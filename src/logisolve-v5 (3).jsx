@@ -397,149 +397,184 @@ function useToasts() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PDF GENERATOR — standalone, usable from any module
+// PDF GENERATOR — formato oficial Logisolve
 // ═══════════════════════════════════════════════════════════════════════════════
 function generarCotizacionPDF(tkt, cl, un, supp) {
-  const s = tkt.snap;
+  const s     = tkt.snap;
   const folio = tkt.id.replace("TKT","COT");
+  const fechaLarga = (()=>{
+    const p=tkt.date.split("/");
+    if(p.length!==3) return tkt.date;
+    const meses=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+    return `${parseInt(p[0])} de ${meses[parseInt(p[1])-1]} de ${p[2]}`;
+  })();
   const formaPago = tkt.payType==="credit"
-    ? "Credito — Fecha limite: "+(tkt.promesaPago||"por definir")
-    : "Contado / Transferencia bancaria.";
+    ? "Credito"+(tkt.promesaPago?" — Fecha limite: "+tkt.promesaPago:"")
+    : "Contado / Transferencia bancaria";
+
   const conceptos = (tkt.lineas && tkt.lineas.length > 0)
     ? tkt.lineas
-    : tkt.titulo.split(" / ").map(t=>({titulo:t,partRef:"",snap:s}));
+    : [{titulo:tkt.titulo, partRef:tkt.partRef||"", snap:s, qty:1}];
+
   const entrega = supp&&supp.entregaDias
     ? supp.entregaDias+" dia"+(supp.entregaDias>1?"s":"")+" habiles"
     : "24-48 hrs habiles";
 
-  const html=`<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Cotizacion ${folio}</title>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#111;font-size:11px;padding:40px 48px;max-width:780px;margin:0 auto}
-  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px}
-  .logo{font-size:20px;font-weight:900;letter-spacing:0.1em;color:#111;line-height:1}
-  .logo span{color:#C87820}
-  .logo-sub{font-size:7px;letter-spacing:0.3em;color:#999;margin-top:3px}
-  .doc-label{text-align:right}
-  .doc-label .tipo{font-size:18px;font-weight:800;letter-spacing:0.05em;color:#111}
-  .doc-label .num{font-size:10px;color:#888;font-family:monospace;margin-top:4px}
-  .doc-label .fecha{font-size:10px;color:#888;margin-top:2px}
-  .divider{height:2px;background:#111;margin-bottom:20px}
-  .info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid #ddd;margin-bottom:28px}
-  .info-cell{padding:10px 14px;border-right:1px solid #ddd}
-  .info-cell:last-child{border-right:none}
-  .info-label{font-size:7px;letter-spacing:0.2em;text-transform:uppercase;color:#999;margin-bottom:4px}
-  .info-value{font-size:11px;font-weight:700;color:#111}
-  .section-title{font-size:8px;letter-spacing:0.25em;text-transform:uppercase;color:#999;margin-bottom:12px;font-weight:600}
-  .concepto-box{border:1px solid #ddd;border-radius:2px;margin-bottom:24px;overflow:hidden}
-  .concepto-header{background:#111;color:#fff;padding:8px 16px;font-size:8px;letter-spacing:0.2em;text-transform:uppercase}
-  .concepto-body{padding:16px}
-  .concepto-num{font-size:10px;font-weight:800;color:#C87820;margin-bottom:6px;font-family:monospace}
-  .concepto-titulo{font-size:14px;font-weight:700;color:#111;margin-bottom:6px;line-height:1.3}
-  .concepto-desc{font-size:10px;color:#555;line-height:1.6}
-  .concepto-footer{background:#f9f9f9;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid #eee}
-  .total-label{font-size:8px;letter-spacing:0.2em;text-transform:uppercase;color:#888}
-  .total-value{font-size:20px;font-weight:900;color:#111;font-family:monospace;letter-spacing:0.02em}
-  .entrega-note{font-size:9px;color:#666;padding:8px 16px;background:#fffbf5;border-top:1px solid #eee}
-  .conditions{border:1px solid #ddd;border-radius:2px;overflow:hidden;margin-bottom:24px}
-  .conditions-title{background:#111;color:#fff;padding:8px 16px;font-size:8px;letter-spacing:0.2em;text-transform:uppercase}
-  .condition-row{display:grid;grid-template-columns:160px 1fr;border-bottom:1px solid #eee}
-  .condition-row:last-child{border-bottom:none}
-  .condition-key{padding:9px 16px;font-size:9px;font-weight:700;color:#111;background:#fafafa;border-right:1px solid #eee}
-  .condition-val{padding:9px 16px;font-size:9px;color:#444;line-height:1.5}
-  .alcance{border:1px solid #ddd;border-radius:2px;overflow:hidden;margin-bottom:28px}
-  .alcance-title{background:#111;color:#fff;padding:8px 16px;font-size:8px;letter-spacing:0.2em;text-transform:uppercase}
-  .alcance-body{padding:14px 16px}
-  .alcance-item{font-size:10px;color:#444;padding:3px 0;display:flex;gap:8px;align-items:flex-start}
-  .alcance-bullet{color:#C87820;font-weight:700;flex-shrink:0}
-  .footer{display:flex;justify-content:space-between;align-items:center;font-size:9px;color:#999;padding-top:16px;border-top:1px solid #eee}
-  .print-btn{text-align:center;margin:24px 0 0}
-  .print-btn button{padding:10px 28px;background:#111;color:#fff;border:none;border-radius:2px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:0.06em}
-  @media print{body{padding:24px 32px}.print-btn{display:none}@page{margin:1.5cm}}
-</style>
-</head>
-<body>
-<div class="header">
-  <div>
-    <div class="logo">LOGI<span>SOLVE</span></div>
-    <div class="logo-sub">LOGISTICS &nbsp;·&nbsp; SUPPLY &nbsp;·&nbsp; SOLUTIONS</div>
-  </div>
-  <div class="doc-label">
-    <div class="tipo">COTIZACION</div>
-    <div class="num">No. ${folio}</div>
-    <div class="fecha">${tkt.date.replace(/\//g," / ")}</div>
-  </div>
-</div>
-<div class="divider"></div>
-<div class="info-grid">
-  <div class="info-cell"><div class="info-label">Folio</div><div class="info-value" style="font-family:monospace;font-size:10px">${folio}</div></div>
-  <div class="info-cell"><div class="info-label">Fecha</div><div class="info-value">${tkt.date.replace(/\//g," / ")}</div></div>
-  <div class="info-cell"><div class="info-label">Cliente</div><div class="info-value">${cl?cl.empresa:"---"}</div></div>
-  <div class="info-cell"><div class="info-label">Vigencia</div><div class="info-value">3 dias naturales</div></div>
-</div>
-<div class="section-title">Detalle del concepto</div>
-<div class="concepto-box">
-  <div class="concepto-header">Concepto</div>
-  <div class="concepto-body">
-    ${conceptos.map((c,i)=>{
-      const lineSnap = c.snap || s;
-      const titulo   = c.titulo || c;
-      const partRef  = c.partRef || "";
-      return `<div style="margin-bottom:${i<conceptos.length-1?16:0}px;${i>0?"padding-top:12px;border-top:1px solid #eee;":""}">
-        <div class="concepto-num">${String(i+1).padStart(2,"0")}${partRef?` <span style="font-weight:400;color:#888;font-size:8px">OEM: ${partRef}</span>`:""}</div>
-        <div class="concepto-titulo">${titulo}</div>
-        <div class="concepto-desc">Suministro con entrega directa${un?" para "+un.marca+" "+un.modelo+" "+un.anio:""}. Coordinacion operativa y trazabilidad del pedido incluidas.</div>
-        ${conceptos.length>1?`<div style="margin-top:6px;display:flex;gap:16px;font-size:9px;font-family:monospace">
-          <span style="color:#888">Precio: <strong style="color:#111">${mxn(lineSnap.precioConIVA)}</strong></span>
-        </div>`:""}
-      </div>`;
-    }).join("")}
-  </div>
-  <div class="concepto-footer">
-    <div>
-      <div class="total-label">Total &nbsp;·&nbsp; IVA Incluido</div>
-      ${un?`<div style="font-size:9px;color:#888;margin-top:3px">${un.marca} ${un.modelo} ${un.anio} &nbsp;·&nbsp; ${un.vin}</div>`:""}
-      ${tkt.partRef?`<div style="font-size:9px;color:#888;margin-top:2px">Num. parte: ${tkt.partRef}</div>`:""}
-    </div>
-    <div class="total-value">${mxn(s.precioConIVA)} MXN</div>
-  </div>
-  <div class="entrega-note">&#9632; Tiempo estimado de entrega: ${entrega} sujeto a disponibilidad.</div>
-</div>
-<div class="conditions">
-  <div class="conditions-title">Condiciones comerciales</div>
-  <div class="condition-row"><div class="condition-key">Precio</div><div class="condition-val">Precio todo incluido — IVA ya considerado en el total.</div></div>
-  <div class="condition-row"><div class="condition-key">Forma de pago</div><div class="condition-val">${formaPago}</div></div>
-  <div class="condition-row"><div class="condition-key">Entrega</div><div class="condition-val">Sujeta a confirmacion de disponibilidad al momento de autorizar.</div></div>
-  <div class="condition-row"><div class="condition-key">Proteccion</div><div class="condition-val">Precios sujetos a cambio y disponibilidad al momento de confirmar.</div></div>
-  <div class="condition-row"><div class="condition-key">Vigencia</div><div class="condition-val">3 dias naturales a partir de la fecha de emision.</div></div>
-</div>
-<div class="alcance">
-  <div class="alcance-title">Alcance del servicio</div>
-  <div class="alcance-body">
-    ${["Suministro de refaccion / componente solicitado.","Validacion y coordinacion operativa.","Entrega directa en planta del cliente.","Seguimiento y trazabilidad del pedido."].map(i=>`<div class="alcance-item"><span class="alcance-bullet">—</span><span>${i}</span></div>`).join("")}
-  </div>
-</div>
-<div class="footer">
-  <div>Quedo atento para cualquier duda o confirmacion.</div>
-  <div>LogiSolve &nbsp;·&nbsp; ${tkt.date}</div>
-</div>
-<div class="print-btn">
-  <button onclick="window.print()">Imprimir / Guardar como PDF</button>
-</div>
-</body>
-</html>`;
+  const htmlDoc = [
+    "<!DOCTYPE html>",
+    "<html lang='es'><head><meta charset='UTF-8'/>",
+    "<meta name='viewport' content='width=device-width,initial-scale=1'/>",
+    "<title>Cotizacion "+folio+"</title>",
+    "<style>",
+    "*{box-sizing:border-box;margin:0;padding:0}",
+    "body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#111;font-size:11px;padding:40px 48px;max-width:800px;margin:0 auto}",
+    ".close-bar{text-align:right;margin-bottom:16px}",
+    ".close-bar button{padding:7px 18px;background:#111;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.05em}",
+    ".header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px}",
+    ".logo{font-size:22px;font-weight:900;letter-spacing:.08em;color:#111;line-height:1}",
+    ".logo span{color:#C87820}",
+    ".logo-sub{font-size:7px;letter-spacing:.28em;color:#aaa;margin-top:4px;text-transform:uppercase}",
+    ".doc-right{text-align:right}",
+    ".doc-tipo{font-size:22px;font-weight:900;letter-spacing:.06em;color:#111}",
+    ".doc-num{font-size:10px;color:#888;font-family:monospace;margin-top:5px}",
+    ".divider{height:2px;background:#111;margin-bottom:22px}",
+    ".info-grid{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #ddd;margin-bottom:28px}",
+    ".info-cell{padding:11px 14px;border-right:1px solid #ddd}",
+    ".info-cell:last-child{border-right:none}",
+    ".info-label{font-size:7px;letter-spacing:.22em;text-transform:uppercase;color:#aaa;margin-bottom:5px}",
+    ".info-value{font-size:12px;font-weight:700;color:#111;line-height:1.3}",
+    ".section-label{font-size:8px;letter-spacing:.25em;text-transform:uppercase;color:#aaa;margin-bottom:10px;font-weight:600}",
+    ".conceptos-box{border:1px solid #222;border-radius:2px;margin-bottom:24px;overflow:hidden}",
+    ".conceptos-hdr{background:#111;color:#fff;padding:8px 16px;font-size:8px;letter-spacing:.22em;text-transform:uppercase}",
+    ".concepto{padding:18px 16px;border-bottom:1px solid #eee}",
+    ".concepto:last-child{border-bottom:none}",
+    ".concepto-row{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}",
+    ".concepto-body{flex:1}",
+    ".concepto-num{font-size:11px;font-weight:800;color:#C87820;margin-bottom:6px;font-family:monospace}",
+    ".concepto-titulo{font-size:15px;font-weight:700;color:#111;margin-bottom:8px;line-height:1.3}",
+    ".concepto-desc{font-size:10px;color:#555;line-height:1.7;margin-bottom:4px}",
+    ".concepto-tag{display:inline-block;padding:2px 8px;background:#f5f5f5;border:1px solid #ddd;border-radius:2px;font-size:8px;color:#888;font-family:monospace;margin-top:4px}",
+    ".concepto-precio{flex-shrink:0;text-align:right;padding-top:4px}",
+    ".concepto-precio .inc{font-size:10px;font-weight:700;color:#C87820;letter-spacing:.05em}",
+    ".concepto-precio .val{font-size:13px;font-weight:800;color:#111;font-family:monospace;margin-top:3px}",
+    ".total-bar{background:#f9f9f9;border-top:2px solid #111;padding:14px 16px;display:flex;justify-content:space-between;align-items:center}",
+    ".total-left{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:#888}",
+    ".total-left .iva{font-size:8px;color:#aaa;margin-top:2px}",
+    ".total-right{font-size:24px;font-weight:900;color:#111;font-family:monospace;letter-spacing:.02em}",
+    ".entrega-note{font-size:9px;color:#666;padding:8px 16px;background:#fffbf5;border-top:1px solid #eee}",
+    ".cond-box{border:1px solid #ddd;border-radius:2px;overflow:hidden;margin-bottom:20px}",
+    ".cond-hdr{background:#111;color:#fff;padding:8px 16px;font-size:8px;letter-spacing:.22em;text-transform:uppercase}",
+    ".cond-list{padding:14px 16px}",
+    ".cond-item{font-size:10px;color:#444;line-height:1.8;display:flex;gap:8px}",
+    ".cond-bullet{color:#C87820;font-weight:700;flex-shrink:0}",
+    ".footer-line{height:1px;background:#eee;margin:20px 0 14px}",
+    ".footer{display:flex;justify-content:space-between;align-items:center;font-size:9px;color:#aaa}",
+    ".print-btn{text-align:center;margin:24px 0 4px}",
+    ".print-btn button{padding:11px 32px;background:#111;color:#fff;border:none;border-radius:3px;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.06em}",
+    "@media print{body{padding:20px 28px}.close-bar,.print-btn{display:none}@page{margin:1.2cm}}",
+    "</style></head><body>",
+    "<div class='close-bar'><button onclick='window.close()'>x Cerrar ventana</button></div>",
+    "<div class='header'>",
+    "  <div><div class='logo'>LOGI<span>SOLVE</span></div>",
+    "  <div class='logo-sub'>Logistics &middot; Supply &middot; Solutions</div></div>",
+    "  <div class='doc-right'>",
+    "    <div class='doc-tipo'>COTIZACION</div>",
+    "    <div class='doc-num'>No. "+folio+" | "+fechaLarga+"</div>",
+    "  </div>",
+    "</div>",
+    "<div class='divider'></div>",
+    "<div class='info-grid'>",
+    "  <div class='info-cell'><div class='info-label'>Folio</div><div class='info-value' style='font-family:monospace'>"+folio+"</div></div>",
+    "  <div class='info-cell'><div class='info-label'>Fecha</div><div class='info-value'>"+tkt.date.replace(/\//g," / ")+"</div></div>",
+    "  <div class='info-cell'><div class='info-label'>Cliente</div><div class='info-value'>"+(cl?cl.empresa:"---")+"</div></div>",
+    "  <div class='info-cell'><div class='info-label'>Vigencia</div><div class='info-value'>3 dias naturales</div></div>",
+    "</div>",
+    "<div class='section-label'>Desglose de conceptos</div>",
+    "<div class='conceptos-box'>",
+    "  <div class='conceptos-hdr'>Concepto</div>",
+  ].join("\n");
+
+  const conceptosHtml = conceptos.map(function(c, i) {
+    var titulo   = c.titulo || c;
+    var partRef  = c.partRef || "";
+    var csnap    = c.snap || s;
+    var qty      = c.qty || 1;
+    var desc = conceptos.length > 1 && i === 0
+      ? "Apoyo operativo para suministro con entrega en planta. Coordinacion, gestion y seguimiento durante todo el proceso."
+      : "Suministro con entrega directa" + (un ? " para " + un.marca + " " + un.modelo + " " + un.anio : "") + ". Coordinacion operativa y trazabilidad del pedido incluidas.";
+    var precioTag = conceptos.length > 1
+      ? "<div class='concepto-precio'><div class='val'>$" + csnap.precioConIVA.toLocaleString("es-MX",{minimumFractionDigits:2}) + "</div></div>"
+      : "<div class='concepto-precio'><div class='inc'>Incluido</div></div>";
+    var unidadTag = un && i === 0
+      ? "<div style='font-size:9px;color:#aaa;margin-top:6px'>Unidad: " + un.marca + " " + un.modelo + " " + un.anio + " &middot; " + un.vin + "</div>"
+      : "";
+    var partTag = partRef ? "<span class='concepto-tag'>" + partRef + "</span>" : "";
+    var qtyTag = qty > 1 ? " <span style='font-size:11px;font-weight:400;color:#888'>(x" + qty + ")</span>" : "";
+    return "<div class='concepto'><div class='concepto-row'><div class='concepto-body'>"
+      + "<div class='concepto-num'>" + String(i+1).padStart(2,"0") + "</div>"
+      + "<div class='concepto-titulo'>" + titulo + qtyTag + "</div>"
+      + "<div class='concepto-desc'>" + desc + "</div>"
+      + partTag + unidadTag
+      + "</div>" + precioTag + "</div></div>";
+  }).join("\n");
+
+  var totalMXN = s.precioConIVA.toLocaleString("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2});
+
+  const htmlBottom = [
+    "  <div class='total-bar'>",
+    "    <div class='total-left'>TOTAL (IVA incluido)<div class='iva'>Precio todo incluido - IVA ya considerado en el total.</div></div>",
+    "    <div class='total-right'>" + totalMXN + " MXN</div>",
+    "  </div>",
+    "  <div class='entrega-note'>Tiempo estimado de entrega: " + entrega + " sujeto a disponibilidad.</div>",
+    "</div>",
+    "<div class='cond-box'>",
+    "  <div class='cond-hdr'>Condiciones comerciales</div>",
+    "  <div class='cond-list'>",
+    "    <div class='cond-item'><span class='cond-bullet'>-</span><span>Precio: Todo incluido - suministro, entrega en planta y apoyo operativo.</span></div>",
+    "    <div class='cond-item'><span class='cond-bullet'>-</span><span>Entrega: Entrega directa en planta del cliente, previa coordinacion.</span></div>",
+    "    <div class='cond-item'><span class='cond-bullet'>-</span><span>Forma de pago: " + formaPago + ".</span></div>",
+    "    <div class='cond-item'><span class='cond-bullet'>-</span><span>Vigencia: 3 dias naturales a partir de la fecha de emision.</span></div>",
+    (tkt.notes ? "    <div class='cond-item'><span class='cond-bullet'>-</span><span>Nota: " + tkt.notes + "</span></div>" : ""),
+    "  </div>",
+    "</div>",
+    "<div class='footer-line'></div>",
+    "<div class='footer'>",
+    "  <div>Quedo atento para avanzar y coordinar la entrega.</div>",
+    "  <div>Generado el " + fechaLarga + " | Vigencia: 3 dias naturales</div>",
+    "</div>",
+    "<div class='print-btn'><button onclick='window.print()'>Imprimir / Guardar como PDF</button></div>",
+    "</body></html>",
+  ].join("\n");
 
   const win = window.open("","_blank");
   if (win) {
-    win.document.write(html);
+    win.document.open();
+    win.document.write(htmlDoc + "\n" + conceptosHtml + "\n" + htmlBottom);
     win.document.close();
-    setTimeout(()=>win.print(), 800);
   }
+}
+
+// Modal de confirmacion PDF
+function PDFConfirm({tkt,cl,un,supp,onClose}) {
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{background:C.bg2,border:`1px solid ${C.borderHi}`,borderRadius:6,padding:22,maxWidth:340,width:"90%"}}>
+        <div style={{fontSize:11,color:C.t1,fontWeight:700,marginBottom:6}}>Generar cotizacion PDF</div>
+        <div style={{fontSize:10,color:C.t2,marginBottom:6,lineHeight:1.5}}>{tkt.id.replace("TKT","COT")}</div>
+        <div style={{fontSize:10,color:C.t3,marginBottom:18,lineHeight:1.5}}>{tkt.titulo.substring(0,60)}</div>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>{generarCotizacionPDF(tkt,cl,un,supp);onClose();}}
+            style={{flex:1,padding:"9px",background:C.blue,border:"none",borderRadius:4,color:C.t1,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+            Si, generar PDF
+          </button>
+          <button onClick={onClose}
+            style={{padding:"9px 14px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:4,color:C.t2,fontSize:11,cursor:"pointer"}}>
+            Ahora no
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1183,6 +1218,7 @@ function Cotizador({state,dispatch,toast}) {
   const [vIVA,      setVIVA]      = useState(true);
   // Multi-line
   const [lineas,    setLineas]    = useState([emptyLine("consumable","P3",[])]);
+  const [pdfPending, setPdfPending] = useState(null); // {tkt,cl,un,supp}
   const [catalogSearch, setCatalogSearch] = useState(null); // idx of line being searched
   const opMeta = useMemo(()=>OP_TYPES.find(o=>o.id===opType)||OP_TYPES[0],[opType]);
   const pr     = useMemo(()=>PRIORITY[priority]||PRIORITY.P3,[priority]);
@@ -1255,7 +1291,7 @@ function Cotizador({state,dispatch,toast}) {
     };
     dispatch({type:"TKT_ADD",t:tkt});
     toast("Ticket registrado: "+tkt.id,"success");
-    generarCotizacionPDF(tkt,cl,un,supp);
+    setPdfPending({tkt,cl,un,supp});
     setLineas([emptyLine(opType,priority,[])]);
     setNotes(""); setHorasOp(0);
   },[lineas,lineSnaps,totalSnap,aggMargen,fecha,opType,opMeta,priority,clientId,supplierId,unitId,status,payType,promesa,activeMods,prob,horasOp,notes,dispatch,toast,clients,units,suppliers]);
@@ -1288,6 +1324,7 @@ function Cotizador({state,dispatch,toast}) {
 
   return (
     <div style={{padding:"10px 13px",maxWidth:1200,margin:"0 auto"}}>
+      {pdfPending&&<PDFConfirm {...pdfPending} onClose={()=>setPdfPending(null)}/>}
 
       {/* Modal busqueda en catalogo */}
       {catalogSearch!==null&&(
@@ -2923,6 +2960,7 @@ function MCotizador({state,dispatch,toast}) {
   const [catalogSearch, setCatalogSearch] = useState(null);
   const [catalogQ,      setCatalogQ]      = useState("");
   const [activeMods,    setActiveMods]    = useState([]);
+  const [pdfPending,    setPdfPending]    = useState(null);
   const sharedMargin = useMemo(()=>effectiveMargin(opType,priority,activeMods,false,27),[opType,priority,activeMods]);
   const lineSnaps = useMemo(()=>lineas.map(l=>{
     const mg   = l.customMgn?Math.min(l.customVal,100):sharedMargin;
@@ -2960,7 +2998,7 @@ function MCotizador({state,dispatch,toast}) {
     };
     dispatch({type:"TKT_ADD",t:tkt});
     toast("Ticket: "+tkt.id,"success");
-    generarCotizacionPDF(tkt,cl,un,supp);
+    setPdfPending({tkt,cl,un,supp});
     setLineas([emptyLine(opType,priority,[])]);setNotes("");setStep(0);
     setClientId("");setUnitId("");setSupplierId("");setPayType("contado");setPromesa("");
   };
@@ -2986,6 +3024,7 @@ function MCotizador({state,dispatch,toast}) {
 
   if(step===0) return (
     <div style={{padding:"14px"}}>
+      {pdfPending&&<PDFConfirm {...pdfPending} onClose={()=>setPdfPending(null)}/>}
       <div style={{fontSize:11,color:C.t3,letterSpacing:"0.14em",marginBottom:12}}>PRIORIDAD OPERATIVA</div>
       {Object.values(PRIORITY).map(p=>(
         <div key={p.id} onClick={()=>setPriority(p.id)}
@@ -3305,12 +3344,34 @@ function MCartera({state,dispatch,toast}) {
 // ── MHistorial — Historial móvil ──────────────────────────────────────────────
 function MHistorial({state,dispatch,toast}) {
   const {tickets,clients,units,suppliers} = state;
-  const totalFact = useMemo(()=>tickets.reduce((s,t)=>s+t.snap.precioConIVA,0),[tickets]);
-  const totalNeta = useMemo(()=>tickets.reduce((s,t)=>s+t.snap.uNeta,0),[tickets]);
-  const [expId,setExpId] = useState(null);
+  const totalFact  = useMemo(()=>tickets.reduce((s,t)=>s+t.snap.precioConIVA,0),[tickets]);
+  const totalNeta  = useMemo(()=>tickets.reduce((s,t)=>s+t.snap.uNeta,0),[tickets]);
+  const [expId,    setExpId]    = useState(null);
+  const [editId,   setEditId]   = useState(null);
+  const [editPrice,setEditPrice]= useState("");
+  const [pdfPending,setPdfPending] = useState(null);
+
+  const savePrice = (t)=>{
+    const precio = parseFloat(editPrice);
+    if(isNaN(precio)||precio<=0){toast("Precio invalido","error");return;}
+    const iva=t.snap.params?.iva||16;
+    const ivaR=iva/100;
+    const precioSinIVA=precio/(1+ivaR);
+    const ivaTraslad=precio-precioSinIVA;
+    const uBruta=precioSinIVA-t.snap.costoTotal;
+    const isrAmt=Math.max(uBruta*(t.snap.params?.isr||20)/100,0);
+    const uNeta=uBruta-isrAmt;
+    const newSnap={...t.snap,precioConIVA:precio,precioSinIVA,ivaTraslad,uBruta,isr:isrAmt,uNeta,
+      markupSobre:t.snap.costoTotal>0?((precioSinIVA-t.snap.costoTotal)/t.snap.costoTotal)*100:0,
+      margenNetoPrecio:precioSinIVA>0?(uNeta/precioSinIVA)*100:0};
+    dispatch({type:"TKT_UPDATE",id:t.id,patch:{snap:newSnap}});
+    toast("Precio actualizado","success");
+    setEditId(null);
+  };
 
   return (
     <div style={{padding:"14px"}}>
+      {pdfPending&&<PDFConfirm {...pdfPending} onClose={()=>setPdfPending(null)}/>}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
         <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px"}}>
           <div style={{fontSize:10,color:C.t3,marginBottom:4}}>FACTURADO</div>
@@ -3325,10 +3386,11 @@ function MHistorial({state,dispatch,toast}) {
       {tickets.slice().reverse().map(t=>{
         const cl=clients.find(c=>c.id===t.clientId);
         const exp=expId===t.id;
+        const editing=editId===t.id;
         const pr=PRIORITY[t.priority]||PRIORITY.P4;
         return (
           <MCard key={t.id}>
-            <div onClick={()=>setExpId(exp?null:t.id)} style={{padding:"14px",cursor:"pointer",borderLeft:`4px solid ${pr.dot}`}}>
+            <div onClick={()=>{if(!editing){setExpId(exp?null:t.id);}}} style={{padding:"14px",cursor:"pointer",borderLeft:`4px solid ${pr.dot}`}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                 <span style={{fontSize:9,color:C.t3,fontFamily:"'Courier New',monospace"}}>{t.id} · {t.date}</span>
                 <StatusBadge sid={t.status} meta={TICKET_META} small/>
@@ -3350,11 +3412,30 @@ function MHistorial({state,dispatch,toast}) {
                 <MRow label="IVA neto SAT" value={mxn(t.snap.ivaNeto)} color={C.yellow}/>
                 <MRow label="Util. neta"   value={mxn(t.snap.uNeta)} color={t.snap.uNeta>=0?C.green:C.red} bold/>
                 <MRow label="Margen neto"  value={fpct(t.snap.margenNetoPrecio)} color={margenColor(t.snap.margenNetoPrecio)}/>
-                {t.notes&&<div style={{padding:"10px 0",fontSize:11,color:C.t3,fontStyle:"italic"}}>"{t.notes}"</div>}
-                <div style={{marginTop:10}}>
-                  <MBtn label="PDF" small bg={C.blueDim} border={C.blueHi} color={C.cyan}
-                    onClick={()=>{const cl2=clients.find(c=>c.id===t.clientId);const un2=units?.find(u=>u.id===t.unitId);const su2=suppliers?.find(s=>s.id===t.supplierId);generarCotizacionPDF(t,cl2,un2,su2);}}/>
-                </div>
+                {t.notes&&<div style={{padding:"8px 0",fontSize:11,color:C.t3,fontStyle:"italic"}}>"{t.notes}"</div>}
+
+                {/* Editar precio */}
+                {editing?(
+                  <div style={{marginTop:12,background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:6,padding:"12px 14px"}}>
+                    <div style={{fontSize:10,color:C.cyan,letterSpacing:"0.12em",marginBottom:8}}>EDITAR PRECIO C/IVA</div>
+                    <div style={{display:"flex",alignItems:"center",background:C.bg1,border:`1px solid ${C.blueHi}`,borderRadius:6,overflow:"hidden",minHeight:48,marginBottom:10}}>
+                      <span style={{padding:"0 12px",color:C.cyan,fontSize:16,fontFamily:"'Courier New',monospace"}}>$</span>
+                      <input type="number" min={0} step={0.01} autoFocus value={editPrice} onChange={e=>setEditPrice(e.target.value)}
+                        style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:20,fontWeight:800,padding:"10px 0",fontFamily:"'Courier New',monospace"}}/>
+                    </div>
+                    <div style={{display:"flex",gap:8}}>
+                      <MBtn label="Guardar" full onClick={()=>savePrice(t)}/>
+                      <MBtn label="Cancelar" bg="transparent" border={C.border} color={C.t2} small onClick={()=>setEditId(null)}/>
+                    </div>
+                  </div>
+                ):(
+                  <div style={{display:"flex",gap:8,marginTop:12}}>
+                    <MBtn label="Editar precio" small bg={C.bg2} border={C.border} color={C.t2}
+                      onClick={()=>{setEditId(t.id);setEditPrice(t.snap.precioConIVA.toFixed(2));}}/>
+                    <MBtn label="Cotizacion PDF" small bg={C.blueDim} border={C.blueHi} color={C.cyan}
+                      onClick={()=>{const cl2=clients.find(c=>c.id===t.clientId);const un2=units?.find(u=>u.id===t.unitId);const su2=suppliers?.find(s=>s.id===t.supplierId);setPdfPending({tkt:t,cl:cl2,un:un2,supp:su2});}}/>
+                  </div>
+                )}
               </div>
             )}
           </MCard>
