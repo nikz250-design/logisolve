@@ -106,7 +106,72 @@ const STORAGE_KEY = "logisolve_v5";
 const STORAGE_VER = 6;
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// L3 — PURE FISCAL ENGINE
+// SUPABASE CLIENT
+// ═══════════════════════════════════════════════════════════════════════════════
+const SB_URL = "https://ecxqxspphoehmkvlmbtv.supabase.co";
+const SB_KEY = "sb_publishable_xTPWFkPZaNN4jAeuFifVaw_yXvQvdfC";
+
+async function sbFetch(path, opts={}) {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1${path}`, {
+      ...opts,
+      headers: {
+        "apikey": SB_KEY,
+        "Authorization": `Bearer ${SB_KEY}`,
+        "Content-Type": "application/json",
+        "Prefer": opts.method==="POST"?"resolution=merge-duplicates,return=minimal":"return=minimal",
+        ...(opts.headers||{}),
+      },
+    });
+    const txt = await res.text();
+    return txt ? JSON.parse(txt) : null;
+  } catch(e) { console.warn("sbFetch:",e); return null; }
+}
+
+async function loadTable(table) {
+  const rows = await sbFetch(`/${table}?select=id,data&order=created_at.asc`);
+  return Array.isArray(rows) && rows.length>0 ? rows.map(r=>r.data) : null;
+}
+
+async function upsertRow(table, id, data) {
+  await sbFetch(`/${table}`, {
+    method:"POST",
+    body: JSON.stringify({id, data}),
+  });
+}
+
+async function deleteRow(table, id) {
+  await sbFetch(`/${table}?id=eq.${encodeURIComponent(id)}`, { method:"DELETE" });
+}
+
+async function loadAllFromSupabase() {
+  const [tickets,clients,suppliers,units,parts] = await Promise.all([
+    loadTable("tickets"), loadTable("clients"), loadTable("suppliers"),
+    loadTable("units"),   loadTable("parts"),
+  ]);
+  if (!tickets && !clients) return null;
+  return {
+    tickets:   tickets   || initialState.tickets,
+    clients:   clients   || initialState.clients,
+    suppliers: suppliers || initialState.suppliers,
+    units:     units     || initialState.units,
+    parts:     parts     || initialState.parts,
+  };
+}
+
+async function seedIfEmpty() {
+  const existing = await loadTable("tickets");
+  if (existing) return; // already has data
+  await Promise.all([
+    ...initialState.tickets.map(t=>upsertRow("tickets",t.id,t)),
+    ...initialState.clients.map(c=>upsertRow("clients",c.id,c)),
+    ...initialState.suppliers.map(s=>upsertRow("suppliers",s.id,s)),
+    ...initialState.units.map(u=>upsertRow("units",u.id,u)),
+    ...initialState.parts.map(p=>upsertRow("parts",p.id,p)),
+  ]);
+}
+
+
 // ═══════════════════════════════════════════════════════════════════════════════
 function computeSnap(p) {
   const { costo=0, gasolina=0, otros=0, iva=16, isr=20,
@@ -2083,13 +2148,39 @@ const TABS = [
 ];
 
 export default function App() {
-  const stored=loadFromStorage();
-  const [state,dispatch]=useReducer(reducer,stored||initialState);
+  const [state,dispatch]=useReducer(reducer,initialState);
   const {toasts,push:toast}=useToasts();
   const [tab,setTab]=useState("ops");
   const [search,setSearch]=useState(false);
+  const [loading,setLoading]=useState(true);
 
-  useEffect(()=>{saveToStorage(state);},[state]);
+  // Load from Supabase on mount
+  useEffect(()=>{
+    (async()=>{
+      try {
+        await seedIfEmpty();
+        const data = await loadAllFromSupabase();
+        if(data) dispatch({type:"IMPORT",data});
+      } catch(e){ console.warn("Supabase load error:",e); }
+      finally { setLoading(false); }
+    })();
+  },[]);
+
+  // Sync to Supabase on every state change (debounced)
+  const syncRef = useRef(null);
+  useEffect(()=>{
+    if(loading) return;
+    saveToStorage(state);
+    clearTimeout(syncRef.current);
+    syncRef.current = setTimeout(()=>{
+      state.tickets.forEach(t=>upsertRow("tickets",t.id,t));
+      state.clients.forEach(c=>upsertRow("clients",c.id,c));
+      state.suppliers.forEach(s=>upsertRow("suppliers",s.id,s));
+      state.units.forEach(u=>upsertRow("units",u.id,u));
+      state.parts.forEach(p=>upsertRow("parts",p.id,p));
+    },1200);
+  },[state,loading]);
+
   useEffect(()=>{
     const h=e=>{if((e.ctrlKey||e.metaKey)&&e.key==="k"){e.preventDefault();setSearch(s=>!s);}};
     window.addEventListener("keydown",h);
@@ -2099,6 +2190,13 @@ export default function App() {
   const p1Active  = useMemo(()=>state.tickets.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status)).length,[state.tickets]);
   const vencidos  = useMemo(()=>state.tickets.filter(t=>{if(!t.promesaPago||t.cobrado||t.status==="cancelado")return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}).length,[state.tickets]);
   const abiertas  = useMemo(()=>state.tickets.filter(t=>!CLOSED_SET.has(t.status)).length,[state.tickets]);
+
+  if(loading) return (
+    <div style={{minHeight:"100vh",background:C.bg0,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
+      <Logo/>
+      <div style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",letterSpacing:"0.2em",marginTop:8}}>CARGANDO DATOS...</div>
+    </div>
+  );
 
   return (
     <div style={{minHeight:"100vh",background:C.bg0,color:C.t1,fontFamily:"'Trebuchet MS',sans-serif",fontSize:13}}>
