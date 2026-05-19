@@ -274,7 +274,9 @@ const SEED_TICKETS = [
 ];
 
 const SEED_CLIENTS = [{
-  id:"CLI-00001", empresa:"Logis Express", contacto:"", tel:"", creditDays:15, category:"A", score:80,
+  id:"CLI-00001", empresa:"Logis Express", contacto:"", tel:"", correo:"", rfc:"",
+  direccion:"Manzana 006", ciudad:"Cuautitlán Izcalli", estado:"Estado de México",
+  creditDays:15, category:"A", score:80,
   unidades:["UNI-00001","UNI-00002","UNI-00003","UNI-00004"],
 }];
 
@@ -400,7 +402,7 @@ function useToasts() {
 // PDF GENERATOR — formato oficial Logisolve
 // ═══════════════════════════════════════════════════════════════════════════════
 function generarCotizacionPDF(tkt, cl, un, supp) {
-  const s     = tkt.snap;
+  const s = tkt.snap;
   const folio = tkt.id.replace("TKT","COT");
   const fechaLarga = (()=>{
     const p=tkt.date.split("/");
@@ -411,215 +413,194 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
   const formaPago = tkt.payType==="credit"
     ? "Cr\u00e9dito"+(tkt.promesaPago?" \u2014 Fecha l\u00edmite: "+tkt.promesaPago:"")
     : "Contado / Transferencia bancaria";
-  const conceptos = (tkt.lineas && tkt.lineas.length > 0)
+  const conceptos = (tkt.lineas&&tkt.lineas.length>0)
     ? tkt.lineas
-    : [{titulo:tkt.titulo, partRef:tkt.partRef||"", snap:s, qty:1}];
+    : [{titulo:tkt.titulo, partRef:tkt.partRef||"", snap:s, qty:1, descripcionPDF:tkt.descripcionPDF||""}];
   const entrega = supp&&supp.entregaDias
     ? supp.entregaDias+" d\u00eda"+(supp.entregaDias>1?"s":"")+" h\u00e1biles"
-    : "24\u201348 hrs h\u00e1biles";
-  const subtotal   = s.precioSinIVA;
-  const ivaAmt     = s.ivaTraslad;
-  const totalFinal = s.precioConIVA;
-  const ivaPct     = s.params?.iva||16;
-  const unidadStr  = un ? (un.economico?"Eco. "+un.economico+" \u2014 ":"")+un.marca+" "+un.modelo+" "+un.anio : "";
-  const fmtMXN = n => n.toLocaleString("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2});
+    : "24-48 hrs h\u00e1biles";
+  const subtotal=s.precioSinIVA, ivaAmt=s.ivaTraslad, totalFinal=s.precioConIVA, ivaPct=s.params?.iva||16;
+  const unidadStr = un?(un.economico?"Eco. "+un.economico+" \u00b7 ":"")+un.marca+" "+un.modelo+" "+un.anio:"";
 
-  const conceptosHTML = conceptos.map((c,i)=>{
-    const titulo  = c.titulo||"";
+  // Dirección del cliente
+  const clDirParts = [];
+  if(cl?.direccion) clDirParts.push(cl.direccion);
+  if(cl?.ciudad) clDirParts.push(cl.ciudad);
+  if(cl?.estado) clDirParts.push(cl.estado);
+  const clDir = clDirParts.join(", ");
+  const clLine = cl ? (cl.empresa + (clDir ? " \u00b7 " + clDir : "")) : "\u2014";
+
+  const fmtMXN = n=>n.toLocaleString("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2});
+
+  const filas = conceptos.map((c,i)=>{
+    const titulo = c.titulo||"";
     const partRef = c.partRef||"";
-    const csnap   = c.snap||s;
-    const qty     = c.qty||1;
-    const precio  = fmtMXN(csnap.precioConIVA||0);
-    const unTag   = unidadStr&&i===0 ? `<tr class='c-meta'><td></td><td colspan='2'><span class='c-unit'>Unidad: ${unidadStr}</span></td></tr>` : "";
-    const refTag  = partRef ? `<tr class='c-meta'><td></td><td colspan='2'><span class='c-ref'>Clave: ${partRef}</span></td></tr>` : "";
-    const desc    = "Atenci\u00f3n correctiva para continuidad operativa de unidad en CEDIS SMO. Incluye integraci\u00f3n de componente compatible, validaci\u00f3n operativa y seguimiento log\u00edstico.";
-    const qtyTag  = qty>1 ? ` \u00d7${qty}` : "";
-    return `<tr class='c-row'>
-      <td class='c-num'>${String(i+1).padStart(2,"0")}</td>
-      <td class='c-title'>${titulo}${qtyTag}</td>
-      <td class='c-desc-col'>
-        <div class='c-desc'>${desc}</div>
-      </td>
-      <td class='c-price'>${precio}</td>
-    </tr>${unTag}${refTag}`;
+    const csnap = c.snap||s;
+    const qty = c.qty||1;
+    const precio = fmtMXN(csnap.precioConIVA||0);
+    // Descripción: usa descripcionPDF si existe, si no genera una por defecto
+    const desc = c.descripcionPDF||"Atenci\u00f3n correctiva para continuidad operativa de unidad en CEDIS SMO.";
+    const qtyTag = qty>1?` \u00d7${qty}`:"";
+    // Línea de unidad solo en primer concepto
+    const unidadTag = unidadStr&&i===0
+      ? `<div class='td-bold'><b>Unidad:</b> ${unidadStr}</div>`
+      : "";
+    const refTag = partRef
+      ? `<div class='td-bold'><b>Clave:</b> ${partRef}</div>`
+      : "";
+    return `<tr>
+      <td class='tno'>${String(i+1).padStart(2,"0")}</td>
+      <td class='tcon'>${titulo}${qtyTag}</td>
+      <td class='tdesc'>${desc}${unidadTag}${refTag}</td>
+      <td class='timp'>${precio}</td>
+    </tr>`;
   }).join("");
 
-  const html = `<!DOCTYPE html>
-<html lang='es'><head><meta charset='UTF-8'/>
-<meta name='viewport' content='width=device-width,initial-scale=1'/>
-<title>${folio}</title>
-<style>
+  const notaLine = tkt.notes?`<li>${tkt.notes}</li>`:"";
+
+  const css = `
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:#fff;color:#111;font-size:10.5px;padding:32px 44px;max-width:820px;margin:0 auto;line-height:1.55}
-.toolbar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:16px}
-.toolbar button{padding:6px 18px;border:none;border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.04em}
-.btn-print{background:#1a1a1a;color:#fff}
-.btn-close{background:#eee;color:#555}
-
-/* HEADER */
-.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px}
-.brand-name{font-size:22px;font-weight:900;letter-spacing:.05em;color:#111;line-height:1}
-.brand-name span{color:#C87820}
-.brand-sub{font-size:8px;letter-spacing:.18em;color:#999;margin-top:2px;text-transform:uppercase}
-.brand-info{margin-top:9px;font-size:9px;color:#555;line-height:1.9}
-.doc-right{text-align:right}
-.doc-tipo{font-size:22px;font-weight:900;letter-spacing:.04em;color:#111;line-height:1}
-.doc-no-label{font-size:8px;color:#aaa;letter-spacing:.12em;text-transform:uppercase;margin-top:5px}
-.doc-folio{font-size:13px;font-weight:700;font-family:monospace;color:#333;margin-top:2px}
-.doc-fecha{font-size:9.5px;color:#888;margin-top:3px}
-
-/* DIVIDER */
-hr{border:none;border-top:1.5px solid #111;margin:0 0 16px}
-
-/* META TABLE */
-.meta-table{width:100%;border-collapse:collapse;margin-bottom:22px;font-size:10px}
-.meta-table td{padding:5px 0;vertical-align:top}
-.meta-table .ml{color:#888;width:80px}
-.meta-table .mv{font-weight:600;color:#111}
-
-/* SECTION HEADING */
-.sec-head{font-size:8px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:#fff;background:#111;padding:6px 12px;margin-bottom:0}
-
-/* CONCEPTO TABLE */
-.tbl{width:100%;border-collapse:collapse;font-size:10px}
-.tbl-wrap{border:1px solid #ccc;margin-bottom:18px}
-.tbl thead th{background:#111;color:#fff;font-size:7.5px;letter-spacing:.18em;text-transform:uppercase;font-weight:600;padding:7px 10px;text-align:left}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#111;font-size:11px;line-height:1.55}
+.page{max-width:780px;margin:0 auto;padding:0}
+.toolbar{text-align:right;padding:10px 16px;background:#f5f5f5;border-bottom:1px solid #e0e0e0}
+.toolbar button{padding:5px 16px;border:none;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;margin-left:6px}
+.tb-close{background:#ddd;color:#444}.tb-save{background:#111;color:#fff}
+.hdr-box{display:flex;justify-content:space-between;align-items:flex-start;border:1px solid #ccc;margin:20px 24px 0;padding:16px 20px}
+.brand-name{font-size:26px;font-weight:900;color:#111;line-height:1;letter-spacing:-.01em}
+.brand-sub{font-size:10px;color:#555;margin-top:5px;letter-spacing:.01em}
+.emisor{font-size:10px;color:#111;line-height:1.85;text-align:right}
+.emisor strong{font-weight:700;font-size:11px}
+.banda{background:#111;display:flex;justify-content:space-between;align-items:flex-end;margin:0 24px;padding:14px 20px}
+.banda-titulo{font-size:24px;font-weight:900;color:#fff;letter-spacing:.01em}
+.banda-right{text-align:right}
+.banda-no{font-size:10px;color:#bbb;font-weight:400;margin-bottom:1px}
+.banda-folio{font-size:17px;font-weight:900;color:#fff;line-height:1.15}
+.banda-fecha{font-size:13px;font-weight:700;color:#fff;margin-top:2px}
+.meta-wrap{border:1px solid #ccc;margin:0 24px;border-top:none}
+.meta-tbl{width:100%;border-collapse:collapse}
+.meta-tbl td{padding:9px 16px;vertical-align:top;border-bottom:1px solid #e8e8e8}
+.meta-tbl tr:last-child td{border-bottom:none}
+.meta-lbl{width:90px;color:#555;font-size:10.5px;font-weight:700}
+.meta-val{color:#111;font-size:10.5px}
+.body{padding:20px 24px}
+.det-title{font-size:12.5px;font-weight:900;color:#111;margin-bottom:8px;letter-spacing:.01em}
+.tbl{width:100%;border-collapse:collapse;border:1px solid #ccc;font-size:10px;margin-bottom:0}
+.tbl thead tr{background:#444}
+.tbl thead th{color:#fff;font-size:9px;font-weight:700;padding:8px 10px;text-align:left;letter-spacing:.04em}
 .tbl thead th.r{text-align:right}
-.c-row td{padding:11px 10px;vertical-align:top;border-bottom:1px solid #eee}
-.c-row:last-of-type td{border-bottom:none}
-.c-num{font-size:11px;font-weight:800;color:#C87820;font-family:monospace;width:30px}
-.c-title{font-size:11px;font-weight:700;color:#111;width:130px;padding-right:8px!important}
-.c-desc-col{font-size:9px;color:#666;line-height:1.65}
-.c-price{font-size:11px;font-weight:700;font-family:monospace;color:#111;text-align:right;white-space:nowrap;width:90px}
-.c-meta td{padding:0 10px 9px!important;border-bottom:none!important}
-.c-unit{font-size:8.5px;color:#888;font-style:italic}
-.c-ref{font-size:8.5px;color:#888}
-
-/* TOTALES */
-.tot-tbl{width:100%;border-collapse:collapse;border-top:1px solid #ccc}
-.tot-tbl td{padding:6px 10px;font-size:10px}
-.tot-lbl{text-align:right;color:#666}
-.tot-val{text-align:right;font-family:monospace;font-weight:600;color:#333;width:120px}
+.tbl tbody td{padding:12px 10px;vertical-align:top;border-bottom:1px solid #e8e8e8}
+.tbl tbody tr:last-child td{border-bottom:none}
+.tno{width:32px;color:#333;font-weight:600;font-size:10.5px}
+.tcon{width:130px;color:#111;font-size:10.5px;font-weight:400}
+.tdesc{color:#333;font-size:10px;line-height:1.65}
+.td-bold{margin-top:7px;font-size:10px;color:#111}
+.timp{text-align:right;font-size:10.5px;color:#111;white-space:nowrap;width:90px;font-weight:400}
+.tots-wrap{display:flex;justify-content:flex-end;border:1px solid #ccc;border-top:none;margin-bottom:18px}
+.tots{border-collapse:collapse;font-size:10.5px;min-width:320px}
+.tots td{padding:8px 14px}
+.tl{color:#333}.tv{text-align:right;color:#111;font-weight:500;min-width:130px}
+.tot-sep{border-top:1px solid #ccc}
 .tot-final{background:#111}
-.tot-final .tot-lbl{color:#fff;font-weight:700;font-size:9px;letter-spacing:.08em;text-transform:uppercase}
-.tot-final .tot-val{color:#C87820;font-size:16px;font-weight:900}
+.tot-final .tl{color:#fff;font-weight:700;font-size:10px;letter-spacing:.05em;text-transform:uppercase}
+.tot-final .tv{color:#fff;font-weight:900;font-size:12px}
+.sec{margin-top:18px}
+.sec-title{font-size:12.5px;font-weight:900;color:#111;margin-bottom:7px;letter-spacing:.01em}
+.blist{list-style:none;padding:0}
+.blist li{font-size:10.5px;color:#222;line-height:1.85;padding-left:13px;position:relative}
+.blist li::before{content:"\u00b7";position:absolute;left:0;top:0;color:#111;font-weight:900;font-size:15px;line-height:1.4}
+.ftr{display:flex;justify-content:space-between;margin:18px 24px 24px;padding-top:10px;border-top:1px solid #ddd;font-size:10px;color:#555}
+@media print{.toolbar{display:none}@page{size:A4;margin:.5cm}}`;
 
-/* BULLETS SECTION */
-.bsec{margin-bottom:16px}
-.bsec-title{font-size:8px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:#fff;background:#111;padding:6px 12px;margin-bottom:8px}
-.bsec-title.orange{background:#C87820}
-.blist{padding:0 0 0 12px}
-.blist li{font-size:10px;color:#333;line-height:1.9;list-style:disc;margin-left:4px}
-.blist li::marker{color:#C87820}
-
-/* FOOTER */
-.footer-line{border:none;border-top:1px solid #ddd;margin:18px 0 10px}
-.footer{display:flex;justify-content:space-between;font-size:9px;color:#888}
-
-@media print{body{padding:18px 26px}.toolbar{display:none}@page{margin:.7cm;size:A4}}
-</style></head><body>
-
+  const html = `<!DOCTYPE html>
+<html lang='es'><head><meta charset='UTF-8'/><title>${folio}</title>
+<style>${css}</style></head><body>
+<div class='page'>
 <div class='toolbar'>
-  <button class='btn-close' onclick='window.close()'>&#x2715; Cerrar</button>
-  <button class='btn-print' onclick='window.print()'>&#x2193; Guardar PDF</button>
+  <button class='tb-close' onclick='window.close()'>&#x2715; Cerrar</button>
+  <button class='tb-save' onclick='window.print()'>&#x2193; Guardar PDF</button>
 </div>
-
-<!-- HEADER -->
-<div class='header'>
+<div class='hdr-box'>
   <div>
-    <div class='brand-name'>LOGI<span>SOLVE</span></div>
+    <div class='brand-name'>LOGISOLVE</div>
     <div class='brand-sub'>Logistics &middot; Supply &middot; Solutions</div>
-    <div class='brand-info'>
-      Alejandro Saucedo<br>
-      RFC: SAME9612277T9<br>
-      Tel. 5562321807<br>
-      contacto@logisolve.mx<br>
-      https://logisolve-sistema.vercel.app/
-    </div>
   </div>
-  <div class='doc-right'>
-    <div class='doc-tipo'>COTIZACI&Oacute;N</div>
-    <div class='doc-no-label'>No.</div>
-    <div class='doc-folio'>${folio}</div>
-    <div class='doc-fecha'>Fecha: ${tkt.date.replace(/\//g," / ")}</div>
+  <div class='emisor'>
+    <strong>Alejandro Saucedo</strong><br>
+    RFC: SAME9612277T9<br>
+    Tel. 5562321807<br>
+    contacto@logisolve.mx
   </div>
 </div>
-
-<hr>
-
-<!-- META -->
-<table class='meta-table'>
-  <tr><td class='ml'>Cliente</td><td class='mv'>${cl?cl.empresa:"&mdash;"}</td></tr>
-  <tr><td class='ml'>Vigencia</td><td class='mv'>3 d&iacute;as naturales</td></tr>
-  <tr><td class='ml'>Atenci&oacute;n</td><td class='mv'>&Aacute;rea de Compras / Operaciones</td></tr>
-</table>
-
-<!-- CONCEPTOS -->
-<div class='tbl-wrap'>
-  <div class='sec-head'>Detalle del concepto</div>
+<div class='banda'>
+  <div class='banda-titulo'>COTIZACI&Oacute;N</div>
+  <div class='banda-right'>
+    <div class='banda-no'>No.</div>
+    <div class='banda-folio'>${folio}</div>
+    <div class='banda-fecha'>${tkt.date.replace(/\//g," / ")}</div>
+  </div>
+</div>
+<div class='meta-wrap'>
+  <table class='meta-tbl'>
+    <tr><td class='meta-lbl'>Cliente</td><td class='meta-val'>${clLine}</td></tr>
+    <tr><td class='meta-lbl'>Atenci&oacute;n</td><td class='meta-val'>&Aacute;rea de Compras / Operaciones</td></tr>
+    <tr><td class='meta-lbl'>Vigencia</td><td class='meta-val'>3 d&iacute;as naturales</td></tr>
+  </table>
+</div>
+<div class='body'>
+  <div class='det-title'>DETALLE DEL CONCEPTO</div>
   <table class='tbl'>
     <thead><tr>
-      <th style='width:30px'>No.</th>
-      <th style='width:130px'>Concepto</th>
+      <th>No.</th><th>Concepto</th>
       <th>Descripci&oacute;n t&eacute;cnica / operativa</th>
-      <th class='r' style='width:90px'>Importe</th>
+      <th class='r'>Importe</th>
     </tr></thead>
-    <tbody>${conceptosHTML}</tbody>
+    <tbody>${filas}</tbody>
   </table>
-  <table class='tbl' style='border-top:1.5px solid #ccc'>
-    <tr><td class='tot-lbl' style='text-align:right;padding:6px 10px;font-size:10px;color:#666'>Subtotal</td><td class='tot-val' style='text-align:right;padding:6px 10px;font-family:monospace;font-weight:600;color:#333;width:120px'>${fmtMXN(subtotal)} MXN</td></tr>
-    <tr><td class='tot-lbl' style='text-align:right;padding:5px 10px;font-size:10px;color:#666'>IVA (${ivaPct}%)</td><td class='tot-val' style='text-align:right;padding:5px 10px;font-family:monospace;font-weight:600;color:#333'>${fmtMXN(ivaAmt)} MXN</td></tr>
-    <tr class='tot-final'><td style='text-align:right;padding:10px;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#fff'>TOTAL - IVA INCLUIDO</td><td style='text-align:right;padding:10px;font-family:monospace;font-size:16px;font-weight:900;color:#C87820'>${fmtMXN(totalFinal)} MXN</td></tr>
-  </table>
+  <div class='tots-wrap'>
+    <table class='tots'>
+      <tr><td class='tl'>Subtotal</td><td class='tv'>${fmtMXN(subtotal)} MXN</td></tr>
+      <tr class='tot-sep'><td class='tl'>IVA (${ivaPct}%)</td><td class='tv'>${fmtMXN(ivaAmt)} MXN</td></tr>
+      <tr class='tot-final'><td class='tl'>TOTAL &middot; IVA INCLUIDO</td><td class='tv'>${fmtMXN(totalFinal)} MXN</td></tr>
+    </table>
+  </div>
+  <div class='sec'>
+    <div class='sec-title'>ALCANCE DEL SERVICIO</div>
+    <ul class='blist'>
+      <li>Integraci&oacute;n y coordinaci&oacute;n de componente requerido para continuidad operativa.</li>
+      <li>Validaci&oacute;n y coordinaci&oacute;n operativa.</li>
+      <li>Entrega directa en CEDIS SMO.</li>
+      <li>Seguimiento y trazabilidad log&iacute;stica.</li>
+    </ul>
+  </div>
+  <div class='sec'>
+    <div class='sec-title'>CONDICIONES COMERCIALES</div>
+    <ul class='blist'>
+      <li>Precio IVA incluido en el total.</li>
+      <li>Forma de pago: ${formaPago}.</li>
+      <li>Entrega conforme a disponibilidad confirmada al momento de autorizaci&oacute;n.</li>
+      <li>Precios sujetos a cambio y disponibilidad al momento de confirmar.</li>
+      <li>Vigencia: 3 d&iacute;as naturales a partir de la fecha de emisi&oacute;n.</li>
+      ${notaLine}
+    </ul>
+  </div>
+  <div class='sec'>
+    <div class='sec-title'>OBSERVACIONES</div>
+    <ul class='blist'>
+      <li>Tiempo estimado de entrega: ${entrega}, sujeto a disponibilidad.</li>
+      <li>La validaci&oacute;n t&eacute;cnica final de compatibilidad corresponde al cliente.</li>
+      <li>La garant&iacute;a aplica conforme a pol&iacute;ticas del fabricante o proveedor.</li>
+    </ul>
+  </div>
 </div>
-
-<!-- ALCANCE -->
-<div class='bsec'>
-  <div class='bsec-title'>Alcance del servicio</div>
-  <ul class='blist'>
-    <li>Integraci&oacute;n y coordinaci&oacute;n de componente requerido para continuidad operativa.</li>
-    <li>Validaci&oacute;n y coordinaci&oacute;n operativa.</li>
-    <li>Entrega directa en CEDIS SMO.</li>
-    <li>Seguimiento y trazabilidad log&iacute;stica.</li>
-  </ul>
+<div class='ftr'>
+  <span>Quedo atento para cualquier duda o confirmaci&oacute;n.</span>
+  <span>LogiSolve &middot; ${fechaLarga}</span>
 </div>
-
-<!-- CONDICIONES -->
-<div class='bsec'>
-  <div class='bsec-title'>Condiciones comerciales</div>
-  <ul class='blist'>
-    <li>Precio IVA incluido en el total.</li>
-    <li>Forma de pago: ${formaPago}.</li>
-    <li>Entrega conforme a disponibilidad confirmada al momento de autorizaci&oacute;n.</li>
-    <li>Precios sujetos a cambio y disponibilidad al momento de confirmar.</li>
-    <li>Vigencia: 3 d&iacute;as naturales a partir de la fecha de emisi&oacute;n.</li>
-    ${tkt.notes?`<li>${tkt.notes}</li>`:""}
-  </ul>
 </div>
-
-<!-- OBSERVACIONES -->
-<div class='bsec'>
-  <div class='bsec-title'>Observaciones</div>
-  <ul class='blist'>
-    <li>Tiempo estimado de entrega: ${entrega}, sujeto a disponibilidad.</li>
-    <li>La validaci&oacute;n t&eacute;cnica final de compatibilidad corresponde al cliente.</li>
-    <li>La garant&iacute;a aplica conforme a pol&iacute;ticas del fabricante o proveedor.</li>
-  </ul>
-</div>
-
-<hr class='footer-line'>
-<div class='footer'>
-  <span>Quedo atento para cualquier duda o confirmaci&oacute;n. LogiSolve &middot; ${fechaLarga}</span>
-</div>
-
 </body></html>`;
 
-  const win = window.open("","_blank");
-  if (win) {
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-  }
+  const win=window.open("","_blank");
+  if(win){win.document.open();win.document.write(html);win.document.close();}
 }
 
 
@@ -2315,7 +2296,7 @@ function Clientes({state,dispatch,toast}) {
   const [editId,setEditId]=useState(null);
   const [adding,setAdding]=useState(false);
   const [confirm,setConfirm]=useState(null);
-  const empty={empresa:"",contacto:"",tel:"",creditDays:15,category:"B",score:70};
+  const empty={empresa:"",contacto:"",tel:"",correo:"",rfc:"",direccion:"",ciudad:"",estado:"",creditDays:15,category:"B",score:70};
   const [form,setForm]=useState(empty);
   const sf=k=>v=>setForm(p=>({...p,[k]:v}));
 
@@ -2348,11 +2329,17 @@ function Clientes({state,dispatch,toast}) {
       {showForm&&(
         <div style={{background:C.bg1,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:4,padding:11,marginBottom:8}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
-            <Field label="Empresa"        value={form.empresa}    onChange={sf("empresa")}    prefix="" hint="Razon social"/>
-            <Field label="Contacto"       value={form.contacto}   onChange={sf("contacto")}   prefix=""/>
-            <Field label="Telefono"       value={form.tel}        onChange={sf("tel")}         prefix=""/>
-            <Field label="Dias credito"   value={form.creditDays} onChange={sf("creditDays")} prefix="" suffix="dias" type="number"/>
-            <Field label="Score (0-100)"  value={form.score}      onChange={sf("score")}      prefix="" type="number" min={0}/>
+            <Field label="Empresa / Razón social" value={form.empresa}    onChange={sf("empresa")}    prefix="" hint="Razón social"/>
+            <Field label="RFC"                    value={form.rfc||""}    onChange={sf("rfc")}         prefix=""/>
+            <Field label="Contacto"               value={form.contacto}   onChange={sf("contacto")}   prefix=""/>
+            <Field label="Teléfono"               value={form.tel}        onChange={sf("tel")}         prefix=""/>
+            <Field label="Correo"                 value={form.correo||""} onChange={sf("correo")}     prefix=""/>
+            <Field label="Días crédito"           value={form.creditDays} onChange={sf("creditDays")} prefix="" suffix="días" type="number"/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:7,marginTop:7}}>
+            <Field label="Dirección"   value={form.direccion||""} onChange={sf("direccion")} prefix="" hint="Calle, número, colonia"/>
+            <Field label="Ciudad"      value={form.ciudad||""}    onChange={sf("ciudad")}    prefix=""/>
+            <Field label="Estado"      value={form.estado||""}    onChange={sf("estado")}    prefix=""/>
           </div>
           <div style={{display:"flex",gap:6,marginTop:7}}>
             <button onClick={save} style={{padding:"5px 14px",background:C.blue,border:"none",borderRadius:3,color:C.t1,fontSize:11,fontWeight:700,cursor:"pointer"}}>{editId?"Guardar cambios":"Guardar cliente"}</button>
@@ -2616,15 +2603,16 @@ function Historial({state,dispatch,toast}) {
         gasolina:l.snap?.gastos||0, otros:0,
         mode:"manual", manualPrice:(l.snap?.precioConIVA||0).toFixed(2),
         customMgn:false, customVal:27,
+        descripcionPDF:l.descripcionPDF||"",
       }));
     } else {
       const parts=(t.titulo||"").split(" / ").filter(Boolean);
       if(parts.length>1) {
         const pxLinea=(t.snap.precioConIVA/parts.length).toFixed(2);
         const costoXLinea=toConIVA(t.snap)/parts.length;
-        lineas=parts.map(p=>({titulo:p.trim(),partRef:"",qty:1,costoUnit:costoXLinea,gasolina:0,otros:0,mode:"manual",manualPrice:pxLinea,customMgn:false,customVal:27}));
+        lineas=parts.map(p=>({titulo:p.trim(),partRef:"",qty:1,costoUnit:costoXLinea,gasolina:0,otros:0,mode:"manual",manualPrice:pxLinea,customMgn:false,customVal:27,descripcionPDF:""}));
       } else {
-        lineas=[{titulo:t.titulo||"",partRef:t.partRef||"",qty:1,costoUnit:toConIVA(t.snap),gasolina:t.snap?.gastos||0,otros:0,mode:"manual",manualPrice:(t.snap.precioConIVA||0).toFixed(2),customMgn:false,customVal:27}];
+        lineas=[{titulo:t.titulo||"",partRef:t.partRef||"",qty:1,costoUnit:toConIVA(t.snap),gasolina:t.snap?.gastos||0,otros:0,mode:"manual",manualPrice:(t.snap.precioConIVA||0).toFixed(2),customMgn:false,customVal:27,descripcionPDF:""}];
       }
     }
     setEditLineas(lineas);
@@ -2683,12 +2671,7 @@ function Historial({state,dispatch,toast}) {
         iva:parseFloat(ef.iva)||16,isr:parseFloat(ef.isr)||20,
         compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,
         mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
-      return {titulo:l.titulo||"Sin descripcion",partRef:l.partRef||"",snap,qty:l.qty||1};
-    });
-    const opMeta=OP_TYPES.find(o=>o.id===opType)||OP_TYPES[0];
-    const patch={
-      titulo, lineas:lineasConSnap,
-      opId:opType, opShort:opMeta.short, priority:ef.priority||"P3",
+      return {titulo:l.titulo||"Sin descripcion",partRef:l.partRef||"",snap,qty:l.qty||1,descripcionPDF:l.descripcionPDF||""};
       mods:[...activeMods],
       date:ef.date, clientId:ef.clientId, supplierId:ef.supplierId, unitId:ef.unitId||"",
       status:ef.status, payType:ef.payType,
@@ -2846,6 +2829,7 @@ function Historial({state,dispatch,toast}) {
                             <Field label="Descripción / producto" value={l.titulo} onChange={v=>updLinea(idx,{titulo:v})} prefix=""/>
                             <Field label="Ref. / OEM" value={l.partRef||""} onChange={v=>updLinea(idx,{partRef:v})} prefix=""/>
                           </div>
+                          <Field label="Descripción PDF (aparece en cotización)" value={l.descripcionPDF||""} onChange={v=>updLinea(idx,{descripcionPDF:v})} prefix="" hint="Dejar vacío para usar texto por defecto" rows={2}/>
                           {/* Qty, costo, gasolina, otros */}
                           <div style={{display:"grid",gridTemplateColumns:"70px 1fr 1fr 1fr",gap:5,marginBottom:5}}>
                             <Field label="Cant." value={l.qty||1} onChange={v=>updLinea(idx,{qty:parseInt(v)||1})} prefix="" suffix="pz" type="text" inputMode="numeric"/>
@@ -4082,6 +4066,13 @@ function MHistorial({state,dispatch,toast}) {
                           <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>DESCRIPCIÓN</div>
                           <input value={l.titulo} onChange={e=>updLinea(idx,{titulo:e.target.value})} placeholder="Producto o servicio..."
                             style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t1,fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+                        </div>
+                        {/* Descripción PDF */}
+                        <div style={{marginBottom:10}}>
+                          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>DESCRIPCIÓN EN COTIZACIÓN PDF</div>
+                          <textarea value={l.descripcionPDF||""} onChange={e=>updLinea(idx,{descripcionPDF:e.target.value})} rows={3}
+                            placeholder="Dejar vacío para texto por defecto..."
+                            style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t2,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
                         </div>
                         {/* Ref */}
                         <div style={{marginBottom:10}}>
