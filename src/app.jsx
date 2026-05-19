@@ -484,7 +484,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#111;font-siz
 .meta-val{color:#111;font-size:9.5px}
 .body{padding:14px 20px}
 .det-title{font-size:11px;font-weight:900;color:#111;margin-bottom:6px}
-.tbl{width:100%;border-collapse:collapse;border:1px solid #ccc;font-size:9.5px;margin-bottom:0}
+.tbl{width:100%;border-collapse:collapse;border:1px solid #ccc;font-size:9.5px;margin-bottom:0;border-bottom:none}
 .tbl thead tr{background:#444}
 .tbl thead th{color:#fff;font-size:8px;font-weight:700;padding:6px 8px;text-align:left;letter-spacing:.04em}
 .tbl thead th.r{text-align:right}
@@ -495,7 +495,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#111;font-siz
 .tdesc{color:#333;font-size:9px;line-height:1.6}
 .td-bold{margin-top:5px;font-size:9px;color:#111}
 .timp{text-align:right;font-size:9.5px;color:#111;white-space:nowrap;width:80px}
-.tots-wrap{display:flex;justify-content:flex-end;border:1px solid #ccc;border-top:none;margin-bottom:14px}
+.tots-wrap{display:flex;justify-content:flex-end;margin-bottom:14px;margin-top:6px}
 .tots{border-collapse:collapse;font-size:9.5px;min-width:300px}
 .tots td{padding:6px 12px}
 .tl{color:#333}.tv{text-align:right;color:#111;font-weight:500;min-width:120px}
@@ -509,7 +509,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#111;font-siz
 .blist li{font-size:9.5px;color:#222;line-height:1.75;padding-left:12px;position:relative}
 .blist li::before{content:"\u00b7";position:absolute;left:0;top:0;color:#111;font-weight:900;font-size:13px;line-height:1.35}
 .ftr{display:flex;justify-content:space-between;margin:13px 20px 18px;padding-top:8px;border-top:1px solid #ddd;font-size:9px;color:#555}
-@media print{.toolbar{display:none}@page{size:A4;margin:.4cm}}`;
+@media print{.toolbar{display:none}@page{size:A4;margin:.4cm;margin-top:.4cm}html{-webkit-print-color-adjust:exact}}`;
 
   const html = `<!DOCTYPE html>
 <html lang='es'><head><meta charset='UTF-8'/><title>${folio}</title>
@@ -528,7 +528,8 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#111;font-siz
     <strong>Alejandro Saucedo</strong><br>
     RFC: SAME9612277T9<br>
     Tel. 5562321807<br>
-    contacto@logisolve.mx
+    contacto@logisolve.mx<br>
+    https://logisolve-sistema.vercel.app/
   </div>
 </div>
 <div class='banda'>
@@ -536,14 +537,14 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#111;font-siz
   <div class='banda-right'>
     <div class='banda-no'>No.</div>
     <div class='banda-folio'>${folio}</div>
-    <div class='banda-fecha'>${tkt.date.replace(/\//g," / ")}</div>
+    <div class='banda-fecha'>Fecha: ${tkt.date.replace(/\//g," / ")}</div>
   </div>
 </div>
 <div class='meta-wrap'>
   <table class='meta-tbl'>
     <tr><td class='meta-lbl'>Cliente</td><td class='meta-val'>${clLine}</td></tr>
-    <tr><td class='meta-lbl'>Atenci&oacute;n</td><td class='meta-val'>&Aacute;rea de Compras / Operaciones</td></tr>
     <tr><td class='meta-lbl'>Vigencia</td><td class='meta-val'>3 d&iacute;as naturales</td></tr>
+    <tr><td class='meta-lbl'>Atenci&oacute;n</td><td class='meta-val'>&Aacute;rea de Compras / Operaciones</td></tr>
   </table>
 </div>
 <div class='body'>
