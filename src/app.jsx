@@ -409,200 +409,209 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
     return `${parseInt(p[0])} de ${meses[parseInt(p[1])-1]} de ${p[2]}`;
   })();
   const formaPago = tkt.payType==="credit"
-    ? "Credito"+(tkt.promesaPago?" — Fecha limite: "+tkt.promesaPago:"")
+    ? "Cr\u00e9dito"+(tkt.promesaPago?" \u2014 Fecha l\u00edmite: "+tkt.promesaPago:"")
     : "Contado / Transferencia bancaria";
-
   const conceptos = (tkt.lineas && tkt.lineas.length > 0)
     ? tkt.lineas
     : [{titulo:tkt.titulo, partRef:tkt.partRef||"", snap:s, qty:1}];
-
   const entrega = supp&&supp.entregaDias
-    ? supp.entregaDias+" dia"+(supp.entregaDias>1?"s":"")+" habiles"
-    : "24-48 hrs habiles";
-
-  // Totales
+    ? supp.entregaDias+" d\u00eda"+(supp.entregaDias>1?"s":"")+" h\u00e1biles"
+    : "24\u201348 hrs h\u00e1biles";
   const subtotal   = s.precioSinIVA;
   const ivaAmt     = s.ivaTraslad;
   const totalFinal = s.precioConIVA;
   const ivaPct     = s.params?.iva||16;
-
-  // Unidad display — solo Eco, sin placa
-  const unidadStr = un
-    ? (un.economico ? "Eco. "+un.economico+" · " : "") + un.marca+" "+un.modelo+" "+un.anio
-    : "";
-
+  const unidadStr  = un ? (un.economico?"Eco. "+un.economico+" \u2014 ":"")+un.marca+" "+un.modelo+" "+un.anio : "";
   const fmtMXN = n => n.toLocaleString("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2});
+
+  const conceptosHTML = conceptos.map((c,i)=>{
+    const titulo  = c.titulo||"";
+    const partRef = c.partRef||"";
+    const csnap   = c.snap||s;
+    const qty     = c.qty||1;
+    const precio  = fmtMXN(csnap.precioConIVA||0);
+    const unTag   = unidadStr&&i===0 ? `<tr class='c-meta'><td></td><td colspan='2'><span class='c-unit'>Unidad: ${unidadStr}</span></td></tr>` : "";
+    const refTag  = partRef ? `<tr class='c-meta'><td></td><td colspan='2'><span class='c-ref'>Clave: ${partRef}</span></td></tr>` : "";
+    const desc    = "Atenci\u00f3n correctiva para continuidad operativa de unidad en CEDIS SMO. Incluye integraci\u00f3n de componente compatible, validaci\u00f3n operativa y seguimiento log\u00edstico.";
+    const qtyTag  = qty>1 ? ` \u00d7${qty}` : "";
+    return `<tr class='c-row'>
+      <td class='c-num'>${String(i+1).padStart(2,"0")}</td>
+      <td class='c-title'>${titulo}${qtyTag}</td>
+      <td class='c-desc-col'>
+        <div class='c-desc'>${desc}</div>
+      </td>
+      <td class='c-price'>${precio}</td>
+    </tr>${unTag}${refTag}`;
+  }).join("");
 
   const html = `<!DOCTYPE html>
 <html lang='es'><head><meta charset='UTF-8'/>
 <meta name='viewport' content='width=device-width,initial-scale=1'/>
-<title>Cotizacion ${folio}</title>
+<title>${folio}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#111;font-size:11px;padding:24px 36px;max-width:820px;margin:0 auto}
-.close-bar{text-align:right;margin-bottom:10px}
-.close-bar button{padding:5px 14px;background:#111;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.05em}
+body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:#fff;color:#111;font-size:10.5px;padding:32px 44px;max-width:820px;margin:0 auto;line-height:1.55}
+.toolbar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:16px}
+.toolbar button{padding:6px 18px;border:none;border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.04em}
+.btn-print{background:#1a1a1a;color:#fff}
+.btn-close{background:#eee;color:#555}
 
 /* HEADER */
-.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px}
-.logo-text{font-size:20px;font-weight:900;letter-spacing:.08em;color:#111;line-height:1}
-.logo-text span{color:#C87820}
-.logo-sub{font-size:6px;letter-spacing:.28em;color:#aaa;margin-top:3px;text-transform:uppercase}
-.emisor-info{font-size:9px;color:#666;margin-top:4px;line-height:1.6}
-.emisor-info strong{color:#333}
+.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px}
+.brand-name{font-size:22px;font-weight:900;letter-spacing:.05em;color:#111;line-height:1}
+.brand-name span{color:#C87820}
+.brand-sub{font-size:8px;letter-spacing:.18em;color:#999;margin-top:2px;text-transform:uppercase}
+.brand-info{margin-top:9px;font-size:9px;color:#555;line-height:1.9}
 .doc-right{text-align:right}
-.doc-tipo{font-size:22px;font-weight:900;letter-spacing:.06em;color:#111}
-.doc-num{font-size:9px;color:#888;font-family:monospace;margin-top:3px}
-.doc-fecha{font-size:9px;color:#aaa;margin-top:2px}
+.doc-tipo{font-size:22px;font-weight:900;letter-spacing:.04em;color:#111;line-height:1}
+.doc-no-label{font-size:8px;color:#aaa;letter-spacing:.12em;text-transform:uppercase;margin-top:5px}
+.doc-folio{font-size:13px;font-weight:700;font-family:monospace;color:#333;margin-top:2px}
+.doc-fecha{font-size:9.5px;color:#888;margin-top:3px}
 
 /* DIVIDER */
-.divider{height:2px;background:#111;margin:12px 0 14px}
+hr{border:none;border-top:1.5px solid #111;margin:0 0 16px}
 
-/* INFO GRID */
-.info-grid{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #222;margin-bottom:16px;border-radius:2px;overflow:hidden}
-.info-cell{padding:7px 12px;border-right:1px solid #ddd}
-.info-cell:last-child{border-right:none}
-.info-label{font-size:6px;letter-spacing:.22em;text-transform:uppercase;color:#aaa;margin-bottom:3px}
-.info-value{font-size:11px;font-weight:700;color:#111;line-height:1.2;font-family:monospace}
+/* META TABLE */
+.meta-table{width:100%;border-collapse:collapse;margin-bottom:22px;font-size:10px}
+.meta-table td{padding:5px 0;vertical-align:top}
+.meta-table .ml{color:#888;width:80px}
+.meta-table .mv{font-weight:600;color:#111}
 
-/* CONCEPTO */
-.section-label{font-size:7px;letter-spacing:.25em;text-transform:uppercase;color:#aaa;margin-bottom:7px;font-weight:600}
-.conceptos-box{border:1px solid #222;border-radius:2px;margin-bottom:0;overflow:hidden}
-.conceptos-hdr{background:#111;color:#fff;padding:6px 14px;font-size:7px;letter-spacing:.22em;text-transform:uppercase}
-.concepto{padding:10px 14px;border-bottom:1px solid #eee}
-.concepto:last-child{border-bottom:none}
-.concepto-num{font-size:10px;font-weight:800;color:#C87820;margin-bottom:3px;font-family:monospace}
-.concepto-titulo{font-size:13px;font-weight:700;color:#111;margin-bottom:4px;line-height:1.2}
-.concepto-desc{font-size:9px;color:#555;line-height:1.6;margin-bottom:4px}
-.concepto-tag{display:inline-block;padding:1px 6px;background:#f5f5f5;border:1px solid #ddd;border-radius:2px;font-size:7px;color:#888;font-family:monospace;margin-top:2px}
-.unidad-tag{font-size:8px;color:#888;margin-top:4px;padding:2px 0;border-top:1px dashed #eee}
+/* SECTION HEADING */
+.sec-head{font-size:8px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:#fff;background:#111;padding:6px 12px;margin-bottom:0}
+
+/* CONCEPTO TABLE */
+.tbl{width:100%;border-collapse:collapse;font-size:10px}
+.tbl-wrap{border:1px solid #ccc;margin-bottom:18px}
+.tbl thead th{background:#111;color:#fff;font-size:7.5px;letter-spacing:.18em;text-transform:uppercase;font-weight:600;padding:7px 10px;text-align:left}
+.tbl thead th.r{text-align:right}
+.c-row td{padding:11px 10px;vertical-align:top;border-bottom:1px solid #eee}
+.c-row:last-of-type td{border-bottom:none}
+.c-num{font-size:11px;font-weight:800;color:#C87820;font-family:monospace;width:30px}
+.c-title{font-size:11px;font-weight:700;color:#111;width:130px;padding-right:8px!important}
+.c-desc-col{font-size:9px;color:#666;line-height:1.65}
+.c-price{font-size:11px;font-weight:700;font-family:monospace;color:#111;text-align:right;white-space:nowrap;width:90px}
+.c-meta td{padding:0 10px 9px!important;border-bottom:none!important}
+.c-unit{font-size:8.5px;color:#888;font-style:italic}
+.c-ref{font-size:8.5px;color:#888}
 
 /* TOTALES */
-.totales-box{border:1px solid #222;border-radius:2px;overflow:hidden;margin-bottom:14px}
-.totales-row{display:flex;justify-content:space-between;align-items:center;padding:7px 14px;border-bottom:1px solid #eee;font-size:10px}
-.totales-row:last-child{border-bottom:none;background:#111;padding:11px 14px}
-.totales-row .lbl{color:#888}
-.totales-row .val{font-family:monospace;font-weight:700;color:#444}
-.totales-row.total-final .lbl{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#fff;font-weight:700}
-.totales-row.total-final .val{font-size:19px;font-weight:900;color:#C87820;letter-spacing:.02em}
-.entrega-note{font-size:8px;color:#666;padding:6px 14px;background:#fffbf5;border:1px solid #ffe0b0;border-radius:2px;margin-bottom:14px}
+.tot-tbl{width:100%;border-collapse:collapse;border-top:1px solid #ccc}
+.tot-tbl td{padding:6px 10px;font-size:10px}
+.tot-lbl{text-align:right;color:#666}
+.tot-val{text-align:right;font-family:monospace;font-weight:600;color:#333;width:120px}
+.tot-final{background:#111}
+.tot-final .tot-lbl{color:#fff;font-weight:700;font-size:9px;letter-spacing:.08em;text-transform:uppercase}
+.tot-final .tot-val{color:#C87820;font-size:16px;font-weight:900}
 
-/* CONDICIONES */
-.cond-box{border:1px solid #ddd;border-radius:2px;overflow:hidden;margin-bottom:14px}
-.cond-hdr{background:#111;color:#fff;padding:6px 14px;font-size:7px;letter-spacing:.22em;text-transform:uppercase}
-.cond-list{padding:8px 14px}
-.cond-item{font-size:9px;color:#444;line-height:1.8;display:flex;gap:8px}
-.cond-bullet{color:#C87820;font-weight:700;flex-shrink:0}
-
-/* ALCANCE */
-.alcance-box{border:1px solid #ddd;border-radius:2px;overflow:hidden;margin-bottom:14px}
-.alcance-hdr{background:#C87820;color:#fff;padding:6px 14px;font-size:7px;letter-spacing:.22em;text-transform:uppercase}
-.alcance-list{padding:8px 14px;display:grid;grid-template-columns:1fr 1fr;gap:2px}
-.alcance-item{font-size:9px;color:#444;line-height:1.8;display:flex;gap:8px}
-.alcance-bullet{color:#C87820;font-weight:700;flex-shrink:0}
+/* BULLETS SECTION */
+.bsec{margin-bottom:16px}
+.bsec-title{font-size:8px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:#fff;background:#111;padding:6px 12px;margin-bottom:8px}
+.bsec-title.orange{background:#C87820}
+.blist{padding:0 0 0 12px}
+.blist li{font-size:10px;color:#333;line-height:1.9;list-style:disc;margin-left:4px}
+.blist li::marker{color:#C87820}
 
 /* FOOTER */
-.footer-line{height:1px;background:#eee;margin:14px 0 10px}
-.footer{display:flex;justify-content:space-between;align-items:center;font-size:8px;color:#aaa}
-.print-btn{text-align:center;margin:16px 0 4px}
-.print-btn button{padding:9px 28px;background:#111;color:#fff;border:none;border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.06em}
-@media print{body{padding:16px 24px}.close-bar,.print-btn{display:none}@page{margin:1cm}}
+.footer-line{border:none;border-top:1px solid #ddd;margin:18px 0 10px}
+.footer{display:flex;justify-content:space-between;font-size:9px;color:#888}
+
+@media print{body{padding:18px 26px}.toolbar{display:none}@page{margin:.7cm;size:A4}}
 </style></head><body>
 
-<div class='close-bar'><button onclick='window.close()'>x Cerrar ventana</button></div>
+<div class='toolbar'>
+  <button class='btn-close' onclick='window.close()'>&#x2715; Cerrar</button>
+  <button class='btn-print' onclick='window.print()'>&#x2193; Guardar PDF</button>
+</div>
 
 <!-- HEADER -->
 <div class='header'>
   <div>
-    <div class='logo-text'>LOGI<span>SOLVE</span></div>
-    <div class='logo-sub'>Logistics &middot; Supply &middot; Solutions</div>
-    <div class='emisor-info'>
-      <strong>Alejandro Saucedo</strong><br/>
-      RFC: SAME9612277T9 &nbsp;&nbsp; Tel. 5562321807
+    <div class='brand-name'>LOGI<span>SOLVE</span></div>
+    <div class='brand-sub'>Logistics &middot; Supply &middot; Solutions</div>
+    <div class='brand-info'>
+      Alejandro Saucedo<br>
+      RFC: SAME9612277T9<br>
+      Tel. 5562321807<br>
+      contacto@logisolve.mx<br>
+      https://logisolve-sistema.vercel.app/
     </div>
   </div>
   <div class='doc-right'>
-    <div class='doc-tipo'>COTIZACIÓN</div>
-    <div class='doc-num'>No. ${folio}</div>
-    <div class='doc-fecha'>${fechaLarga}</div>
+    <div class='doc-tipo'>COTIZACI&Oacute;N</div>
+    <div class='doc-no-label'>No.</div>
+    <div class='doc-folio'>${folio}</div>
+    <div class='doc-fecha'>Fecha: ${tkt.date.replace(/\//g," / ")}</div>
   </div>
 </div>
 
-<div class='divider'></div>
+<hr>
 
-<!-- INFO GRID -->
-<div class='info-grid'>
-  <div class='info-cell'><div class='info-label'>Folio</div><div class='info-value' style='font-family:monospace'>${folio}</div></div>
-  <div class='info-cell'><div class='info-label'>Fecha</div><div class='info-value'>${tkt.date.replace(/\//g," / ")}</div></div>
-  <div class='info-cell'><div class='info-label'>Cliente</div><div class='info-value'>${cl?cl.empresa:"---"}</div></div>
-  <div class='info-cell'><div class='info-label'>Vigencia</div><div class='info-value'>3 días naturales</div></div>
-</div>
+<!-- META -->
+<table class='meta-table'>
+  <tr><td class='ml'>Cliente</td><td class='mv'>${cl?cl.empresa:"&mdash;"}</td></tr>
+  <tr><td class='ml'>Vigencia</td><td class='mv'>3 d&iacute;as naturales</td></tr>
+  <tr><td class='ml'>Atenci&oacute;n</td><td class='mv'>&Aacute;rea de Compras / Operaciones</td></tr>
+</table>
 
-<!-- CONCEPTO -->
-<div class='section-label'>Detalle del concepto</div>
-<div class='conceptos-box'>
-  <div class='conceptos-hdr'>Concepto</div>
-  ${conceptos.map(function(c,i){
-    var titulo  = c.titulo||c;
-    var partRef = c.partRef||"";
-    var csnap   = c.snap||s;
-    var qty     = c.qty||1;
-    var qtyTag  = qty>1?" <span style='font-size:11px;font-weight:400;color:#888'>(x"+qty+")</span>":"";
-    var desc    = "Gestión de suministro — coordinación, localización y entrega directa en CEDIS SMO. Trazabilidad del pedido incluida.";
-    var partTag = partRef?"<span class='concepto-tag'>"+partRef+"</span>":"";
-    var uTag    = unidadStr&&i===0?"<div class='unidad-tag'>Unidad: "+unidadStr+"</div>":"";
-    return "<div class='concepto'>"
-      +"<div class='concepto-num'>"+String(i+1).padStart(2,"0")+"</div>"
-      +"<div class='concepto-titulo'>"+titulo+qtyTag+"</div>"
-      +"<div class='concepto-desc'>"+desc+"</div>"
-      +partTag+uTag
-      +"</div>";
-  }).join("")}
-</div>
-
-<!-- TOTALES -->
-<div class='totales-box'>
-  <div class='totales-row'><span class='lbl'>Subtotal</span><span class='val'>${fmtMXN(subtotal)} MXN</span></div>
-  <div class='totales-row'><span class='lbl'>IVA (${ivaPct}%)</span><span class='val'>${fmtMXN(ivaAmt)} MXN</span></div>
-  <div class='totales-row total-final'><span class='lbl'>TOTAL &middot; IVA INCLUIDO</span><span class='val'>${fmtMXN(totalFinal)} MXN</span></div>
-</div>
-
-<!-- ENTREGA -->
-<div class='entrega-note'>
-  &#9679; Tiempo estimado de entrega: <strong>${entrega}</strong> sujeto a disponibilidad. &nbsp;&nbsp; &#9679; Lugar de entrega: <strong>CEDIS SMO</strong>
-</div>
-
-<!-- CONDICIONES -->
-<div class='cond-box'>
-  <div class='cond-hdr'>Condiciones comerciales</div>
-  <div class='cond-list'>
-    <div class='cond-item'><span class='cond-bullet'>—</span><span>Precio IVA incluido en el total.</span></div>
-    <div class='cond-item'><span class='cond-bullet'>—</span><span>Forma de pago: ${formaPago}.</span></div>
-    <div class='cond-item'><span class='cond-bullet'>—</span><span>Entrega conforme a disponibilidad confirmada al momento de autorización.</span></div>
-    <div class='cond-item'><span class='cond-bullet'>—</span><span>Precios sujetos a cambio y disponibilidad al momento de confirmar.</span></div>
-    <div class='cond-item'><span class='cond-bullet'>—</span><span>Vigencia: 3 días naturales a partir de la fecha de emisión.</span></div>
-    ${tkt.notes?"<div class='cond-item'><span class='cond-bullet'>—</span><span>Nota: "+tkt.notes+"</span></div>":""}
-  </div>
+<!-- CONCEPTOS -->
+<div class='tbl-wrap'>
+  <div class='sec-head'>Detalle del concepto</div>
+  <table class='tbl'>
+    <thead><tr>
+      <th style='width:30px'>No.</th>
+      <th style='width:130px'>Concepto</th>
+      <th>Descripci&oacute;n t&eacute;cnica / operativa</th>
+      <th class='r' style='width:90px'>Importe</th>
+    </tr></thead>
+    <tbody>${conceptosHTML}</tbody>
+  </table>
+  <table class='tbl' style='border-top:1.5px solid #ccc'>
+    <tr><td class='tot-lbl' style='text-align:right;padding:6px 10px;font-size:10px;color:#666'>Subtotal</td><td class='tot-val' style='text-align:right;padding:6px 10px;font-family:monospace;font-weight:600;color:#333;width:120px'>${fmtMXN(subtotal)} MXN</td></tr>
+    <tr><td class='tot-lbl' style='text-align:right;padding:5px 10px;font-size:10px;color:#666'>IVA (${ivaPct}%)</td><td class='tot-val' style='text-align:right;padding:5px 10px;font-family:monospace;font-weight:600;color:#333'>${fmtMXN(ivaAmt)} MXN</td></tr>
+    <tr class='tot-final'><td style='text-align:right;padding:10px;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#fff'>TOTAL - IVA INCLUIDO</td><td style='text-align:right;padding:10px;font-family:monospace;font-size:16px;font-weight:900;color:#C87820'>${fmtMXN(totalFinal)} MXN</td></tr>
+  </table>
 </div>
 
 <!-- ALCANCE -->
-<div class='alcance-box'>
-  <div class='alcance-hdr'>Alcance del servicio</div>
-  <div class='alcance-list'>
-    <div class='alcance-item'><span class='alcance-bullet'>—</span><span>Suministro de refacción / componente solicitado.</span></div>
-    <div class='alcance-item'><span class='alcance-bullet'>—</span><span>Validación y coordinación operativa.</span></div>
-    <div class='alcance-item'><span class='alcance-bullet'>—</span><span>Entrega directa en CEDIS SMO.</span></div>
-    <div class='alcance-item'><span class='alcance-bullet'>—</span><span>Seguimiento y trazabilidad del pedido.</span></div>
-  </div>
+<div class='bsec'>
+  <div class='bsec-title'>Alcance del servicio</div>
+  <ul class='blist'>
+    <li>Integraci&oacute;n y coordinaci&oacute;n de componente requerido para continuidad operativa.</li>
+    <li>Validaci&oacute;n y coordinaci&oacute;n operativa.</li>
+    <li>Entrega directa en CEDIS SMO.</li>
+    <li>Seguimiento y trazabilidad log&iacute;stica.</li>
+  </ul>
 </div>
 
-<div class='footer-line'></div>
+<!-- CONDICIONES -->
+<div class='bsec'>
+  <div class='bsec-title'>Condiciones comerciales</div>
+  <ul class='blist'>
+    <li>Precio IVA incluido en el total.</li>
+    <li>Forma de pago: ${formaPago}.</li>
+    <li>Entrega conforme a disponibilidad confirmada al momento de autorizaci&oacute;n.</li>
+    <li>Precios sujetos a cambio y disponibilidad al momento de confirmar.</li>
+    <li>Vigencia: 3 d&iacute;as naturales a partir de la fecha de emisi&oacute;n.</li>
+    ${tkt.notes?`<li>${tkt.notes}</li>`:""}
+  </ul>
+</div>
+
+<!-- OBSERVACIONES -->
+<div class='bsec'>
+  <div class='bsec-title'>Observaciones</div>
+  <ul class='blist'>
+    <li>Tiempo estimado de entrega: ${entrega}, sujeto a disponibilidad.</li>
+    <li>La validaci&oacute;n t&eacute;cnica final de compatibilidad corresponde al cliente.</li>
+    <li>La garant&iacute;a aplica conforme a pol&iacute;ticas del fabricante o proveedor.</li>
+  </ul>
+</div>
+
+<hr class='footer-line'>
 <div class='footer'>
-  <div>Quedo atento para cualquier duda o confirmación.</div>
-  <div>LogiSolve &middot; ${fechaLarga}</div>
+  <span>Quedo atento para cualquier duda o confirmaci&oacute;n. LogiSolve &middot; ${fechaLarga}</span>
 </div>
 
-<div class='print-btn'><button onclick='window.print()'>Imprimir / Guardar como PDF</button></div>
 </body></html>`;
 
   const win = window.open("","_blank");
@@ -612,6 +621,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#111;font-siz
     win.document.close();
   }
 }
+
 
 // Modal de confirmacion PDF
 function PDFConfirm({tkt,cl,un,supp,onClose}) {
@@ -2594,66 +2604,92 @@ function Historial({state,dispatch,toast}) {
     e.stopPropagation();
     setEditId(t.id);
     setExpId(t.id);
+    const iva = t.snap.params?.iva||16;
+    const ivaR = iva/100;
+    // costoBase en snap es sin IVA; el cotizador trabaja con costo CON IVA
+    const toConIVA = (snap) => (snap?.costoBase||0)*(1+ivaR);
     let lineas;
     if(t.lineas&&t.lineas.length>0) {
-      // Ticket nuevo con lineas guardadas
       lineas = t.lineas.map(l=>({
-        titulo:l.titulo||"",
-        partRef:l.partRef||"",
-        manualPrice:(l.snap?.precioConIVA||0).toFixed(2),
-        qty:l.qty||1,
+        titulo:l.titulo||"", partRef:l.partRef||"",
+        qty:l.qty||1, costoUnit:toConIVA(l.snap),
+        gasolina:l.snap?.gastos||0, otros:0,
+        mode:"manual", manualPrice:(l.snap?.precioConIVA||0).toFixed(2),
+        customMgn:false, customVal:27,
       }));
     } else {
-      // Ticket viejo — reconstruir desde titulo (puede ser "Prod A / Prod B")
-      const parts = (t.titulo||"").split(" / ").filter(Boolean);
+      const parts=(t.titulo||"").split(" / ").filter(Boolean);
       if(parts.length>1) {
-        // Distribuir el precio total equitativamente entre las partes
-        const pxLinea = (t.snap.precioConIVA/parts.length).toFixed(2);
-        lineas = parts.map(p=>({titulo:p.trim(),partRef:"",manualPrice:pxLinea,qty:1}));
+        const pxLinea=(t.snap.precioConIVA/parts.length).toFixed(2);
+        const costoXLinea=toConIVA(t.snap)/parts.length;
+        lineas=parts.map(p=>({titulo:p.trim(),partRef:"",qty:1,costoUnit:costoXLinea,gasolina:0,otros:0,mode:"manual",manualPrice:pxLinea,customMgn:false,customVal:27}));
       } else {
-        lineas = [{titulo:t.titulo||"",partRef:t.partRef||"",manualPrice:(t.snap.precioConIVA||0).toFixed(2),qty:1}];
+        lineas=[{titulo:t.titulo||"",partRef:t.partRef||"",qty:1,costoUnit:toConIVA(t.snap),gasolina:t.snap?.gastos||0,otros:0,mode:"manual",manualPrice:(t.snap.precioConIVA||0).toFixed(2),customMgn:false,customVal:27}];
       }
     }
     setEditLineas(lineas);
     setEf({
-      date:t.date,
-      clientId:t.clientId||"", supplierId:t.supplierId||"",
-      unitId:t.unitId||"",
+      date:t.date, clientId:t.clientId||"", supplierId:t.supplierId||"", unitId:t.unitId||"",
       status:t.status, payType:t.payType, promesaPago:t.promesaPago||"",
       prob:t.prob||"high", horasOp:t.horasOp||0, notes:t.notes||"",
-      iva:t.snap.params?.iva||16, isr:t.snap.params?.isr||20,
+      iva, isr:t.snap.params?.isr||20,
+      cIVA:true, vIVA:true,
+      opType:t.opId||"consumable", activeMods:[...(t.mods||[])], priority:t.priority||"P3",
     });
   },[]);
 
   const cancelEdit = useCallback(()=>{setEditId(null);setEf({});setEditLineas([]);},[]);
 
-  // Snap agregado de todas las líneas editadas
+  // Snap agregado de todas las líneas — igual que cotizador
   const editTotalSnap = useMemo(()=>{
     if(!editId||!editLineas.length) return null;
-    const iva=ef.iva||16; const isr=ef.isr||20;
-    const snaps = editLineas.map(l=>computeSnap({costo:0,gasolina:0,otros:0,iva,isr,compraConIVA:false,ventaConIVA:true,mode:"manual",manualPrice:l.manualPrice||"0"}));
+    const iva=parseFloat(ef.iva)||16; const isr=parseFloat(ef.isr)||20;
+    const opType=ef.opType||"consumable"; const priority=ef.priority||"P3";
+    const activeMods=ef.activeMods||[];
+    const sharedMgn = effectiveMargin(opType,priority,activeMods,false,27);
+    const snaps = editLineas.map(l=>{
+      const mg = l.customMgn?Math.min(l.customVal,99):sharedMgn;
+      const costo=(l.costoUnit||0)*(l.qty||1);
+      return computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,iva,isr,
+        compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,
+        mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
+    });
     const sum=k=>snaps.reduce((s,sn)=>s+sn[k],0);
+    const precioSinIVA=sum("precioSinIVA");
+    const uNeta=sum("uNeta");
     return {
-      precioConIVA:sum("precioConIVA"), precioSinIVA:sum("precioSinIVA"),
+      precioConIVA:sum("precioConIVA"), precioSinIVA,
       ivaTraslad:sum("ivaTraslad"), ivaAcred:sum("ivaAcred"), ivaNeto:sum("ivaNeto"),
       costoTotal:sum("costoTotal"), costoBase:sum("costoBase"), gastos:sum("gastos"),
-      uNeta:sum("uNeta"), uBruta:sum("uBruta"), isr:sum("isr"),
-      markupSobre:0, margenNetoPrecio:sum("precioSinIVA")>0?(sum("uNeta")/sum("precioSinIVA"))*100:0,
+      uNeta, uBruta:sum("uBruta"), isr:sum("isr"),
+      markupSobre:sum("costoTotal")>0?((precioSinIVA-sum("costoTotal"))/sum("costoTotal"))*100:0,
+      margenNetoPrecio:precioSinIVA>0?(uNeta/precioSinIVA)*100:0,
       params:{iva,isr},
     };
-  },[editId,editLineas,ef.iva,ef.isr]);
+  },[editId,editLineas,ef]);
 
   const liveSnap = editTotalSnap;
 
   const saveEdit = useCallback(id=>{
     if(!editTotalSnap) return;
     const titulo = editLineas.map(l=>l.titulo.trim()||"Sin descripcion").join(" / ");
+    const opType=ef.opType||"consumable"; const priority=ef.priority||"P3";
+    const activeMods=ef.activeMods||[];
+    const sharedMgn=effectiveMargin(opType,priority,activeMods,false,27);
     const lineasConSnap = editLineas.map(l=>{
-      const snap=computeSnap({costo:0,gasolina:0,otros:0,iva:ef.iva||16,isr:ef.isr||20,compraConIVA:false,ventaConIVA:true,mode:"manual",manualPrice:l.manualPrice||"0"});
+      const mg=l.customMgn?Math.min(l.customVal,99):sharedMgn;
+      const costo=(l.costoUnit||0)*(l.qty||1);
+      const snap=computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,
+        iva:parseFloat(ef.iva)||16,isr:parseFloat(ef.isr)||20,
+        compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,
+        mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
       return {titulo:l.titulo||"Sin descripcion",partRef:l.partRef||"",snap,qty:l.qty||1};
     });
+    const opMeta=OP_TYPES.find(o=>o.id===opType)||OP_TYPES[0];
     const patch={
       titulo, lineas:lineasConSnap,
+      opId:opType, opShort:opMeta.short, priority:ef.priority||"P3",
+      mods:[...activeMods],
       date:ef.date, clientId:ef.clientId, supplierId:ef.supplierId, unitId:ef.unitId||"",
       status:ef.status, payType:ef.payType,
       promesaPago:ef.payType==="credit"?ef.promesaPago:null,
@@ -2668,11 +2704,11 @@ function Historial({state,dispatch,toast}) {
   },[ef,editLineas,editTotalSnap,dispatch,toast,cancelEdit]);
 
   const desgloseRows = t=>[
-    ["Costo base s/IVA",    mxn(t.snap.costoBase),        C.t2,    false],
-    ["IVA acreditable",     mxn(t.snap.ivaAcred),         C.blueHi,false],
-    ["Gastos op.",          mxn(t.snap.gastos),           C.t2,    false],
-    ["Costo total",         mxn(t.snap.costoTotal),       C.t1,    true ],
-    ["Markup s/costo",      fpct(t.snap.markupSobre),     C.blueHi,false],
+    ["Costo producto (c/IVA)",  mxn((t.snap.costoBase||0)*(1+(t.snap.params?.iva||16)/100)), C.t2,    false],
+    ["IVA acreditable",        mxn(t.snap.ivaAcred),         C.blueHi,false],
+    ["Gastos op.",             mxn(t.snap.gastos),           C.t2,    false],
+    ["Costo total",            mxn(t.snap.costoTotal),       C.t1,    true ],
+    ["Markup s/costo",         fpct(t.snap.markupSobre),     C.blueHi,false],
     ["Precio sin IVA",      mxn(t.snap.precioSinIVA),     C.cyan,  false],
     ["IVA trasladado",      mxn(t.snap.ivaTraslad),       C.blueHi,false],
     ["Precio con IVA",      mxn(t.snap.precioConIVA),     C.cyan,  true ],
@@ -2759,25 +2795,102 @@ function Historial({state,dispatch,toast}) {
                         </div>
                       </div>
 
+                      {/* Tipo de operación y modificadores */}
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}>
+                        <div>
+                          <div style={{fontSize:7,color:C.t3,letterSpacing:"0.14em",marginBottom:3}}>TIPO DE OPERACIÓN</div>
+                          <select value={ef.opType||"consumable"} onChange={e=>sfn("opType")(e.target.value)}
+                            style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 6px",color:C.t1,fontSize:10,outline:"none"}}>
+                            {OP_TYPES.map(op=><option key={op.id} value={op.id}>{op.label} ({op.baseMin}-{op.baseMax}%)</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <div style={{fontSize:7,color:C.t3,letterSpacing:"0.14em",marginBottom:3}}>PRIORIDAD</div>
+                          <select value={ef.priority||"P3"} onChange={e=>sfn("priority")(e.target.value)}
+                            style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 6px",color:C.t1,fontSize:10,outline:"none"}}>
+                            {Object.values(PRIORITY).map(p=><option key={p.id} value={p.id}>{p.id} — {p.label}</option>)}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Parámetros fiscales */}
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6,marginBottom:6}}>
+                        <Field label="IVA %" value={ef.iva} onChange={sfn("iva")} prefix="" suffix="%" type="text" inputMode="decimal"/>
+                        <Field label="ISR %" value={ef.isr} onChange={sfn("isr")} prefix="" suffix="%" type="text" inputMode="decimal"/>
+                        <div style={{display:"flex",flexDirection:"column",justifyContent:"flex-end",paddingBottom:2}}>
+                          <Toggle label="Compra c/IVA" value={ef.cIVA!==false} onChange={v=>sfn("cIVA")(v)}/>
+                        </div>
+                        <div style={{display:"flex",flexDirection:"column",justifyContent:"flex-end",paddingBottom:2}}>
+                          <Toggle label="Venta c/IVA" value={ef.vIVA!==false} onChange={v=>sfn("vIVA")(v)}/>
+                        </div>
+                      </div>
+
                       {/* Líneas */}
                       <div style={{height:1,background:C.border,margin:"4px 0 7px"}}/>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
                         <div style={{fontSize:7,color:C.t3,letterSpacing:"0.14em"}}>LÍNEAS ({editLineas.length})</div>
                         <button onClick={addEditLinea} style={{fontSize:8,background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,padding:"2px 8px",cursor:"pointer",fontWeight:600}}>+ Agregar línea</button>
                       </div>
-                      {editLineas.map((l,idx)=>(
+                      {editLineas.map((l,idx)=>{
+                        const mg = l.customMgn ? Math.min(l.customVal,99) : effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
+                        const costo=(l.costoUnit||0)*(l.qty||1);
+                        const lsnap = computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,iva:parseFloat(ef.iva)||16,isr:parseFloat(ef.isr)||20,compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
+                        return (
                         <div key={idx} style={{background:C.bg1,border:`1px solid ${C.borderHi}`,borderRadius:3,padding:"7px 9px",marginBottom:5}}>
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
-                            <span style={{fontSize:8,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>LÍNEA {String(idx+1).padStart(2,"0")}</span>
+                            <span style={{fontSize:8,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>LÍNEA {String(idx+1).padStart(2,"0")} · {mxn(lsnap.precioConIVA)} · {fpct(lsnap.margenNetoPrecio)}</span>
                             {editLineas.length>1&&<button onClick={()=>delLinea(idx)} style={{padding:"1px 6px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:2,color:C.red,fontSize:8,cursor:"pointer",fontWeight:700}}>× Eliminar</button>}
                           </div>
-                          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:5}}>
+                          {/* Descripción y parte */}
+                          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:5,marginBottom:5}}>
                             <Field label="Descripción / producto" value={l.titulo} onChange={v=>updLinea(idx,{titulo:v})} prefix=""/>
                             <Field label="Ref. / OEM" value={l.partRef||""} onChange={v=>updLinea(idx,{partRef:v})} prefix=""/>
-                            <Field label="Precio venta c/IVA" value={l.manualPrice} onChange={v=>updLinea(idx,{manualPrice:v})} hi type="number" min={0} step={0.01}/>
+                          </div>
+                          {/* Qty, costo, gasolina, otros */}
+                          <div style={{display:"grid",gridTemplateColumns:"70px 1fr 1fr 1fr",gap:5,marginBottom:5}}>
+                            <Field label="Cant." value={l.qty||1} onChange={v=>updLinea(idx,{qty:parseInt(v)||1})} prefix="" suffix="pz" type="text" inputMode="numeric"/>
+                            <Field label="Costo unit. c/IVA" value={l.costoUnit||0} onChange={v=>updLinea(idx,{costoUnit:parseFloat(v)||0})} type="text" inputMode="decimal"/>
+                            <Field label="Gasolina" value={l.gasolina||0} onChange={v=>updLinea(idx,{gasolina:parseFloat(v)||0})} type="text" inputMode="decimal"/>
+                            <Field label="Otros gastos" value={l.otros||0} onChange={v=>updLinea(idx,{otros:parseFloat(v)||0})} type="text" inputMode="decimal"/>
+                          </div>
+                          {(l.qty||1)>1&&<div style={{fontSize:7,color:C.t3,marginBottom:5,fontFamily:"'Courier New',monospace"}}>{l.qty} × {mxn(l.costoUnit||0)} = {mxn(costo)} costo total</div>}
+                          {/* Modo precio */}
+                          <div style={{display:"flex",gap:7,alignItems:"center"}}>
+                            <div style={{display:"flex",borderRadius:3,overflow:"hidden",border:`1px solid ${C.border}`,flexShrink:0}}>
+                              {[["auto","Auto"],["manual","Manual"]].map(([id,lbl])=>(
+                                <button key={id} onClick={()=>updLinea(idx,{mode:id})}
+                                  style={{padding:"3px 8px",border:"none",cursor:"pointer",fontSize:8,fontWeight:600,background:l.mode===id?C.blue:C.bg2,color:l.mode===id?C.t1:C.t2}}>{lbl}</button>
+                              ))}
+                            </div>
+                            {l.mode==="auto" ? (
+                              <div style={{display:"flex",alignItems:"center",gap:5,flex:1}}>
+                                <span style={{fontSize:7,color:C.t3}}>Margen:</span>
+                                {l.customMgn ? (
+                                  <input type="text" inputMode="decimal" value={l.customVal} onChange={e=>updLinea(idx,{customVal:parseFloat(e.target.value)||0})}
+                                    style={{width:55,background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:3,padding:"3px 5px",color:C.cyan,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace",textAlign:"right"}}/>
+                                ) : (
+                                  <span style={{fontSize:11,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{fpct(mg)}</span>
+                                )}
+                                <button onClick={()=>updLinea(idx,{customMgn:!l.customMgn})}
+                                  style={{fontSize:7,padding:"2px 5px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:2,color:C.t3,cursor:"pointer"}}>
+                                  {l.customMgn?"auto":"editar"}
+                                </button>
+                              </div>
+                            ) : (
+                              <div style={{display:"flex",alignItems:"center",gap:5,flex:1}}>
+                                <span style={{fontSize:7,color:C.t3}}>Precio c/IVA:</span>
+                                <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden",flex:1}}>
+                                  <span style={{padding:"0 4px",color:C.cyan,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
+                                  <input type="text" inputMode="decimal" value={l.manualPrice} onChange={e=>updLinea(idx,{manualPrice:e.target.value})}
+                                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:11,fontWeight:700,padding:"4px 0",fontFamily:"'Courier New',monospace"}}/>
+                                </div>
+                                <span style={{fontSize:8,color:margenColor(lsnap.margenNetoPrecio),fontFamily:"'Courier New',monospace",flexShrink:0}}>{fpct(lsnap.margenNetoPrecio)}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
 
                       {/* Preview total */}
                       {liveSnap&&(
@@ -2802,7 +2915,7 @@ function Historial({state,dispatch,toast}) {
                     </div>
                   ):(
                     <>
-                      {/* Líneas individuales si existen */}
+                        {/* Líneas individuales si existen */}
                       {t.lineas&&t.lineas.length>0 ? (
                         <div>
                           {t.lineas.map((l,j)=>(
@@ -3662,44 +3775,116 @@ function MCartera({state,dispatch,toast}) {
   );
 }
 
-// ── MHistorial — Historial móvil con edición completa ────────────────────────
+// ── MHistorial — Historial móvil con edición completa y líneas ───────────────
 function MHistorial({state,dispatch,toast}) {
   const {tickets,clients,units,suppliers} = state;
   const realizados = useMemo(()=>tickets.filter(t=>!FORECAST_SET.has(t.status)&&t.status!=="cancelado"),[tickets]);
   const totalFact  = useMemo(()=>realizados.reduce((s,t)=>s+t.snap.precioConIVA,0),[realizados]);
   const totalNeta  = useMemo(()=>realizados.reduce((s,t)=>s+t.snap.uNeta,0),[realizados]);
-  const [expId,    setExpId]    = useState(null);
-  const [editId,   setEditId]   = useState(null);
-  const [ef,       setEf]       = useState({});
-  const [pdfPending,setPdfPending] = useState(null);
-  const [confirm,  setConfirm]  = useState(null);
+  const [expId,     setExpId]     = useState(null);
+  const [editId,    setEditId]    = useState(null);
+  const [ef,        setEf]        = useState({});
+  const [editLineas,setEditLineas]= useState([]);
+  const [pdfPending,setPdfPending]= useState(null);
+  const [confirm,   setConfirm]   = useState(null);
   const sfn = k => v => setEf(p=>({...p,[k]:v}));
 
+  const updLinea = (idx,patch) => setEditLineas(p=>p.map((l,i)=>i===idx?{...l,...patch}:l));
+  const delLinea = idx => setEditLineas(p=>p.filter((_,i)=>i!==idx));
+  const addLinea = () => setEditLineas(p=>[...p,{titulo:"",partRef:"",costoUnit:0,gasolina:0,otros:0,qty:1,mode:"manual",manualPrice:"0",customMgn:false,customVal:27}]);
+
+  // Snap igual que cotizador
   const liveSnap = useMemo(()=>{
-    if(!editId) return null;
-    return computeSnap({costo:ef.costo||0,gasolina:ef.gasolina||0,otros:ef.otros||0,iva:ef.iva||16,isr:ef.isr||20,compraConIVA:ef.compraConIVA!==false,ventaConIVA:ef.ventaConIVA!==false,mode:"manual",manualPrice:ef.manualPrice||"0"});
-  },[editId,ef]);
+    if(!editId||!editLineas.length) return null;
+    const iva=parseFloat(ef.iva)||16; const isr=parseFloat(ef.isr)||20;
+    const opType=ef.opType||"consumable"; const priority=ef.priority||"P3";
+    const activeMods=ef.activeMods||[];
+    const sharedMgn=effectiveMargin(opType,priority,activeMods,false,27);
+    const snaps=editLineas.map(l=>{
+      const mg=l.customMgn?Math.min(l.customVal,99):sharedMgn;
+      const costo=(l.costoUnit||0)*(l.qty||1);
+      return computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,iva,isr,
+        compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,
+        mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
+    });
+    const sum=k=>snaps.reduce((s,sn)=>s+sn[k],0);
+    const precioSinIVA=sum("precioSinIVA"); const uNeta=sum("uNeta");
+    return {
+      precioConIVA:sum("precioConIVA"),precioSinIVA,
+      ivaTraslad:sum("ivaTraslad"),ivaAcred:sum("ivaAcred"),ivaNeto:sum("ivaNeto"),
+      costoTotal:sum("costoTotal"),costoBase:sum("costoBase"),gastos:sum("gastos"),
+      uNeta,uBruta:sum("uBruta"),isr:sum("isr"),
+      markupSobre:sum("costoTotal")>0?((precioSinIVA-sum("costoTotal"))/sum("costoTotal"))*100:0,
+      margenNetoPrecio:precioSinIVA>0?(uNeta/precioSinIVA)*100:0,
+      params:{iva,isr},
+    };
+  },[editId,editLineas,ef]);
 
   const startEdit = (t) => {
     setEditId(t.id);
     setExpId(t.id);
+    const iva = t.snap.params?.iva||16;
+    const ivaR = iva/100;
+    const toConIVA = (snap) => (snap?.costoBase||0)*(1+ivaR);
+    let lineas;
+    if(t.lineas&&t.lineas.length>0) {
+      lineas=t.lineas.map(l=>({
+        titulo:l.titulo||"",partRef:l.partRef||"",
+        qty:l.qty||1,costoUnit:toConIVA(l.snap),
+        gasolina:l.snap?.gastos||0,otros:0,
+        mode:"manual",manualPrice:(l.snap?.precioConIVA||0).toFixed(2),
+        customMgn:false,customVal:27,
+      }));
+    } else {
+      const parts=(t.titulo||"").split(" / ").filter(Boolean);
+      if(parts.length>1) {
+        const pxLinea=(t.snap.precioConIVA/parts.length).toFixed(2);
+        const costoXLinea=toConIVA(t.snap)/parts.length;
+        lineas=parts.map(p=>({titulo:p.trim(),partRef:"",qty:1,costoUnit:costoXLinea,gasolina:0,otros:0,mode:"manual",manualPrice:pxLinea,customMgn:false,customVal:27}));
+      } else {
+        lineas=[{titulo:t.titulo||"",partRef:t.partRef||"",qty:1,costoUnit:toConIVA(t.snap),gasolina:t.snap?.gastos||0,otros:0,mode:"manual",manualPrice:(t.snap.precioConIVA||0).toFixed(2),customMgn:false,customVal:27}];
+      }
+    }
+    setEditLineas(lineas);
     setEf({
-      titulo:t.titulo, date:t.date,
-      clientId:t.clientId||"", supplierId:t.supplierId||"", unitId:t.unitId||"",
+      date:t.date, clientId:t.clientId||"", supplierId:t.supplierId||"", unitId:t.unitId||"",
       status:t.status, payType:t.payType, promesaPago:t.promesaPago||"",
       prob:t.prob||"high", horasOp:t.horasOp||0, notes:t.notes||"",
-      costo:parseFloat((t.snap.costoBase*(1+(t.snap.params.iva||16)/100)).toFixed(2)),
-      gasolina:t.snap.gastos, otros:0,
-      iva:t.snap.params.iva||16, isr:t.snap.params.isr||20,
-      compraConIVA:true, ventaConIVA:true,
-      manualPrice:t.snap.precioConIVA.toFixed(2),
+      iva, isr:t.snap.params?.isr||20,
+      cIVA:true, vIVA:true,
+      opType:t.opId||"consumable", activeMods:[...(t.mods||[])], priority:t.priority||"P3",
     });
   };
 
-  const cancelEdit = () => { setEditId(null); setEf({}); };
+  const cancelEdit = () => { setEditId(null); setEf({}); setEditLineas([]); };
 
   const saveEdit = (id) => {
-    const patch={titulo:ef.titulo,date:ef.date,clientId:ef.clientId,supplierId:ef.supplierId,unitId:ef.unitId||"",status:ef.status,payType:ef.payType,promesaPago:ef.payType==="credit"?ef.promesaPago:null,cobrado:PAID_SET.has(ef.status),prob:ef.prob,horasOp:parseFloat(ef.horasOp)||0,notes:ef.notes,snap:liveSnap,mode:"manual"};
+    if(!liveSnap) return;
+    const opType=ef.opType||"consumable"; const priority=ef.priority||"P3";
+    const activeMods=ef.activeMods||[];
+    const sharedMgn=effectiveMargin(opType,priority,activeMods,false,27);
+    const opMeta=OP_TYPES.find(o=>o.id===opType)||OP_TYPES[0];
+    const titulo=editLineas.map(l=>l.titulo.trim()||"Sin descripcion").join(" / ");
+    const lineasConSnap=editLineas.map(l=>{
+      const mg=l.customMgn?Math.min(l.customVal,99):sharedMgn;
+      const costo=(l.costoUnit||0)*(l.qty||1);
+      const snap=computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,
+        iva:parseFloat(ef.iva)||16,isr:parseFloat(ef.isr)||20,
+        compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,
+        mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
+      return {titulo:l.titulo||"Sin descripcion",partRef:l.partRef||"",snap,qty:l.qty||1};
+    });
+    const patch={
+      titulo, lineas:lineasConSnap,
+      opId:opType, opShort:opMeta.short, priority, mods:[...activeMods],
+      date:ef.date, clientId:ef.clientId, supplierId:ef.supplierId, unitId:ef.unitId||"",
+      status:ef.status, payType:ef.payType, priority,
+      promesaPago:ef.payType==="credit"?ef.promesaPago:null,
+      cobrado:PAID_SET.has(ef.status), prob:ef.prob,
+      horasOp:parseFloat(ef.horasOp)||0, notes:ef.notes,
+      snap:liveSnap, mode:editLineas.length>1?"multilinea":"auto",
+      partRef:editLineas.map(l=>l.partRef).filter(Boolean).join(", "),
+    };
     dispatch({type:"TKT_UPDATE",id,patch});
     toast("Ticket actualizado","success");
     cancelEdit();
@@ -3715,18 +3900,6 @@ function MHistorial({state,dispatch,toast}) {
     </div>
   );
 
-  const MNum = ({label,value,onChange,suffix,color}) => (
-    <div style={{marginBottom:10}}>
-      {label&&<div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase"}}>{label}</div>}
-      <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-        <span style={{padding:"0 12px",color:color||C.t3,fontSize:14,fontFamily:"'Courier New',monospace"}}>$</span>
-        <input type="number" min={0} step={0.01} value={value} onChange={e=>onChange(parseFloat(e.target.value)||0)}
-          style={{flex:1,background:"transparent",border:"none",outline:"none",color:color||C.t1,fontSize:15,padding:"10px 0",fontFamily:"'Courier New',monospace"}}/>
-        {suffix&&<span style={{padding:"0 12px",color:C.t3,fontSize:13}}>{suffix}</span>}
-      </div>
-    </div>
-  );
-
   return (
     <div style={{padding:"14px"}}>
       {pdfPending&&<PDFConfirm {...pdfPending} onClose={()=>setPdfPending(null)}/>}
@@ -3734,7 +3907,7 @@ function MHistorial({state,dispatch,toast}) {
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
         <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px"}}>
-          <div style={{fontSize:10,color:C.t3,marginBottom:4}}>FACTURADO</div>
+          <div style={{fontSize:10,color:C.t3,marginBottom:4}}>REALIZADO</div>
           <div style={{fontSize:16,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(totalFact)}</div>
         </div>
         <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px"}}>
@@ -3751,13 +3924,22 @@ function MHistorial({state,dispatch,toast}) {
         const pr=PRIORITY[t.priority]||PRIORITY.P4;
         return (
           <MCard key={t.id}>
-            {/* Header fila */}
+            {/* Header */}
             <div onClick={()=>{if(!editing)setExpId(exp?null:t.id);}} style={{padding:"14px",cursor:"pointer",borderLeft:`4px solid ${pr.dot}`}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                 <span style={{fontSize:9,color:C.t3,fontFamily:"'Courier New',monospace"}}>{t.id} · {t.date}</span>
                 <StatusBadge sid={t.status} meta={TICKET_META} small/>
               </div>
-              <div style={{fontSize:13,fontWeight:700,color:C.t1,marginBottom:6,lineHeight:1.3}}>{t.titulo}</div>
+              {/* Mostrar líneas individuales en el header si existen */}
+              {t.lineas&&t.lineas.length>1 ? (
+                <div style={{marginBottom:6}}>
+                  {t.lineas.map((l,j)=>(
+                    <div key={j} style={{fontSize:12,color:C.t1,lineHeight:1.4}}>· {l.titulo}</div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{fontSize:13,fontWeight:700,color:C.t1,marginBottom:6,lineHeight:1.3}}>{t.titulo}</div>
+              )}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <div>
                   <span style={{fontSize:11,color:C.t3}}>{cl?cl.empresa:"---"}</span>
@@ -3774,18 +3956,10 @@ function MHistorial({state,dispatch,toast}) {
             {exp&&(
               <div style={{borderTop:`1px solid ${C.border}`}}>
                 {editing ? (
-                  /* ── FORM EDICION COMPLETO ── */
                   <div style={{padding:"14px"}}>
                     <div style={{fontSize:10,color:C.cyan,letterSpacing:"0.14em",marginBottom:12,fontWeight:700}}>EDITANDO {t.id}</div>
 
-                    {/* Título */}
-                    <div style={{marginBottom:10}}>
-                      <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>TÍTULO</div>
-                      <input value={ef.titulo} onChange={e=>sfn("titulo")(e.target.value)}
-                        style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t1,fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
-                    </div>
-
-                    {/* Fecha y Estado */}
+                    {/* Datos generales */}
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
                       <div>
                         <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>FECHA</div>
@@ -3812,17 +3986,13 @@ function MHistorial({state,dispatch,toast}) {
                       </div>
                     </div>
 
-                    {/* Cliente y Proveedor */}
                     <MSel2 label="Cliente"   value={ef.clientId}   onChange={sfn("clientId")}   options={[{value:"",label:"-- Sin cliente --"},...clients.map(c=>({value:c.id,label:c.empresa}))]}/>
                     <MSel2 label="Proveedor" value={ef.supplierId} onChange={sfn("supplierId")} options={[{value:"",label:"-- Sin proveedor --"},...suppliers.map(s=>({value:s.id,label:s.nombre}))]}/>
-
-                    {/* Unidad */}
                     <UnitPicker units={units} value={ef.unitId||""} onChange={sfn("unitId")} mobile/>
 
-                    {/* Pago */}
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                       <MSel2 label="Pago" value={ef.payType} onChange={sfn("payType")} options={[{value:"contado",label:"Contado"},{value:"credit",label:"Credito"}]}/>
-                      <MSel2 label="Prob. cierre" value={ef.prob} onChange={sfn("prob")} options={PROB.map(p=>({value:p.id,label:p.label+" ("+p.pct+"%)"}))}/> 
+                      <MSel2 label="Prob." value={ef.prob} onChange={sfn("prob")} options={PROB.map(p=>({value:p.id,label:p.label+" ("+p.pct+"%)"}))}/> 
                     </div>
                     {ef.payType==="credit"&&(
                       <div style={{marginBottom:10}}>
@@ -3832,63 +4002,172 @@ function MHistorial({state,dispatch,toast}) {
                       </div>
                     )}
 
-                    {/* Horas */}
-                    <div style={{marginBottom:10}}>
-                      <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>HORAS OPERATIVAS</div>
-                      <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                        <input type="number" min={0} step={0.5} value={ef.horasOp} onChange={e=>sfn("horasOp")(parseFloat(e.target.value)||0)}
-                          style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:15,padding:"10px 14px",fontFamily:"'Courier New',monospace"}}/>
-                        <span style={{padding:"0 14px",color:C.t3,fontSize:13}}>h</span>
-                      </div>
-                    </div>
-
-                    {/* Separador financiero */}
-                    <div style={{height:1,background:C.border,margin:"4px 0 12px"}}/>
-                    <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:8}}>DATOS FINANCIEROS</div>
-
-                    <MNum label="Costo c/IVA" value={ef.costo} onChange={sfn("costo")}/>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                      <MNum label="Gasolina" value={ef.gasolina} onChange={sfn("gasolina")}/>
-                      <MNum label="Otros gastos" value={ef.otros} onChange={sfn("otros")}/>
-                    </div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                      <div style={{marginBottom:10}}>
+                      {/* IVA/ISR */}
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+                      <div>
                         <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>IVA %</div>
                         <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                          <input type="number" min={0} step={0.1} value={ef.iva} onChange={e=>sfn("iva")(parseFloat(e.target.value)||0)}
+                          <input type="text" inputMode="decimal" value={ef.iva} onChange={e=>sfn("iva")(e.target.value)}
                             style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:15,padding:"10px 14px",fontFamily:"'Courier New',monospace"}}/>
                           <span style={{padding:"0 12px",color:C.t3,fontSize:13}}>%</span>
                         </div>
                       </div>
-                      <div style={{marginBottom:10}}>
+                      <div>
                         <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>ISR %</div>
                         <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                          <input type="number" min={0} step={0.1} value={ef.isr} onChange={e=>sfn("isr")(parseFloat(e.target.value)||0)}
+                          <input type="text" inputMode="decimal" value={ef.isr} onChange={e=>sfn("isr")(e.target.value)}
                             style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:15,padding:"10px 14px",fontFamily:"'Courier New',monospace"}}/>
                           <span style={{padding:"0 12px",color:C.t3,fontSize:13}}>%</span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Precio de venta */}
-                    <div style={{marginBottom:10}}>
-                      <div style={{fontSize:10,color:C.cyan,letterSpacing:"0.12em",marginBottom:5}}>PRECIO VENTA C/IVA</div>
-                      <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:6,overflow:"hidden",minHeight:52}}>
-                        <span style={{padding:"0 14px",color:C.cyan,fontSize:18,fontFamily:"'Courier New',monospace"}}>$</span>
-                        <input type="number" min={0} step={0.01} autoFocus value={ef.manualPrice} onChange={e=>sfn("manualPrice")(e.target.value)}
-                          style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:20,fontWeight:800,padding:"10px 0",fontFamily:"'Courier New',monospace"}}/>
+                    {/* Tipo operación */}
+                    <MSel2 label="Tipo de operación" value={ef.opType||"consumable"} onChange={sfn("opType")} options={OP_TYPES.map(o=>({value:o.id,label:o.label+" ("+o.baseMin+"-"+o.baseMax+"%)"}))}/>
+
+                    {/* IVA/ISR */}
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+                      <div>
+                        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>IVA %</div>
+                        <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
+                          <input type="text" inputMode="decimal" value={ef.iva} onChange={e=>sfn("iva")(e.target.value)}
+                            style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:15,padding:"10px 14px",fontFamily:"'Courier New',monospace"}}/>
+                          <span style={{padding:"0 12px",color:C.t3,fontSize:13}}>%</span>
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>ISR %</div>
+                        <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
+                          <input type="text" inputMode="decimal" value={ef.isr} onChange={e=>sfn("isr")(e.target.value)}
+                            style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:15,padding:"10px 14px",fontFamily:"'Courier New',monospace"}}/>
+                          <span style={{padding:"0 12px",color:C.t3,fontSize:13}}>%</span>
+                        </div>
                       </div>
                     </div>
+                    <div style={{display:"flex",gap:12,marginBottom:10}}>
+                      <Toggle label="Compra c/IVA" value={ef.cIVA!==false} onChange={v=>sfn("cIVA")(v)}/>
+                      <Toggle label="Venta c/IVA"  value={ef.vIVA!==false} onChange={v=>sfn("vIVA")(v)}/>
+                    </div>
 
-                    {/* Preview live */}
-                    {liveSnap&&(
-                      <div style={{background:C.bg3,border:`1px solid ${C.borderHi}`,borderRadius:6,padding:"10px 14px",marginBottom:12}}>
-                        <div style={{fontSize:9,color:C.t3,marginBottom:4}}>PREVIEW</div>
-                        <div style={{display:"flex",justifyContent:"space-between"}}>
-                          <span style={{fontSize:13,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(liveSnap.precioConIVA)}</span>
-                          <span style={{fontSize:13,fontWeight:700,color:liveSnap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(liveSnap.uNeta)}</span>
+                    {/* ── LÍNEAS ── */}
+                    <div style={{height:1,background:C.border,margin:"4px 0 12px"}}/>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                      <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em"}}>PRODUCTOS / SERVICIOS ({editLineas.length})</div>
+                      <button onClick={addLinea}
+                        style={{padding:"7px 14px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:6,color:C.cyan,fontSize:12,cursor:"pointer",fontWeight:700}}>
+                        + Agregar
+                      </button>
+                    </div>
+
+                    {editLineas.map((l,idx)=>{
+                      const mg=l.customMgn?Math.min(l.customVal,99):effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
+                      const costo=(l.costoUnit||0)*(l.qty||1);
+                      const lsnap=computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,iva:parseFloat(ef.iva)||16,isr:parseFloat(ef.isr)||20,compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
+                      return (
+                      <div key={idx} style={{background:C.bg1,border:`1px solid ${C.borderHi}`,borderRadius:8,padding:"12px 14px",marginBottom:10}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                          <div>
+                            <span style={{fontSize:10,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>Línea {String(idx+1).padStart(2,"0")}</span>
+                            <span style={{fontSize:10,color:margenColor(lsnap.margenNetoPrecio),fontFamily:"'Courier New',monospace",marginLeft:8}}>{mxn(lsnap.precioConIVA)} · {fpct(lsnap.margenNetoPrecio)}</span>
+                          </div>
+                          {editLineas.length>1&&(
+                            <button onClick={()=>delLinea(idx)}
+                              style={{padding:"6px 12px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:6,color:C.red,fontSize:12,cursor:"pointer",fontWeight:700}}>
+                              × Eliminar
+                            </button>
+                          )}
                         </div>
-                        <div style={{fontSize:10,color:C.t3,marginTop:3}}>Markup {fpct(liveSnap.markupSobre)} · Margen {fpct(liveSnap.margenNetoPrecio)}</div>
+                        {/* Descripción */}
+                        <div style={{marginBottom:10}}>
+                          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>DESCRIPCIÓN</div>
+                          <input value={l.titulo} onChange={e=>updLinea(idx,{titulo:e.target.value})} placeholder="Producto o servicio..."
+                            style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t1,fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+                        </div>
+                        {/* Ref */}
+                        <div style={{marginBottom:10}}>
+                          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>REF. / OEM</div>
+                          <input value={l.partRef||""} onChange={e=>updLinea(idx,{partRef:e.target.value})} placeholder="Número de parte..."
+                            style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t2,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace"}}/>
+                        </div>
+                        {/* Cant + Costo en 2 col */}
+                        <div style={{display:"grid",gridTemplateColumns:"90px 1fr",gap:8,marginBottom:8}}>
+                          <div>
+                            <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>CANT.</div>
+                            <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
+                              <input type="text" inputMode="numeric" value={l.qty||1} onChange={e=>updLinea(idx,{qty:parseInt(e.target.value)||1})}
+                                style={{flex:1,minWidth:0,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:16,fontWeight:700,padding:"10px 10px",fontFamily:"'Courier New',monospace"}}/>
+                              <span style={{padding:"0 8px",color:C.t3,fontSize:11,flexShrink:0}}>pz</span>
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>COSTO UNIT. C/IVA</div>
+                            <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
+                              <span style={{padding:"0 8px",color:C.t3,fontSize:13,fontFamily:"'Courier New',monospace",flexShrink:0}}>$</span>
+                              <input type="text" inputMode="decimal" value={l.costoUnit||0} onChange={e=>updLinea(idx,{costoUnit:parseFloat(e.target.value)||0})}
+                                style={{flex:1,minWidth:0,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:14,padding:"10px 8px 10px 0",fontFamily:"'Courier New',monospace"}}/>
+                            </div>
+                          </div>
+                        </div>
+                        {/* Gasolina + Otros en 2 col */}
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+                          {[["GASOLINA","gasolina"],["OTROS","otros"]].map(([lbl,k])=>(
+                            <div key={k}>
+                              <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>{lbl}</div>
+                              <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
+                                <span style={{padding:"0 8px",color:C.t3,fontSize:13,fontFamily:"'Courier New',monospace",flexShrink:0}}>$</span>
+                                <input type="text" inputMode="decimal" value={l[k]||0} onChange={e=>updLinea(idx,{[k]:parseFloat(e.target.value)||0})}
+                                  style={{flex:1,minWidth:0,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:14,padding:"10px 8px 10px 0",fontFamily:"'Courier New',monospace"}}/>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {(l.qty||1)>1&&<div style={{fontSize:11,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:8}}>{l.qty} × {mxn(l.costoUnit||0)} = {mxn(costo)}</div>}
+                        {/* Modo */}
+                        <div style={{marginBottom:8}}>
+                          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:6}}>MODO PRECIO</div>
+                          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                            <div style={{display:"flex",borderRadius:6,overflow:"hidden",border:`1px solid ${C.border}`}}>
+                              {[["auto","Auto"],["manual","Manual"]].map(([id,lbl])=>(
+                                <button key={id} onClick={()=>updLinea(idx,{mode:id})}
+                                  style={{padding:"10px 18px",border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:l.mode===id?C.blue:C.bg2,color:l.mode===id?C.t1:C.t2}}>{lbl}</button>
+                              ))}
+                            </div>
+                            {l.mode==="auto"&&(
+                              <div style={{flex:1,textAlign:"right"}}>
+                                <span style={{fontSize:13,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>Margen: {fpct(mg)}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        {/* Precio manual */}
+                        {l.mode==="manual"&&(
+                          <div>
+                            <div style={{fontSize:10,color:C.cyan,letterSpacing:"0.12em",marginBottom:5}}>PRECIO VENTA C/IVA</div>
+                            <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:6,overflow:"hidden",minHeight:50}}>
+                              <span style={{padding:"0 10px",color:C.cyan,fontSize:16,fontFamily:"'Courier New',monospace",flexShrink:0}}>$</span>
+                              <input type="text" inputMode="decimal" value={l.manualPrice} onChange={e=>updLinea(idx,{manualPrice:e.target.value})}
+                                style={{flex:1,minWidth:0,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:18,fontWeight:800,padding:"10px 8px 10px 0",fontFamily:"'Courier New',monospace"}}/>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      );
+                    })}
+
+                    {/* Preview total */}
+                    {liveSnap&&(
+                      <div style={{background:C.bg3,border:`1px solid ${C.borderHi}`,borderRadius:8,padding:"12px 14px",marginBottom:12}}>
+                        <div style={{fontSize:9,color:C.t3,marginBottom:6}}>TOTAL ({editLineas.length} línea{editLineas.length>1?"s":""})</div>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <div>
+                            <div style={{fontSize:17,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(liveSnap.precioConIVA)}</div>
+                            <div style={{fontSize:11,color:C.t3,marginTop:2}}>c/IVA incluido</div>
+                          </div>
+                          <div style={{textAlign:"right"}}>
+                            <div style={{fontSize:15,fontWeight:700,color:liveSnap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(liveSnap.uNeta)}</div>
+                            <div style={{fontSize:11,color:C.t3,marginTop:2}}>util. neta</div>
+                          </div>
+                        </div>
                       </div>
                     )}
 
@@ -3907,30 +4186,76 @@ function MHistorial({state,dispatch,toast}) {
                 ) : (
                   /* ── VISTA DETALLE ── */
                   <div style={{padding:"12px 14px"}}>
-                    <MRow label="Costo total"  value={mxn(t.snap.costoTotal)} color={C.t2}/>
-                    <MRow label="Markup"       value={fpct(t.snap.markupSobre)} color={C.blueHi}/>
-                    <MRow label="Precio c/IVA" value={mxn(t.snap.precioConIVA)} color={C.cyan} bold/>
-                    <MRow label="IVA neto SAT" value={mxn(t.snap.ivaNeto)} color={C.yellow}/>
-                    <MRow label="Util. neta"   value={mxn(t.snap.uNeta)} color={t.snap.uNeta>=0?C.green:C.red} bold/>
-                    <MRow label="Margen neto"  value={fpct(t.snap.margenNetoPrecio)} color={margenColor(t.snap.margenNetoPrecio)}/>
-                    {un&&<MRow label="Unidad" value={(un.economico?"Eco."+un.economico+" · ":"")+un.marca+" "+un.modelo} color={C.cyan}/>}
-                    {t.payType==="credit"&&<MRow label="Promesa pago" value={t.promesaPago||"---"} color={C.yellow}/>}
-                    {t.notes&&<div style={{padding:"8px 0",fontSize:11,color:C.t3,fontStyle:"italic"}}>"{t.notes}"</div>}
+
+                    {/* Líneas individuales si existen */}
+                    {t.lineas&&t.lineas.length>0&&(
+                      <div style={{marginBottom:12}}>
+                        <div style={{fontSize:9,color:C.t3,letterSpacing:"0.14em",marginBottom:6}}>PRODUCTOS / SERVICIOS</div>
+                        {t.lineas.map((l,j)=>(
+                          <div key={j} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
+                            <div style={{flex:1,minWidth:0,marginRight:12}}>
+                              <div style={{fontSize:13,fontWeight:600,color:C.t1}}>{l.titulo}</div>
+                              {l.partRef&&<div style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",marginTop:2}}>{l.partRef}</div>}
+                            </div>
+                            <div style={{textAlign:"right",flexShrink:0}}>
+                              <div style={{fontSize:14,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(l.snap?.precioConIVA||0)}</div>
+                              <div style={{fontSize:10,color:C.t3}}>c/IVA</div>
+                            </div>
+                          </div>
+                        ))}
+                        <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0"}}>
+                          <span style={{fontSize:13,fontWeight:700,color:C.t1}}>TOTAL</span>
+                          <span style={{fontSize:15,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap.precioConIVA)}</span>
+                        </div>
+                        <div style={{height:1,background:C.border,marginBottom:12}}/>
+                      </div>
+                    )}
+
+                    {/* Desglose financiero completo */}
+                    <div style={{fontSize:9,color:C.cyan,letterSpacing:"0.14em",marginBottom:8,fontWeight:700}}>DESGLOSE COMPLETO</div>
+                    {[
+                      ["Costo producto (c/IVA)", mxn((t.snap.costoBase||0)*(1+(t.snap.params?.iva||16)/100)), C.t2,   false],
+                      ["IVA acreditable",          mxn(t.snap.ivaAcred),               C.blueHi,false],
+                      ["Gastos operativos",        mxn(t.snap.gastos),                 C.t2,   false],
+                      ["Costo operativo total",    mxn(t.snap.costoTotal),             C.t1,   true],
+                      ["Markup sobre costo",       fpct(t.snap.markupSobre),           C.blueHi,false],
+                      ["Precio sin IVA",           mxn(t.snap.precioSinIVA),           C.cyan, false],
+                      ["IVA trasladado",           mxn(t.snap.ivaTraslad),             C.cyan, false],
+                      ["Precio con IVA",           mxn(t.snap.precioConIVA),           C.cyan, true],
+                      ["IVA neto SAT",             mxn(t.snap.ivaNeto),                C.yellow,false],
+                      ["Utilidad bruta",           mxn(t.snap.uBruta),                 C.t2,   false],
+                      ["ISR estimado",             mxn(t.snap.isr),                    C.yellow,false],
+                      ["Utilidad neta",            mxn(t.snap.uNeta),                  t.snap.uNeta>=0?C.green:C.red, true],
+                      ["Margen neto s/precio",     fpct(t.snap.margenNetoPrecio),      margenColor(t.snap.margenNetoPrecio), false],
+                    ].map(([lbl,val,col,bold],j)=>(
+                      <div key={j} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${C.border}`,background:bold?C.bg3:"transparent"}}>
+                        <span style={{fontSize:13,color:bold?C.t1:C.t2,fontWeight:bold?700:400,paddingLeft:bold?4:0}}>{lbl}</span>
+                        <span style={{fontSize:bold?15:13,fontWeight:bold?800:600,color:col,fontFamily:"'Courier New',monospace"}}>{val}</span>
+                      </div>
+                    ))}
+
+                    {/* Datos adicionales */}
+                    <div style={{marginTop:12,paddingTop:4}}>
+                      {un&&<MRow label="Unidad" value={(un.economico?"Eco."+un.economico+" · ":"")+un.marca+" "+un.modelo} color={C.cyan}/>}
+                      {t.payType==="credit"&&<MRow label="Promesa pago" value={t.promesaPago||"---"} color={C.yellow}/>}
+                      {t.notes&&<div style={{padding:"8px 0",fontSize:11,color:C.t3,fontStyle:"italic",borderBottom:`1px solid ${C.border}`}}>"{t.notes}"</div>}
+                    </div>
+
+                    {/* Timeline */}
                     {t.timeline&&t.timeline.length>0&&(
-                      <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${C.border}`}}>
-                        <div style={{fontSize:9,color:C.t3,marginBottom:4}}>ÚLTIMOS EVENTOS</div>
+                      <div style={{marginTop:10,paddingTop:8,borderTop:`1px solid ${C.border}`}}>
+                        <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",marginBottom:6}}>ÚLTIMOS EVENTOS</div>
                         {t.timeline.slice(-3).map((ev,j)=>(
-                          <div key={j} style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:3}}>{fmtTS(ev.ts)} — {ev.evento}</div>
+                          <div key={j} style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:4}}>{fmtTS(ev.ts)} — {ev.evento}</div>
                         ))}
                       </div>
                     )}
-                    <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
-                      <MBtn label="Editar" small bg={C.blueDim} border={C.blueHi} color={C.cyan}
-                        onClick={()=>startEdit(t)}/>
+
+                    <div style={{display:"flex",gap:8,marginTop:14,flexWrap:"wrap"}}>
+                      <MBtn label="Editar" small bg={C.blueDim} border={C.blueHi} color={C.cyan} onClick={()=>startEdit(t)}/>
                       <MBtn label="PDF" small bg={C.bg2} border={C.border} color={C.t2}
                         onClick={()=>{const cl2=clients.find(c=>c.id===t.clientId);const un2=units?.find(u=>u.id===t.unitId);const su2=suppliers?.find(s=>s.id===t.supplierId);setPdfPending({tkt:t,cl:cl2,un:un2,supp:su2});}}/>
-                      <MBtn label="Eliminar" small bg={C.redDim} border={C.red+"44"} color={C.red}
-                        onClick={()=>setConfirm(t)}/>
+                      <MBtn label="Eliminar" small bg={C.redDim} border={C.red+"44"} color={C.red} onClick={()=>setConfirm(t)}/>
                     </div>
                   </div>
                 )}
@@ -4060,20 +4385,24 @@ export default function App() {
 
       {/* Mobile bottom nav — solo 5 tabs principales */}
       {mobileView&&(
-        <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,background:C.bg1,borderTop:`1px solid ${C.border}`,display:"grid",gridTemplateColumns:"repeat(5,1fr)"}}>
+        <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,background:C.bg1,borderTop:`1px solid ${C.border}`,display:"grid",gridTemplateColumns:"repeat(6,1fr)"}}>
           {[
             {id:"ops",      label:"Ops",      icon:"*"},
             {id:"tickets",  label:"Pipeline", icon:">"},
             {id:"cotizador",label:"Nuevo",    icon:"+"},
             {id:"cartera",  label:"Cartera",  icon:"$"},
             {id:"historial",label:"Historial",icon:"="},
+            {id:"__mas__",  label:"Más",      icon:"≡"},
           ].map(t=>{
             const badge=t.id==="cartera"&&vencidos>0?vencidos:t.id==="tickets"&&abiertas>0?abiertas:t.id==="ops"&&p1Active>0?p1Active:0;
+            const isMore=t.id==="__mas__";
+            const moreActive=["unidades","catalogo","proveedores","clientes","ajustes"].includes(tab);
+            const active=isMore?moreActive:tab===t.id;
             return (
-              <button key={t.id} onClick={()=>setTab(t.id)}
-                style={{padding:"10px 2px 12px",border:"none",cursor:"pointer",background:tab===t.id?C.blueDim:"transparent",borderTop:`3px solid ${tab===t.id?C.cyan:"transparent"}`,position:"relative",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-                <span style={{fontSize:16,fontWeight:800,color:tab===t.id?C.cyan:C.t3,fontFamily:"'Courier New',monospace",lineHeight:1}}>{t.icon}</span>
-                <span style={{fontSize:9,color:tab===t.id?C.cyan:C.t3,letterSpacing:"0.04em",fontWeight:tab===t.id?700:400}}>{t.label}</span>
+              <button key={t.id} onClick={()=>isMore?setTab(moreActive?"ops":"unidades"):setTab(t.id)}
+                style={{padding:"10px 2px 12px",border:"none",cursor:"pointer",background:active?C.blueDim:"transparent",borderTop:`3px solid ${active?C.cyan:"transparent"}`,position:"relative",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+                <span style={{fontSize:16,fontWeight:800,color:active?C.cyan:C.t3,fontFamily:"'Courier New',monospace",lineHeight:1}}>{t.icon}</span>
+                <span style={{fontSize:9,color:active?C.cyan:C.t3,letterSpacing:"0.04em",fontWeight:active?700:400}}>{t.label}</span>
                 {badge>0&&<span style={{position:"absolute",top:6,right:"calc(50% - 16px)",width:14,height:14,borderRadius:"50%",background:t.id==="cartera"?C.red:t.id==="ops"?C.p1dot:C.yellow,fontSize:8,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",color:"#000"}}>{badge}</span>}
               </button>
             );
@@ -4081,8 +4410,27 @@ export default function App() {
         </div>
       )}
 
-      {/* Content — add bottom padding on mobile for fixed nav */}
-      <div style={{paddingBottom:mobileView?80:0}}>
+      {/* Submenú "Más" en móvil */}
+      {mobileView&&["unidades","catalogo","proveedores","clientes","ajustes"].includes(tab)&&(
+        <div style={{position:"fixed",bottom:64,left:0,right:0,zIndex:99,background:C.bg2,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-around",padding:"8px 0"}}>
+          {[
+            {id:"unidades",   label:"Flotilla",   icon:"🚛"},
+            {id:"catalogo",   label:"Catálogo",   icon:"📦"},
+            {id:"clientes",   label:"Clientes",   icon:"🏢"},
+            {id:"proveedores",label:"Proveedores",icon:"🔧"},
+            {id:"ajustes",    label:"Ajustes",    icon:"⚙"},
+          ].map(t=>(
+            <button key={t.id} onClick={()=>setTab(t.id)}
+              style={{padding:"6px 10px",border:"none",cursor:"pointer",background:tab===t.id?C.blueDim:"transparent",borderRadius:6,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+              <span style={{fontSize:18}}>{t.icon}</span>
+              <span style={{fontSize:9,color:tab===t.id?C.cyan:C.t3,fontWeight:tab===t.id?700:400}}>{t.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Content */}
+      <div style={{paddingBottom:mobileView?(["unidades","catalogo","proveedores","clientes","ajustes"].includes(tab)?130:80):0}}>
         {tab==="ops"        &&(mobileView?<MOps       state={state} setTab={setTab}/>                                    :<CentroOps   state={state}/>)}
         {tab==="tickets"    &&(mobileView?<MPipeline  state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Tickets     state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="historial"  &&(mobileView?<MHistorial state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Historial   state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
