@@ -2672,6 +2672,11 @@ function Historial({state,dispatch,toast}) {
         compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,
         mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
       return {titulo:l.titulo||"Sin descripcion",partRef:l.partRef||"",snap,qty:l.qty||1,descripcionPDF:l.descripcionPDF||""};
+    });
+    const opMeta=OP_TYPES.find(o=>o.id===opType)||OP_TYPES[0];
+    const patch={
+      titulo, lineas:lineasConSnap,
+      opId:opType, opShort:opMeta.short, priority:ef.priority||"P3",
       mods:[...activeMods],
       date:ef.date, clientId:ef.clientId, supplierId:ef.supplierId, unitId:ef.unitId||"",
       status:ef.status, payType:ef.payType,
