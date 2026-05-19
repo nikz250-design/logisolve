@@ -297,10 +297,10 @@ const SEED_SUPPLIERS = [
 ];
 
 const SEED_UNITS = [
-  {id:"UNI-00001",vin:"3AKJHHDR9JSJU1234",marca:"Freightliner",modelo:"M2 106",anio:2019,motor:"Detroit DD5",transmision:"Allison 2100",config:"6x2",clientId:"CLI-00001",statusOp:"operativa",km:284000,notas:"Historial de falla en clutch — revisar en 50k km"},
-  {id:"UNI-00002",vin:"1FDWF36P14EB12345",marca:"Ford",modelo:"F-350 Super Duty",anio:2014,motor:"6.7L Power Stroke V8",transmision:"TorqShift 6A",config:"4x2",clientId:"CLI-00001",statusOp:"operativa",km:198000,notas:""},
-  {id:"UNI-00003",vin:"1FDWF36P04EB67890",marca:"Ford",modelo:"F-350 Super Duty",anio:2012,motor:"6.7L Power Stroke V8",transmision:"TorqShift 6A",config:"4x2",clientId:"CLI-00001",statusOp:"preventivo",km:312000,notas:"Diferencial con desgaste — programar revision"},
-  {id:"UNI-00004",vin:"1FDWF36P09EB55555",marca:"Ford",modelo:"F-350 Super Duty",anio:2016,motor:"6.7L Power Stroke V8",transmision:"TorqShift 6A",config:"4x2",clientId:"CLI-00001",statusOp:"operativa",km:156000,notas:""},
+  {id:"UNI-00001",vin:"3AKJHHDR9JSJU1234",marca:"Freightliner",modelo:"M2 106",anio:2019,motor:"Detroit DD5",transmision:"Allison 2100",config:"6x2",clientId:"CLI-00001",statusOp:"operativa",km:284000,notas:"Historial de falla en clutch — revisar en 50k km",placa:"",economico:""},
+  {id:"UNI-00002",vin:"1FDWF36P14EB12345",marca:"Ford",modelo:"F-350 Super Duty",anio:2014,motor:"6.7L Power Stroke V8",transmision:"TorqShift 6A",config:"4x2",clientId:"CLI-00001",statusOp:"operativa",km:198000,notas:"",placa:"",economico:""},
+  {id:"UNI-00003",vin:"1FDWF36P04EB67890",marca:"Ford",modelo:"F-350 Super Duty",anio:2012,motor:"6.7L Power Stroke V8",transmision:"TorqShift 6A",config:"4x2",clientId:"CLI-00001",statusOp:"preventivo",km:312000,notas:"Diferencial con desgaste — programar revision",placa:"",economico:""},
+  {id:"UNI-00004",vin:"1FDWF36P09EB55555",marca:"Ford",modelo:"F-350 Super Duty",anio:2016,motor:"6.7L Power Stroke V8",transmision:"TorqShift 6A",config:"4x2",clientId:"CLI-00001",statusOp:"operativa",km:156000,notas:"",placa:"",economico:""},
 ];
 
 const SEED_PARTS = [
@@ -771,6 +771,108 @@ function SearchPalette({state,onNavigate,onClose}) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ── UNIT PICKER (búsqueda por económico, placa, marca, modelo) ──────────────
+function UnitPicker({units, value, onChange, placeholder="Buscar por eco, placa, marca...", mobile=false}) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef();
+
+  const selected = units.find(u => u.id === value);
+  const displayLabel = selected
+    ? `${selected.economico ? "Eco." + selected.economico + " · " : ""}${selected.marca} ${selected.modelo} ${selected.anio}`
+    : "";
+
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  const results = useMemo(() => {
+    if (!q.trim()) return units.slice(0, 80);
+    const lq = q.toLowerCase();
+    return units.filter(u =>
+      (u.economico && u.economico.toLowerCase().includes(lq)) ||
+      (u.placa && u.placa.toLowerCase().includes(lq)) ||
+      u.marca.toLowerCase().includes(lq) ||
+      u.modelo.toLowerCase().includes(lq) ||
+      u.vin.toLowerCase().includes(lq)
+    );
+  }, [q, units]);
+
+  const triggerPad  = mobile ? "12px 14px" : "6px 8px";
+  const triggerFont = mobile ? 15 : 10;
+  const labelFont   = mobile ? 10 : 7;
+  const dropFont    = mobile ? 13 : 9;
+  const dropSubFont = mobile ? 11 : 7;
+  const dropHeight  = mobile ? 320 : 260;
+  const itemPad     = mobile ? "10px 12px" : "6px 9px";
+
+  return (
+    <div ref={ref} style={{position:"relative",marginBottom: mobile ? 10 : 7}}>
+      <div style={{fontSize:labelFont,color:C.t3,letterSpacing:"0.14em",marginBottom: mobile ? 5 : 3,textTransform:"uppercase"}}>{mobile ? "Unidad" : "UNIDAD"}</div>
+      <div
+        onClick={() => { setOpen(o => !o); setQ(""); }}
+        style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:C.bg0,border:`1px solid ${open?C.blueHi:C.border}`,borderRadius: mobile ? 6 : 3,padding:triggerPad,cursor:"pointer",minHeight: mobile ? 46 : 32}}
+      >
+        {value ? (
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{fontSize:triggerFont,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'Courier New',monospace"}}>{displayLabel}</div>
+            {selected?.placa && <div style={{fontSize:dropSubFont,color:C.t3,marginTop:2}}>Placa {selected.placa}</div>}
+          </div>
+        ) : (
+          <span style={{fontSize:triggerFont,color:C.t3}}>{placeholder}</span>
+        )}
+        <div style={{display:"flex",gap:5,alignItems:"center",flexShrink:0,marginLeft:6}}>
+          {value && <span onClick={e=>{e.stopPropagation();onChange("");}} style={{fontSize: mobile ? 18 : 10,color:C.red,cursor:"pointer",padding:"0 3px",lineHeight:1}}>×</span>}
+          <span style={{fontSize: mobile ? 10 : 8,color:C.t3}}>{open?"▲":"▼"}</span>
+        </div>
+      </div>
+      {open && (
+        <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:300,background:C.bg2,border:`1px solid ${C.blueHi}`,borderRadius: mobile ? 6 : 3,boxShadow:"0 4px 20px rgba(0,0,0,.6)",maxHeight:dropHeight,display:"flex",flexDirection:"column"}}>
+          <div style={{padding: mobile ? "10px 12px" : "5px 8px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
+            <input
+              autoFocus
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              placeholder="Eco., placa, marca, modelo..."
+              style={{width:"100%",background:"transparent",border:"none",outline:"none",color:C.t1,fontSize: mobile ? 15 : 10,fontFamily:"'Courier New',monospace"}}
+            />
+          </div>
+          <div style={{overflowY:"auto",flex:1}}>
+            <div
+              onClick={() => { onChange(""); setOpen(false); }}
+              style={{padding:itemPad,borderBottom:`1px solid ${C.border}`,cursor:"pointer",fontSize:dropFont,color:C.t3}}
+            >
+              — Sin unidad —
+            </div>
+            {results.length === 0 && <div style={{padding:itemPad,fontSize:dropFont,color:C.t3}}>Sin resultados</div>}
+            {results.map(u => (
+              <div
+                key={u.id}
+                onClick={() => { onChange(u.id); setOpen(false); setQ(""); }}
+                style={{padding:itemPad,borderBottom:`1px solid ${C.border}`,cursor:"pointer",background:u.id===value?C.blueDim:"transparent",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}
+              >
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                    {u.economico && <span style={{fontSize: mobile ? 13 : 9,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",flexShrink:0}}>Eco.{u.economico}</span>}
+                    <span style={{fontSize: mobile ? 13 : 9,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.marca} {u.modelo} {u.anio}</span>
+                  </div>
+                  <div style={{fontSize:dropSubFont,color:C.t3,fontFamily:"'Courier New',monospace",marginTop:2}}>
+                    {u.placa && <span>Placa {u.placa} · </span>}
+                    <span>{u.vin.slice(-8)}</span>
+                  </div>
+                </div>
+                <StatusBadge sid={u.statusOp} meta={UNIT_STATUS} small/>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1424,8 +1526,8 @@ function Cotizador({state,dispatch,toast}) {
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginTop:4}}>
                 <Sel label="Cliente"   value={clientId}   onChange={setClientId}   options={[{value:"",label:"-- Sin cliente --"},...clients.map(c=>({value:c.id,label:c.empresa}))]}/>
-                <Sel label="Unidad"    value={unitId}     onChange={setUnitId}     options={[{value:"",label:"-- Sin unidad --"},...units.map(u=>({value:u.id,label:u.marca+" "+u.modelo+" "+u.anio}))]}/>
               </div>
+              <UnitPicker units={units} value={unitId} onChange={setUnitId}/>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginTop:0}}>
                 <Sel label="Proveedor" value={supplierId} onChange={setSupplierId} options={[{value:"",label:"-- Sin proveedor --"},...suppliers.map(s=>({value:s.id,label:s.nombre}))]}/>
                 <Sel label="Pago"      value={payType}    onChange={setPayType}    options={[{value:"contado",label:"Contado"},{value:"credit",label:"Credito"}]}/>
@@ -1744,15 +1846,20 @@ function Unidades({state,dispatch,toast}) {
   const [editId,  setEditId]  = useState(null);
   const [adding,  setAdding]  = useState(false);
   const [confirm, setConfirm] = useState(null);
-  const empty={vin:"",marca:"",modelo:"",anio:"",motor:"",transmision:"",config:"",clientId:"",statusOp:"operativa",km:"",notas:""};
+  const empty={vin:"",marca:"",modelo:"",anio:"",motor:"",transmision:"",config:"",clientId:"",statusOp:"operativa",km:"",notas:"",placa:"",economico:""};
   const [form,setForm]=useState(empty);
   const sf=k=>v=>setForm(p=>({...p,[k]:v}));
 
+  const [fConOp, setFConOp] = useState(false);
+
+  const unitsWithOpenOp = useMemo(()=>new Set(tickets.filter(t=>!CLOSED_SET.has(t.status)&&t.unitId).map(t=>t.unitId)),[tickets]);
+
   const filtered=useMemo(()=>units.filter(u=>{
     if(fStatus!=="all"&&u.statusOp!==fStatus) return false;
-    if(search){const lq=search.toLowerCase();if(!u.vin.toLowerCase().includes(lq)&&!u.marca.toLowerCase().includes(lq)&&!u.modelo.toLowerCase().includes(lq))return false;}
+    if(fConOp&&!unitsWithOpenOp.has(u.id)) return false;
+    if(search){const lq=search.toLowerCase();if(!u.vin.toLowerCase().includes(lq)&&!u.marca.toLowerCase().includes(lq)&&!u.modelo.toLowerCase().includes(lq)&&!(u.economico||"").toLowerCase().includes(lq)&&!(u.placa||"").toLowerCase().includes(lq))return false;}
     return true;
-  }),[units,search,fStatus]);
+  }),[units,search,fStatus,fConOp,unitsWithOpenOp]);
 
   const unitTickets=useCallback(id=>tickets.filter(t=>t.unitId===id),[tickets]);
 
@@ -1792,6 +1899,8 @@ function Unidades({state,dispatch,toast}) {
             <Field label="Transmision"    value={form.transmision}  onChange={sf("transmision")}  prefix=""/>
             <Field label="Configuracion"  value={form.config}       onChange={sf("config")}       prefix="" placeholder="4x2, 6x4..."/>
             <Field label="Kilometraje"    value={form.km}           onChange={sf("km")}           prefix="" suffix="km" type="number" min={0}/>
+            <Field label="No. Económico"  value={form.economico||""} onChange={sf("economico")}   prefix="" placeholder="Ej: 1045"/>
+            <Field label="Placa"          value={form.placa||""}    onChange={sf("placa")}        prefix="" placeholder="Ej: 912FE2"/>
             <Sel label="Cliente"          value={form.clientId}     onChange={sf("clientId")}     options={[{value:"",label:"-- Sin cliente --"},...clients.map(c=>({value:c.id,label:c.empresa}))]}/>
             <Sel label="Estado operativo" value={form.statusOp}     onChange={sf("statusOp")}     options={Object.entries(UNIT_STATUS).map(([k,v])=>({value:k,label:v.label}))}/>
           </div>
@@ -1807,34 +1916,51 @@ function Unidades({state,dispatch,toast}) {
 
       {/* Filtros */}
       {units.length>0&&(
-        <div style={{display:"flex",gap:5,marginBottom:6,alignItems:"center"}}>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar VIN, marca, modelo..."
+        <div style={{display:"flex",gap:5,marginBottom:6,alignItems:"center",flexWrap:"wrap"}}>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar eco., placa, VIN, marca..."
             style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 8px",color:C.t1,fontSize:10,outline:"none",width:220,fontFamily:"'Courier New',monospace"}}/>
           <select value={fStatus} onChange={e=>setFStatus(e.target.value)} style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t1,fontSize:10,outline:"none",cursor:"pointer"}}>
             <option value="all">Todos los estados</option>
             {Object.entries(UNIT_STATUS).map(([k,v])=><option key={k} value={k} style={{background:C.bg1}}>{v.label}</option>)}
           </select>
+          <button onClick={()=>setFConOp(v=>!v)}
+            style={{padding:"4px 10px",background:fConOp?C.yellowDim:"transparent",border:`1px solid ${fConOp?C.yellow:C.border}`,borderRadius:3,color:fConOp?C.yellow:C.t2,fontSize:10,cursor:"pointer",fontWeight:fConOp?700:400,display:"flex",alignItems:"center",gap:5}}>
+            <span style={{width:6,height:6,borderRadius:"50%",background:fConOp?C.yellow:C.t3,flexShrink:0,display:"inline-block"}}/>
+            Con operación abierta {fConOp&&unitsWithOpenOp.size>0?`(${unitsWithOpenOp.size})`:""}
+          </button>
+          {(search||fStatus!=="all"||fConOp)&&(
+            <button onClick={()=>{setSearch("");setFStatus("all");setFConOp(false);}}
+              style={{padding:"4px 8px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t3,fontSize:9,cursor:"pointer"}}>
+              × Limpiar
+            </button>
+          )}
+          <span style={{fontSize:8,color:C.t3,marginLeft:"auto"}}>{filtered.length} de {units.length}</span>
         </div>
       )}
 
       {filtered.length>0&&(
         <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
-          <div style={{display:"grid",gridTemplateColumns:"0.8fr 1.4fr 0.7fr 1fr 1fr 0.6fr 0.6fr 0.6fr 60px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:5}}>
-            <span>VIN</span><span>UNIDAD</span><span>AÑO</span><span>MOTOR</span><span>TRANSMISION</span><span>KM</span><span>CLIENTE</span><span>ESTADO</span><span/>
+          <div style={{display:"grid",gridTemplateColumns:"0.6fr 0.5fr 1.4fr 0.7fr 1fr 1fr 0.6fr 0.6fr 0.6fr 60px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:5}}>
+            <span>ECO.</span><span>VIN</span><span>UNIDAD</span><span>AÑO</span><span>MOTOR</span><span>TRANSMISION</span><span>KM</span><span>CLIENTE</span><span>ESTADO</span><span/>
           </div>
           {filtered.map((u,i)=>{
             const st=stMeta[u.statusOp]||stMeta.operativa;
             const cl=clients.find(c=>c.id===u.clientId);
             const tks=unitTickets(u.id);
+            const openTks=tks.filter(t=>!CLOSED_SET.has(t.status));
             const exp=sel===u.id;
             return (
               <div key={u.id} style={{borderBottom:`1px solid ${C.border}`}}>
                 <div onClick={()=>setSel(exp?null:u.id)}
-                  style={{display:"grid",gridTemplateColumns:"0.8fr 1.4fr 0.7fr 1fr 1fr 0.6fr 0.6fr 0.6fr 60px",padding:"7px 9px",background:exp?C.blueDim:i%2===0?C.bg1:C.bg2,gap:5,alignItems:"center",cursor:"pointer",borderLeft:`3px solid ${st.dot}`}}>
-                  <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.vin}</div>
+                  style={{display:"grid",gridTemplateColumns:"0.6fr 0.5fr 1.4fr 0.7fr 1fr 1fr 0.6fr 0.6fr 0.6fr 60px",padding:"7px 9px",background:exp?C.blueDim:i%2===0?C.bg1:C.bg2,gap:5,alignItems:"center",cursor:"pointer",borderLeft:`3px solid ${st.dot}`}}>
+                  <div style={{fontSize:9,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.economico||"—"}</div>
+                  <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.vin.slice(-8)}</div>
                   <div>
                     <div style={{fontSize:10,fontWeight:700,color:C.t1}}>{u.marca} {u.modelo}</div>
-                    <div style={{fontSize:7,color:C.t3}}>{u.id} · {u.config||"---"}</div>
+                    <div style={{display:"flex",gap:5,alignItems:"center",marginTop:1}}>
+                      <span style={{fontSize:7,color:C.t3}}>{u.id} · {u.config||"---"}</span>
+                      {openTks.length>0&&<span style={{fontSize:7,fontWeight:700,color:C.yellow,background:C.yellowDim,border:`1px solid ${C.yellow}44`,borderRadius:2,padding:"0 4px"}}>{openTks.length} op. abierta{openTks.length>1?"s":""}</span>}
+                    </div>
                   </div>
                   <div style={{fontSize:9,color:C.t2,fontFamily:"'Courier New',monospace"}}>{u.anio}</div>
                   <div style={{fontSize:8,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.motor||"---"}</div>
@@ -1852,10 +1978,12 @@ function Unidades({state,dispatch,toast}) {
                 {exp&&(
                   <div style={{background:C.bg0,borderTop:`1px solid ${C.border}`,padding:"8px 11px"}}>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,marginBottom:6,fontSize:8}}>
+                      <span style={{color:C.t3}}>No. Económico: <span style={{color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>{u.economico||"---"}</span></span>
+                      <span style={{color:C.t3}}>Placa: <span style={{color:C.t2,fontFamily:"'Courier New',monospace"}}>{u.placa||"---"}</span></span>
                       <span style={{color:C.t3}}>VIN: <span style={{color:C.t2,fontFamily:"'Courier New',monospace"}}>{u.vin||"---"}</span></span>
+                      <span style={{color:C.t3}}>Config: <span style={{color:C.t2}}>{u.config||"---"}</span></span>
                       <span style={{color:C.t3}}>Motor: <span style={{color:C.t2}}>{u.motor||"---"}</span></span>
                       <span style={{color:C.t3}}>Transmision: <span style={{color:C.t2}}>{u.transmision||"---"}</span></span>
-                      <span style={{color:C.t3}}>Config: <span style={{color:C.t2}}>{u.config||"---"}</span></span>
                     </div>
                     {u.notas&&<div style={{fontSize:8,color:C.t3,marginBottom:6,fontStyle:"italic",lineHeight:1.4}}>"{u.notas}"</div>}
                     <div style={{fontSize:7,color:C.t3,marginBottom:4,letterSpacing:"0.1em"}}>HISTORIAL OPERATIVO ({tks.length} tickets)</div>
@@ -2299,6 +2427,23 @@ function Ajustes({state,dispatch,toast}) {
     r.onload=e=>{try{const d=JSON.parse(e.target.result);dispatch({type:"IMPORT",data:d});toast("Datos importados","success");}catch{toast("Archivo invalido","error");}};
     r.readAsText(file);
   };
+  const importUnitsFile=useRef();
+  const importUnitsJSON=file=>{
+    const r=new FileReader();
+    r.onload=e=>{
+      try{
+        const d=JSON.parse(e.target.result);
+        const arr=Array.isArray(d)?d:(d.units||[]);
+        if(!arr.length){toast("Sin unidades en el JSON","error");return;}
+        arr.forEach(u=>{
+          if(!u.id) return;
+          dispatch({type:"UNIT_ADD",u:{...u,clientId:u.clientId||"CLI-00001"}});
+        });
+        toast(arr.length+" unidades importadas","success");
+      }catch{toast("Archivo invalido","error");}
+    };
+    r.readAsText(file);
+  };
 
   return (
     <div style={{padding:"10px 13px",maxWidth:600,margin:"0 auto"}}>
@@ -2320,6 +2465,14 @@ function Ajustes({state,dispatch,toast}) {
           <div style={{padding:11}}>
             <div style={{fontSize:9,color:C.t2,marginBottom:7}}>Exporta todos los datos como JSON.</div>
             <button onClick={exportData} style={{padding:"6px 14px",background:C.blue,border:"none",borderRadius:3,color:C.t1,fontSize:11,fontWeight:700,cursor:"pointer"}}>Exportar JSON</button>
+          </div>
+        )},
+        {title:"IMPORTAR FLOTILLA (JSON)",content:(
+          <div style={{padding:11}}>
+            <div style={{fontSize:9,color:C.t2,marginBottom:4}}>Importa unidades desde el JSON de flotilla (logisolve-import-units.json). Las unidades existentes se conservan, se agregan las nuevas.</div>
+            <div style={{fontSize:8,color:C.t3,marginBottom:7}}>Campos reconocidos: id, vin, marca, modelo, anio, motor, transmision, config, clientId, statusOp, km, notas, placa, economico</div>
+            <input ref={importUnitsFile} type="file" accept=".json" onChange={e=>{if(e.target.files[0])importUnitsJSON(e.target.files[0]);}} style={{display:"none"}}/>
+            <button onClick={()=>importUnitsFile.current&&importUnitsFile.current.click()} style={{padding:"6px 14px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,fontSize:11,fontWeight:700,cursor:"pointer"}}>Importar flotilla JSON</button>
           </div>
         )},
         {title:"IMPORTAR DATOS",content:(
@@ -2373,6 +2526,7 @@ function Historial({state,dispatch,toast}) {
     setEf({
       titulo:t.titulo, date:t.date,
       clientId:t.clientId||"", supplierId:t.supplierId||"",
+      unitId:t.unitId||"",
       status:t.status, payType:t.payType, promesaPago:t.promesaPago||"",
       prob:t.prob||"high", horasOp:t.horasOp||0, notes:t.notes||"",
       costo:parseFloat((t.snap.costoBase*(1+(t.snap.params.iva||16)/100)).toFixed(2)),
@@ -2391,7 +2545,7 @@ function Historial({state,dispatch,toast}) {
   },[editId,ef]);
 
   const saveEdit = useCallback(id=>{
-    const patch={titulo:ef.titulo,date:ef.date,clientId:ef.clientId,supplierId:ef.supplierId,status:ef.status,payType:ef.payType,promesaPago:ef.payType==="credit"?ef.promesaPago:null,cobrado:PAID_SET.has(ef.status),prob:ef.prob,horasOp:parseFloat(ef.horasOp)||0,notes:ef.notes,snap:liveSnap,mode:"manual"};
+    const patch={titulo:ef.titulo,date:ef.date,clientId:ef.clientId,supplierId:ef.supplierId,unitId:ef.unitId||"",status:ef.status,payType:ef.payType,promesaPago:ef.payType==="credit"?ef.promesaPago:null,cobrado:PAID_SET.has(ef.status),prob:ef.prob,horasOp:parseFloat(ef.horasOp)||0,notes:ef.notes,snap:liveSnap,mode:"manual"};
     dispatch({type:"TKT_UPDATE",id,patch});
     toast("Ticket actualizado","success");
     cancelEdit();
@@ -2472,6 +2626,11 @@ function Historial({state,dispatch,toast}) {
                         <Field label="Fecha"  value={ef.date}   onChange={sfn("date")}   prefix="" hint="DD/MM/AAAA"/>
                         <Sel label="Estado"   value={ef.status} onChange={sfn("status")} options={TICKET_ALL.map(id=>({value:id,label:TICKET_META[id].label}))}/>
                       </div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}>
+                        <Sel label="Cliente"   value={ef.clientId}   onChange={sfn("clientId")}   options={[{value:"",label:"-- Sin cliente --"},...clients.map(c=>({value:c.id,label:c.empresa}))]}/>
+                        <Sel label="Proveedor" value={ef.supplierId} onChange={sfn("supplierId")} options={[{value:"",label:"-- Sin proveedor --"},...suppliers.map(s=>({value:s.id,label:s.nombre}))]}/>
+                      </div>
+                      <UnitPicker units={units} value={ef.unitId||""} onChange={sfn("unitId")}/>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6,marginBottom:6}}>
                         <Sel label="Pago" value={ef.payType} onChange={sfn("payType")} options={[{value:"contado",label:"Contado"},{value:"credit",label:"Credito"}]}/>
                         <Sel label="Prob." value={ef.prob} onChange={sfn("prob")} options={PROB.map(p=>({value:p.id,label:p.label+" ("+p.pct+"%)"}))}/>
@@ -3261,7 +3420,7 @@ function MCotizador({state,dispatch,toast}) {
           <input value={fecha} onChange={e=>setFecha(e.target.value)} placeholder="DD/MM/AAAA"
             style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t1,fontSize:15,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace",marginBottom:10}}/>
           <MSel label="Cliente"   value={clientId}   onChange={setClientId}   options={[{value:"",label:"-- Sin cliente --"},...clients.map(c=>({value:c.id,label:c.empresa}))]}/>
-          <MSel label="Unidad"    value={unitId}     onChange={setUnitId}     options={[{value:"",label:"-- Sin unidad --"},...units.map(u=>({value:u.id,label:u.marca+" "+u.modelo+" "+u.anio}))]}/>
+          <UnitPicker units={units} value={unitId} onChange={setUnitId} placeholder="Buscar por eco., placa, marca..." mobile/>
           <MSel label="Proveedor" value={supplierId} onChange={setSupplierId} options={[{value:"",label:"-- Sin proveedor --"},...suppliers.map(s=>({value:s.id,label:s.nombre}))]}/>
           <MSel label="Pago"      value={payType}    onChange={setPayType}    options={[{value:"contado",label:"Contado"},{value:"credit",label:"Credito"}]}/>
           {payType==="credit"&&<MField label="Promesa de pago" value={promesa} onChange={setPromesa} placeholder="DD/MM/AAAA" color={C.yellow}/>}
