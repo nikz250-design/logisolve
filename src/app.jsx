@@ -438,8 +438,8 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
     const csnap = c.snap||s;
     const qty = c.qty||1;
     const precio = fmtMXN(csnap.precioConIVA||0);
-    // Descripción: usa descripcionPDF si existe, si no genera una por defecto
-    const desc = c.descripcionPDF||"Atenci\u00f3n correctiva para continuidad operativa de unidad en CEDIS SMO.";
+    // Descripción: usa descripcionPDF personalizada si existe, si no el texto estándar
+    const desc = c.descripcionPDF||"Atenci\u00f3n correctiva para continuidad operativa de unidad en CEDIS SMO. Incluye integraci\u00f3n de componente compatible, validaci\u00f3n operativa y seguimiento log\u00edstico.";
     const qtyTag = qty>1?` \u00d7${qty}`:"";
     // Línea de unidad solo en primer concepto
     const unidadTag = unidadStr&&i===0
@@ -460,56 +460,56 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
 
   const css = `
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#111;font-size:11px;line-height:1.55}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#111;font-size:10px;line-height:1.45}
 .page{max-width:780px;margin:0 auto;padding:0}
-.toolbar{text-align:right;padding:10px 16px;background:#f5f5f5;border-bottom:1px solid #e0e0e0}
-.toolbar button{padding:5px 16px;border:none;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;margin-left:6px}
+.toolbar{text-align:right;padding:8px 14px;background:#f5f5f5;border-bottom:1px solid #e0e0e0}
+.toolbar button{padding:4px 14px;border:none;border-radius:3px;font-size:9.5px;font-weight:700;cursor:pointer;margin-left:6px}
 .tb-close{background:#ddd;color:#444}.tb-save{background:#111;color:#fff}
-.hdr-box{display:flex;justify-content:space-between;align-items:flex-start;border:1px solid #ccc;margin:20px 24px 0;padding:16px 20px}
-.brand-name{font-size:26px;font-weight:900;color:#111;line-height:1;letter-spacing:-.01em}
-.brand-sub{font-size:10px;color:#555;margin-top:5px;letter-spacing:.01em}
-.emisor{font-size:10px;color:#111;line-height:1.85;text-align:right}
-.emisor strong{font-weight:700;font-size:11px}
-.banda{background:#111;display:flex;justify-content:space-between;align-items:flex-end;margin:0 24px;padding:14px 20px}
-.banda-titulo{font-size:24px;font-weight:900;color:#fff;letter-spacing:.01em}
+.hdr-box{display:flex;justify-content:space-between;align-items:flex-start;border:1px solid #ccc;margin:14px 20px 0;padding:12px 16px}
+.brand-name{font-size:22px;font-weight:900;color:#111;line-height:1}
+.brand-sub{font-size:9px;color:#555;margin-top:3px}
+.emisor{font-size:9px;color:#111;line-height:1.8;text-align:right}
+.emisor strong{font-weight:700;font-size:9.5px}
+.banda{background:#111;display:flex;justify-content:space-between;align-items:flex-end;margin:0 20px;padding:11px 16px}
+.banda-titulo{font-size:20px;font-weight:900;color:#fff}
 .banda-right{text-align:right}
-.banda-no{font-size:10px;color:#bbb;font-weight:400;margin-bottom:1px}
-.banda-folio{font-size:17px;font-weight:900;color:#fff;line-height:1.15}
-.banda-fecha{font-size:13px;font-weight:700;color:#fff;margin-top:2px}
-.meta-wrap{border:1px solid #ccc;margin:0 24px;border-top:none}
+.banda-no{font-size:9px;color:#bbb;margin-bottom:1px}
+.banda-folio{font-size:15px;font-weight:900;color:#fff;line-height:1.15}
+.banda-fecha{font-size:12px;font-weight:700;color:#fff;margin-top:1px}
+.meta-wrap{border:1px solid #ccc;margin:0 20px;border-top:none}
 .meta-tbl{width:100%;border-collapse:collapse}
-.meta-tbl td{padding:9px 16px;vertical-align:top;border-bottom:1px solid #e8e8e8}
+.meta-tbl td{padding:7px 14px;vertical-align:top;border-bottom:1px solid #e8e8e8}
 .meta-tbl tr:last-child td{border-bottom:none}
-.meta-lbl{width:90px;color:#555;font-size:10.5px;font-weight:700}
-.meta-val{color:#111;font-size:10.5px}
-.body{padding:20px 24px}
-.det-title{font-size:12.5px;font-weight:900;color:#111;margin-bottom:8px;letter-spacing:.01em}
-.tbl{width:100%;border-collapse:collapse;border:1px solid #ccc;font-size:10px;margin-bottom:0}
+.meta-lbl{width:80px;color:#555;font-size:9.5px;font-weight:700}
+.meta-val{color:#111;font-size:9.5px}
+.body{padding:14px 20px}
+.det-title{font-size:11px;font-weight:900;color:#111;margin-bottom:6px}
+.tbl{width:100%;border-collapse:collapse;border:1px solid #ccc;font-size:9.5px;margin-bottom:0}
 .tbl thead tr{background:#444}
-.tbl thead th{color:#fff;font-size:9px;font-weight:700;padding:8px 10px;text-align:left;letter-spacing:.04em}
+.tbl thead th{color:#fff;font-size:8px;font-weight:700;padding:6px 8px;text-align:left;letter-spacing:.04em}
 .tbl thead th.r{text-align:right}
-.tbl tbody td{padding:12px 10px;vertical-align:top;border-bottom:1px solid #e8e8e8}
+.tbl tbody td{padding:9px 8px;vertical-align:top;border-bottom:1px solid #e8e8e8}
 .tbl tbody tr:last-child td{border-bottom:none}
-.tno{width:32px;color:#333;font-weight:600;font-size:10.5px}
-.tcon{width:130px;color:#111;font-size:10.5px;font-weight:400}
-.tdesc{color:#333;font-size:10px;line-height:1.65}
-.td-bold{margin-top:7px;font-size:10px;color:#111}
-.timp{text-align:right;font-size:10.5px;color:#111;white-space:nowrap;width:90px;font-weight:400}
-.tots-wrap{display:flex;justify-content:flex-end;border:1px solid #ccc;border-top:none;margin-bottom:18px}
-.tots{border-collapse:collapse;font-size:10.5px;min-width:320px}
-.tots td{padding:8px 14px}
-.tl{color:#333}.tv{text-align:right;color:#111;font-weight:500;min-width:130px}
+.tno{width:28px;color:#333;font-weight:600;font-size:9.5px}
+.tcon{width:120px;color:#111;font-size:9.5px}
+.tdesc{color:#333;font-size:9px;line-height:1.6}
+.td-bold{margin-top:5px;font-size:9px;color:#111}
+.timp{text-align:right;font-size:9.5px;color:#111;white-space:nowrap;width:80px}
+.tots-wrap{display:flex;justify-content:flex-end;border:1px solid #ccc;border-top:none;margin-bottom:14px}
+.tots{border-collapse:collapse;font-size:9.5px;min-width:300px}
+.tots td{padding:6px 12px}
+.tl{color:#333}.tv{text-align:right;color:#111;font-weight:500;min-width:120px}
 .tot-sep{border-top:1px solid #ccc}
 .tot-final{background:#111}
-.tot-final .tl{color:#fff;font-weight:700;font-size:10px;letter-spacing:.05em;text-transform:uppercase}
-.tot-final .tv{color:#fff;font-weight:900;font-size:12px}
-.sec{margin-top:18px}
-.sec-title{font-size:12.5px;font-weight:900;color:#111;margin-bottom:7px;letter-spacing:.01em}
+.tot-final .tl{color:#fff;font-weight:700;font-size:9px;letter-spacing:.05em;text-transform:uppercase}
+.tot-final .tv{color:#fff;font-weight:900;font-size:11px}
+.sec{margin-top:13px}
+.sec-title{font-size:11px;font-weight:900;color:#111;margin-bottom:5px}
 .blist{list-style:none;padding:0}
-.blist li{font-size:10.5px;color:#222;line-height:1.85;padding-left:13px;position:relative}
-.blist li::before{content:"\u00b7";position:absolute;left:0;top:0;color:#111;font-weight:900;font-size:15px;line-height:1.4}
-.ftr{display:flex;justify-content:space-between;margin:18px 24px 24px;padding-top:10px;border-top:1px solid #ddd;font-size:10px;color:#555}
-@media print{.toolbar{display:none}@page{size:A4;margin:.5cm}}`;
+.blist li{font-size:9.5px;color:#222;line-height:1.75;padding-left:12px;position:relative}
+.blist li::before{content:"\u00b7";position:absolute;left:0;top:0;color:#111;font-weight:900;font-size:13px;line-height:1.35}
+.ftr{display:flex;justify-content:space-between;margin:13px 20px 18px;padding-top:8px;border-top:1px solid #ddd;font-size:9px;color:#555}
+@media print{.toolbar{display:none}@page{size:A4;margin:.4cm}}`;
 
   const html = `<!DOCTYPE html>
 <html lang='es'><head><meta charset='UTF-8'/><title>${folio}</title>
