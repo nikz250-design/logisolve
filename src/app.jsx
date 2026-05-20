@@ -197,15 +197,15 @@ function computeSnap(p) {
   const ivaAcred   = compraConIVA ? c0-costoBase : costoBase*ivaR;
   const gastos     = g0+o0;
   const costoTotal = costoBase+gastos;
-  let precioSinIVA, markupSobre;
+  let precioSinIVA;
   if (mode==="manual") {
     const raw = safeNumber(manualPrice);
     precioSinIVA = ventaConIVA ? raw/(1+ivaR) : raw;
-    markupSobre  = costoTotal>0 ? ((precioSinIVA-costoTotal)/costoTotal)*100 : 0;
   } else {
     precioSinIVA = costoTotal*(1+safeNumber(margin)/100);
-    markupSobre  = safeNumber(margin);
   }
+  // Always calculate markup from real values — never copy margin input
+  const markupSobre      = costoTotal>0 ? ((precioSinIVA-costoTotal)/costoTotal)*100 : 0;
   const ivaTraslad       = precioSinIVA*ivaR;
   const precioConIVA     = ventaConIVA ? precioSinIVA+ivaTraslad : precioSinIVA;
   const ivaNeto          = ivaTraslad-ivaAcred;
@@ -213,7 +213,24 @@ function computeSnap(p) {
   const isrAmt           = Math.max(uBruta*isrR,0);
   const uNeta            = uBruta-isrAmt;
   const margenNetoPrecio = precioSinIVA>0 ? (uNeta/precioSinIVA)*100 : 0;
-  return { costoBase,ivaAcred,gastos,costoTotal,precioSinIVA,ivaTraslad,precioConIVA,ivaNeto,uBruta,isr:isrAmt,uNeta,markupSobre,margenNetoPrecio,params:{iva,isr} };
+  // Fiscal metrics
+  const cargaFiscal      = ivaNeto+isrAmt;
+  const eficienciaFiscal = uBruta>0 ? (uNeta/uBruta)*100 : 0;
+  const costoFiscalPct   = precioSinIVA>0 ? (cargaFiscal/precioSinIVA)*100 : 0;
+  // Operative alerts
+  const alertas = [];
+  if (margenNetoPrecio>0 && margenNetoPrecio<15)  alertas.push("margen_critico");
+  if (ivaNeto>uNeta)                               alertas.push("carga_fiscal_alta");
+  if (markupSobre>0 && markupSobre<25)             alertas.push("markup_bajo");
+  return {
+    costoBase,ivaAcred,gastos,costoTotal,
+    precioSinIVA,ivaTraslad,precioConIVA,
+    ivaNeto,uBruta,isr:isrAmt,uNeta,
+    markupSobre,margenNetoPrecio,
+    cargaFiscal,eficienciaFiscal,costoFiscalPct,
+    alertas,
+    params:{iva,isr}
+  };
 }
 
 function effectiveMargin(opId, priority, mods, custom, customVal) {
@@ -586,41 +603,45 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
 <title>${folio}</title>
 <style>
 *{box-sizing:border-box}
-body{margin:0;background:#efefef;font-family:Arial,Helvetica,sans-serif;color:#111}
-.page{width:794px;min-height:1123px;margin:0 auto;background:#fff;padding:42px 42px 34px}
-.toolbar{text-align:right;margin-bottom:14px}
-.toolbar button{padding:6px 18px;border:none;border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;margin-left:6px}
+html,body{width:210mm;margin:0;padding:0;background:#fff;font-family:Arial,Helvetica,sans-serif;color:#111}
+.page{width:210mm;height:297mm;background:#fff;margin:0 auto;padding:14mm;overflow:hidden;position:relative;box-sizing:border-box}
+.toolbar{text-align:right;margin-bottom:6mm}
+.toolbar button{padding:2mm 5mm;border:none;border-radius:2px;font-size:10px;font-weight:700;cursor:pointer;margin-left:4px}
 .tb-close{background:#ddd;color:#444}.tb-save{background:#111;color:#fff}
-.top-header{border:1px solid #d9d9d9;background:#fafafa;padding:20px 18px;display:flex;justify-content:space-between;align-items:flex-start}
-.brand h1{margin:0;font-size:28px;font-weight:800;letter-spacing:.5px}
-.brand p{margin:8px 0 0;font-size:12px;color:#555;font-weight:600}
-.issuer{text-align:right;font-size:12px;line-height:1.55}
-.issuer strong{font-size:14px}
-.hero{margin-top:22px;background:#0c0c0c;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:20px 22px}
-.hero-title{font-size:28px;font-weight:800;letter-spacing:.4px}
+.top-header{border:1px solid #d9d9d9;background:#fafafa;padding:4.5mm 5mm;display:flex;justify-content:space-between;align-items:flex-start}
+.brand h1{margin:0;font-size:20px;font-weight:800;letter-spacing:.5px}
+.brand p{margin:2mm 0 0;font-size:9px;color:#555;font-weight:600}
+.issuer{text-align:right;font-size:9.5px;line-height:1.65}
+.issuer strong{font-size:10.5px}
+.hero{margin-top:3.5mm;background:#0c0c0c;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:3.5mm 5mm}
+.hero-title{font-size:20px;font-weight:800;letter-spacing:.4px}
 .hero-meta{text-align:right;line-height:1.3}
-.hero-meta .label{font-size:14px;opacity:.85}
-.hero-meta .folio{font-size:22px;font-weight:800}
-.hero-meta .date{font-size:16px;font-weight:700}
-.meta-table{width:100%;border-collapse:collapse;margin-top:18px}
-.meta-table td{border:1px solid #e1e1e1;padding:12px 14px;font-size:14px}
-.meta-table td:first-child{width:140px;background:#fafafa;font-weight:700}
-.section-title{margin-top:28px;margin-bottom:12px;font-size:18px;font-weight:800;letter-spacing:.2px}
-.detail-table{width:100%;border-collapse:collapse}
-.detail-table th{background:#0c0c0c;color:#fff;text-align:left;padding:11px 12px;font-size:13px;font-weight:700}
-.detail-table td{border:1px solid #e4e4e4;padding:12px 12px;vertical-align:top;font-size:13px;line-height:1.5}
+.hero-meta .label{font-size:10px;opacity:.85}
+.hero-meta .folio{font-size:16px;font-weight:800}
+.hero-meta .date{font-size:12px;font-weight:700}
+.meta-table{width:100%;border-collapse:collapse;margin-top:3mm}
+.meta-table td{border:1px solid #e1e1e1;padding:2.2mm 3mm;font-size:10.5px}
+.meta-table td:first-child{width:28mm;background:#fafafa;font-weight:700}
+.section-title{margin-top:4.5mm;margin-bottom:2mm;font-size:12.5px;font-weight:800;letter-spacing:.2px}
+.detail-table{width:100%;border-collapse:collapse;page-break-inside:avoid}
+.detail-table th{background:#0c0c0c;color:#fff;text-align:left;padding:2mm 2.5mm;font-size:9.5px;font-weight:700}
+.detail-table td{border:1px solid #e4e4e4;padding:2.5mm 2.5mm;vertical-align:top;font-size:10px;line-height:1.45}
 .detail-table strong{display:inline-block;margin-top:0}
-.totals{width:420px;margin-left:auto;margin-top:16px;border-collapse:collapse}
-.totals td{border:1px solid #e3e3e3;padding:10px 14px;font-size:14px}
+.totals{width:88mm;margin-left:auto;margin-top:2.5mm;border-collapse:collapse;page-break-inside:avoid}
+.totals td{border:1px solid #e3e3e3;padding:1.8mm 3mm;font-size:10.5px}
 .totals td:last-child{text-align:right;font-weight:700}
-.totals .sep td{border-top:2px solid #ccc}
-.totals .grand-total td{background:#0c0c0c;color:#fff;font-weight:800;font-size:15px}
-.block{margin-top:28px}
-.block h3{margin:0 0 10px;font-size:17px;font-weight:800}
-.block ul{margin:0;padding-left:18px}
-.block li{margin-bottom:6px;line-height:1.45;font-size:13px}
-.footer{margin-top:38px;padding-top:12px;border-top:1px solid #e3e3e3;display:flex;justify-content:space-between;font-size:12px;color:#444}
-@media print{.toolbar{display:none}body{background:#fff}@page{size:A4;margin:0}}
+.totals .grand-total td{background:#0c0c0c;color:#fff;font-weight:800;font-size:11.5px}
+.block{margin-top:4mm;page-break-inside:avoid}
+.block h3{margin:0 0 1.5mm;font-size:12px;font-weight:800}
+.block ul{margin:0;padding-left:4mm}
+.block li{margin-bottom:1.2mm;line-height:1.45;font-size:10px}
+.footer{margin-top:4mm;padding-top:2mm;border-top:1px solid #e3e3e3;display:flex;justify-content:space-between;font-size:9.5px;color:#444;page-break-inside:avoid}
+table,tr,td,th{page-break-inside:avoid !important}
+@media print{
+  .toolbar{display:none}
+  html,body{background:#fff;width:210mm}
+  @page{size:A4 portrait;margin:0}
+}
 </style>
 </head>
 <body>
@@ -628,7 +649,7 @@ body{margin:0;background:#efefef;font-family:Arial,Helvetica,sans-serif;color:#1
 
 <div class="toolbar">
   <button class="tb-close" onclick="window.close()">&#x2715; Cerrar</button>
-  <button class="tb-save" onclick="window.print()">&#x2193; Guardar PDF</button>
+  <button class="tb-save" onclick="document.body.style.zoom='100%';window.print()">&#x2193; Guardar PDF</button>
 </div>
 
 <div class="top-header">
@@ -2869,21 +2890,34 @@ function Historial({state,dispatch,toast}) {
     cancelEdit();
   },[ef,editLineas,editTotalSnap,dispatch,toast,cancelEdit]);
 
-  const desgloseRows = t=>[
-    ["Costo producto (c/IVA)",  mxn((t.snap.costoBase||0)*(1+(t.snap.params?.iva||16)/100)), C.t2,    false],
-    ["IVA acreditable",        mxn(t.snap.ivaAcred),         C.blueHi,false],
-    ["Gastos op.",             mxn(t.snap.gastos),           C.t2,    false],
-    ["Costo total",            mxn(t.snap.costoTotal),       C.t1,    true ],
-    ["Markup s/costo",         fpct(t.snap.markupSobre),     C.blueHi,false],
-    ["Precio sin IVA",      mxn(t.snap.precioSinIVA),     C.cyan,  false],
-    ["IVA trasladado",      mxn(t.snap.ivaTraslad),       C.blueHi,false],
-    ["Precio con IVA",      mxn(t.snap.precioConIVA),     C.cyan,  true ],
-    ["IVA neto SAT",        mxn(t.snap.ivaNeto),          C.yellow,false],
-    ["Util. bruta",         mxn(t.snap.uBruta),           C.t1,    false],
-    ["ISR",                 mxn(t.snap.isr),              C.yellow,false],
-    ["Util. neta",          mxn(t.snap.uNeta),            t.snap.uNeta>=0?C.green:C.red,true],
-    ["Margen neto",         fpct(t.snap.margenNetoPrecio),margenColor(t.snap.margenNetoPrecio),false],
-  ];
+  const desgloseRows = t=>{
+    const s = t.snap||{};
+    const iva16  = safeNumber(s.params?.iva,16);
+    const carga  = safeNumber(s.cargaFiscal, safeNumber(s.ivaNeto)+safeNumber(s.isr));
+    const efic   = safeNumber(s.eficienciaFiscal, safeNumber(s.uBruta)>0?(safeNumber(s.uNeta)/safeNumber(s.uBruta))*100:0);
+    const rows = [
+      ["Costo producto (c/IVA)",  mxn(safeNumber(s.costoBase)*(1+iva16/100)), C.t2,     false],
+      ["IVA acreditable",         mxn(s.ivaAcred),                            C.blueHi, false],
+      ["Gastos operativos",       mxn(s.gastos),                              C.t2,     false],
+      ["Costo operativo total",   mxn(s.costoTotal),                          C.t1,     true ],
+      ["Markup s/costo",          fpct(s.markupSobre),                        C.blueHi, false],
+      ["Precio sin IVA",          mxn(s.precioSinIVA),                        C.cyan,   false],
+      ["IVA trasladado",          mxn(s.ivaTraslad),                          C.cyan,   false],
+      ["Precio con IVA",          mxn(s.precioConIVA),                        C.cyan,   true ],
+      ["IVA neto SAT",            mxn(s.ivaNeto),                             C.yellow, false],
+      ["Utilidad bruta",          mxn(s.uBruta),                              C.t2,     false],
+      ["ISR estimado SAT",        mxn(s.isr),                                 C.yellow, false],
+      ["Carga fiscal total",      mxn(carga),                                 C.red,    false],
+      ["Utilidad neta",           mxn(s.uNeta),                               safeNumber(s.uNeta)>=0?C.green:C.red, true],
+      ["Rentabilidad neta",       fpct(s.margenNetoPrecio),                   margenColor(safeNumber(s.margenNetoPrecio)), false],
+      ["Eficiencia fiscal",       fpct(efic),                                 efic>=75?C.green:efic>=60?C.yellow:C.red, false],
+    ];
+    const al = safeArr(s.alertas);
+    if(al.includes("margen_critico"))    rows.push(["⚠ Margen crítico","< 15%",C.red,false]);
+    if(al.includes("carga_fiscal_alta")) rows.push(["⚠ Carga fiscal alta","> util. neta",C.red,false]);
+    if(al.includes("markup_bajo"))       rows.push(["⚠ Markup insuficiente","< 25%",C.yellow,false]);
+    return rows;
+  };
 
   return (
     <div style={{padding:"10px 13px",maxWidth:1050,margin:"0 auto"}}>
@@ -4487,21 +4521,28 @@ function MHistorial({state,dispatch,toast}) {
 
                     {/* Desglose financiero completo */}
                     <div style={{fontSize:9,color:C.cyan,letterSpacing:"0.14em",marginBottom:8,fontWeight:700}}>DESGLOSE COMPLETO</div>
-                    {[
-                      ["Costo producto (c/IVA)", mxn((t.snap.costoBase||0)*(1+(t.snap.params?.iva||16)/100)), C.t2,   false],
-                      ["IVA acreditable",          mxn(t.snap.ivaAcred),               C.blueHi,false],
-                      ["Gastos operativos",        mxn(t.snap.gastos),                 C.t2,   false],
-                      ["Costo operativo total",    mxn(t.snap.costoTotal),             C.t1,   true],
-                      ["Markup sobre costo",       fpct(t.snap.markupSobre),           C.blueHi,false],
-                      ["Precio sin IVA",           mxn(t.snap.precioSinIVA),           C.cyan, false],
-                      ["IVA trasladado",           mxn(t.snap.ivaTraslad),             C.cyan, false],
-                      ["Precio con IVA",           mxn(t.snap.precioConIVA),           C.cyan, true],
-                      ["IVA neto SAT",             mxn(t.snap.ivaNeto),                C.yellow,false],
-                      ["Utilidad bruta",           mxn(t.snap.uBruta),                 C.t2,   false],
-                      ["ISR estimado",             mxn(t.snap.isr),                    C.yellow,false],
-                      ["Utilidad neta",            mxn(t.snap.uNeta),                  t.snap.uNeta>=0?C.green:C.red, true],
-                      ["Margen neto s/precio",     fpct(t.snap.margenNetoPrecio),      margenColor(t.snap.margenNetoPrecio), false],
-                    ].map(([lbl,val,col,bold],j)=>(
+                    {(()=>{
+                      const s=t.snap||{};
+                      const carga=safeNumber(s.cargaFiscal,safeNumber(s.ivaNeto)+safeNumber(s.isr));
+                      const efic=safeNumber(s.eficienciaFiscal,safeNumber(s.uBruta)>0?(safeNumber(s.uNeta)/safeNumber(s.uBruta))*100:0);
+                      return [
+                        ["Costo producto (c/IVA)", mxn(safeNumber(s.costoBase)*(1+safeNumber(s.params?.iva,16)/100)), C.t2,   false],
+                        ["IVA acreditable",          mxn(s.ivaAcred),               C.blueHi,false],
+                        ["Gastos operativos",        mxn(s.gastos),                 C.t2,    false],
+                        ["Costo operativo total",    mxn(s.costoTotal),             C.t1,    true ],
+                        ["Markup s/costo",           fpct(s.markupSobre),           C.blueHi,false],
+                        ["Precio sin IVA",           mxn(s.precioSinIVA),           C.cyan,  false],
+                        ["IVA trasladado",           mxn(s.ivaTraslad),             C.cyan,  false],
+                        ["Precio con IVA",           mxn(s.precioConIVA),           C.cyan,  true ],
+                        ["IVA neto SAT",             mxn(s.ivaNeto),                C.yellow,false],
+                        ["Utilidad bruta",           mxn(s.uBruta),                 C.t2,    false],
+                        ["ISR estimado SAT",         mxn(s.isr),                    C.yellow,false],
+                        ["Carga fiscal total",       mxn(carga),                    C.red,   false],
+                        ["Utilidad neta",            mxn(s.uNeta),                  safeNumber(s.uNeta)>=0?C.green:C.red, true],
+                        ["Rentabilidad neta",        fpct(s.margenNetoPrecio),      margenColor(safeNumber(s.margenNetoPrecio)),false],
+                        ["Eficiencia fiscal",        fpct(efic),                    efic>=75?C.green:efic>=60?C.yellow:C.red,false],
+                      ];
+                    })().map(([lbl,val,col,bold],j)=>(
                       <div key={j} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${C.border}`,background:bold?C.bg3:"transparent"}}>
                         <span style={{fontSize:13,color:bold?C.t1:C.t2,fontWeight:bold?700:400,paddingLeft:bold?4:0}}>{lbl}</span>
                         <span style={{fontSize:bold?15:13,fontWeight:bold?800:600,color:col,fontFamily:"'Courier New',monospace"}}>{val}</span>
