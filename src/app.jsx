@@ -476,9 +476,11 @@ function reducer(state,action) {
     case "SUP_UPDATE": return {...state,suppliers:state.suppliers.map(s=>s.id===action.id?{...s,...action.patch}:s)};
     case "SUP_DELETE": return {...state,suppliers:state.suppliers.filter(s=>s.id!==action.id)};
     // UNITS
-    case "UNIT_ADD":    return {...state,units:[...state.units,action.u]};
-    case "UNIT_UPDATE": return {...state,units:state.units.map(u=>u.id===action.id?{...u,...action.patch}:u)};
-    case "UNIT_DELETE": return {...state,units:state.units.filter(u=>u.id!==action.id)};
+    case "UNIT_ADD":      return {...state,units:[...state.units,action.u]};
+    case "UNIT_UPDATE":   return {...state,units:state.units.map(u=>u.id===action.id?{...u,...action.patch}:u)};
+    case "UNIT_DELETE":   return {...state,units:state.units.filter(u=>u.id!==action.id)};
+    case "UNITS_CLEAR":   return {...state,units:[]};
+    case "UNITS_REPLACE": return {...state,units:safeArr(action.units)};
     // PARTS
     case "PART_ADD":    return {...state,parts:[...state.parts,action.p]};
     case "PART_UPDATE": return {...state,parts:state.parts.map(p=>p.id===action.id?{...p,...action.patch}:p)};
@@ -2666,15 +2668,37 @@ function Cartera({state,dispatch,toast}) {
 // ── AJUSTES ───────────────────────────────────────────────────────────────────
 function Ajustes({state,dispatch,toast}) {
   const fileRef=useRef();
+  const importUnitsFile=useRef();
   const [confirmReset,setConfirmReset]=useState(false);
+  const [confirmClearUnits,setConfirmClearUnits]=useState(false);
   const [exporting, setExporting] = useState(false);
   const [showBackups, setShowBackups] = useState(false);
   const [backupList, setBackupList] = useState([]);
   const [previewKey, setPreviewKey] = useState(null);
   const [previewData, setPreviewData] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
+  const [importMode, setImportMode] = useState("merge"); // "merge" | "replace"
 
   const savedAt=(()=>{try{const r=localStorage.getItem(STORAGE_KEY);if(r){const p=JSON.parse(r);return p.savedAt?new Date(p.savedAt).toLocaleString("es-MX"):"---";}}catch{}return "---";})();
+
+  const importUnitsJSON=(file, mode="merge")=>{
+    const r=new FileReader();
+    r.onload=e=>{
+      try{
+        const d=JSON.parse(e.target.result);
+        const arr=Array.isArray(d)?d:(d.units||[]);
+        if(!arr.length){toast("Sin unidades en el JSON","error");return;}
+        if(mode==="replace") {
+          dispatch({type:"UNITS_REPLACE", units: arr.map(u=>({...u, clientId:u.clientId||"CLI-00001"}))});
+          toast(`Flotilla reemplazada: ${arr.length} unidades`,"success");
+        } else {
+          arr.forEach(u=>{if(!u.id)return;dispatch({type:"UNIT_ADD",u:{...u,clientId:u.clientId||"CLI-00001"}});});
+          toast(`${arr.length} unidades agregadas`,"success");
+        }
+      }catch{toast("Archivo inválido","error");}
+    };
+    r.readAsText(file);
+  };
 
   // Load backup keys from localStorage
   const loadBackupList = () => {
@@ -2771,24 +2795,10 @@ function Ajustes({state,dispatch,toast}) {
     } catch { toast("Error al restaurar","error"); }
   };
 
-  const importUnitsFile=useRef();
-  const importUnitsJSON=file=>{
-    const r=new FileReader();
-    r.onload=e=>{
-      try{
-        const d=JSON.parse(e.target.result);
-        const arr=Array.isArray(d)?d:(d.units||[]);
-        if(!arr.length){toast("Sin unidades en el JSON","error");return;}
-        arr.forEach(u=>{if(!u.id)return;dispatch({type:"UNIT_ADD",u:{...u,clientId:u.clientId||"CLI-00001"}});});
-        toast(arr.length+" unidades importadas","success");
-      }catch{toast("Archivo invalido","error");}
-    };
-    r.readAsText(file);
-  };
-
   return (
     <div style={{padding:"10px 13px",maxWidth:640,margin:"0 auto"}}>
       {confirmReset&&<Confirm msg="Restablecer todos los datos al estado inicial?" onConfirm={()=>{dispatch({type:"RESET"});setConfirmReset(false);toast("Sistema restablecido","info");}} onCancel={()=>setConfirmReset(false)}/>}
+      {confirmClearUnits&&<Confirm msg={`Eliminar las ${state.units.length} unidades de la flotilla?`} onConfirm={()=>{dispatch({type:"UNITS_CLEAR"});setConfirmClearUnits(false);toast("Flotilla eliminada","info");}} onCancel={()=>setConfirmClearUnits(false)}/>}
       {confirmDel&&<Confirm msg={"Eliminar backup: "+confirmDel+"?"} onConfirm={()=>deleteBackup(confirmDel)} onCancel={()=>setConfirmDel(null)}/>}
 
       <div style={{fontSize:7,color:C.t3,letterSpacing:"0.2em",marginBottom:9}}>AJUSTES DEL SISTEMA</div>
@@ -2869,10 +2879,38 @@ function Ajustes({state,dispatch,toast}) {
         )},
         {title:"IMPORTAR FLOTILLA (JSON)",content:(
           <div style={{padding:11}}>
-            <div style={{fontSize:9,color:C.t2,marginBottom:4}}>Importa unidades desde JSON. Las existentes se conservan.</div>
-            <div style={{fontSize:8,color:C.t3,marginBottom:7}}>Campos: id, vin, marca, modelo, anio, motor, transmision, config, clientId, statusOp, km, notas, placa, economico</div>
-            <input ref={importUnitsFile} type="file" accept=".json" onChange={e=>{if(e.target.files[0])importUnitsJSON(e.target.files[0]);}} style={{display:"none"}}/>
-            <button onClick={()=>importUnitsFile.current&&importUnitsFile.current.click()} style={{padding:"6px 14px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,fontSize:11,fontWeight:700,cursor:"pointer"}}>Importar flotilla JSON</button>
+            <div style={{fontSize:9,color:C.t2,marginBottom:4}}>Importa unidades desde JSON.</div>
+            <div style={{fontSize:8,color:C.t3,marginBottom:8}}>Campos: id, vin, marca, modelo, anio, motor, transmision, config, clientId, statusOp, km, notas, placa, economico</div>
+
+            {/* Mode toggle */}
+            <div style={{display:"flex",gap:6,marginBottom:10}}>
+              {[["merge","Agregar a existentes"],["replace","Reemplazar toda la flotilla"]].map(([m,l])=>(
+                <button key={m} onClick={()=>setImportMode(m)}
+                  style={{padding:"4px 10px",border:`1px solid ${importMode===m?C.blueHi:C.border}`,borderRadius:3,background:importMode===m?C.blueDim:"transparent",color:importMode===m?C.cyan:C.t2,fontSize:9,cursor:"pointer",fontWeight:importMode===m?700:400}}>
+                  {l}
+                </button>
+              ))}
+            </div>
+
+            {importMode==="replace"&&(
+              <div style={{padding:"6px 10px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:3,marginBottom:8,fontSize:8,color:C.red}}>
+                ⚠ Esto eliminará las {state.units.length} unidades actuales y las reemplazará con el JSON.
+              </div>
+            )}
+
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              <input ref={importUnitsFile} type="file" accept=".json" onChange={e=>{if(e.target.files[0])importUnitsJSON(e.target.files[0],importMode);e.target.value="";}} style={{display:"none"}}/>
+              <button onClick={()=>importUnitsFile.current&&importUnitsFile.current.click()}
+                style={{padding:"6px 14px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                ⬆ {importMode==="replace"?"Reemplazar flotilla":"Importar flotilla JSON"}
+              </button>
+              <button onClick={()=>setConfirmClearUnits(true)}
+                style={{padding:"6px 12px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:3,color:C.red,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                🗑 Limpiar flotilla
+              </button>
+            </div>
+
+            <div style={{fontSize:8,color:C.t3,marginTop:6}}>Flotilla actual: <span style={{color:C.cyan,fontFamily:"'Courier New',monospace"}}>{state.units.length} unidades</span></div>
           </div>
         )},
         {title:"IMPORTAR DATOS COMPLETOS",content:(
