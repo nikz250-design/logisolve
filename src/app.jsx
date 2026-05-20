@@ -1,4 +1,4 @@
-import { useState, useReducer, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useReducer, useEffect, useRef, useCallback, useMemo } from "react";
 
 // ── Module imports ──────────────────────────────────────────────────────────
 import {
