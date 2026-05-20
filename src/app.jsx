@@ -4120,7 +4120,7 @@ export default function App() {
       savingRef.current = true;
       setSaving();
       try {
-        const online = navigator.onLine !== false;
+        const online = typeof navigator === "undefined" || navigator.onLine !== false;
         if(!online) {
           pendingQueue.push({type:"full_sync", ts: Date.now()});
           setOffline();

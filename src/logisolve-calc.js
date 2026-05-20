@@ -11,11 +11,15 @@ export const safeNumber = (v, fallback=0) => {
 export const safeStr  = (v) => (v==null ? "" : String(v));
 export const safeLower = (v) => safeStr(v).toLowerCase();
 export const safeArr  = (v) => (Array.isArray(v) ? v : []);
-export const genId    = (prefix) => {
-  const uuid = (typeof crypto!=="undefined"&&crypto.randomUUID)
-    ? crypto.randomUUID().replace(/-/g,"").slice(0,8).toUpperCase()
-    : Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,6).toUpperCase();
-  return `${prefix}-${uuid}`;
+export const genId = (prefix) => {
+  try {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) {
+      return `${prefix}-${crypto.randomUUID().replace(/-/g,"").slice(0,8).toUpperCase()}`;
+    }
+  } catch {}
+  // Fallback for Safari iOS < 15.4
+  const rand = () => Math.floor((1+Math.random())*0x10000).toString(16).slice(1).toUpperCase();
+  return `${prefix}-${rand()}${rand()}`;
 };
 
 // Utility

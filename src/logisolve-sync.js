@@ -78,6 +78,8 @@ export function subscribeRealtime(onEvent) {
 
   const connect = () => {
     if (_stopping) return;
+    // Don't attempt if browser doesn't support WebSocket (very old Safari)
+    if (typeof WebSocket === "undefined") return;
     try {
       const ws = new WebSocket(
         `${SB_URL.replace("https://","wss://")}/realtime/v1/websocket?apikey=${SB_KEY}&vsn=1.0.0`
@@ -154,8 +156,21 @@ export const pendingQueue = {
   flush()   { const q=[...this._q]; this._q=[]; this._persist(); return q; },
   peek()    { return [...this._q]; },
   size()    { return this._q.length; },
-  _persist(){ try{ localStorage.setItem(PENDING_KEY,JSON.stringify(this._q)); }catch{} },
-  _restore(){ try{ const s=localStorage.getItem(PENDING_KEY); if(s)this._q=JSON.parse(s)||[]; }catch{ this._q=[]; } },
+  _persist(){ 
+    try{ 
+      const json = JSON.stringify(this._q);
+      localStorage.setItem(PENDING_KEY, json); 
+    } catch(e) {
+      // Safari private mode throws on localStorage.setItem
+      console.warn("[sync] pendingQueue persist failed:", e?.message);
+    } 
+  },
+  _restore(){ 
+    try{ 
+      const s = typeof localStorage !== "undefined" && localStorage.getItem(PENDING_KEY); 
+      if(s) this._q = JSON.parse(s) || []; 
+    } catch { this._q = []; } 
+  },
 };
 pendingQueue._restore();
 
@@ -177,30 +192,27 @@ export const opLog = {
 
 export function safeLocalSet(key, value) {
   try {
+    if (typeof localStorage === "undefined") return false;
     localStorage.setItem(key, value);
     return true;
   } catch(e) {
-    if(e.name==="QuotaExceededError") {
-      // Remove old backups to free space
-      Object.keys(localStorage)
-        .filter(k=>k.startsWith("lgs_backup_"))
-        .forEach(k=>localStorage.removeItem(k));
-      try{ localStorage.setItem(key,value); return true; }catch{ return false; }
-    }
+    // Safari private mode, quota exceeded, etc.
+    console.warn("[storage] localStorage write failed:", e?.message);
     return false;
   }
 }
 
 export function loadFromStorage() {
   try {
+    if (typeof localStorage === "undefined") return null;
     const raw = localStorage.getItem("logisolve_state");
     if (!raw) return null;
     const s = JSON.parse(raw);
-    if (s.version!==STORAGE_VER) return null;
+    if (s.version !== STORAGE_VER) return null;
     return s;
   } catch { return null; }
 }
 
 export function saveToStorage(state) {
-  safeLocalSet("logisolve_state", JSON.stringify({version:STORAGE_VER,...state}));
+  safeLocalSet("logisolve_state", JSON.stringify({version: STORAGE_VER, ...state}));
 }
