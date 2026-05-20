@@ -2898,26 +2898,6 @@ function Ajustes({state,dispatch,toast}) {
   );
 }
 
-
-    if(exporting) return;
-    setExporting(true);
-    try {
-      // Use setTimeout to yield UI before heavy stringify
-      await new Promise(r=>setTimeout(r,0));
-      const payload = {version:STORAGE_VER, exportedAt:nowISO(), ...state};
-      const json = JSON.stringify(payload, null, 2);
-      const blob = new Blob([json],{type:"application/json"});
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement("a");
-      a.href=url; a.download="logisolve-backup-"+Date.now()+".json"; a.click();
-      URL.revokeObjectURL(url);
-      opLog.push("EXPORT_OK", {tickets: state.tickets.length, units: state.units.length});
-      toast("Backup exportado","success");
-    } catch(e) {
-      opLog.push("EXPORT_ERROR", {error: e?.message});
-      toast("Error al exportar","error");
-    } finally { setExporting(false); }
-
 // ── HISTORIAL ─────────────────────────────────────────────────────────────────
 function Historial({state,dispatch,toast}) {
   const {tickets,clients,units,suppliers} = state;
