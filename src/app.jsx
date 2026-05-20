@@ -281,7 +281,7 @@ function calculateTicketTotals(ticket) {
       uBruta:      safeNumber(snap.uBruta),
       isrAmt:      safeNumber(snap.isr),
       ivaNeto:     safeNumber(snap.ivaNeto),
-      markupSobre: safeNumber(snap.markupSobre),
+      markupSobre: calcMarkup(safeNumber(snap.precioSinIVA), safeNumber(snap.costoTotal)),
       margenNeto:  safeNumber(snap.margenNetoPrecio),
       ivaPct: iva, isrPct: isr,
     };
@@ -1093,25 +1093,49 @@ const Timeline = React.memo(function Timeline({events}) {
 // L9 — MODULES
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ── HELPER CENTRALIZADO ───────────────────────────────────────────────────────
+const calcMarkup = (precioSinIVA, costoTotal) =>
+  safeNumber(costoTotal) > 0
+    ? ((safeNumber(precioSinIVA) - safeNumber(costoTotal)) / safeNumber(costoTotal)) * 100
+    : 0;
+
 // ── CENTRO DE OPERACIONES (Dashboard) ────────────────────────────────────────
 function CentroOps({state}) {
   const {tickets,clients,suppliers,units} = state;
 
-  const realizados = useMemo(()=>tickets.filter(t=>!FORECAST_SET.has(t.status)&&t.status!=="cancelado"),[tickets]);
-  const totalFact  = useMemo(()=>realizados.reduce((s,t)=>s+t.snap.precioConIVA,0),[realizados]);
-  const totalNeta  = useMemo(()=>realizados.reduce((s,t)=>s+t.snap.uNeta,0),[realizados]);
-  const totalInv   = useMemo(()=>realizados.reduce((s,t)=>s+t.snap.costoBase*(1+(t.snap.params.iva||16)/100),0),[realizados]);
+  const realizados = useMemo(()=>tickets.filter(t=>!t._deleted&&!FORECAST_SET.has(t.status)&&t.status!=="cancelado"),[tickets]);
+  const totalFact  = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[realizados]);
+  const totalNeta  = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),[realizados]);
+  const totalInv   = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.costoBase)*(1+safeNumber(t.snap.params?.iva,16)/100),0),[realizados]);
   const pctNeta    = totalFact>0?(totalNeta/totalFact)*100:0;
-  const totalHoras = useMemo(()=>tickets.reduce((s,t)=>s+(t.horasOp||0),0),[tickets]);
+  const totalHoras = useMemo(()=>tickets.filter(t=>!t._deleted).reduce((s,t)=>s+safeNumber(t.horasOp),0),[tickets]);
   const uPorHora   = totalHoras>0?totalNeta/totalHoras:0;
-  const margenProm = useMemo(()=>{const v=tickets.filter(t=>t.snap.margenNetoPrecio!=null);return v.length>0?v.reduce((s,t)=>s+t.snap.margenNetoPrecio,0)/v.length:0;},[tickets]);
-  const carteraPend= useMemo(()=>tickets.filter(t=>t.payType==="credit"&&!t.cobrado&&t.status!=="cancelado").reduce((s,t)=>s+t.snap.precioConIVA,0),[tickets]);
-  const forecast   = useMemo(()=>tickets.filter(t=>FORECAST_SET.has(t.status)).reduce((s,t)=>s+utilidadPonderada(t.snap.uNeta,t.prob),0),[tickets]);
-  const abiertas   = useMemo(()=>tickets.filter(t=>!CLOSED_SET.has(t.status)),[tickets]);
-  const cobradas   = useMemo(()=>tickets.filter(t=>PAID_SET.has(t.status)),[tickets]);
-  const conversion = tickets.length>0?(cobradas.length/tickets.length)*100:0;
-  const p1Active   = useMemo(()=>tickets.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status)),[tickets]);
-  const vencidos   = useMemo(()=>tickets.filter(t=>{if(!t.promesaPago||t.cobrado||t.status==="cancelado")return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}),[tickets]);
+  // Fiscal aggregates — always recalculated from real snap values
+  const ivaAcredTotal  = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.ivaAcred),0),[realizados]);
+  const ivaTrasTotal   = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.ivaTraslad),0),[realizados]);
+  const ivaNetoTotal   = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.ivaNeto),0),[realizados]);
+  const isrTotal       = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.isr),0),[realizados]);
+  const cargaFiscalTotal = ivaNetoTotal + isrTotal;
+  const utilidadBrutaTotal = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.uBruta),0),[realizados]);
+  const markupProm = useMemo(()=>{
+    const v=realizados.filter(t=>safeNumber(t.snap.costoTotal)>0);
+    return v.length>0?v.reduce((s,t)=>s+calcMarkup(t.snap.precioSinIVA,t.snap.costoTotal),0)/v.length:0;
+  },[realizados]);
+  const rentabilidadProm = useMemo(()=>{
+    const v=realizados.filter(t=>safeNumber(t.snap.precioSinIVA)>0);
+    return v.length>0?v.reduce((s,t)=>s+(safeNumber(t.snap.uNeta)/safeNumber(t.snap.precioSinIVA))*100,0)/v.length:0;
+  },[realizados]);
+  const eficienciaFiscalGlobal = utilidadBrutaTotal>0?(totalNeta/utilidadBrutaTotal)*100:0;
+  const roi = totalInv>0?(totalNeta/totalInv)*100:0;
+  const cxp = useMemo(()=>tickets.filter(t=>!t._deleted&&!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap.costoTotal),0),[tickets]);
+  const carteraPend  = useMemo(()=>tickets.filter(t=>!t._deleted&&t.payType==="credit"&&!t.cobrado&&t.status!=="cancelado").reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[tickets]);
+  const flujoOp      = carteraPend - cargaFiscalTotal - cxp;
+  const forecast     = useMemo(()=>tickets.filter(t=>!t._deleted&&FORECAST_SET.has(t.status)).reduce((s,t)=>s+utilidadPonderada(safeNumber(t.snap.uNeta),t.prob),0),[tickets]);
+  const abiertas     = useMemo(()=>tickets.filter(t=>!t._deleted&&!CLOSED_SET.has(t.status)),[tickets]);
+  const cobradas     = useMemo(()=>tickets.filter(t=>!t._deleted&&PAID_SET.has(t.status)),[tickets]);
+  const conversion   = tickets.filter(t=>!t._deleted).length>0?(cobradas.length/tickets.filter(t=>!t._deleted).length)*100:0;
+  const p1Active     = useMemo(()=>tickets.filter(t=>!t._deleted&&t.priority==="P1"&&!CLOSED_SET.has(t.status)),[tickets]);
+  const vencidos     = useMemo(()=>tickets.filter(t=>{if(t._deleted||!t.promesaPago||t.cobrado||t.status==="cancelado")return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}),[tickets]);
 
   // Aging cartera
   const aging = useMemo(()=>{
@@ -1286,7 +1310,7 @@ function CentroOps({state}) {
         <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
           <SHdr title="RESUMEN FINANCIERO GLOBAL"/>
           <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:5,marginTop:8}}>
-            {[["Facturado",mxn(totalFact),C.cyan],["Invertido",mxn(totalInv),C.t2],["Util. neta",mxn(totalNeta),totalNeta>=0?C.green:C.red],["Margen prom.",fpct(margenProm),margenColor(margenProm)],["Cartera pend.",mxn(carteraPend),C.yellow],["Forecast",mxn(forecast),C.cyan]].map(([lbl,val,col],i)=>(
+            {[["Facturado",mxn(totalFact),C.cyan],["Invertido",mxn(totalInv),C.t2],["Util. neta",mxn(totalNeta),totalNeta>=0?C.green:C.red],["Markup prom.",fpct(markupProm),C.blueHi],["Rentabilidad neta",fpct(rentabilidadProm),margenColor(rentabilidadProm)],["ROI operativo",fpct(roi),roi>=25?C.green:C.yellow],["IVA neto SAT",mxn(ivaNetoTotal),C.yellow],["ISR estimado",mxn(isrTotal),C.yellow],["Carga fiscal",mxn(cargaFiscalTotal),C.red],["Eficiencia fiscal",fpct(eficienciaFiscalGlobal),eficienciaFiscalGlobal>=75?C.green:C.yellow],["Cartera pend.",mxn(carteraPend),C.yellow],["CxP proveedores",mxn(cxp),C.t2],["Flujo operativo",mxn(flujoOp),flujoOp>=0?C.green:C.red],["Forecast util.",mxn(forecast),C.cyan]].map(([lbl,val,col],i)=>(
               <div key={i} style={{padding:"5px 8px",background:C.bg2,borderRadius:3,border:`1px solid ${C.border}`}}>
                 <div style={{fontSize:7,color:C.t3,marginBottom:2}}>{lbl}</div>
                 <div style={{fontSize:12,fontWeight:800,color:col,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{val}</div>
@@ -1429,7 +1453,7 @@ function Tickets({state,dispatch,toast}) {
                     <div>
                       <SHdr title="DETALLE FINANCIERO"/>
                       <div style={{padding:"6px 10px"}}>
-                        {[["Costo total",mxn(t.snap.costoTotal),C.t1],["Markup",fpct(t.snap.markupSobre),C.blueHi],["Precio c/IVA",mxn(t.snap.precioConIVA),C.cyan],["IVA neto SAT",mxn(t.snap.ivaNeto),C.yellow],["Util. bruta",mxn(t.snap.uBruta),C.t1],["ISR",mxn(t.snap.isr),C.yellow],["Util. neta",mxn(t.snap.uNeta),t.snap.uNeta>=0?C.green:C.red],["Margen neto",fpct(t.snap.margenNetoPrecio),margenColor(t.snap.margenNetoPrecio)]].map(([lbl,val,col],j)=>(
+                        {[["Costo total",mxn(t.snap.costoTotal),C.t1],["Markup",fpct(calcMarkup(t.snap.precioSinIVA,t.snap.costoTotal)),C.blueHi],["Precio c/IVA",mxn(t.snap.precioConIVA),C.cyan],["IVA neto SAT",mxn(t.snap.ivaNeto),C.yellow],["Util. bruta",mxn(t.snap.uBruta),C.t1],["ISR",mxn(t.snap.isr),C.yellow],["Util. neta",mxn(t.snap.uNeta),t.snap.uNeta>=0?C.green:C.red],["Margen neto",fpct(t.snap.margenNetoPrecio),margenColor(t.snap.margenNetoPrecio)]].map(([lbl,val,col],j)=>(
                           <div key={j} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",borderBottom:`1px solid ${C.border}`}}>
                             <span style={{fontSize:8,color:C.t2}}>{lbl}</span>
                             <span style={{fontSize:9,fontWeight:600,color:col,fontFamily:"'Courier New',monospace"}}>{val}</span>
@@ -2643,10 +2667,238 @@ function Cartera({state,dispatch,toast}) {
 function Ajustes({state,dispatch,toast}) {
   const fileRef=useRef();
   const [confirmReset,setConfirmReset]=useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [showBackups, setShowBackups] = useState(false);
+  const [backupList, setBackupList] = useState([]);
+  const [previewKey, setPreviewKey] = useState(null);
+  const [previewData, setPreviewData] = useState(null);
+  const [confirmDel, setConfirmDel] = useState(null);
+
   const savedAt=(()=>{try{const r=localStorage.getItem(STORAGE_KEY);if(r){const p=JSON.parse(r);return p.savedAt?new Date(p.savedAt).toLocaleString("es-MX"):"---";}}catch{}return "---";})();
 
-  const [exporting, setExporting] = useState(false);
+  // Load backup keys from localStorage
+  const loadBackupList = () => {
+    try {
+      const keys = Object.keys(localStorage)
+        .filter(k=>k.startsWith("lgs_backup_")||k==="logisolve_state"||k==="lgs_pending_v1")
+        .map(k=>{
+          try {
+            const raw = localStorage.getItem(k);
+            const size = (raw?.length||0);
+            let info = {key:k, size, date:"---", tickets:0, units:0};
+            if(raw) {
+              const parsed = JSON.parse(raw);
+              if(parsed.exportedAt||parsed.savedAt) info.date = new Date(parsed.exportedAt||parsed.savedAt).toLocaleString("es-MX");
+              info.tickets = safeArr(parsed.tickets).length;
+              info.units   = safeArr(parsed.units).length;
+            }
+            return info;
+          } catch { return {key:k, size:0, date:"---", tickets:0, units:0}; }
+        });
+      setBackupList(keys);
+    } catch(e) { toast("Error leyendo localStorage","error"); }
+  };
+
   const exportData=async()=>{
+    if(exporting) return;
+    setExporting(true);
+    try {
+      await new Promise(r=>setTimeout(r,0));
+      const payload = {version:STORAGE_VER, exportedAt:nowISO(), ...state};
+      const json = JSON.stringify(payload, null, 2);
+      // Save a copy in localStorage as backup
+      const backupKey = "lgs_backup_"+Date.now();
+      try { localStorage.setItem(backupKey, json); } catch {}
+      const blob = new Blob([json],{type:"application/json"});
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href=url; a.download="logisolve-backup-"+Date.now()+".json"; a.click();
+      URL.revokeObjectURL(url);
+      opLog.push("EXPORT_OK", {tickets: state.tickets.length});
+      toast("Backup exportado","success");
+    } catch(e) {
+      toast("Error al exportar","error");
+    } finally { setExporting(false); }
+  };
+
+  const importData=file=>{
+    const r=new FileReader();
+    r.onload=e=>{
+      try{
+        const d=JSON.parse(e.target.result);
+        if(!d||typeof d!=="object") throw new Error("JSON inválido");
+        // Validate before importing
+        const tCount = safeArr(d.tickets).length;
+        const uCount = safeArr(d.units).length;
+        dispatch({type:"IMPORT",data:d});
+        opLog.push("IMPORT_OK", {tickets:tCount, units:uCount});
+        toast(`Importado: ${tCount} tickets, ${uCount} unidades`,"success");
+      } catch(e) {
+        opLog.push("IMPORT_ERROR", {error: e?.message});
+        toast("Archivo inválido: "+e?.message,"error");
+      }
+    };
+    r.readAsText(file);
+  };
+
+  const previewBackup = (key) => {
+    try {
+      const raw = localStorage.getItem(key);
+      if(!raw) return;
+      const d = JSON.parse(raw);
+      setPreviewKey(key);
+      setPreviewData(d);
+    } catch { toast("No se pudo leer el backup","error"); }
+  };
+
+  const deleteBackup = (key) => {
+    try {
+      localStorage.removeItem(key);
+      setBackupList(p=>p.filter(b=>b.key!==key));
+      if(previewKey===key) { setPreviewKey(null); setPreviewData(null); }
+      toast("Backup eliminado","info");
+    } catch { toast("Error al eliminar","error"); }
+    setConfirmDel(null);
+  };
+
+  const restoreFromBackup = (key) => {
+    try {
+      const raw = localStorage.getItem(key);
+      if(!raw) return;
+      const d = JSON.parse(raw);
+      dispatch({type:"IMPORT",data:d});
+      toast("Datos restaurados desde backup","success");
+    } catch { toast("Error al restaurar","error"); }
+  };
+
+  const importUnitsFile=useRef();
+  const importUnitsJSON=file=>{
+    const r=new FileReader();
+    r.onload=e=>{
+      try{
+        const d=JSON.parse(e.target.result);
+        const arr=Array.isArray(d)?d:(d.units||[]);
+        if(!arr.length){toast("Sin unidades en el JSON","error");return;}
+        arr.forEach(u=>{if(!u.id)return;dispatch({type:"UNIT_ADD",u:{...u,clientId:u.clientId||"CLI-00001"}});});
+        toast(arr.length+" unidades importadas","success");
+      }catch{toast("Archivo invalido","error");}
+    };
+    r.readAsText(file);
+  };
+
+  return (
+    <div style={{padding:"10px 13px",maxWidth:640,margin:"0 auto"}}>
+      {confirmReset&&<Confirm msg="Restablecer todos los datos al estado inicial?" onConfirm={()=>{dispatch({type:"RESET"});setConfirmReset(false);toast("Sistema restablecido","info");}} onCancel={()=>setConfirmReset(false)}/>}
+      {confirmDel&&<Confirm msg={"Eliminar backup: "+confirmDel+"?"} onConfirm={()=>deleteBackup(confirmDel)} onCancel={()=>setConfirmDel(null)}/>}
+
+      <div style={{fontSize:7,color:C.t3,letterSpacing:"0.2em",marginBottom:9}}>AJUSTES DEL SISTEMA</div>
+      {[
+        {title:"PERSISTENCIA",content:(
+          <div style={{padding:11}}>
+            <div style={{fontSize:9,color:C.t2,marginBottom:5}}>Guardado automático en Supabase + localStorage.</div>
+            <div style={{fontSize:8,color:C.t3,marginBottom:8}}>Último guardado: <span style={{color:C.cyan,fontFamily:"'Courier New',monospace"}}>{savedAt}</span></div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5}}>
+              <KPI label="Tickets"    value={String(state.tickets.filter(t=>!t._deleted).length)}/>
+              <KPI label="Unidades"   value={String(state.units.length)}/>
+              <KPI label="Clientes"   value={String(state.clients.length)}/>
+              <KPI label="Partes"     value={String(state.parts.length)}/>
+            </div>
+          </div>
+        )},
+        {title:"EXPORTAR BACKUP",content:(
+          <div style={{padding:11}}>
+            <div style={{fontSize:9,color:C.t2,marginBottom:7}}>Exporta todos los datos como JSON. También guarda una copia en localStorage.</div>
+            <button onClick={exportData} disabled={exporting} style={{padding:"6px 14px",background:exporting?C.bg2:C.blue,border:"none",borderRadius:3,color:exporting?C.t3:C.t1,fontSize:11,fontWeight:700,cursor:exporting?"not-allowed":"pointer"}}>
+              {exporting?"Exportando…":"⬇ Exportar JSON"}
+            </button>
+          </div>
+        )},
+        {title:"VER Y GESTIONAR BACKUPS (localStorage)",content:(
+          <div style={{padding:11}}>
+            <div style={{fontSize:9,color:C.t2,marginBottom:7}}>Backups guardados en este navegador. Puedes ver, restaurar o eliminar cada uno.</div>
+            <button onClick={()=>{setShowBackups(v=>!v);loadBackupList();}} style={{padding:"5px 12px",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:10,cursor:"pointer",marginBottom:8}}>
+              {showBackups?"▲ Ocultar":"▼ Ver backups"}
+            </button>
+            {showBackups&&(
+              <div>
+                {backupList.length===0&&<div style={{fontSize:9,color:C.t3}}>No hay backups guardados.</div>}
+                {backupList.map(b=>(
+                  <div key={b.key} style={{background:C.bg0,border:`1px solid ${C.border}`,borderRadius:4,padding:"8px 10px",marginBottom:6}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:9,fontFamily:"'Courier New',monospace",color:C.cyan,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.key}</div>
+                        <div style={{fontSize:8,color:C.t3}}>{b.date} · {b.tickets} tickets · {b.units} unidades · {(b.size/1024).toFixed(1)}KB</div>
+                      </div>
+                      <div style={{display:"flex",gap:5,flexShrink:0,marginLeft:8}}>
+                        <button onClick={()=>previewKey===b.key?setPreviewKey(null):previewBackup(b.key)}
+                          style={{padding:"3px 8px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,fontSize:9,cursor:"pointer"}}>
+                          {previewKey===b.key?"▲":"👁"}
+                        </button>
+                        <button onClick={()=>restoreFromBackup(b.key)}
+                          style={{padding:"3px 8px",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:9,cursor:"pointer"}}>
+                          ↩ Restaurar
+                        </button>
+                        <button onClick={()=>setConfirmDel(b.key)}
+                          style={{padding:"3px 8px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:3,color:C.red,fontSize:9,cursor:"pointer"}}>
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                    {previewKey===b.key&&previewData&&(
+                      <div style={{marginTop:8,padding:"8px",background:C.bg1,borderRadius:3,border:`1px solid ${C.border}`}}>
+                        <div style={{fontSize:8,color:C.t3,marginBottom:6}}>PREVIEW DEL BACKUP</div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>
+                          <KPI label="Tickets"    value={String(safeArr(previewData.tickets).length)}/>
+                          <KPI label="Clientes"   value={String(safeArr(previewData.clients).length)}/>
+                          <KPI label="Unidades"   value={String(safeArr(previewData.units).length)}/>
+                        </div>
+                        <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace",maxHeight:120,overflow:"auto",whiteSpace:"pre-wrap",wordBreak:"break-all"}}>
+                          {JSON.stringify({version:previewData.version,exportedAt:previewData.exportedAt,tickets:safeArr(previewData.tickets).slice(0,3).map(t=>({id:t.id,titulo:t.titulo,date:t.date}))},null,2)}
+                          {safeArr(previewData.tickets).length>3&&`\n... y ${safeArr(previewData.tickets).length-3} tickets más`}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <div style={{fontSize:8,color:C.t3,marginTop:6}}>
+                  localStorage usado: ~{(Object.keys(localStorage).reduce((s,k)=>{try{return s+(localStorage.getItem(k)||"").length;}catch{return s;}},0)/1024).toFixed(0)}KB
+                </div>
+              </div>
+            )}
+          </div>
+        )},
+        {title:"IMPORTAR FLOTILLA (JSON)",content:(
+          <div style={{padding:11}}>
+            <div style={{fontSize:9,color:C.t2,marginBottom:4}}>Importa unidades desde JSON. Las existentes se conservan.</div>
+            <div style={{fontSize:8,color:C.t3,marginBottom:7}}>Campos: id, vin, marca, modelo, anio, motor, transmision, config, clientId, statusOp, km, notas, placa, economico</div>
+            <input ref={importUnitsFile} type="file" accept=".json" onChange={e=>{if(e.target.files[0])importUnitsJSON(e.target.files[0]);}} style={{display:"none"}}/>
+            <button onClick={()=>importUnitsFile.current&&importUnitsFile.current.click()} style={{padding:"6px 14px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,fontSize:11,fontWeight:700,cursor:"pointer"}}>Importar flotilla JSON</button>
+          </div>
+        )},
+        {title:"IMPORTAR DATOS COMPLETOS",content:(
+          <div style={{padding:11}}>
+            <div style={{fontSize:9,color:C.t2,marginBottom:4}}>Importa un backup JSON completo. <span style={{color:C.yellow}}>Reemplaza los datos actuales.</span></div>
+            <input ref={fileRef} type="file" accept=".json" onChange={e=>{if(e.target.files[0])importData(e.target.files[0]);}} style={{display:"none"}}/>
+            <button onClick={()=>fileRef.current&&fileRef.current.click()} style={{padding:"6px 14px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:11,cursor:"pointer"}}>⬆ Importar JSON</button>
+          </div>
+        )},
+        {title:"RESTABLECER",content:(
+          <div style={{padding:11}}>
+            <div style={{fontSize:9,color:C.t2,marginBottom:7}}>Elimina todos los datos y vuelve al estado inicial. <span style={{color:C.red}}>No se puede deshacer.</span></div>
+            <button onClick={()=>setConfirmReset(true)} style={{padding:"6px 14px",background:C.redDim,border:`1px solid ${C.red}55`,borderRadius:3,color:C.red,fontSize:11,fontWeight:700,cursor:"pointer"}}>Restablecer sistema</button>
+          </div>
+        )},
+      ].map(sec=>(
+        <div key={sec.title} style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+          <SHdr title={sec.title}/>
+          {sec.content}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+
     if(exporting) return;
     setExporting(true);
     try {
@@ -2665,94 +2917,6 @@ function Ajustes({state,dispatch,toast}) {
       opLog.push("EXPORT_ERROR", {error: e?.message});
       toast("Error al exportar","error");
     } finally { setExporting(false); }
-  };
-  const importData=file=>{
-    const r=new FileReader();
-    r.onload=e=>{
-      try{
-        const d=JSON.parse(e.target.result);
-        dispatch({type:"IMPORT",data:d});
-        opLog.push("IMPORT_OK", {tickets: safeArr(d.tickets).length});
-        toast("Datos importados","success");
-      } catch(e) {
-        opLog.push("IMPORT_ERROR", {error: e?.message});
-        toast("Archivo invalido","error");
-      }
-    };
-    r.readAsText(file);
-  };
-  const importUnitsFile=useRef();
-  const importUnitsJSON=file=>{
-    const r=new FileReader();
-    r.onload=e=>{
-      try{
-        const d=JSON.parse(e.target.result);
-        const arr=Array.isArray(d)?d:(d.units||[]);
-        if(!arr.length){toast("Sin unidades en el JSON","error");return;}
-        arr.forEach(u=>{
-          if(!u.id) return;
-          dispatch({type:"UNIT_ADD",u:{...u,clientId:u.clientId||"CLI-00001"}});
-        });
-        toast(arr.length+" unidades importadas","success");
-      }catch{toast("Archivo invalido","error");}
-    };
-    r.readAsText(file);
-  };
-
-  return (
-    <div style={{padding:"10px 13px",maxWidth:600,margin:"0 auto"}}>
-      {confirmReset&&<Confirm msg="Restablecer todos los datos al estado inicial?" onConfirm={()=>{dispatch({type:"RESET"});setConfirmReset(false);toast("Sistema restablecido","info");}} onCancel={()=>setConfirmReset(false)}/>}
-      <div style={{fontSize:7,color:C.t3,letterSpacing:"0.2em",marginBottom:9}}>AJUSTES DEL SISTEMA</div>
-      {[
-        {title:"PERSISTENCIA",content:(
-          <div style={{padding:11}}>
-            <div style={{fontSize:9,color:C.t2,marginBottom:5}}>Guardado automatico en localStorage del navegador.</div>
-            <div style={{fontSize:8,color:C.t3,marginBottom:8}}>Ultimo guardado: <span style={{color:C.cyan,fontFamily:"'Courier New',monospace"}}>{savedAt}</span></div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:5}}>
-              <KPI label="Tickets"    value={String(state.tickets.length)}/>
-              <KPI label="Unidades"   value={String(state.units.length)}/>
-              <KPI label="Partes"     value={String(state.parts.length)}/>
-            </div>
-          </div>
-        )},
-        {title:"EXPORTAR BACKUP",content:(
-          <div style={{padding:11}}>
-            <div style={{fontSize:9,color:C.t2,marginBottom:7}}>Exporta todos los datos como JSON.</div>
-            <button onClick={exportData} disabled={exporting} style={{padding:"6px 14px",background:exporting?C.bg2:C.blue,border:"none",borderRadius:3,color:exporting?C.t3:C.t1,fontSize:11,fontWeight:700,cursor:exporting?"not-allowed":"pointer"}}>
-              {exporting?"Exportando…":"Exportar JSON"}
-            </button>
-          </div>
-        )},
-        {title:"IMPORTAR FLOTILLA (JSON)",content:(
-          <div style={{padding:11}}>
-            <div style={{fontSize:9,color:C.t2,marginBottom:4}}>Importa unidades desde el JSON de flotilla (logisolve-import-units.json). Las unidades existentes se conservan, se agregan las nuevas.</div>
-            <div style={{fontSize:8,color:C.t3,marginBottom:7}}>Campos reconocidos: id, vin, marca, modelo, anio, motor, transmision, config, clientId, statusOp, km, notas, placa, economico</div>
-            <input ref={importUnitsFile} type="file" accept=".json" onChange={e=>{if(e.target.files[0])importUnitsJSON(e.target.files[0]);}} style={{display:"none"}}/>
-            <button onClick={()=>importUnitsFile.current&&importUnitsFile.current.click()} style={{padding:"6px 14px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,fontSize:11,fontWeight:700,cursor:"pointer"}}>Importar flotilla JSON</button>
-          </div>
-        )},
-        {title:"IMPORTAR DATOS",content:(
-          <div style={{padding:11}}>
-            <div style={{fontSize:9,color:C.t2,marginBottom:7}}>Importa un backup JSON. Reemplaza los datos actuales.</div>
-            <input ref={fileRef} type="file" accept=".json" onChange={e=>{if(e.target.files[0])importData(e.target.files[0]);}} style={{display:"none"}}/>
-            <button onClick={()=>fileRef.current&&fileRef.current.click()} style={{padding:"6px 14px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:11,cursor:"pointer"}}>Importar JSON</button>
-          </div>
-        )},
-        {title:"RESTABLECER",content:(
-          <div style={{padding:11}}>
-            <div style={{fontSize:9,color:C.t2,marginBottom:7}}>Elimina todos los datos y vuelve al estado inicial.</div>
-            <button onClick={()=>setConfirmReset(true)} style={{padding:"6px 14px",background:C.redDim,border:`1px solid ${C.red}55`,borderRadius:3,color:C.red,fontSize:11,fontWeight:700,cursor:"pointer"}}>Restablecer sistema</button>
-          </div>
-        )},
-      ].map(sec=>(
-        <div key={sec.title} style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
-          <SHdr title={sec.title}/>
-          {sec.content}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 // ── HISTORIAL ─────────────────────────────────────────────────────────────────
 function Historial({state,dispatch,toast}) {
@@ -2900,7 +3064,7 @@ function Historial({state,dispatch,toast}) {
       ["IVA acreditable",         mxn(s.ivaAcred),                            C.blueHi, false],
       ["Gastos operativos",       mxn(s.gastos),                              C.t2,     false],
       ["Costo operativo total",   mxn(s.costoTotal),                          C.t1,     true ],
-      ["Markup s/costo",          fpct(s.markupSobre),                        C.blueHi, false],
+      ["Markup s/costo",          fpct(calcMarkup(s.precioSinIVA,s.costoTotal)),                        C.blueHi, false],
       ["Precio sin IVA",          mxn(s.precioSinIVA),                        C.cyan,   false],
       ["IVA trasladado",          mxn(s.ivaTraslad),                          C.cyan,   false],
       ["Precio con IVA",          mxn(s.precioConIVA),                        C.cyan,   true ],
@@ -2963,7 +3127,7 @@ function Historial({state,dispatch,toast}) {
                 <div style={{fontSize:8,fontFamily:"'Courier New',monospace",color:C.t2,fontWeight:600}}>{t.opShort}</div>
                 <PriorityBadge pid={t.priority} small/>
                 <StatusBadge sid={t.status} meta={TICKET_META} small/>
-                <div style={{fontSize:9,color:C.blueHi,fontFamily:"'Courier New',monospace"}}>{hide?"---":fpct(t.snap.markupSobre)}</div>
+                <div style={{fontSize:9,color:C.blueHi,fontFamily:"'Courier New',monospace"}}>{hide?"---":fpct(calcMarkup(t.snap.precioSinIVA,t.snap.costoTotal))}</div>
                 <div style={{fontSize:9,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{mxn(t.snap.precioConIVA)}</div>
                 <div style={{fontSize:9,fontWeight:700,color:t.snap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{hide?"---":mxn(t.snap.uNeta)}</div>
                 <div style={{display:"flex",gap:3}}>
@@ -3285,20 +3449,28 @@ function MSel({label,value,onChange,options}) {
 function MOps({state,setTab}) {
   const {tickets,clients,suppliers,units} = state;
 
-  const p1       = useMemo(()=>tickets.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status)),[tickets]);
-  const p2       = useMemo(()=>tickets.filter(t=>t.priority==="P2"&&!CLOSED_SET.has(t.status)),[tickets]);
-  const abiertos = useMemo(()=>tickets.filter(t=>!CLOSED_SET.has(t.status)),[tickets]);
-  const vencidos = useMemo(()=>tickets.filter(t=>{if(!t.promesaPago||t.cobrado||t.status==="cancelado")return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}),[tickets]);
-  const realizados = useMemo(()=>tickets.filter(t=>!FORECAST_SET.has(t.status)&&t.status!=="cancelado"),[tickets]);
-  const totalFact= useMemo(()=>realizados.reduce((s,t)=>s+t.snap.precioConIVA,0),[realizados]);
-  const totalNeta= useMemo(()=>realizados.reduce((s,t)=>s+t.snap.uNeta,0),[realizados]);
-  const totalInv = useMemo(()=>realizados.reduce((s,t)=>s+t.snap.costoBase*(1+(t.snap.params?.iva||16)/100),0),[realizados]);
-  const pctNeta  = totalFact>0?(totalNeta/totalFact)*100:0;
-  const cartera  = useMemo(()=>tickets.filter(t=>t.payType==="credit"&&!t.cobrado&&t.status!=="cancelado").reduce((s,t)=>s+t.snap.precioConIVA,0),[tickets]);
-  const forecast = useMemo(()=>tickets.filter(t=>FORECAST_SET.has(t.status)).reduce((s,t)=>s+utilidadPonderada(t.snap.uNeta,t.prob),0),[tickets]);
-  const margenProm=useMemo(()=>{const v=tickets.filter(t=>t.snap.margenNetoPrecio!=null);return v.length>0?v.reduce((s,t)=>s+t.snap.margenNetoPrecio,0)/v.length:0;},[tickets]);
-  const totalHoras=useMemo(()=>tickets.reduce((s,t)=>s+(t.horasOp||0),0),[tickets]);
-  const uPH      = totalHoras>0?totalNeta/totalHoras:0;
+  const p1       = useMemo(()=>tickets.filter(t=>!t._deleted&&t.priority==="P1"&&!CLOSED_SET.has(t.status)),[tickets]);
+  const p2       = useMemo(()=>tickets.filter(t=>!t._deleted&&t.priority==="P2"&&!CLOSED_SET.has(t.status)),[tickets]);
+  const abiertos = useMemo(()=>tickets.filter(t=>!t._deleted&&!CLOSED_SET.has(t.status)),[tickets]);
+  const vencidos = useMemo(()=>tickets.filter(t=>{if(t._deleted||!t.promesaPago||t.cobrado||t.status==="cancelado")return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}),[tickets]);
+  const realizados = useMemo(()=>tickets.filter(t=>!t._deleted&&!FORECAST_SET.has(t.status)&&t.status!=="cancelado"),[tickets]);
+  const totalFact = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[realizados]);
+  const totalNeta = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),[realizados]);
+  const totalInv  = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.costoBase)*(1+safeNumber(t.snap.params?.iva,16)/100),0),[realizados]);
+  const pctNeta   = totalFact>0?(totalNeta/totalFact)*100:0;
+  const ivaNetoTotal = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.ivaNeto),0),[realizados]);
+  const isrTotal     = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.isr),0),[realizados]);
+  const cargaFiscalTotal = ivaNetoTotal + isrTotal;
+  const rentabilidadProm = useMemo(()=>{const v=realizados.filter(t=>safeNumber(t.snap.precioSinIVA)>0);return v.length>0?v.reduce((s,t)=>s+(safeNumber(t.snap.uNeta)/safeNumber(t.snap.precioSinIVA))*100,0)/v.length:0;},[realizados]);
+  const markupProm = useMemo(()=>{const v=realizados.filter(t=>safeNumber(t.snap.costoTotal)>0);return v.length>0?v.reduce((s,t)=>s+calcMarkup(t.snap.precioSinIVA,t.snap.costoTotal),0)/v.length:0;},[realizados]);
+  const utilidadBrutaTotal = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.uBruta),0),[realizados]);
+  const eficienciaFiscalGlobal = utilidadBrutaTotal>0?(totalNeta/utilidadBrutaTotal)*100:0;
+  const roi = totalInv>0?(totalNeta/totalInv)*100:0;
+  const cxp = useMemo(()=>tickets.filter(t=>!t._deleted&&!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap.costoTotal),0),[tickets]);
+  const flujoOp = cartera - cargaFiscalTotal - cxp;
+  const forecast  = useMemo(()=>tickets.filter(t=>!t._deleted&&FORECAST_SET.has(t.status)).reduce((s,t)=>s+utilidadPonderada(safeNumber(t.snap.uNeta),t.prob),0),[tickets]);
+  const totalHoras= useMemo(()=>tickets.filter(t=>!t._deleted).reduce((s,t)=>s+safeNumber(t.horasOp),0),[tickets]);
+  const uPH       = totalHoras>0?totalNeta/totalHoras:0;
 
   // Aging cartera
   const aging = useMemo(()=>{
@@ -3506,14 +3678,21 @@ function MOps({state,setTab}) {
           <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em"}}>RESUMEN FINANCIERO</div>
         </div>
         {[
-          ["Facturado total", mxn(totalFact),  C.cyan],
-          ["Total invertido", mxn(totalInv),   C.t2],
-          ["Utilidad neta",   mxn(totalNeta),  totalNeta>=0?C.green:C.red],
-          ["Margen promedio", fpct(pctNeta),    margenColor(pctNeta)],
-          ["Cartera pend.",   mxn(cartera),     C.yellow],
-          ["Forecast",        mxn(forecast),    C.cyan],
-          ["P1 activos",      String(p1.length),p1.length>0?C.p1dot:C.t3],
-          ["P2 activos",      String(p2.length),p2.length>0?C.p2dot:C.t3],
+          ["Facturado total",   mxn(totalFact),              C.cyan],
+          ["Total invertido",   mxn(totalInv),               C.t2],
+          ["Utilidad neta",     mxn(totalNeta),              totalNeta>=0?C.green:C.red],
+          ["Markup promedio",   fpct(markupProm),            C.blueHi],
+          ["Rentabilidad neta", fpct(rentabilidadProm),      margenColor(rentabilidadProm)],
+          ["ROI operativo",     fpct(roi),                   roi>=25?C.green:C.yellow],
+          ["IVA neto SAT",      mxn(ivaNetoTotal),           C.yellow],
+          ["ISR estimado",      mxn(isrTotal),               C.yellow],
+          ["Carga fiscal",      mxn(cargaFiscalTotal),       C.red],
+          ["Eficiencia fiscal", fpct(eficienciaFiscalGlobal),eficienciaFiscalGlobal>=75?C.green:C.yellow],
+          ["Cartera pend.",     mxn(cartera),                C.yellow],
+          ["Flujo operativo",   mxn(flujoOp),                flujoOp>=0?C.green:C.red],
+          ["Forecast util.",    mxn(forecast),               C.cyan],
+          ["P1 activos",        String(p1.length),           p1.length>0?C.p1dot:C.t3],
+          ["P2 activos",        String(p2.length),           p2.length>0?C.p2dot:C.t3],
         ].map(([l,v,c],i,arr)=>(
           <div key={l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 14px",borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none"}}>
             <span style={{fontSize:12,color:C.t2}}>{l}</span>
@@ -4530,7 +4709,7 @@ function MHistorial({state,dispatch,toast}) {
                         ["IVA acreditable",          mxn(s.ivaAcred),               C.blueHi,false],
                         ["Gastos operativos",        mxn(s.gastos),                 C.t2,    false],
                         ["Costo operativo total",    mxn(s.costoTotal),             C.t1,    true ],
-                        ["Markup s/costo",           fpct(s.markupSobre),           C.blueHi,false],
+                        ["Markup s/costo",           fpct(calcMarkup(s.precioSinIVA,s.costoTotal)),           C.blueHi,false],
                         ["Precio sin IVA",           mxn(s.precioSinIVA),           C.cyan,  false],
                         ["IVA trasladado",           mxn(s.ivaTraslad),             C.cyan,  false],
                         ["Precio con IVA",           mxn(s.precioConIVA),           C.cyan,  true ],
