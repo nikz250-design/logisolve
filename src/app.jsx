@@ -3447,6 +3447,7 @@ function MOps({state,setTab}) {
   const eficienciaFiscalGlobal = utilidadBrutaTotal>0?(totalNeta/utilidadBrutaTotal)*100:0;
   const roi = totalInv>0?(totalNeta/totalInv)*100:0;
   const cxp = useMemo(()=>tickets.filter(t=>!t._deleted&&!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap.costoTotal),0),[tickets]);
+  const cartera   = useMemo(()=>tickets.filter(t=>!t._deleted&&t.payType==="credit"&&!t.cobrado&&t.status!=="cancelado").reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[tickets]);
   const flujoOp = cartera - cargaFiscalTotal - cxp;
   const forecast  = useMemo(()=>tickets.filter(t=>!t._deleted&&FORECAST_SET.has(t.status)).reduce((s,t)=>s+utilidadPonderada(safeNumber(t.snap.uNeta),t.prob),0),[tickets]);
   const totalHoras= useMemo(()=>tickets.filter(t=>!t._deleted).reduce((s,t)=>s+safeNumber(t.horasOp),0),[tickets]);
