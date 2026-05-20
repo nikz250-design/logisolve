@@ -298,7 +298,7 @@ const PriorityBadge = React.memo(function PriorityBadge({pid,small}) {
       {p.short} <span style={{fontWeight:400,opacity:.7,fontSize:small?6:7}}>{p.label}</span>
     </span>
   );
-}
+})
 
 const StatusBadge = React.memo(function StatusBadge({sid,meta,small}) {
   const s=meta[sid]||(meta.recibido||Object.values(meta)[0]);
@@ -308,7 +308,7 @@ const StatusBadge = React.memo(function StatusBadge({sid,meta,small}) {
       {s.label}
     </span>
   );
-}
+})
 
 const KPI = React.memo(function KPI({label,value,color,sub,accent,alert}) {
   return (
@@ -318,7 +318,7 @@ const KPI = React.memo(function KPI({label,value,color,sub,accent,alert}) {
       {sub&&<div style={{fontSize:7,color:C.t3,marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sub}</div>}
     </div>
   );
-}
+})
 
 function Field({label,value,onChange,prefix="$",suffix,hint,hi,min=0,step=1,type="text",disabled,placeholder,rows}) {
   const st={flex:1,background:"transparent",border:"none",outline:"none",color:hi?C.cyan:disabled?C.t3:C.t1,fontSize:hi?13:11,fontWeight:hi?700:400,padding:"7px 0",fontFamily:"'Courier New',monospace"};
@@ -362,7 +362,7 @@ const Toggle = React.memo(function Toggle({label,value,onChange}) {
       </div>
     </div>
   );
-}
+})
 
 const SHdr = React.memo(function SHdr({title,right}) {
   return (
@@ -371,7 +371,7 @@ const SHdr = React.memo(function SHdr({title,right}) {
       {right&&<div style={{fontSize:9,color:C.t2}}>{right}</div>}
     </div>
   );
-}
+})
 
 const MiniBar = React.memo(function MiniBar({value,max,color}) {
   return (
@@ -379,7 +379,7 @@ const MiniBar = React.memo(function MiniBar({value,max,color}) {
       <div style={{height:"100%",width:`${clamp((value/Math.max(max,1))*100,0,100)}%`,background:color||C.cyan}}/>
     </div>
   );
-}
+})
 
 const EmptyState = React.memo(function EmptyState({icon,title,sub}) {
   return (
@@ -389,7 +389,7 @@ const EmptyState = React.memo(function EmptyState({icon,title,sub}) {
       {sub&&<div style={{fontSize:9,color:C.t3}}>{sub}</div>}
     </div>
   );
-}
+})
 
 const Confirm = React.memo(function Confirm({msg,onConfirm,onCancel}) {
   return (
@@ -403,7 +403,7 @@ const Confirm = React.memo(function Confirm({msg,onConfirm,onCancel}) {
       </div>
     </div>
   );
-}
+})
 
 const Toasts = React.memo(function Toasts({items}) {
   if(!items.length) return null;
@@ -413,7 +413,7 @@ const Toasts = React.memo(function Toasts({items}) {
       {items.map(t=><div key={t.id} style={{background:C.bg3,borderRadius:3,padding:"7px 12px",fontSize:10,...s(t.type),fontFamily:"'Courier New',monospace",maxWidth:280}}>{t.msg}</div>)}
     </div>
   );
-}
+})
 
 function SearchPalette({state,onNavigate,onClose}) {
   const [q,setQ]=useState("");
@@ -579,7 +579,7 @@ const Timeline = React.memo(function Timeline({events}) {
       ))}
     </div>
   );
-}
+})
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // L9 — MODULES
