@@ -1200,7 +1200,7 @@ function CentroOps({state}) {
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:8}}>
         <KPI label="Tickets abiertos" value={String(abiertas.length)} color={C.t1}/>
         <KPI label="Conversion"       value={fpct(conversion)}        color={conversion>=60?C.green:C.yellow} sub="cierre / total"/>
-        <KPI label="Margen prom."     value={fpct(margenProm)}        color={margenColor(margenProm)} sub="neto s/precio"/>
+        <KPI label="Rentabilidad neta"     value={fpct(rentabilidadProm)}        color={margenColor(rentabilidadProm)} sub="neto s/precio"/>
         <KPI label="Util / hora"      value={totalHoras>0?mxn(uPorHora):"---"} color={C.cyan} sub={totalHoras>0?totalHoras.toFixed(1)+"h registradas":""}/>
       </div>
 
@@ -3520,7 +3520,7 @@ function MOps({state,setTab}) {
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
         {[
           ["Abiertos",    String(abiertos.length), C.t1],
-          ["Margen prom", fpct(margenProm),         margenColor(margenProm)],
+          ["Rentabilidad neta", fpct(rentabilidadProm),         margenColor(rentabilidadProm)],
           ["Util/hora",   totalHoras>0?mxn(uPH):"---", C.cyan],
         ].map(([l,v,c])=>(
           <div key={l} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 12px"}}>
@@ -4075,7 +4075,7 @@ function MCotizador({state,dispatch,toast}) {
       <MCard>
         <MRow label="Total c/IVA" value={mxn(totalPrecio)} color={C.cyan} bold/>
         <MRow label="Util. neta"  value={mxn(totalNeta)}   color={totalNeta>=0?C.green:C.red} bold/>
-        <MRow label="Margen prom" value={fpct(aggMargen)}  color={margenColor(aggMargen)}/>
+        <MRow label="Rentabilidad neta" value={fpct(aggMargen)}  color={margenColor(aggMargen)}/>
       </MCard>
 
       <MBtn label="Siguiente: Datos del ticket" full onClick={()=>setStep(2)}/>
