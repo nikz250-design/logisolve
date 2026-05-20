@@ -16,7 +16,6 @@ import {
   upsertRow, deleteRow, loadAllFromSupabase, seedIfEmpty,
   saveToStorage, loadFromStorage, STORAGE_VER,
   subscribeRealtime, disconnectRealtime,
-  pendingQueue, opLog,
 } from "./logisolve-sync.js";
 
 import { generarCotizacionPDF } from "./logisolve-pdf.js";
