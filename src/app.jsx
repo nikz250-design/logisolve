@@ -1,316 +1,30 @@
 import { useState, useReducer, useEffect, useRef, useCallback, useMemo } from "react";
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// L1 — DESIGN TOKENS
-// ═══════════════════════════════════════════════════════════════════════════════
-const C = {
-  bg0:"#070909", bg1:"#0C0F11", bg2:"#101415", bg3:"#151A1C", bg4:"#1A2022",
-  border:"#222A2E", borderHi:"#2E3C42",
-  blue:"#1A4D72", blueHi:"#215E8C", blueDim:"#0A2438",
-  cyan:"#267A90", cyanDim:"#16505E",
-  green:"#246845", greenDim:"#122E1E",
-  red:"#7A2828", redDim:"#321010",
-  yellow:"#866018", yellowDim:"#322408",
-  orange:"#7A4E14",
-  amber:"#8A5A10",
-  t1:"#BEC5CA", t2:"#4E5C65", t3:"#283238", t4:"#181E22",
-  p1:"#8A2020", p1dim:"#2E0A0A", p1dot:"#C84040",   // P1 CRITICO
-  p2:"#7A5010", p2dim:"#2E1C04", p2dot:"#C08020",   // P2 URGENTE
-  p3:"#1A5A4A", p3dim:"#082418", p3dot:"#30A080",   // P3 NORMAL
-  p4:"#243A4A", p4dim:"#0C1820", p4dot:"#4A7A9A",   // P4 PREVENTIVO
-};
+// ── Module imports ──────────────────────────────────────────────────────────
+import {
+  C, PRIORITY, OP_TYPES, MODIFIERS, PROB, TICKET_META, TICKET_TRANSITIONS,
+  FORECAST_SET, CLOSED_SET, PAID_SET, TICKET_ALL, MCard, MBtn, MRow, MField,
+  SEED_TICKETS, SEED_CLIENTS, SEED_SUPPLIERS, SEED_UNITS, SEED_PARTS,
+} from "./logisolve-constants.js";
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// L2 — DOMAIN CONSTANTS
-// ═══════════════════════════════════════════════════════════════════════════════
+import {
+  safeNumber, safeStr, safeLower, safeArr, genId,
+  mxn, fpct, clamp, nowISO, fmtTS, margenColor,
+  parseDateMX, daysFromNow,
+  computeSnap, effectiveMargin, migrateLinea, calculateTicketTotals,
+  utilidadPonderada,
+} from "./logisolve-calc.js";
 
-const PRIORITY = {
-  P1: { id:"P1", label:"Unidad detenida",         short:"P1", color:C.p1, dim:C.p1dim, dot:C.p1dot, marginBonus:40 },
-  P2: { id:"P2", label:"Operacion comprometida",  short:"P2", color:C.p2, dim:C.p2dim, dot:C.p2dot, marginBonus:20 },
-  P3: { id:"P3", label:"Preventivo urgente",      short:"P3", color:C.p3, dim:C.p3dim, dot:C.p3dot, marginBonus:0  },
-  P4: { id:"P4", label:"Solicitud normal",        short:"P4", color:C.p4, dim:C.p4dim, dot:C.p4dot, marginBonus:0  },
-};
+import {
+  upsertRow, deleteRow, loadAllFromSupabase, seedIfEmpty,
+  saveToStorage, loadFromStorage, STORAGE_VER,
+  subscribeRealtime, disconnectRealtime,
+  pendingQueue, opLog,
+} from "./logisolve-sync.js";
 
-const OP_TYPES = [
-  { id:"consumable", label:"Consumible",    short:"CONS",  baseMin:20, baseMax:35,  cap:80  },
-  { id:"general",    label:"Ref. General",  short:"REF-G", baseMin:25, baseMax:40,  cap:100 },
-  { id:"tech",       label:"Serv. Tecnico", short:"SERV",  baseMin:35, baseMax:60,  cap:120 },
-  { id:"heavy",      label:"Ref. Pesada",   short:"REF-P", baseMin:35, baseMax:70,  cap:140 },
-  { id:"logistics",  label:"Logistica",     short:"LOG",   baseMin:15, baseMax:30,  cap:60  },
-  { id:"rescue",     label:"Rescate",       short:"RESC",  baseMin:60, baseMax:150, cap:220 },
-];
+import { generarCotizacionPDF } from "./logisolve-pdf.js";
 
-const MODIFIERS = [
-  { id:"urgency",  label:"Urgencia / ent. inmediata", pct:20 },
-  { id:"offhours", label:"Fuera de horario",           pct:20 },
-  { id:"rare",     label:"Pieza dificil / rara",       pct:25 },
-  { id:"credit",   label:"Credito",                    pct:10 },
-];
-
-// Ticket pipeline — operational states
-const TICKET_PIPELINE = [
-  "recibido","validando","sourcing","cotizado","autorizado",
-  "comprado","transito","entregado","facturado","cobrado","cerrado",
-];
-const TICKET_META = {
-  recibido:   { label:"Recibido",        color:"#2A3A4A", dot:"#4A6A8A" },
-  validando:  { label:"Validando",       color:"#3A3A2A", dot:"#8A8A30" },
-  sourcing:   { label:"Sourcing",        color:"#2A3A5A", dot:"#4A70C0" },
-  cotizado:   { label:"Cotizado",        color:"#3A4A2A", dot:"#70A040" },
-  autorizado: { label:"Autorizado",      color:"#1A4A2A", dot:"#30A050" },
-  comprado:   { label:"Comprado",        color:"#1A3A2A", dot:"#30805A" },
-  transito:   { label:"En Transito",     color:"#2A3A1A", dot:"#70A030" },
-  entregado:  { label:"Entregado",       color:"#1A4A3A", dot:"#30C080" },
-  facturado:  { label:"Facturado",       color:"#2A2A5A", dot:"#5050C0" },
-  cobrado:    { label:"Cobrado",         color:"#1A5A1A", dot:"#30C030" },
-  cerrado:    { label:"Cerrado",         color:"#2A3A2A", dot:"#507050" },
-  cancelado:  { label:"Cancelado",       color:"#5A1A1A", dot:"#C03030" },
-};
-const TICKET_ALL = [...TICKET_PIPELINE, "cancelado"];
-
-const TICKET_TRANSITIONS = {
-  recibido:   ["validando","sourcing","cancelado"],
-  validando:  ["sourcing","cotizado","cancelado"],
-  sourcing:   ["cotizado","cancelado"],
-  cotizado:   ["autorizado","cancelado"],
-  autorizado: ["comprado","cancelado"],
-  comprado:   ["transito","cancelado"],
-  transito:   ["entregado","cancelado"],
-  entregado:  ["facturado","cancelado"],
-  facturado:  ["cobrado","cancelado"],
-  cobrado:    ["cerrado"],
-  cerrado:    [],
-  cancelado:  [],
-};
-
-const FORECAST_SET  = new Set(["recibido","validando","sourcing","cotizado","autorizado","comprado","transito"]);
-const CLOSED_SET    = new Set(["cerrado","cancelado","cobrado"]);
-const PAID_SET      = new Set(["cobrado","cerrado"]);
-const CARTERA_SET   = new Set(["entregado","facturado"]);
-
-const PROB = [
-  { id:"high",   label:"Alta",  pct:90 },
-  { id:"medium", label:"Media", pct:60 },
-  { id:"low",    label:"Baja",  pct:30 },
-];
-
-// Unit operational status
-const UNIT_STATUS = {
-  operativa:  { label:"Operativa",  color:C.green, dot:"#30C060" },
-  detenida:   { label:"Detenida",   color:C.red,   dot:"#C03030" },
-  preventivo: { label:"Preventivo", color:C.yellow,dot:"#C09020" },
-  taller:     { label:"En taller",  color:C.orange,dot:"#C07020" },
-};
-
-const STORAGE_KEY = "logisolve_v5";
-const STORAGE_VER = 6;
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// SUPABASE CLIENT
-// ═══════════════════════════════════════════════════════════════════════════════
-const SB_URL = "https://ecxqxspphoehmkvlmbtv.supabase.co";
-const SB_KEY = "sb_publishable_xTPWFkPZaNN4jAeuFifVaw_yXvQvdfC";
-
-async function sbFetch(path, opts={}) {
-  try {
-    const res = await fetch(`${SB_URL}/rest/v1${path}`, {
-      ...opts,
-      headers: {
-        "apikey": SB_KEY,
-        "Authorization": `Bearer ${SB_KEY}`,
-        "Content-Type": "application/json",
-        "Prefer": opts.method==="POST"?"resolution=merge-duplicates,return=minimal":"return=minimal",
-        ...(opts.headers||{}),
-      },
-    });
-    const txt = await res.text();
-    return txt ? JSON.parse(txt) : null;
-  } catch(e) { console.warn("sbFetch:",e); return null; }
-}
-
-async function loadTable(table) {
-  const rows = await sbFetch(`/${table}?select=id,data&order=created_at.asc`);
-  return Array.isArray(rows) && rows.length>0 ? rows.map(r=>r.data) : null;
-}
-
-async function upsertRow(table, id, data) {
-  await sbFetch(`/${table}`, {
-    method:"POST",
-    body: JSON.stringify({id, data}),
-  });
-}
-
-async function deleteRow(table, id) {
-  await sbFetch(`/${table}?id=eq.${encodeURIComponent(id)}`, { method:"DELETE" });
-}
-
-async function loadAllFromSupabase() {
-  const [tickets,clients,suppliers,units,parts] = await Promise.all([
-    loadTable("tickets"), loadTable("clients"), loadTable("suppliers"),
-    loadTable("units"),   loadTable("parts"),
-  ]);
-  if (!tickets && !clients) return null;
-  return {
-    tickets:   tickets   || initialState.tickets,
-    clients:   clients   || initialState.clients,
-    suppliers: suppliers || initialState.suppliers,
-    units:     units     || initialState.units,
-    parts:     parts     || initialState.parts,
-  };
-}
-
-async function seedIfEmpty() {
-  const existing = await loadTable("tickets");
-  if (existing) return; // already has data
-  await Promise.all([
-    ...initialState.tickets.map(t=>upsertRow("tickets",t.id,t)),
-    ...initialState.clients.map(c=>upsertRow("clients",c.id,c)),
-    ...initialState.suppliers.map(s=>upsertRow("suppliers",s.id,s)),
-    ...initialState.units.map(u=>upsertRow("units",u.id,u)),
-    ...initialState.parts.map(p=>upsertRow("parts",p.id,p)),
-  ]);
-}
-
-
-// ── SAFE HELPERS ─────────────────────────────────────────────────────────────
-const safeNumber = (v, fallback=0) => {
-  const n = typeof v==="string" ? parseFloat(v.replace(/,/g,"")) : Number(v);
-  return (isFinite(n) && !isNaN(n)) ? n : fallback;
-};
-const safeStr = (v) => (v==null ? "" : String(v));
-const safeLower = (v) => safeStr(v).toLowerCase();
-const safeArr = (v) => (Array.isArray(v) ? v : []);
-const genId = (prefix) => {
-  const uuid = (typeof crypto!=="undefined"&&crypto.randomUUID)
-    ? crypto.randomUUID().replace(/-/g,"").slice(0,8).toUpperCase()
-    : Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,6).toUpperCase();
-  return `${prefix}-${uuid}`;
-};
-
-// ═══════════════════════════════════════════════════════════════════════════════
-function computeSnap(p) {
-  const { costo=0, gasolina=0, otros=0, iva=16, isr=20,
-          compraConIVA=true, ventaConIVA=true, mode="auto", margin=0, manualPrice=0 } = p;
-  const ivaR = safeNumber(iva,16)/100, isrR = safeNumber(isr,20)/100;
-  const c0 = safeNumber(costo), g0 = safeNumber(gasolina), o0 = safeNumber(otros);
-  const costoBase  = compraConIVA ? c0/(1+ivaR) : c0;
-  const ivaAcred   = compraConIVA ? c0-costoBase : costoBase*ivaR;
-  const gastos     = g0+o0;
-  const costoTotal = costoBase+gastos;
-  let precioSinIVA, markupSobre;
-  if (mode==="manual") {
-    const raw = safeNumber(manualPrice);
-    precioSinIVA = ventaConIVA ? raw/(1+ivaR) : raw;
-    markupSobre  = costoTotal>0 ? ((precioSinIVA-costoTotal)/costoTotal)*100 : 0;
-  } else {
-    precioSinIVA = costoTotal*(1+safeNumber(margin)/100);
-    markupSobre  = safeNumber(margin);
-  }
-  const ivaTraslad       = precioSinIVA*ivaR;
-  const precioConIVA     = ventaConIVA ? precioSinIVA+ivaTraslad : precioSinIVA;
-  const ivaNeto          = ivaTraslad-ivaAcred;
-  const uBruta           = precioSinIVA-costoTotal;
-  const isrAmt           = Math.max(uBruta*isrR,0);
-  const uNeta            = uBruta-isrAmt;
-  const margenNetoPrecio = precioSinIVA>0 ? (uNeta/precioSinIVA)*100 : 0;
-  return { costoBase,ivaAcred,gastos,costoTotal,precioSinIVA,ivaTraslad,precioConIVA,ivaNeto,uBruta,isr:isrAmt,uNeta,markupSobre,margenNetoPrecio,params:{iva,isr} };
-}
-
-function effectiveMargin(opId, priority, mods, custom, customVal) {
-  const op  = OP_TYPES.find(o=>o.id===opId)||OP_TYPES[0];
-  const pr  = PRIORITY[priority]||PRIORITY.P3;
-  const base = Math.round((op.baseMin+op.baseMax)/2) + pr.marginBonus;
-  if (custom) return Math.min(customVal, op.cap);
-  const modSum = mods.reduce((s,id)=>{ const m=MODIFIERS.find(m=>m.id===id); return s+(m?m.pct:0); },0);
-  return Math.min(base+modSum, op.cap);
-}
-
-// ── MIGRACIÓN DE LÍNEAS — compatibilidad total con tickets viejos ─────────────
-function migrateLinea(l, fallbackSnap, ivaR=0.16) {
-  if (!l) return null;
-  return {
-    titulo:       safeStr(l.titulo) || safeStr(l.title) || "Sin descripción",
-    partRef:      safeStr(l.partRef),
-    qty:          safeNumber(l.qty, 1) || 1,
-    costoUnit:    safeNumber(l.costoUnit, (l.snap?.costoBase||0)*(1+ivaR)),
-    gasolina:     safeNumber(l.gasolina, l.snap?.gastos||0),
-    otros:        safeNumber(l.otros, 0),
-    mode:         l.mode || "manual",
-    manualPrice:  safeStr(l.manualPrice || (l.snap?.precioConIVA||0).toFixed(2)),
-    customMgn:    !!l.customMgn,
-    customVal:    safeNumber(l.customVal, 27),
-    descripcionPDF: safeStr(l.descripcionPDF),
-    snap:         l.snap || fallbackSnap,
-  };
-}
-
-// ── HELPER CENTRALIZADO DE TOTALES ───────────────────────────────────────────
-function calculateTicketTotals(ticket) {
-  if (!ticket) return null;
-  const snap = ticket.snap || {};
-  const lineas = safeArr(ticket.lineas);
-  const iva = safeNumber(snap.params?.iva, 16);
-  const isr = safeNumber(snap.params?.isr, 20);
-
-  if (lineas.length === 0) {
-    // Ticket viejo sin lineas — usar snap directamente
-    return {
-      lineas: [],
-      subtotal:    safeNumber(snap.precioSinIVA),
-      ivaAmt:      safeNumber(snap.ivaTraslad),
-      total:       safeNumber(snap.precioConIVA),
-      costoTotal:  safeNumber(snap.costoTotal),
-      uNeta:       safeNumber(snap.uNeta),
-      uBruta:      safeNumber(snap.uBruta),
-      isrAmt:      safeNumber(snap.isr),
-      ivaNeto:     safeNumber(snap.ivaNeto),
-      markupSobre: safeNumber(snap.markupSobre),
-      margenNeto:  safeNumber(snap.margenNetoPrecio),
-      ivaPct: iva, isrPct: isr,
-    };
-  }
-
-  // Agregar totales de todas las líneas
-  const ivaR = iva/100;
-  let subtotal=0, ivaAmt=0, total=0, costoTotal=0, uNeta=0, uBruta=0, isrAmt=0, ivaNeto=0;
-  const lineasCalc = lineas.map(l => {
-    const ml = migrateLinea(l, snap, ivaR);
-    const qty = safeNumber(ml.qty, 1) || 1;
-    const lsnap = ml.snap || {};
-    const precioUnit  = safeNumber(lsnap.precioConIVA);
-    const precioUnitSinIVA = safeNumber(lsnap.precioSinIVA);
-    const lineTotal   = precioUnit * qty;
-    const lineTotalSinIVA = precioUnitSinIVA * qty;
-    const lineIVA     = safeNumber(lsnap.ivaTraslad) * qty;
-    subtotal   += lineTotalSinIVA;
-    ivaAmt     += lineIVA;
-    total      += lineTotal;
-    costoTotal += safeNumber(lsnap.costoTotal) * qty;
-    uNeta      += safeNumber(lsnap.uNeta) * qty;
-    uBruta     += safeNumber(lsnap.uBruta) * qty;
-    isrAmt     += safeNumber(lsnap.isr) * qty;
-    ivaNeto    += safeNumber(lsnap.ivaNeto) * qty;
-    return { ...ml, precioUnit, precioUnitSinIVA, lineTotal, lineTotalSinIVA, lineIVA };
-  });
-
-  const markupSobre = costoTotal>0 ? ((subtotal-costoTotal)/costoTotal)*100 : 0;
-  const margenNeto  = subtotal>0 ? (uNeta/subtotal)*100 : 0;
-
-  return {
-    lineas: lineasCalc,
-    subtotal, ivaAmt, total,
-    costoTotal, uNeta, uBruta, isrAmt, ivaNeto,
-    markupSobre, margenNeto,
-    ivaPct: iva, isrPct: isr,
-  };
-}
-
-function utilidadPonderada(uNeta, probId) {
-  const p = PROB.find(x=>x.id===probId)||PROB[0];
-  return uNeta*(p.pct/100);
-}
-
-
+// ── Domain helpers (inline — depend on constants) ─────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
 const mxn   = n => new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2}).format(n||0);
 const fpct  = n => ((n||0).toFixed(1))+"%";
@@ -418,18 +132,8 @@ const initialState = {
 // ═══════════════════════════════════════════════════════════════════════════════
 // L6 — STORE
 // ═══════════════════════════════════════════════════════════════════════════════
-function loadFromStorage() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const p = JSON.parse(raw);
-    return p.version===STORAGE_VER ? p.data : null;
-  } catch { return null; }
-}
-function saveToStorage(s) {
-  try { localStorage.setItem(STORAGE_KEY,JSON.stringify({version:STORAGE_VER,savedAt:nowISO(),data:{tickets:s.tickets,clients:s.clients,suppliers:s.suppliers,units:s.units,parts:s.parts}})); }
-  catch(e){ console.warn("storage:",e); }
-}
+
+// ── State ────────────────────────────────────────────────────────────────────
 
 function reducer(state,action) {
   switch(action.type) {
@@ -479,12 +183,37 @@ function reducer(state,action) {
     }
     case "RESET": return {...initialState};
     case "NOOP":  return state; // trigger effects without mutation
+    // Realtime sync from another tab/device — merge without overwriting newer local data
+    case "REALTIME_UPSERT": {
+      const {table, item} = action;
+      if(!item?.id) return state;
+      const merge = (arr) => {
+        const existing = arr.find(x=>x.id===item.id);
+        if(!existing) return [...arr, item]; // new item
+        // Keep whichever was updated more recently
+        const localTs  = existing._updatedAt || "0";
+        const remoteTs = item._updatedAt     || "0";
+        return localTs >= remoteTs
+          ? arr  // local is newer, keep it
+          : arr.map(x=>x.id===item.id ? item : x); // remote is newer
+      };
+      const tableMap = {
+        tickets:   s=>({...s,tickets:merge(s.tickets)}),
+        clients:   s=>({...s,clients:merge(s.clients)}),
+        suppliers: s=>({...s,suppliers:merge(s.suppliers)}),
+        units:     s=>({...s,units:merge(s.units)}),
+        parts:     s=>({...s,parts:merge(s.parts)}),
+      };
+      return tableMap[table] ? tableMap[table](state) : state;
+    }
     default: return state;
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // L7 — TOAST HOOK
+// ═══════════════════════════════════════════════════════════════════════════════
+
 // ═══════════════════════════════════════════════════════════════════════════════
 function useToasts() {
   const [toasts,setToasts] = useState([]);
@@ -499,224 +228,8 @@ function useToasts() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // PDF GENERATOR — formato oficial Logisolve
 // ═══════════════════════════════════════════════════════════════════════════════
-function generarCotizacionPDF(tkt, cl, un, supp) {
-  const totals = calculateTicketTotals(tkt);
-  const folio = tkt.id.replace("TKT","COT");
-  const fechaLarga = (()=>{
-    const p=tkt.date.split("/");
-    if(p.length!==3) return tkt.date;
-    const meses=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-    return `${parseInt(p[0])} de ${meses[parseInt(p[1])-1]} de ${p[2]}`;
-  })();
-  const formaPago = tkt.payType==="credit"
-    ? "Cr\u00e9dito"+(tkt.promesaPago?" \u2014 Fecha l\u00edmite: "+tkt.promesaPago:"")
-    : "Contado / Transferencia bancaria";
-  const entrega = supp&&supp.entregaDias
-    ? supp.entregaDias+" d\u00eda"+(supp.entregaDias>1?"s":"")+" h\u00e1biles"
-    : "24-48 hrs h\u00e1biles";
-  const unidadStr = un?(un.economico?"Eco. "+un.economico+" \u00b7 ":"")+un.marca+" "+un.modelo+" "+un.anio:"";
-  const clDirParts=[];
-  if(cl?.direccion) clDirParts.push(cl.direccion);
-  if(cl?.ciudad)    clDirParts.push(cl.ciudad);
-  if(cl?.estado)    clDirParts.push(cl.estado);
-  const clLine = cl?(cl.empresa+(clDirParts.length?" \u00b7 "+clDirParts.join(", "):"")):"&mdash;";
-  const fmtMXN = n=>safeNumber(n).toLocaleString("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2});
-  const notaLine = tkt.notes?`<li>${tkt.notes}</li>`:"";
 
-  // Si ticket viejo sin lineas, crear una fila con datos del snap
-  const conceptos = (tkt.lineas&&tkt.lineas.length>0)
-    ? tkt.lineas
-    : [{titulo:tkt.titulo, partRef:tkt.partRef||"", snap:tkt.snap, qty:1, descripcionPDF:""}];
-
-  const multiLinea = conceptos.length > 1;
-
-  const filas = conceptos.map((c,i)=>{
-    const ml = migrateLinea(c, tkt.snap);
-    const qty = safeNumber(ml.qty,1)||1;
-    const lsnap = ml.snap||tkt.snap||{};
-    const precioUnit = safeNumber(lsnap.precioConIVA);
-    const lineTotal  = precioUnit * qty;
-    const desc = ml.descripcionPDF ||
-      "Atenci\u00f3n correctiva para continuidad operativa de unidad en CEDIS SMO. "+
-      "Incluye integraci\u00f3n de componente compatible, validaci\u00f3n operativa y seguimiento log\u00edstico.";
-    const unTag = unidadStr&&i===0?`<br><br><strong>Unidad:</strong> ${unidadStr}`:"";
-    const refTag = ml.partRef?`<br><br><strong>Clave:</strong> ${ml.partRef}`:"";
-
-    if(multiLinea) {
-      // Tabla con columnas: # | Cant. | Concepto | Descripción | Unitario | Total
-      return `<tr>
-        <td style="text-align:center">${String(i+1).padStart(2,"0")}</td>
-        <td style="text-align:center">${qty}</td>
-        <td>${ml.titulo}</td>
-        <td>${desc}${unTag}${refTag}</td>
-        <td style="text-align:right;white-space:nowrap">${fmtMXN(precioUnit)}</td>
-        <td style="text-align:right;white-space:nowrap;font-weight:700">${fmtMXN(lineTotal)}</td>
-      </tr>`;
-    } else {
-      // Tabla simple: # | Concepto | Descripción | Importe
-      return `<tr>
-        <td>${String(i+1).padStart(2,"0")}</td>
-        <td>${ml.titulo}</td>
-        <td>${desc}${unTag}${refTag}</td>
-        <td style="text-align:right;white-space:nowrap;font-weight:700">${fmtMXN(precioUnit*qty)}</td>
-      </tr>`;
-    }
-  }).join("");
-
-  const theadMulti = `<thead><tr>
-    <th style="width:36px;text-align:center">#</th>
-    <th style="width:60px;text-align:center">Cant.</th>
-    <th style="width:160px">Concepto</th>
-    <th>Descripci\u00f3n t\u00e9cnica / operativa</th>
-    <th style="width:110px;text-align:right">Unitario</th>
-    <th style="width:120px;text-align:right">Total</th>
-  </tr></thead>`;
-
-  const theadSimple = `<thead><tr>
-    <th style="width:36px">No.</th>
-    <th style="width:190px">Concepto</th>
-    <th>Descripci\u00f3n t\u00e9cnica / operativa</th>
-    <th style="width:130px;text-align:right">Importe</th>
-  </tr></thead>`;
-
-  const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8"/>
-<title>${folio}</title>
-<style>
-*{box-sizing:border-box}
-body{margin:0;background:#efefef;font-family:Arial,Helvetica,sans-serif;color:#111}
-.page{width:794px;min-height:1123px;margin:0 auto;background:#fff;padding:42px 42px 34px}
-.toolbar{text-align:right;margin-bottom:14px}
-.toolbar button{padding:6px 18px;border:none;border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;margin-left:6px}
-.tb-close{background:#ddd;color:#444}.tb-save{background:#111;color:#fff}
-.top-header{border:1px solid #d9d9d9;background:#fafafa;padding:20px 18px;display:flex;justify-content:space-between;align-items:flex-start}
-.brand h1{margin:0;font-size:28px;font-weight:800;letter-spacing:.5px}
-.brand p{margin:8px 0 0;font-size:12px;color:#555;font-weight:600}
-.issuer{text-align:right;font-size:12px;line-height:1.55}
-.issuer strong{font-size:14px}
-.hero{margin-top:22px;background:#0c0c0c;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:20px 22px}
-.hero-title{font-size:28px;font-weight:800;letter-spacing:.4px}
-.hero-meta{text-align:right;line-height:1.3}
-.hero-meta .label{font-size:14px;opacity:.85}
-.hero-meta .folio{font-size:22px;font-weight:800}
-.hero-meta .date{font-size:16px;font-weight:700}
-.meta-table{width:100%;border-collapse:collapse;margin-top:18px}
-.meta-table td{border:1px solid #e1e1e1;padding:12px 14px;font-size:14px}
-.meta-table td:first-child{width:140px;background:#fafafa;font-weight:700}
-.section-title{margin-top:28px;margin-bottom:12px;font-size:18px;font-weight:800;letter-spacing:.2px}
-.detail-table{width:100%;border-collapse:collapse}
-.detail-table th{background:#0c0c0c;color:#fff;text-align:left;padding:11px 12px;font-size:13px;font-weight:700}
-.detail-table td{border:1px solid #e4e4e4;padding:12px 12px;vertical-align:top;font-size:13px;line-height:1.5}
-.detail-table strong{display:inline-block;margin-top:0}
-.totals{width:420px;margin-left:auto;margin-top:16px;border-collapse:collapse}
-.totals td{border:1px solid #e3e3e3;padding:10px 14px;font-size:14px}
-.totals td:last-child{text-align:right;font-weight:700}
-.totals .sep td{border-top:2px solid #ccc}
-.totals .grand-total td{background:#0c0c0c;color:#fff;font-weight:800;font-size:15px}
-.block{margin-top:28px}
-.block h3{margin:0 0 10px;font-size:17px;font-weight:800}
-.block ul{margin:0;padding-left:18px}
-.block li{margin-bottom:6px;line-height:1.45;font-size:13px}
-.footer{margin-top:38px;padding-top:12px;border-top:1px solid #e3e3e3;display:flex;justify-content:space-between;font-size:12px;color:#444}
-@media print{.toolbar{display:none}body{background:#fff}@page{size:A4;margin:0}}
-</style>
-</head>
-<body>
-<div class="page">
-
-<div class="toolbar">
-  <button class="tb-close" onclick="window.close()">&#x2715; Cerrar</button>
-  <button class="tb-save" onclick="window.print()">&#x2193; Guardar PDF</button>
-</div>
-
-<div class="top-header">
-  <div class="brand">
-    <h1>LOGISOLVE</h1>
-    <p>Logistics &middot; Supply &middot; Solutions</p>
-  </div>
-  <div class="issuer">
-    <strong>Alejandro Saucedo</strong><br>
-    RFC: SAME9612277T9<br>
-    Tel. 5562321807<br>
-    contacto@logisolve.mx<br>
-    https://logisolve-sistema.vercel.app/
-  </div>
-</div>
-
-<div class="hero">
-  <div class="hero-title">COTIZACI&Oacute;N</div>
-  <div class="hero-meta">
-    <div class="label">No.</div>
-    <div class="folio">${folio}</div>
-    <div class="date">Fecha: ${tkt.date.replace(/\//g," / ")}</div>
-  </div>
-</div>
-
-<table class="meta-table">
-  <tr><td>Cliente</td><td>${clLine}</td></tr>
-  <tr><td>Atenci&oacute;n</td><td>&Aacute;rea de Compras / Operaciones</td></tr>
-  <tr><td>Vigencia</td><td>3 d&iacute;as naturales</td></tr>
-</table>
-
-<div class="section-title">DETALLE DEL CONCEPTO</div>
-
-<table class="detail-table">
-  ${multiLinea?theadMulti:theadSimple}
-  <tbody>${filas}</tbody>
-</table>
-
-<table class="totals">
-  <tr><td>Subtotal</td><td>${fmtMXN(totals.subtotal)} MXN</td></tr>
-  <tr><td>IVA (${totals.ivaPct}%)</td><td>${fmtMXN(totals.ivaAmt)} MXN</td></tr>
-  <tr class="grand-total"><td>TOTAL &middot; IVA INCLUIDO</td><td>${fmtMXN(totals.total)} MXN</td></tr>
-</table>
-
-<div class="block">
-  <h3>ALCANCE DEL SERVICIO</h3>
-  <ul>
-    <li>Integraci&oacute;n y coordinaci&oacute;n de componente requerido para continuidad operativa.</li>
-    <li>Validaci&oacute;n y coordinaci&oacute;n operativa.</li>
-    <li>Entrega directa en CEDIS SMO.</li>
-    <li>Seguimiento y trazabilidad log&iacute;stica.</li>
-  </ul>
-</div>
-
-<div class="block">
-  <h3>CONDICIONES COMERCIALES</h3>
-  <ul>
-    <li>Precio IVA incluido en el total.</li>
-    <li>Forma de pago: ${formaPago}.</li>
-    <li>Entrega conforme a disponibilidad confirmada al momento de autorizaci&oacute;n.</li>
-    <li>Precios sujetos a cambio y disponibilidad al momento de confirmar.</li>
-    <li>Vigencia: 3 d&iacute;as naturales a partir de la fecha de emisi&oacute;n.</li>
-    ${notaLine}
-  </ul>
-</div>
-
-<div class="block">
-  <h3>OBSERVACIONES</h3>
-  <ul>
-    <li>Tiempo estimado de entrega: ${entrega}, sujeto a disponibilidad.</li>
-    <li>La validaci&oacute;n t&eacute;cnica final de compatibilidad corresponde al cliente.</li>
-    <li>La garant&iacute;a aplica conforme a pol&iacute;ticas del fabricante o proveedor.</li>
-  </ul>
-</div>
-
-<div class="footer">
-  <div>Quedo atento para cualquier duda o confirmaci&oacute;n.</div>
-  <div>LogiSolve &middot; ${fechaLarga}</div>
-</div>
-
-</div>
-</body>
-</html>`;
-
-  const win=window.open("","_blank");
-  if(win){win.document.open();win.document.write(html);win.document.close();}
-}
-
+// ── Components + App ────────────────────────────────────────────────────────
 
 // Modal de confirmacion PDF
 function PDFConfirm({tkt,cl,un,supp,onClose}) {
@@ -4589,13 +4102,12 @@ export default function App() {
   useEffect(()=>{
     (async()=>{
       try {
-        await seedIfEmpty();
+        await seedIfEmpty(initialState);
         const data = await loadAllFromSupabase();
         if(data) dispatch({type:"IMPORT",data});
         opLog.push("LOAD_OK");
       } catch(e){
         opLog.push("LOAD_ERROR", {error: e?.message});
-        console.warn("Supabase load error:",e);
       }
       finally { setLoading(false); }
     })();
@@ -4608,7 +4120,7 @@ export default function App() {
     saveToStorage(state);
     clearTimeout(syncRef.current);
     syncRef.current = setTimeout(async ()=>{
-      if(savingRef.current) return; // prevent concurrent saves
+      if(savingRef.current) return;
       savingRef.current = true;
       setSaving();
       try {
