@@ -3,14 +3,11 @@ import { useState, useReducer, useEffect, useRef, useCallback, useMemo } from "r
 // ── Module imports ──────────────────────────────────────────────────────────
 import {
   C, PRIORITY, OP_TYPES, MODIFIERS, PROB, TICKET_META, TICKET_TRANSITIONS,
-  FORECAST_SET, CLOSED_SET, PAID_SET, TICKET_ALL, MCard, MBtn, MRow, MField,
-  SEED_TICKETS, SEED_CLIENTS, SEED_SUPPLIERS, SEED_UNITS, SEED_PARTS,
+  FORECAST_SET, CLOSED_SET, PAID_SET, TICKET_ALL,
 } from "./logisolve-constants.js";
 
 import {
   safeNumber, safeStr, safeLower, safeArr, genId,
-  mxn, fpct, clamp, nowISO, fmtTS, margenColor,
-  parseDateMX, daysFromNow,
   computeSnap, effectiveMargin, migrateLinea, calculateTicketTotals,
   utilidadPonderada,
 } from "./logisolve-calc.js";
