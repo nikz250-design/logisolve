@@ -291,7 +291,7 @@ const Logo = React.memo(function Logo() {
   );
 })
 
-const PriorityBadge = React.memo(function PriorityBadge({pid,small})) {
+const PriorityBadge = React.memo(function PriorityBadge({pid,small}) {
   const p=PRIORITY[pid]||PRIORITY.P4;
   return (
     <span style={{display:"inline-flex",alignItems:"center",gap:3,padding:small?"2px 5px":"3px 8px",borderRadius:2,background:p.dim,border:`1px solid ${p.color}66`,fontSize:small?7:8,color:p.dot,fontWeight:700,letterSpacing:"0.05em",whiteSpace:"nowrap",fontFamily:"'Courier New',monospace"}}>
@@ -300,7 +300,7 @@ const PriorityBadge = React.memo(function PriorityBadge({pid,small})) {
   );
 }
 
-const StatusBadge = React.memo(function StatusBadge({sid,meta,small})) {
+const StatusBadge = React.memo(function StatusBadge({sid,meta,small}) {
   const s=meta[sid]||(meta.recibido||Object.values(meta)[0]);
   return (
     <span style={{display:"inline-flex",alignItems:"center",gap:3,padding:small?"2px 5px":"3px 7px",borderRadius:2,background:s.color+"33",border:`1px solid ${s.color}55`,fontSize:small?7:8,color:s.dot,fontWeight:600,whiteSpace:"nowrap"}}>
@@ -310,7 +310,7 @@ const StatusBadge = React.memo(function StatusBadge({sid,meta,small})) {
   );
 }
 
-const KPI = React.memo(function KPI({label,value,color,sub,accent,alert})) {
+const KPI = React.memo(function KPI({label,value,color,sub,accent,alert}) {
   return (
     <div style={{background:accent?C.blueDim:alert?C.redDim:C.bg2,border:`1px solid ${accent?C.blue:alert?C.red+"55":C.border}`,borderRadius:3,padding:"8px 10px",minWidth:0,overflow:"hidden"}}>
       <div style={{fontSize:7,color:C.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
@@ -353,7 +353,7 @@ function Sel({label,value,onChange,options}) {
   );
 }
 
-const Toggle = React.memo(function Toggle({label,value,onChange})) {
+const Toggle = React.memo(function Toggle({label,value,onChange}) {
   return (
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:`1px solid ${C.bg4}`}}>
       <span style={{fontSize:10,color:C.t2}}>{label}</span>
@@ -364,7 +364,7 @@ const Toggle = React.memo(function Toggle({label,value,onChange})) {
   );
 }
 
-const SHdr = React.memo(function SHdr({title,right})) {
+const SHdr = React.memo(function SHdr({title,right}) {
   return (
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 10px",background:C.bg3,borderBottom:`1px solid ${C.border}`}}>
       <div style={{fontSize:7,color:C.t3,letterSpacing:"0.2em",fontWeight:700}}>{title}</div>
@@ -373,7 +373,7 @@ const SHdr = React.memo(function SHdr({title,right})) {
   );
 }
 
-const MiniBar = React.memo(function MiniBar({value,max,color})) {
+const MiniBar = React.memo(function MiniBar({value,max,color}) {
   return (
     <div style={{height:3,background:C.bg4,borderRadius:2,overflow:"hidden",marginTop:3}}>
       <div style={{height:"100%",width:`${clamp((value/Math.max(max,1))*100,0,100)}%`,background:color||C.cyan}}/>
@@ -381,7 +381,7 @@ const MiniBar = React.memo(function MiniBar({value,max,color})) {
   );
 }
 
-const EmptyState = React.memo(function EmptyState({icon,title,sub})) {
+const EmptyState = React.memo(function EmptyState({icon,title,sub}) {
   return (
     <div style={{textAlign:"center",padding:"32px 16px",color:C.t3}}>
       <div style={{fontSize:24,marginBottom:6,opacity:.4}}>{icon}</div>
@@ -391,7 +391,7 @@ const EmptyState = React.memo(function EmptyState({icon,title,sub})) {
   );
 }
 
-const Confirm = React.memo(function Confirm({msg,onConfirm,onCancel})) {
+const Confirm = React.memo(function Confirm({msg,onConfirm,onCancel}) {
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:5,padding:18,maxWidth:320,width:"90%"}}>
@@ -405,7 +405,7 @@ const Confirm = React.memo(function Confirm({msg,onConfirm,onCancel})) {
   );
 }
 
-const Toasts = React.memo(function Toasts({items})) {
+const Toasts = React.memo(function Toasts({items}) {
   if(!items.length) return null;
   const s=t=>t==="success"?{border:`1px solid ${C.green}55`,color:C.green}:t==="error"?{border:`1px solid ${C.red}55`,color:C.red}:{border:`1px solid ${C.border}`,color:C.t2};
   return (
@@ -560,7 +560,7 @@ function UnitPicker({units, value, onChange, placeholder="Buscar por eco, placa,
 }
 
 // ── TIMELINE COMPONENT ───────────────────────────────────────────────────────
-const Timeline = React.memo(function Timeline({events})) {
+const Timeline = React.memo(function Timeline({events}) {
   if(!events||!events.length) return <div style={{padding:"8px 12px",fontSize:9,color:C.t3}}>Sin eventos registrados.</div>;
   return (
     <div style={{padding:"6px 12px"}}>
