@@ -172,23 +172,39 @@ async function seedIfEmpty() {
 }
 
 
+// ── SAFE HELPERS ─────────────────────────────────────────────────────────────
+const safeNumber = (v, fallback=0) => {
+  const n = typeof v==="string" ? parseFloat(v.replace(/,/g,"")) : Number(v);
+  return (isFinite(n) && !isNaN(n)) ? n : fallback;
+};
+const safeStr = (v) => (v==null ? "" : String(v));
+const safeLower = (v) => safeStr(v).toLowerCase();
+const safeArr = (v) => (Array.isArray(v) ? v : []);
+const genId = (prefix) => {
+  const uuid = (typeof crypto!=="undefined"&&crypto.randomUUID)
+    ? crypto.randomUUID().replace(/-/g,"").slice(0,8).toUpperCase()
+    : Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,6).toUpperCase();
+  return `${prefix}-${uuid}`;
+};
+
 // ═══════════════════════════════════════════════════════════════════════════════
 function computeSnap(p) {
   const { costo=0, gasolina=0, otros=0, iva=16, isr=20,
           compraConIVA=true, ventaConIVA=true, mode="auto", margin=0, manualPrice=0 } = p;
-  const ivaR = iva/100, isrR = isr/100;
-  const costoBase  = compraConIVA ? costo/(1+ivaR) : costo;
-  const ivaAcred   = compraConIVA ? costo-costoBase : costoBase*ivaR;
-  const gastos     = gasolina+otros;
+  const ivaR = safeNumber(iva,16)/100, isrR = safeNumber(isr,20)/100;
+  const c0 = safeNumber(costo), g0 = safeNumber(gasolina), o0 = safeNumber(otros);
+  const costoBase  = compraConIVA ? c0/(1+ivaR) : c0;
+  const ivaAcred   = compraConIVA ? c0-costoBase : costoBase*ivaR;
+  const gastos     = g0+o0;
   const costoTotal = costoBase+gastos;
   let precioSinIVA, markupSobre;
   if (mode==="manual") {
-    const raw = parseFloat(manualPrice)||0;
+    const raw = safeNumber(manualPrice);
     precioSinIVA = ventaConIVA ? raw/(1+ivaR) : raw;
     markupSobre  = costoTotal>0 ? ((precioSinIVA-costoTotal)/costoTotal)*100 : 0;
   } else {
-    precioSinIVA = costoTotal*(1+(margin||0)/100);
-    markupSobre  = margin||0;
+    precioSinIVA = costoTotal*(1+safeNumber(margin)/100);
+    markupSobre  = safeNumber(margin);
   }
   const ivaTraslad       = precioSinIVA*ivaR;
   const precioConIVA     = ventaConIVA ? precioSinIVA+ivaTraslad : precioSinIVA;
@@ -209,13 +225,92 @@ function effectiveMargin(opId, priority, mods, custom, customVal) {
   return Math.min(base+modSum, op.cap);
 }
 
+// ── MIGRACIÓN DE LÍNEAS — compatibilidad total con tickets viejos ─────────────
+function migrateLinea(l, fallbackSnap, ivaR=0.16) {
+  if (!l) return null;
+  return {
+    titulo:       safeStr(l.titulo) || safeStr(l.title) || "Sin descripción",
+    partRef:      safeStr(l.partRef),
+    qty:          safeNumber(l.qty, 1) || 1,
+    costoUnit:    safeNumber(l.costoUnit, (l.snap?.costoBase||0)*(1+ivaR)),
+    gasolina:     safeNumber(l.gasolina, l.snap?.gastos||0),
+    otros:        safeNumber(l.otros, 0),
+    mode:         l.mode || "manual",
+    manualPrice:  safeStr(l.manualPrice || (l.snap?.precioConIVA||0).toFixed(2)),
+    customMgn:    !!l.customMgn,
+    customVal:    safeNumber(l.customVal, 27),
+    descripcionPDF: safeStr(l.descripcionPDF),
+    snap:         l.snap || fallbackSnap,
+  };
+}
+
+// ── HELPER CENTRALIZADO DE TOTALES ───────────────────────────────────────────
+function calculateTicketTotals(ticket) {
+  if (!ticket) return null;
+  const snap = ticket.snap || {};
+  const lineas = safeArr(ticket.lineas);
+  const iva = safeNumber(snap.params?.iva, 16);
+  const isr = safeNumber(snap.params?.isr, 20);
+
+  if (lineas.length === 0) {
+    // Ticket viejo sin lineas — usar snap directamente
+    return {
+      lineas: [],
+      subtotal:    safeNumber(snap.precioSinIVA),
+      ivaAmt:      safeNumber(snap.ivaTraslad),
+      total:       safeNumber(snap.precioConIVA),
+      costoTotal:  safeNumber(snap.costoTotal),
+      uNeta:       safeNumber(snap.uNeta),
+      uBruta:      safeNumber(snap.uBruta),
+      isrAmt:      safeNumber(snap.isr),
+      ivaNeto:     safeNumber(snap.ivaNeto),
+      markupSobre: safeNumber(snap.markupSobre),
+      margenNeto:  safeNumber(snap.margenNetoPrecio),
+      ivaPct: iva, isrPct: isr,
+    };
+  }
+
+  // Agregar totales de todas las líneas
+  const ivaR = iva/100;
+  let subtotal=0, ivaAmt=0, total=0, costoTotal=0, uNeta=0, uBruta=0, isrAmt=0, ivaNeto=0;
+  const lineasCalc = lineas.map(l => {
+    const ml = migrateLinea(l, snap, ivaR);
+    const qty = safeNumber(ml.qty, 1) || 1;
+    const lsnap = ml.snap || {};
+    const precioUnit  = safeNumber(lsnap.precioConIVA);
+    const precioUnitSinIVA = safeNumber(lsnap.precioSinIVA);
+    const lineTotal   = precioUnit * qty;
+    const lineTotalSinIVA = precioUnitSinIVA * qty;
+    const lineIVA     = safeNumber(lsnap.ivaTraslad) * qty;
+    subtotal   += lineTotalSinIVA;
+    ivaAmt     += lineIVA;
+    total      += lineTotal;
+    costoTotal += safeNumber(lsnap.costoTotal) * qty;
+    uNeta      += safeNumber(lsnap.uNeta) * qty;
+    uBruta     += safeNumber(lsnap.uBruta) * qty;
+    isrAmt     += safeNumber(lsnap.isr) * qty;
+    ivaNeto    += safeNumber(lsnap.ivaNeto) * qty;
+    return { ...ml, precioUnit, precioUnitSinIVA, lineTotal, lineTotalSinIVA, lineIVA };
+  });
+
+  const markupSobre = costoTotal>0 ? ((subtotal-costoTotal)/costoTotal)*100 : 0;
+  const margenNeto  = subtotal>0 ? (uNeta/subtotal)*100 : 0;
+
+  return {
+    lineas: lineasCalc,
+    subtotal, ivaAmt, total,
+    costoTotal, uNeta, uBruta, isrAmt, ivaNeto,
+    markupSobre, margenNeto,
+    ivaPct: iva, isrPct: isr,
+  };
+}
+
 function utilidadPonderada(uNeta, probId) {
   const p = PROB.find(x=>x.id===probId)||PROB[0];
   return uNeta*(p.pct/100);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// L4 — DOMAIN HELPERS
+
 // ═══════════════════════════════════════════════════════════════════════════════
 const mxn   = n => new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2}).format(n||0);
 const fpct  = n => ((n||0).toFixed(1))+"%";
@@ -247,7 +342,7 @@ function mkTicketId(dateStr) {
   else{const n=new Date();y=n.getFullYear();m=String(n.getMonth()+1).padStart(2,"0");d=String(n.getDate()).padStart(2,"0");}
   return `TKT-${y}${String(m).padStart(2,"0")}${String(d).padStart(2,"0")}-${String(_seq++).padStart(3,"0")}`;
 }
-function mkUnitId() { return `UNI-${Date.now().toString().slice(-5)}`; }
+function mkUnitId() { return genId("UNI"); }
 function mkPartId() { return `PRT-${Date.now().toString().slice(-5)}`; }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -350,7 +445,9 @@ function reducer(state,action) {
         return {...t,status:to,cobrado:PAID_SET.has(to),timeline:[...(t.timeline||[]),tlEvent],history:[...(t.history||[]),mkEvent("status_changed",{from:t.status,to})]};
       })};
     }
-    case "TKT_DELETE":  return {...state,tickets:state.tickets.filter(t=>t.id!==action.id)};
+    case "TKT_DELETE":   return {...state,tickets:state.tickets.filter(t=>t.id!==action.id)};
+    case "TKT_SOFT_DEL": return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,_deleted:true,_deletedAt:nowISO()})};
+    case "TKT_RESTORE":  return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,_deleted:false,_deletedAt:null})};
     case "TKT_COBRADO": return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,cobrado:true,status:"cobrado",timeline:[...(t.timeline||[]),{ts:nowISO(),evento:"Cobrado",actor:"Operador"}],history:[...(t.history||[]),mkEvent("cobrado")]})};
     case "TKT_TIMELINE": return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,timeline:[...(t.timeline||[]),{ts:nowISO(),evento:action.evento,actor:action.actor||"Operador"}]})};
     // CLIENTS
@@ -381,6 +478,7 @@ function reducer(state,action) {
       };
     }
     case "RESET": return {...initialState};
+    case "NOOP":  return state; // trigger effects without mutation
     default: return state;
   }
 }
@@ -391,7 +489,7 @@ function reducer(state,action) {
 function useToasts() {
   const [toasts,setToasts] = useState([]);
   const push = useCallback((msg,type="info")=>{
-    const id=Date.now()+Math.random();
+    const id = genId("T");
     setToasts(p=>[...p,{id,msg,type}]);
     setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),3000);
   },[]);
@@ -402,7 +500,7 @@ function useToasts() {
 // PDF GENERATOR — formato oficial Logisolve
 // ═══════════════════════════════════════════════════════════════════════════════
 function generarCotizacionPDF(tkt, cl, un, supp) {
-  const s = tkt.snap;
+  const totals = calculateTicketTotals(tkt);
   const folio = tkt.id.replace("TKT","COT");
   const fechaLarga = (()=>{
     const p=tkt.date.split("/");
@@ -413,118 +511,132 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
   const formaPago = tkt.payType==="credit"
     ? "Cr\u00e9dito"+(tkt.promesaPago?" \u2014 Fecha l\u00edmite: "+tkt.promesaPago:"")
     : "Contado / Transferencia bancaria";
-  const conceptos = (tkt.lineas&&tkt.lineas.length>0)
-    ? tkt.lineas
-    : [{titulo:tkt.titulo, partRef:tkt.partRef||"", snap:s, qty:1, descripcionPDF:tkt.descripcionPDF||""}];
   const entrega = supp&&supp.entregaDias
     ? supp.entregaDias+" d\u00eda"+(supp.entregaDias>1?"s":"")+" h\u00e1biles"
     : "24-48 hrs h\u00e1biles";
-  const subtotal=s.precioSinIVA, ivaAmt=s.ivaTraslad, totalFinal=s.precioConIVA, ivaPct=s.params?.iva||16;
   const unidadStr = un?(un.economico?"Eco. "+un.economico+" \u00b7 ":"")+un.marca+" "+un.modelo+" "+un.anio:"";
-
-  // Dirección del cliente
-  const clDirParts = [];
+  const clDirParts=[];
   if(cl?.direccion) clDirParts.push(cl.direccion);
-  if(cl?.ciudad) clDirParts.push(cl.ciudad);
-  if(cl?.estado) clDirParts.push(cl.estado);
-  const clDir = clDirParts.join(", ");
-  const clLine = cl ? (cl.empresa + (clDir ? " \u00b7 " + clDir : "")) : "\u2014";
-
-  const fmtMXN = n=>n.toLocaleString("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2});
-
-  const filas = conceptos.map((c,i)=>{
-    const titulo = c.titulo||"";
-    const partRef = c.partRef||"";
-    const csnap = c.snap||s;
-    const qty = c.qty||1;
-    const precio = fmtMXN(csnap.precioConIVA||0);
-    // Descripción: usa descripcionPDF personalizada si existe, si no el texto estándar
-    const desc = c.descripcionPDF||"Atenci\u00f3n correctiva para continuidad operativa de unidad en CEDIS SMO. Incluye integraci\u00f3n de componente compatible, validaci\u00f3n operativa y seguimiento log\u00edstico.";
-    const qtyTag = qty>1?` \u00d7${qty}`:"";
-    // Línea de unidad solo en primer concepto
-    const unidadTag = unidadStr&&i===0
-      ? `<div class='td-bold'><b>Unidad:</b> ${unidadStr}</div>`
-      : "";
-    const refTag = partRef
-      ? `<div class='td-bold'><b>Clave:</b> ${partRef}</div>`
-      : "";
-    return `<tr>
-      <td class='tno'>${String(i+1).padStart(2,"0")}</td>
-      <td class='tcon'>${titulo}${qtyTag}</td>
-      <td class='tdesc'>${desc}${unidadTag}${refTag}</td>
-      <td class='timp'>${precio}</td>
-    </tr>`;
-  }).join("");
-
+  if(cl?.ciudad)    clDirParts.push(cl.ciudad);
+  if(cl?.estado)    clDirParts.push(cl.estado);
+  const clLine = cl?(cl.empresa+(clDirParts.length?" \u00b7 "+clDirParts.join(", "):"")):"&mdash;";
+  const fmtMXN = n=>safeNumber(n).toLocaleString("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2});
   const notaLine = tkt.notes?`<li>${tkt.notes}</li>`:"";
 
-  const css = `
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#111;font-size:10px;line-height:1.45}
-.page{max-width:780px;margin:0 auto;padding:0}
-.toolbar{text-align:right;padding:8px 14px;background:#f5f5f5;border-bottom:1px solid #e0e0e0}
-.toolbar button{padding:4px 14px;border:none;border-radius:3px;font-size:9.5px;font-weight:700;cursor:pointer;margin-left:6px}
-.tb-close{background:#ddd;color:#444}.tb-save{background:#111;color:#fff}
-.hdr-box{display:flex;justify-content:space-between;align-items:flex-start;border:1px solid #ccc;margin:14px 20px 0;padding:12px 16px}
-.brand-name{font-size:22px;font-weight:900;color:#111;line-height:1}
-.brand-sub{font-size:9px;color:#555;margin-top:3px}
-.emisor{font-size:9px;color:#111;line-height:1.8;text-align:right}
-.emisor strong{font-weight:700;font-size:9.5px}
-.banda{background:#111;display:flex;justify-content:space-between;align-items:flex-end;margin:0 20px;padding:11px 16px}
-.banda-titulo{font-size:20px;font-weight:900;color:#fff}
-.banda-right{text-align:right}
-.banda-no{font-size:9px;color:#bbb;margin-bottom:1px}
-.banda-folio{font-size:15px;font-weight:900;color:#fff;line-height:1.15}
-.banda-fecha{font-size:12px;font-weight:700;color:#fff;margin-top:1px}
-.meta-wrap{border:1px solid #ccc;margin:0 20px;border-top:none}
-.meta-tbl{width:100%;border-collapse:collapse}
-.meta-tbl td{padding:7px 14px;vertical-align:top;border-bottom:1px solid #e8e8e8}
-.meta-tbl tr:last-child td{border-bottom:none}
-.meta-lbl{width:80px;color:#555;font-size:9.5px;font-weight:700}
-.meta-val{color:#111;font-size:9.5px}
-.body{padding:14px 20px}
-.det-title{font-size:11px;font-weight:900;color:#111;margin-bottom:6px}
-.tbl{width:100%;border-collapse:collapse;border:1px solid #ccc;font-size:9.5px;margin-bottom:0;border-bottom:none}
-.tbl thead tr{background:#444}
-.tbl thead th{color:#fff;font-size:8px;font-weight:700;padding:6px 8px;text-align:left;letter-spacing:.04em}
-.tbl thead th.r{text-align:right}
-.tbl tbody td{padding:9px 8px;vertical-align:top;border-bottom:1px solid #e8e8e8}
-.tbl tbody tr:last-child td{border-bottom:none}
-.tno{width:28px;color:#333;font-weight:600;font-size:9.5px}
-.tcon{width:120px;color:#111;font-size:9.5px}
-.tdesc{color:#333;font-size:9px;line-height:1.6}
-.td-bold{margin-top:5px;font-size:9px;color:#111}
-.timp{text-align:right;font-size:9.5px;color:#111;white-space:nowrap;width:80px}
-.tots-wrap{display:flex;justify-content:flex-end;margin-bottom:14px;margin-top:6px}
-.tots{border-collapse:collapse;font-size:9.5px;min-width:300px}
-.tots td{padding:6px 12px}
-.tl{color:#333}.tv{text-align:right;color:#111;font-weight:500;min-width:120px}
-.tot-sep{border-top:1px solid #ccc}
-.tot-final{background:#111}
-.tot-final .tl{color:#fff;font-weight:700;font-size:9px;letter-spacing:.05em;text-transform:uppercase}
-.tot-final .tv{color:#fff;font-weight:900;font-size:11px}
-.sec{margin-top:13px}
-.sec-title{font-size:11px;font-weight:900;color:#111;margin-bottom:5px}
-.blist{list-style:none;padding:0}
-.blist li{font-size:9.5px;color:#222;line-height:1.75;padding-left:12px;position:relative}
-.blist li::before{content:"\u00b7";position:absolute;left:0;top:0;color:#111;font-weight:900;font-size:13px;line-height:1.35}
-.ftr{display:flex;justify-content:space-between;margin:13px 20px 18px;padding-top:8px;border-top:1px solid #ddd;font-size:9px;color:#555}
-@media print{.toolbar{display:none}@page{size:A4;margin:.4cm;margin-top:.4cm}html{-webkit-print-color-adjust:exact}}`;
+  // Si ticket viejo sin lineas, crear una fila con datos del snap
+  const conceptos = (tkt.lineas&&tkt.lineas.length>0)
+    ? tkt.lineas
+    : [{titulo:tkt.titulo, partRef:tkt.partRef||"", snap:tkt.snap, qty:1, descripcionPDF:""}];
+
+  const multiLinea = conceptos.length > 1;
+
+  const filas = conceptos.map((c,i)=>{
+    const ml = migrateLinea(c, tkt.snap);
+    const qty = safeNumber(ml.qty,1)||1;
+    const lsnap = ml.snap||tkt.snap||{};
+    const precioUnit = safeNumber(lsnap.precioConIVA);
+    const lineTotal  = precioUnit * qty;
+    const desc = ml.descripcionPDF ||
+      "Atenci\u00f3n correctiva para continuidad operativa de unidad en CEDIS SMO. "+
+      "Incluye integraci\u00f3n de componente compatible, validaci\u00f3n operativa y seguimiento log\u00edstico.";
+    const unTag = unidadStr&&i===0?`<br><br><strong>Unidad:</strong> ${unidadStr}`:"";
+    const refTag = ml.partRef?`<br><br><strong>Clave:</strong> ${ml.partRef}`:"";
+
+    if(multiLinea) {
+      // Tabla con columnas: # | Cant. | Concepto | Descripción | Unitario | Total
+      return `<tr>
+        <td style="text-align:center">${String(i+1).padStart(2,"0")}</td>
+        <td style="text-align:center">${qty}</td>
+        <td>${ml.titulo}</td>
+        <td>${desc}${unTag}${refTag}</td>
+        <td style="text-align:right;white-space:nowrap">${fmtMXN(precioUnit)}</td>
+        <td style="text-align:right;white-space:nowrap;font-weight:700">${fmtMXN(lineTotal)}</td>
+      </tr>`;
+    } else {
+      // Tabla simple: # | Concepto | Descripción | Importe
+      return `<tr>
+        <td>${String(i+1).padStart(2,"0")}</td>
+        <td>${ml.titulo}</td>
+        <td>${desc}${unTag}${refTag}</td>
+        <td style="text-align:right;white-space:nowrap;font-weight:700">${fmtMXN(precioUnit*qty)}</td>
+      </tr>`;
+    }
+  }).join("");
+
+  const theadMulti = `<thead><tr>
+    <th style="width:36px;text-align:center">#</th>
+    <th style="width:60px;text-align:center">Cant.</th>
+    <th style="width:160px">Concepto</th>
+    <th>Descripci\u00f3n t\u00e9cnica / operativa</th>
+    <th style="width:110px;text-align:right">Unitario</th>
+    <th style="width:120px;text-align:right">Total</th>
+  </tr></thead>`;
+
+  const theadSimple = `<thead><tr>
+    <th style="width:36px">No.</th>
+    <th style="width:190px">Concepto</th>
+    <th>Descripci\u00f3n t\u00e9cnica / operativa</th>
+    <th style="width:130px;text-align:right">Importe</th>
+  </tr></thead>`;
 
   const html = `<!DOCTYPE html>
-<html lang='es'><head><meta charset='UTF-8'/><title>${folio}</title>
-<style>${css}</style></head><body>
-<div class='page'>
-<div class='toolbar'>
-  <button class='tb-close' onclick='window.close()'>&#x2715; Cerrar</button>
-  <button class='tb-save' onclick='window.print()'>&#x2193; Guardar PDF</button>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<title>${folio}</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#efefef;font-family:Arial,Helvetica,sans-serif;color:#111}
+.page{width:794px;min-height:1123px;margin:0 auto;background:#fff;padding:42px 42px 34px}
+.toolbar{text-align:right;margin-bottom:14px}
+.toolbar button{padding:6px 18px;border:none;border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;margin-left:6px}
+.tb-close{background:#ddd;color:#444}.tb-save{background:#111;color:#fff}
+.top-header{border:1px solid #d9d9d9;background:#fafafa;padding:20px 18px;display:flex;justify-content:space-between;align-items:flex-start}
+.brand h1{margin:0;font-size:28px;font-weight:800;letter-spacing:.5px}
+.brand p{margin:8px 0 0;font-size:12px;color:#555;font-weight:600}
+.issuer{text-align:right;font-size:12px;line-height:1.55}
+.issuer strong{font-size:14px}
+.hero{margin-top:22px;background:#0c0c0c;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:20px 22px}
+.hero-title{font-size:28px;font-weight:800;letter-spacing:.4px}
+.hero-meta{text-align:right;line-height:1.3}
+.hero-meta .label{font-size:14px;opacity:.85}
+.hero-meta .folio{font-size:22px;font-weight:800}
+.hero-meta .date{font-size:16px;font-weight:700}
+.meta-table{width:100%;border-collapse:collapse;margin-top:18px}
+.meta-table td{border:1px solid #e1e1e1;padding:12px 14px;font-size:14px}
+.meta-table td:first-child{width:140px;background:#fafafa;font-weight:700}
+.section-title{margin-top:28px;margin-bottom:12px;font-size:18px;font-weight:800;letter-spacing:.2px}
+.detail-table{width:100%;border-collapse:collapse}
+.detail-table th{background:#0c0c0c;color:#fff;text-align:left;padding:11px 12px;font-size:13px;font-weight:700}
+.detail-table td{border:1px solid #e4e4e4;padding:12px 12px;vertical-align:top;font-size:13px;line-height:1.5}
+.detail-table strong{display:inline-block;margin-top:0}
+.totals{width:420px;margin-left:auto;margin-top:16px;border-collapse:collapse}
+.totals td{border:1px solid #e3e3e3;padding:10px 14px;font-size:14px}
+.totals td:last-child{text-align:right;font-weight:700}
+.totals .sep td{border-top:2px solid #ccc}
+.totals .grand-total td{background:#0c0c0c;color:#fff;font-weight:800;font-size:15px}
+.block{margin-top:28px}
+.block h3{margin:0 0 10px;font-size:17px;font-weight:800}
+.block ul{margin:0;padding-left:18px}
+.block li{margin-bottom:6px;line-height:1.45;font-size:13px}
+.footer{margin-top:38px;padding-top:12px;border-top:1px solid #e3e3e3;display:flex;justify-content:space-between;font-size:12px;color:#444}
+@media print{.toolbar{display:none}body{background:#fff}@page{size:A4;margin:0}}
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="toolbar">
+  <button class="tb-close" onclick="window.close()">&#x2715; Cerrar</button>
+  <button class="tb-save" onclick="window.print()">&#x2193; Guardar PDF</button>
 </div>
-<div class='hdr-box'>
-  <div>
-    <div class='brand-name'>LOGISOLVE</div>
-    <div class='brand-sub'>Logistics &middot; Supply &middot; Solutions</div>
+
+<div class="top-header">
+  <div class="brand">
+    <h1>LOGISOLVE</h1>
+    <p>Logistics &middot; Supply &middot; Solutions</p>
   </div>
-  <div class='emisor'>
+  <div class="issuer">
     <strong>Alejandro Saucedo</strong><br>
     RFC: SAME9612277T9<br>
     Tel. 5562321807<br>
@@ -532,73 +644,74 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#111;font-siz
     https://logisolve-sistema.vercel.app/
   </div>
 </div>
-<div class='banda'>
-  <div class='banda-titulo'>COTIZACI&Oacute;N</div>
-  <div class='banda-right'>
-    <div class='banda-no'>No.</div>
-    <div class='banda-folio'>${folio}</div>
-    <div class='banda-fecha'>Fecha: ${tkt.date.replace(/\//g," / ")}</div>
+
+<div class="hero">
+  <div class="hero-title">COTIZACI&Oacute;N</div>
+  <div class="hero-meta">
+    <div class="label">No.</div>
+    <div class="folio">${folio}</div>
+    <div class="date">Fecha: ${tkt.date.replace(/\//g," / ")}</div>
   </div>
 </div>
-<div class='meta-wrap'>
-  <table class='meta-tbl'>
-    <tr><td class='meta-lbl'>Cliente</td><td class='meta-val'>${clLine}</td></tr>
-    <tr><td class='meta-lbl'>Vigencia</td><td class='meta-val'>3 d&iacute;as naturales</td></tr>
-    <tr><td class='meta-lbl'>Atenci&oacute;n</td><td class='meta-val'>&Aacute;rea de Compras / Operaciones</td></tr>
-  </table>
+
+<table class="meta-table">
+  <tr><td>Cliente</td><td>${clLine}</td></tr>
+  <tr><td>Atenci&oacute;n</td><td>&Aacute;rea de Compras / Operaciones</td></tr>
+  <tr><td>Vigencia</td><td>3 d&iacute;as naturales</td></tr>
+</table>
+
+<div class="section-title">DETALLE DEL CONCEPTO</div>
+
+<table class="detail-table">
+  ${multiLinea?theadMulti:theadSimple}
+  <tbody>${filas}</tbody>
+</table>
+
+<table class="totals">
+  <tr><td>Subtotal</td><td>${fmtMXN(totals.subtotal)} MXN</td></tr>
+  <tr><td>IVA (${totals.ivaPct}%)</td><td>${fmtMXN(totals.ivaAmt)} MXN</td></tr>
+  <tr class="grand-total"><td>TOTAL &middot; IVA INCLUIDO</td><td>${fmtMXN(totals.total)} MXN</td></tr>
+</table>
+
+<div class="block">
+  <h3>ALCANCE DEL SERVICIO</h3>
+  <ul>
+    <li>Integraci&oacute;n y coordinaci&oacute;n de componente requerido para continuidad operativa.</li>
+    <li>Validaci&oacute;n y coordinaci&oacute;n operativa.</li>
+    <li>Entrega directa en CEDIS SMO.</li>
+    <li>Seguimiento y trazabilidad log&iacute;stica.</li>
+  </ul>
 </div>
-<div class='body'>
-  <div class='det-title'>DETALLE DEL CONCEPTO</div>
-  <table class='tbl'>
-    <thead><tr>
-      <th>No.</th><th>Concepto</th>
-      <th>Descripci&oacute;n t&eacute;cnica / operativa</th>
-      <th class='r'>Importe</th>
-    </tr></thead>
-    <tbody>${filas}</tbody>
-  </table>
-  <div class='tots-wrap'>
-    <table class='tots'>
-      <tr><td class='tl'>Subtotal</td><td class='tv'>${fmtMXN(subtotal)} MXN</td></tr>
-      <tr class='tot-sep'><td class='tl'>IVA (${ivaPct}%)</td><td class='tv'>${fmtMXN(ivaAmt)} MXN</td></tr>
-      <tr class='tot-final'><td class='tl'>TOTAL &middot; IVA INCLUIDO</td><td class='tv'>${fmtMXN(totalFinal)} MXN</td></tr>
-    </table>
-  </div>
-  <div class='sec'>
-    <div class='sec-title'>ALCANCE DEL SERVICIO</div>
-    <ul class='blist'>
-      <li>Integraci&oacute;n y coordinaci&oacute;n de componente requerido para continuidad operativa.</li>
-      <li>Validaci&oacute;n y coordinaci&oacute;n operativa.</li>
-      <li>Entrega directa en CEDIS SMO.</li>
-      <li>Seguimiento y trazabilidad log&iacute;stica.</li>
-    </ul>
-  </div>
-  <div class='sec'>
-    <div class='sec-title'>CONDICIONES COMERCIALES</div>
-    <ul class='blist'>
-      <li>Precio IVA incluido en el total.</li>
-      <li>Forma de pago: ${formaPago}.</li>
-      <li>Entrega conforme a disponibilidad confirmada al momento de autorizaci&oacute;n.</li>
-      <li>Precios sujetos a cambio y disponibilidad al momento de confirmar.</li>
-      <li>Vigencia: 3 d&iacute;as naturales a partir de la fecha de emisi&oacute;n.</li>
-      ${notaLine}
-    </ul>
-  </div>
-  <div class='sec'>
-    <div class='sec-title'>OBSERVACIONES</div>
-    <ul class='blist'>
-      <li>Tiempo estimado de entrega: ${entrega}, sujeto a disponibilidad.</li>
-      <li>La validaci&oacute;n t&eacute;cnica final de compatibilidad corresponde al cliente.</li>
-      <li>La garant&iacute;a aplica conforme a pol&iacute;ticas del fabricante o proveedor.</li>
-    </ul>
-  </div>
+
+<div class="block">
+  <h3>CONDICIONES COMERCIALES</h3>
+  <ul>
+    <li>Precio IVA incluido en el total.</li>
+    <li>Forma de pago: ${formaPago}.</li>
+    <li>Entrega conforme a disponibilidad confirmada al momento de autorizaci&oacute;n.</li>
+    <li>Precios sujetos a cambio y disponibilidad al momento de confirmar.</li>
+    <li>Vigencia: 3 d&iacute;as naturales a partir de la fecha de emisi&oacute;n.</li>
+    ${notaLine}
+  </ul>
 </div>
-<div class='ftr'>
-  <span>Quedo atento para cualquier duda o confirmaci&oacute;n.</span>
-  <span>LogiSolve &middot; ${fechaLarga}</span>
+
+<div class="block">
+  <h3>OBSERVACIONES</h3>
+  <ul>
+    <li>Tiempo estimado de entrega: ${entrega}, sujeto a disponibilidad.</li>
+    <li>La validaci&oacute;n t&eacute;cnica final de compatibilidad corresponde al cliente.</li>
+    <li>La garant&iacute;a aplica conforme a pol&iacute;ticas del fabricante o proveedor.</li>
+  </ul>
 </div>
+
+<div class="footer">
+  <div>Quedo atento para cualquier duda o confirmaci&oacute;n.</div>
+  <div>LogiSolve &middot; ${fechaLarga}</div>
 </div>
-</body></html>`;
+
+</div>
+</body>
+</html>`;
 
   const win=window.open("","_blank");
   if(win){win.document.open();win.document.write(html);win.document.close();}
@@ -636,7 +749,7 @@ function PDFConfirm({tkt,cl,un,supp,onClose}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // L8 — UI PRIMITIVES
 // ═══════════════════════════════════════════════════════════════════════════════
-function Logo() {
+const Logo = React.memo(function Logo() {
   return (
     <div style={{display:"flex",alignItems:"center",gap:10}}>
       <svg width="22" height="22" viewBox="0 0 28 28">
@@ -663,9 +776,9 @@ function Logo() {
       </div>
     </div>
   );
-}
+})
 
-function PriorityBadge({pid,small}) {
+const PriorityBadge = React.memo(function PriorityBadge({pid,small})) {
   const p=PRIORITY[pid]||PRIORITY.P4;
   return (
     <span style={{display:"inline-flex",alignItems:"center",gap:3,padding:small?"2px 5px":"3px 8px",borderRadius:2,background:p.dim,border:`1px solid ${p.color}66`,fontSize:small?7:8,color:p.dot,fontWeight:700,letterSpacing:"0.05em",whiteSpace:"nowrap",fontFamily:"'Courier New',monospace"}}>
@@ -674,7 +787,7 @@ function PriorityBadge({pid,small}) {
   );
 }
 
-function StatusBadge({sid,meta,small}) {
+const StatusBadge = React.memo(function StatusBadge({sid,meta,small})) {
   const s=meta[sid]||(meta.recibido||Object.values(meta)[0]);
   return (
     <span style={{display:"inline-flex",alignItems:"center",gap:3,padding:small?"2px 5px":"3px 7px",borderRadius:2,background:s.color+"33",border:`1px solid ${s.color}55`,fontSize:small?7:8,color:s.dot,fontWeight:600,whiteSpace:"nowrap"}}>
@@ -684,7 +797,7 @@ function StatusBadge({sid,meta,small}) {
   );
 }
 
-function KPI({label,value,color,sub,accent,alert}) {
+const KPI = React.memo(function KPI({label,value,color,sub,accent,alert})) {
   return (
     <div style={{background:accent?C.blueDim:alert?C.redDim:C.bg2,border:`1px solid ${accent?C.blue:alert?C.red+"55":C.border}`,borderRadius:3,padding:"8px 10px",minWidth:0,overflow:"hidden"}}>
       <div style={{fontSize:7,color:C.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
@@ -706,7 +819,7 @@ function Field({label,value,onChange,prefix="$",suffix,hint,hi,min=0,step=1,type
             onChange={e=>onChange(e.target.value)} style={{...st,resize:"vertical",paddingTop:7}}/>
         ):(
           <input type={type} value={value} min={type==="number"?min:undefined} step={type==="number"?step:undefined} disabled={disabled} placeholder={placeholder||""}
-            onChange={e=>{const v=e.target.value;type==="number"?onChange(v===""?0:parseFloat(v)):onChange(v);}} style={st}/>
+            onChange={e=>{const v=e.target.value;onChange(v);}} style={st}/>
         )}
         {suffix&&<span style={{padding:"0 6px",color:C.t3,fontSize:10,flexShrink:0}}>{suffix}</span>}
       </div>
@@ -727,7 +840,7 @@ function Sel({label,value,onChange,options}) {
   );
 }
 
-function Toggle({label,value,onChange}) {
+const Toggle = React.memo(function Toggle({label,value,onChange})) {
   return (
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:`1px solid ${C.bg4}`}}>
       <span style={{fontSize:10,color:C.t2}}>{label}</span>
@@ -738,7 +851,7 @@ function Toggle({label,value,onChange}) {
   );
 }
 
-function SHdr({title,right}) {
+const SHdr = React.memo(function SHdr({title,right})) {
   return (
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 10px",background:C.bg3,borderBottom:`1px solid ${C.border}`}}>
       <div style={{fontSize:7,color:C.t3,letterSpacing:"0.2em",fontWeight:700}}>{title}</div>
@@ -747,7 +860,7 @@ function SHdr({title,right}) {
   );
 }
 
-function MiniBar({value,max,color}) {
+const MiniBar = React.memo(function MiniBar({value,max,color})) {
   return (
     <div style={{height:3,background:C.bg4,borderRadius:2,overflow:"hidden",marginTop:3}}>
       <div style={{height:"100%",width:`${clamp((value/Math.max(max,1))*100,0,100)}%`,background:color||C.cyan}}/>
@@ -755,7 +868,7 @@ function MiniBar({value,max,color}) {
   );
 }
 
-function EmptyState({icon,title,sub}) {
+const EmptyState = React.memo(function EmptyState({icon,title,sub})) {
   return (
     <div style={{textAlign:"center",padding:"32px 16px",color:C.t3}}>
       <div style={{fontSize:24,marginBottom:6,opacity:.4}}>{icon}</div>
@@ -765,7 +878,7 @@ function EmptyState({icon,title,sub}) {
   );
 }
 
-function Confirm({msg,onConfirm,onCancel}) {
+const Confirm = React.memo(function Confirm({msg,onConfirm,onCancel})) {
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:5,padding:18,maxWidth:320,width:"90%"}}>
@@ -779,7 +892,7 @@ function Confirm({msg,onConfirm,onCancel}) {
   );
 }
 
-function Toasts({items}) {
+const Toasts = React.memo(function Toasts({items})) {
   if(!items.length) return null;
   const s=t=>t==="success"?{border:`1px solid ${C.green}55`,color:C.green}:t==="error"?{border:`1px solid ${C.red}55`,color:C.red}:{border:`1px solid ${C.border}`,color:C.t2};
   return (
@@ -797,11 +910,11 @@ function SearchPalette({state,onNavigate,onClose}) {
   const results=useMemo(()=>{
     if(!q.trim()) return [];
     const lq=q.toLowerCase(); const r=[];
-    state.tickets.forEach(t=>{if(t.titulo.toLowerCase().includes(lq)||t.id.toLowerCase().includes(lq))r.push({type:"ticket",label:t.titulo,sub:t.id,tab:"tickets"});});
-    state.clients.forEach(c=>{if(c.empresa.toLowerCase().includes(lq))r.push({type:"client",label:c.empresa,sub:c.id,tab:"clientes"});});
-    state.suppliers.forEach(s=>{if(s.nombre.toLowerCase().includes(lq))r.push({type:"supplier",label:s.nombre,sub:s.id,tab:"proveedores"});});
-    state.units.forEach(u=>{if(u.marca.toLowerCase().includes(lq)||u.modelo.toLowerCase().includes(lq)||u.vin.toLowerCase().includes(lq))r.push({type:"unit",label:`${u.marca} ${u.modelo} ${u.anio}`,sub:u.vin,tab:"unidades"});});
-    state.parts.forEach(p=>{if(p.nombre.toLowerCase().includes(lq)||p.oem.toLowerCase().includes(lq))r.push({type:"part",label:p.nombre,sub:p.oem,tab:"catalogo"});});
+    state.tickets.forEach(t=>{if(safeLower(t.titulo).includes(lq)||safeLower(t.id).includes(lq))r.push({type:"ticket",label:t.titulo,sub:t.id,tab:"tickets"});});
+    state.clients.forEach(c=>{if(safeLower(c.empresa).includes(lq))r.push({type:"client",label:c.empresa,sub:c.id,tab:"clientes"});});
+    state.suppliers.forEach(s=>{if(safeLower(s.nombre).includes(lq))r.push({type:"supplier",label:s.nombre,sub:s.id,tab:"proveedores"});});
+    state.units.forEach(u=>{if(safeLower(u.marca).includes(lq)||safeLower(u.modelo).includes(lq)||safeLower(u.vin).includes(lq))r.push({type:"unit",label:`${u.marca} ${u.modelo} ${u.anio}`,sub:u.vin,tab:"unidades"});});
+    state.parts.forEach(p=>{if(safeLower(p.nombre).includes(lq)||safeLower(p.oem).includes(lq))r.push({type:"part",label:p.nombre,sub:p.oem,tab:"catalogo"});});
     return r.slice(0,14);
   },[q,state]);
   const tl={ticket:"Ticket",client:"Cliente",supplier:"Prov.",unit:"Unidad",part:"Parte"};
@@ -852,11 +965,11 @@ function UnitPicker({units, value, onChange, placeholder="Buscar por eco, placa,
     if (!q.trim()) return units.slice(0, 80);
     const lq = q.toLowerCase();
     return units.filter(u =>
-      (u.economico && u.economico.toLowerCase().includes(lq)) ||
-      (u.placa && u.placa.toLowerCase().includes(lq)) ||
-      u.marca.toLowerCase().includes(lq) ||
-      u.modelo.toLowerCase().includes(lq) ||
-      u.vin.toLowerCase().includes(lq)
+      (u.economico && safeLower(u.economico).includes(lq)) ||
+      (u.placa && safeLower(u.placa).includes(lq)) ||
+      safeLower(u.marca).includes(lq) ||
+      safeLower(u.modelo).includes(lq) ||
+      safeLower(u.vin).includes(lq)
     );
   }, [q, units]);
 
@@ -934,7 +1047,7 @@ function UnitPicker({units, value, onChange, placeholder="Buscar por eco, placa,
 }
 
 // ── TIMELINE COMPONENT ───────────────────────────────────────────────────────
-function Timeline({events}) {
+const Timeline = React.memo(function Timeline({events})) {
   if(!events||!events.length) return <div style={{padding:"8px 12px",fontSize:9,color:C.t3}}>Sin eventos registrados.</div>;
   return (
     <div style={{padding:"6px 12px"}}>
@@ -1190,13 +1303,14 @@ function Tickets({state,dispatch,toast}) {
   const [expId,   setExpId]   = useState(null);
   const [confirm, setConfirm] = useState(null);
   const [tlInput, setTlInput] = useState({evento:"",actor:"Operador"});
+  const dSearch = useDebounce(search, 250);
 
   const filtered = useMemo(()=>tickets.filter(t=>{
     if(fStatus!=="all"&&t.status!==fStatus) return false;
     if(fPrio!=="all"&&t.priority!==fPrio)   return false;
-    if(search){const lq=search.toLowerCase();if(!t.titulo.toLowerCase().includes(lq)&&!t.id.toLowerCase().includes(lq))return false;}
+    if(dSearch){const lq=safeLower(dSearch);if(!safeLower(t.titulo).includes(lq)&&!safeLower(t.id).includes(lq))return false;}
     return true;
-  }),[tickets,fStatus,fPrio,search]);
+  }),[tickets,fStatus,fPrio,dSearch]);
 
   const moveStatus=(id,to)=>{
     const t=tickets.find(t=>t.id===id);
@@ -1214,7 +1328,14 @@ function Tickets({state,dispatch,toast}) {
 
   return (
     <div style={{padding:"10px 13px",maxWidth:1200,margin:"0 auto"}}>
-      {confirm&&<Confirm msg={"Eliminar ticket: "+confirm.titulo+"?"} onConfirm={()=>{dispatch({type:"TKT_DELETE",id:confirm.id});setConfirm(null);setExpId(null);toast("Ticket eliminado","info");}} onCancel={()=>setConfirm(null)}/>}
+      {confirm&&<Confirm msg={"Eliminar ticket: "+confirm.titulo+"?"} onConfirm={()=>{
+        dispatch({type:"TKT_SOFT_DEL",id:confirm.id});
+        const id=confirm.id;
+        toast("Ticket eliminado — click para deshacer","info");
+        setConfirm(null);setExpId(null);
+        // Hard delete after 8s if not restored
+        setTimeout(()=>dispatch({type:"TKT_DELETE",id}),8000);
+      }} onCancel={()=>setConfirm(null)}/>}
 
       {/* Filtros */}
       <div style={{display:"flex",gap:5,marginBottom:7,flexWrap:"wrap",alignItems:"center"}}>
@@ -1338,7 +1459,7 @@ function Tickets({state,dispatch,toast}) {
 const emptyLine = (opType, priority, activeMods) => {
   const mg = effectiveMargin(opType||"consumable", priority||"P3", activeMods||[], false, 27);
   return {
-    key:         Date.now()+Math.random(),
+    key:         genId("TOAST"),
     titulo:      "",
     partRef:     "",
     qty:         1,
@@ -1394,19 +1515,23 @@ function Cotizador({state,dispatch,toast}) {
 
   // Each line uses sharedMargin unless it has its own customMgn
   const lineSnaps = useMemo(()=>lineas.map(l=>{
-    const mg   = l.customMgn ? Math.min(l.customVal, opMeta.cap) : sharedMargin;
-    const costo = (l.costoUnit||0) * (l.qty||1);
-    return computeSnap({costo,gasolina:l.gasolina,otros:l.otros,iva,isr,
-      compraConIVA:cIVA,ventaConIVA:vIVA,mode:l.mode,margin:mg,manualPrice:l.manualPrice});
+    const mg   = l.customMgn ? Math.min(safeNumber(l.customVal), opMeta.cap) : sharedMargin;
+    const qty  = safeNumber(l.qty,1)||1;
+    const costo = safeNumber(l.costoUnit) * qty;
+    return computeSnap({costo,gasolina:safeNumber(l.gasolina),otros:safeNumber(l.otros),iva,isr,
+      compraConIVA:cIVA,ventaConIVA:vIVA,mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
   }),[lineas,sharedMargin,opMeta,iva,isr,cIVA,vIVA]);
 
   const totalSnap = useMemo(()=>{
-    const sum=k=>lineSnaps.reduce((s,sn)=>s+sn[k],0);
+    const sum=k=>lineSnaps.reduce((s,sn)=>s+safeNumber(sn[k]),0);
+    const precioSinIVA=sum("precioSinIVA"), uNeta=sum("uNeta");
     return {
-      precioConIVA:sum("precioConIVA"),precioSinIVA:sum("precioSinIVA"),
+      precioConIVA:sum("precioConIVA"),precioSinIVA,
       costoTotal:sum("costoTotal"),costoBase:sum("costoBase"),gastos:sum("gastos"),
-      uNeta:sum("uNeta"),uBruta:sum("uBruta"),isr:sum("isr"),
+      uNeta,uBruta:sum("uBruta"),isr:sum("isr"),
       ivaTraslad:sum("ivaTraslad"),ivaAcred:sum("ivaAcred"),ivaNeto:sum("ivaNeto"),
+      markupSobre:sum("costoTotal")>0?((precioSinIVA-sum("costoTotal"))/sum("costoTotal"))*100:0,
+      margenNetoPrecio:precioSinIVA>0?(uNeta/precioSinIVA)*100:0,
       params:{iva,isr},
     };
   },[lineSnaps,iva,isr]);
@@ -1423,25 +1548,36 @@ function Cotizador({state,dispatch,toast}) {
   // Reset custom margin when opType/priority changes
   useEffect(()=>{setCustomMgn(false);setActiveMods([]);},[opType,priority]);
 
+  const [isSaving, setIsSaving] = useState(false);
   const save = useCallback(()=>{
+    if(isSaving) return; // double-click guard
     const titulo = lineas.map(l=>l.titulo.trim()||"Sin descripcion").join(" / ");
+    if(!titulo||titulo==="Sin descripcion") { toast("Agrega al menos un concepto","error"); return; }
+    setIsSaving(true);
     const cl   = clients.find(c=>c.id===clientId);
     const un   = units.find(u=>u.id===unitId);
     const supp = suppliers.find(s=>s.id===supplierId);
-    const lineasConSnap = lineas.map((l,i)=>({titulo:l.titulo||"Sin descripcion",partRef:l.partRef,snap:lineSnaps[i]}));
-    const snapAgregado  = {
+    const lineasConSnap = lineas.map((l,i)=>({
+      titulo:l.titulo||"Sin descripcion", partRef:l.partRef||"",
+      qty:safeNumber(l.qty,1)||1, costoUnit:safeNumber(l.costoUnit),
+      gasolina:safeNumber(l.gasolina), otros:safeNumber(l.otros),
+      mode:l.mode||"manual", manualPrice:l.manualPrice||"0",
+      descripcionPDF:l.descripcionPDF||"",
+      snap:lineSnaps[i],
+    }));
+    const snapAgregado = {
       ...totalSnap,
       markupSobre:      totalSnap.costoTotal>0?((totalSnap.precioSinIVA-totalSnap.costoTotal)/totalSnap.costoTotal)*100:0,
       margenNetoPrecio: aggMargen,
     };
     const tkt = {
-      id:mkTicketId(fecha),titulo,opId:opType,opShort:opMeta.short,priority,
-      clientId,supplierId,unitId,
+      id:mkTicketId(fecha), titulo, opId:opType, opShort:opMeta.short, priority,
+      clientId, supplierId, unitId,
       partRef:lineas.map(l=>l.partRef).filter(Boolean).join(", "),
-      date:fecha,status,payType,
+      date:fecha, status, payType,
       promesaPago:payType==="credit"?promesa:null,
       cobrado:PAID_SET.has(status),
-      mods:[...activeMods],prob,horasOp:parseFloat(horasOp)||0,notes,
+      mods:[...activeMods], prob, horasOp:safeNumber(horasOp), notes,
       mode:lineas.length>1?"multilinea":"auto",
       lineas:lineasConSnap,
       snap:snapAgregado,
@@ -1449,11 +1585,13 @@ function Cotizador({state,dispatch,toast}) {
       history:[mkEvent("created",{titulo,status,priority})],
     };
     dispatch({type:"TKT_ADD",t:tkt});
+    opLog.push("TKT_CREATED", {id:tkt.id, titulo});
     toast("Ticket registrado: "+tkt.id,"success");
     setPdfPending({tkt,cl,un,supp});
     setLineas([emptyLine(opType,priority,[])]);
     setNotes(""); setHorasOp(0);
-  },[lineas,lineSnaps,totalSnap,aggMargen,fecha,opType,opMeta,priority,clientId,supplierId,unitId,status,payType,promesa,activeMods,prob,horasOp,notes,dispatch,toast,clients,units,suppliers]);
+    setTimeout(()=>setIsSaving(false), 1500); // reset after 1.5s
+  },[isSaving,lineas,lineSnaps,totalSnap,aggMargen,fecha,opType,opMeta,priority,clientId,supplierId,unitId,status,payType,promesa,activeMods,prob,horasOp,notes,dispatch,toast,clients,units,suppliers]);
 
   // ── RENDER ──────────────────────────────────────────────────────────────────
   const [catalogQ, setCatalogQ] = useState("");
@@ -1601,7 +1739,8 @@ function Cotizador({state,dispatch,toast}) {
                 <div>
                   <div style={{fontSize:7,color:C.t3,marginBottom:2}}>HORAS OP.</div>
                   <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,overflow:"hidden"}}>
-                    <input type="number" min={0} step={0.5} value={horasOp} onChange={e=>setHorasOp(parseFloat(e.target.value)||0)}
+                    <input type="text" inputMode="decimal" min={0} step={0.5} value={horasOp} onChange={e=>setHorasOp(e.target.value)}
+                      onBlur={()=>setHorasOp(v=>String(safeNumber(v)))}
                       style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:11,padding:"5px 0 5px 7px",fontFamily:"'Courier New',monospace"}}/>
                     <span style={{padding:"0 6px",color:C.t3,fontSize:10}}>h</span>
                   </div>
@@ -1664,15 +1803,12 @@ function Cotizador({state,dispatch,toast}) {
                         <div>
                           <div style={{fontSize:7,color:C.t3,marginBottom:2}}>CANT.</div>
                           <div style={{display:"flex",alignItems:"center",background:C.bg1,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
-                            <input type="text" inputMode="numeric" value={l.qty===1&&l._qtyRaw===undefined?"1":(l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1))}
-                              onChange={e=>{
-                                const raw=e.target.value;
-                                const n=parseInt(raw);
-                                updateLinea(i,{_qtyRaw:raw, qty:(!isNaN(n)&&n>=1)?n:(l.qty||1)});
-                              }}
-                              onBlur={e=>{
-                                const n=parseInt(e.target.value);
-                                updateLinea(i,{qty:(!isNaN(n)&&n>=1)?n:1, _qtyRaw:undefined});
+                            <input type="text" inputMode="numeric"
+                              value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)}
+                              onChange={e=>updateLinea(i,{_qtyRaw:e.target.value})}
+                              onBlur={()=>{
+                                const n=parseInt(l._qtyRaw);
+                                updateLinea(i,{qty:isFinite(n)&&n>=1?n:1, _qtyRaw:undefined});
                               }}
                               style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:12,fontWeight:700,padding:"5px 0 5px 7px",fontFamily:"'Courier New',monospace"}}/>
                             <span style={{padding:"0 5px",color:C.t3,fontSize:9}}>pz</span>
@@ -1683,16 +1819,19 @@ function Cotizador({state,dispatch,toast}) {
                             <div style={{fontSize:7,color:C.t3,marginBottom:2}}>{lbl}</div>
                             <div style={{display:"flex",alignItems:"center",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,overflow:"hidden"}}>
                               <span style={{padding:"0 5px",color:C.t3,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
-                              <input type="number" min={0} value={l[k]||0} onChange={e=>updateLinea(i,{[k]:parseFloat(e.target.value)||0})}
+                              <input type="text" inputMode="decimal"
+                                value={l[`_${k}Raw`]!==undefined?l[`_${k}Raw`]:String(l[k]||0)}
+                                onChange={e=>updateLinea(i,{[`_${k}Raw`]:e.target.value})}
+                                onBlur={()=>updateLinea(i,{[k]:safeNumber(l[`_${k}Raw`]),[`_${k}Raw`]:undefined})}
                                 style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:10,padding:"5px 0",fontFamily:"'Courier New',monospace"}}/>
                             </div>
                           </div>
                         ))}
                       </div>
                       {/* Subtotal de cantidad */}
-                      {(l.qty||1)>1&&(
+                      {(safeNumber(l.qty,1))>1&&(
                         <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:6}}>
-                          {l.qty} x {mxn(l.costoUnit||0)} = <span style={{color:C.t2,fontWeight:700}}>{mxn((l.costoUnit||0)*(l.qty||1))}</span> costo total piezas
+                          {l.qty} × {mxn(safeNumber(l.costoUnit))} = <span style={{color:C.cyan,fontWeight:700}}>{mxn(safeNumber(l.costoUnit)*safeNumber(l.qty,1))}</span> costo total
                         </div>
                       )}
                       {/* Modo precio */}
@@ -1709,7 +1848,9 @@ function Cotizador({state,dispatch,toast}) {
                           <div style={{display:"flex",alignItems:"center",gap:5,flex:1}}>
                             <span style={{fontSize:7,color:C.t3,flexShrink:0}}>Margen:</span>
                             {l.customMgn?(
-                              <input type="number" min={0} step={0.5} value={l.customVal} onChange={e=>updateLinea(i,{customVal:parseFloat(e.target.value)||0})}
+                              <input type="number" min={0} step={0.5} value={l._customValRaw!==undefined?l._customValRaw:String(l.customVal||27)}
+                              onChange={e=>updateLinea(i,{_customValRaw:e.target.value})}
+                              onBlur={()=>updateLinea(i,{customVal:safeNumber(l._customValRaw,27),_customValRaw:undefined})}
                                 style={{width:55,background:C.bg1,border:`1px solid ${C.blueHi}`,borderRadius:3,padding:"3px 5px",color:C.cyan,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace",textAlign:"right"}}/>
                             ):(
                               <span style={{fontSize:11,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{fpct(mg)}</span>
@@ -1745,12 +1886,14 @@ function Cotizador({state,dispatch,toast}) {
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:6}}>
                 <div>
                   <div style={{fontSize:7,color:C.t3,marginBottom:2}}>IVA (%)</div>
-                  <input type="number" min={0} step={0.1} value={iva} onChange={e=>setIva(parseFloat(e.target.value)||0)}
+                  <input type="number" min={0} step={0.1} value={iva} onChange={e=>setIva(e.target.value)}
+                    onBlur={()=>setIva(v=>String(safeNumber(v,16)))}
                     style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 7px",color:C.t1,fontSize:11,outline:"none",fontFamily:"'Courier New',monospace"}}/>
                 </div>
                 <div>
                   <div style={{fontSize:7,color:C.t3,marginBottom:2}}>ISR (%)</div>
-                  <input type="number" min={0} step={0.1} value={isr} onChange={e=>setIsr(parseFloat(e.target.value)||0)}
+                  <input type="number" min={0} step={0.1} value={isr} onChange={e=>setIsr(e.target.value)}
+                    onBlur={()=>setIsr(v=>String(safeNumber(v,20)))}
                     style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 7px",color:C.t1,fontSize:11,outline:"none",fontFamily:"'Courier New',monospace"}}/>
                 </div>
               </div>
@@ -1759,9 +1902,9 @@ function Cotizador({state,dispatch,toast}) {
             </div>
           </div>
 
-          <button onClick={save}
-            style={{width:"100%",padding:"9px",background:C.blue,border:"none",borderRadius:4,color:C.t1,fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:"0.08em"}}>
-            + Registrar ticket operativo
+          <button onClick={save} disabled={isSaving}
+            style={{width:"100%",padding:"9px",background:isSaving?C.bg2:C.blue,border:"none",borderRadius:4,color:isSaving?C.t3:C.t1,fontSize:11,fontWeight:700,cursor:isSaving?"not-allowed":"pointer",letterSpacing:"0.08em",opacity:isSaving?0.6:1}}>
+            {isSaving?"Registrando…":"+ Registrar ticket operativo"}
           </button>
         </div>
 
@@ -1811,7 +1954,8 @@ function Cotizador({state,dispatch,toast}) {
                 <div>
                   <div style={{fontSize:7,color:C.t3,marginBottom:2}}>MARGEN PERSONALIZADO</div>
                   <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
-                    <input type="number" min={0} step={0.5} value={customVal} onChange={e=>setCustomVal(parseFloat(e.target.value)||0)}
+                    <input type="number" min={0} step={0.5} value={customVal} onChange={e=>setCustomVal(e.target.value)}
+                    onBlur={()=>setCustomVal(v=>safeNumber(v,27))}
                       style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:12,fontWeight:700,padding:"5px 7px",fontFamily:"'Courier New',monospace"}}/>
                     <span style={{padding:"0 7px",color:C.t3,fontSize:10}}>%</span>
                   </div>
@@ -1906,6 +2050,7 @@ function Unidades({state,dispatch,toast}) {
   const empty={vin:"",marca:"",modelo:"",anio:"",motor:"",transmision:"",config:"",clientId:"",statusOp:"operativa",km:"",notas:"",placa:"",economico:""};
   const [form,setForm]=useState(empty);
   const sf=k=>v=>setForm(p=>({...p,[k]:v}));
+  const dSearch = useDebounce(search, 250);
 
   const [fConOp, setFConOp] = useState(false);
 
@@ -1914,9 +2059,9 @@ function Unidades({state,dispatch,toast}) {
   const filtered=useMemo(()=>units.filter(u=>{
     if(fStatus!=="all"&&u.statusOp!==fStatus) return false;
     if(fConOp&&!unitsWithOpenOp.has(u.id)) return false;
-    if(search){const lq=search.toLowerCase();if(!u.vin.toLowerCase().includes(lq)&&!u.marca.toLowerCase().includes(lq)&&!u.modelo.toLowerCase().includes(lq)&&!(u.economico||"").toLowerCase().includes(lq)&&!(u.placa||"").toLowerCase().includes(lq))return false;}
+    if(dSearch){const lq=safeLower(dSearch);if(!safeLower(u.vin).includes(lq)&&!safeLower(u.marca).includes(lq)&&!safeLower(u.modelo).includes(lq)&&!safeLower(u.economico).includes(lq)&&!safeLower(u.placa).includes(lq))return false;}
     return true;
-  }),[units,search,fStatus,fConOp,unitsWithOpenOp]);
+  }),[units,dSearch,fStatus,fConOp,unitsWithOpenOp]);
 
   const unitTickets=useCallback(id=>tickets.filter(t=>t.unitId===id),[tickets]);
 
@@ -2076,12 +2221,13 @@ function Catalogo({state,dispatch,toast}) {
   const empty={nombre:"",oem:"",aftermarket:"",aplicacion:"",notas:"",proveedor:"",ultimoPrecio:"",ultimaFecha:""};
   const [form,setForm]=useState(empty);
   const sf=k=>v=>setForm(p=>({...p,[k]:v}));
+  const dSearch = useDebounce(search, 250);
 
   const filtered=useMemo(()=>parts.filter(p=>{
-    if(!search.trim()) return true;
-    const lq=search.toLowerCase();
-    return p.nombre.toLowerCase().includes(lq)||p.oem.toLowerCase().includes(lq)||(p.aftermarket||"").toLowerCase().includes(lq)||(p.aplicacion||"").toLowerCase().includes(lq);
-  }),[parts,search]);
+    if(!dSearch.trim()) return true;
+    const lq=safeLower(dSearch);
+    return safeLower(p.nombre).includes(lq)||safeLower(p.oem).includes(lq)||safeLower(p.aftermarket).includes(lq)||safeLower(p.aplicacion).includes(lq);
+  }),[parts,dSearch]);
 
   const startAdd=()=>{setAdding(true);setEditId(null);setForm(empty);};
   const startEdit=(p,e)=>{e.stopPropagation();setEditId(p.id);setAdding(false);setForm({...p,ultimoPrecio:String(p.ultimoPrecio||"")});};
@@ -2312,7 +2458,7 @@ function Clientes({state,dispatch,toast}) {
   const cancel=()=>{setAdding(false);setEditId(null);setForm(empty);};
   const save=()=>{
     if(editId){dispatch({type:"CLI_UPDATE",id:editId,patch:form});toast("Cliente actualizado","success");}
-    else{dispatch({type:"CLI_ADD",c:{...form,id:"CLI-"+Date.now().toString().slice(-5),unidades:[]}});toast("Cliente registrado","success");}
+    else{dispatch({type:"CLI_ADD",c:{...form,id:genId("CLI"),unidades:[]}});toast("Cliente registrado","success");}
     cancel();
   };
   const del=(id,e)=>{e.stopPropagation();setConfirm(clients.find(c=>c.id===id));};
@@ -2478,16 +2624,40 @@ function Ajustes({state,dispatch,toast}) {
   const [confirmReset,setConfirmReset]=useState(false);
   const savedAt=(()=>{try{const r=localStorage.getItem(STORAGE_KEY);if(r){const p=JSON.parse(r);return p.savedAt?new Date(p.savedAt).toLocaleString("es-MX"):"---";}}catch{}return "---";})();
 
-  const exportData=()=>{
-    const blob=new Blob([JSON.stringify({version:STORAGE_VER,exportedAt:nowISO(),...state},null,2)],{type:"application/json"});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement("a");a.href=url;a.download="logisolve-v5-"+Date.now()+".json";a.click();
-    URL.revokeObjectURL(url);
-    toast("Backup exportado","success");
+  const [exporting, setExporting] = useState(false);
+  const exportData=async()=>{
+    if(exporting) return;
+    setExporting(true);
+    try {
+      // Use setTimeout to yield UI before heavy stringify
+      await new Promise(r=>setTimeout(r,0));
+      const payload = {version:STORAGE_VER, exportedAt:nowISO(), ...state};
+      const json = JSON.stringify(payload, null, 2);
+      const blob = new Blob([json],{type:"application/json"});
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href=url; a.download="logisolve-backup-"+Date.now()+".json"; a.click();
+      URL.revokeObjectURL(url);
+      opLog.push("EXPORT_OK", {tickets: state.tickets.length, units: state.units.length});
+      toast("Backup exportado","success");
+    } catch(e) {
+      opLog.push("EXPORT_ERROR", {error: e?.message});
+      toast("Error al exportar","error");
+    } finally { setExporting(false); }
   };
   const importData=file=>{
     const r=new FileReader();
-    r.onload=e=>{try{const d=JSON.parse(e.target.result);dispatch({type:"IMPORT",data:d});toast("Datos importados","success");}catch{toast("Archivo invalido","error");}};
+    r.onload=e=>{
+      try{
+        const d=JSON.parse(e.target.result);
+        dispatch({type:"IMPORT",data:d});
+        opLog.push("IMPORT_OK", {tickets: safeArr(d.tickets).length});
+        toast("Datos importados","success");
+      } catch(e) {
+        opLog.push("IMPORT_ERROR", {error: e?.message});
+        toast("Archivo invalido","error");
+      }
+    };
     r.readAsText(file);
   };
   const importUnitsFile=useRef();
@@ -2527,7 +2697,9 @@ function Ajustes({state,dispatch,toast}) {
         {title:"EXPORTAR BACKUP",content:(
           <div style={{padding:11}}>
             <div style={{fontSize:9,color:C.t2,marginBottom:7}}>Exporta todos los datos como JSON.</div>
-            <button onClick={exportData} style={{padding:"6px 14px",background:C.blue,border:"none",borderRadius:3,color:C.t1,fontSize:11,fontWeight:700,cursor:"pointer"}}>Exportar JSON</button>
+            <button onClick={exportData} disabled={exporting} style={{padding:"6px 14px",background:exporting?C.bg2:C.blue,border:"none",borderRadius:3,color:exporting?C.t3:C.t1,fontSize:11,fontWeight:700,cursor:exporting?"not-allowed":"pointer"}}>
+              {exporting?"Exportando…":"Exportar JSON"}
+            </button>
           </div>
         )},
         {title:"IMPORTAR FLOTILLA (JSON)",content:(
@@ -2569,19 +2741,23 @@ function Historial({state,dispatch,toast}) {
   const [editId,  setEditId] = useState(null);
   const [ef,      setEf]     = useState({});
   const [confirm, setConfirm]= useState(null);
+  const [showTrash, setShowTrash] = useState(false);
   const sfn = k => v => setEf(p=>({...p,[k]:v}));
 
-  const realizados = useMemo(()=>tickets.filter(t=>!FORECAST_SET.has(t.status)&&t.status!=="cancelado"),[tickets]);
-  const totalFact = useMemo(()=>realizados.reduce((s,t)=>s+t.snap.precioConIVA,0),[realizados]);
-  const totalNeta = useMemo(()=>realizados.reduce((s,t)=>s+t.snap.uNeta,0),[realizados]);
-  const totalInv  = useMemo(()=>realizados.reduce((s,t)=>s+t.snap.costoBase*(1+(t.snap.params.iva||16)/100),0),[realizados]);
+  const activeTickets = useMemo(()=>tickets.filter(t=>!t._deleted),[tickets]);
+  const trashedTickets = useMemo(()=>tickets.filter(t=>t._deleted),[tickets]);
+
+  const realizados = useMemo(()=>activeTickets.filter(t=>!FORECAST_SET.has(t.status)&&t.status!=="cancelado"),[activeTickets]);
+  const totalFact = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[realizados]);
+  const totalNeta = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),[realizados]);
+  const totalInv  = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.costoBase)*(1+(safeNumber(t.snap.params?.iva,16))/100),0),[realizados]);
   const pctN      = totalFact>0?(totalNeta/totalFact)*100:0;
 
   const days = useMemo(()=>{
     const d={};
-    tickets.forEach(t=>{if(!d[t.date])d[t.date]={v:0,n:0,c:0};d[t.date].v+=t.snap.precioConIVA;d[t.date].n+=t.snap.uNeta;d[t.date].c++;});
+    activeTickets.forEach(t=>{if(!d[t.date])d[t.date]={v:0,n:0,c:0};d[t.date].v+=safeNumber(t.snap.precioConIVA);d[t.date].n+=safeNumber(t.snap.uNeta);d[t.date].c++;});
     return d;
-  },[tickets]);
+  },[activeTickets]);
 
   const [editLineas, setEditLineas] = useState([]);
   const updLinea = (idx,patch) => setEditLineas(p=>p.map((l,i)=>i===idx?{...l,...patch}:l));
@@ -2632,18 +2808,19 @@ function Historial({state,dispatch,toast}) {
   // Snap agregado de todas las líneas — igual que cotizador
   const editTotalSnap = useMemo(()=>{
     if(!editId||!editLineas.length) return null;
-    const iva=parseFloat(ef.iva)||16; const isr=parseFloat(ef.isr)||20;
+    const iva=safeNumber(ef.iva,16); const isr=safeNumber(ef.isr,20);
     const opType=ef.opType||"consumable"; const priority=ef.priority||"P3";
-    const activeMods=ef.activeMods||[];
+    const activeMods=safeArr(ef.activeMods);
     const sharedMgn = effectiveMargin(opType,priority,activeMods,false,27);
     const snaps = editLineas.map(l=>{
-      const mg = l.customMgn?Math.min(l.customVal,99):sharedMgn;
-      const costo=(l.costoUnit||0)*(l.qty||1);
-      return computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,iva,isr,
+      const mg = l.customMgn?Math.min(safeNumber(l.customVal),99):sharedMgn;
+      const qty = safeNumber(l.qty,1)||1;
+      const costo = safeNumber(l.costoUnit)*qty;
+      return computeSnap({costo,gasolina:safeNumber(l.gasolina),otros:safeNumber(l.otros),iva,isr,
         compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,
         mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
     });
-    const sum=k=>snaps.reduce((s,sn)=>s+sn[k],0);
+    const sum=k=>snaps.reduce((s,sn)=>s+safeNumber(sn[k]),0);
     const precioSinIVA=sum("precioSinIVA");
     const uNeta=sum("uNeta");
     return {
@@ -2710,7 +2887,13 @@ function Historial({state,dispatch,toast}) {
 
   return (
     <div style={{padding:"10px 13px",maxWidth:1050,margin:"0 auto"}}>
-      {confirm&&<Confirm msg={"Eliminar: "+confirm.titulo+"?"} onConfirm={()=>{dispatch({type:"TKT_DELETE",id:confirm.id});setConfirm(null);setExpId(null);toast("Eliminado","info");}} onCancel={()=>setConfirm(null)}/>}
+      {confirm&&<Confirm msg={"Eliminar: "+confirm.titulo+"?"} onConfirm={()=>{
+        const id=confirm.id;
+        dispatch({type:"TKT_SOFT_DEL",id});
+        toast("Ticket a papelera — restaurable","info");
+        setConfirm(null);setExpId(null);
+        setTimeout(()=>dispatch({type:"TKT_DELETE",id}),8000);
+      }} onCancel={()=>setConfirm(null)}/>}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
         <div style={{fontSize:7,color:C.t3,letterSpacing:"0.2em"}}>HISTORIAL DE OPERACIONES</div>
         <button onClick={()=>setHide(!hide)} style={{padding:"3px 9px",background:hide?C.blue:"transparent",border:`1px solid ${hide?C.blueHi:C.border}`,borderRadius:3,color:hide?C.t1:C.t2,fontSize:9,cursor:"pointer"}}>
@@ -2730,7 +2913,7 @@ function Historial({state,dispatch,toast}) {
           <span>ID / TITULO</span><span>TIPO</span><span>PRIO</span><span>ESTADO</span><span>MARKUP</span><span>PRECIO</span><span>UTIL.</span><span/><span/>
         </div>
 
-        {tickets.map((t,i)=>{
+        {activeTickets.map((t,i)=>{
           const exp=expId===t.id;
           const editing=editId===t.id;
           const cl=clients.find(c=>c.id===t.clientId);
@@ -2838,12 +3021,12 @@ function Historial({state,dispatch,toast}) {
                           <Field label="Descripción PDF (aparece en cotización)" value={l.descripcionPDF||""} onChange={v=>updLinea(idx,{descripcionPDF:v})} prefix="" hint="Dejar vacío para usar texto por defecto" rows={2}/>
                           {/* Qty, costo, gasolina, otros */}
                           <div style={{display:"grid",gridTemplateColumns:"70px 1fr 1fr 1fr",gap:5,marginBottom:5}}>
-                            <Field label="Cant." value={l.qty||1} onChange={v=>updLinea(idx,{qty:parseInt(v)||1})} prefix="" suffix="pz" type="text" inputMode="numeric"/>
-                            <Field label="Costo unit. c/IVA" value={l.costoUnit||0} onChange={v=>updLinea(idx,{costoUnit:parseFloat(v)||0})} type="text" inputMode="decimal"/>
-                            <Field label="Gasolina" value={l.gasolina||0} onChange={v=>updLinea(idx,{gasolina:parseFloat(v)||0})} type="text" inputMode="decimal"/>
-                            <Field label="Otros gastos" value={l.otros||0} onChange={v=>updLinea(idx,{otros:parseFloat(v)||0})} type="text" inputMode="decimal"/>
+                            <Field label="Cant." value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)} onChange={v=>updLinea(idx,{_qtyRaw:v})} onBlur={()=>{const n=parseInt(l._qtyRaw);updLinea(idx,{qty:isFinite(n)&&n>=1?n:1,_qtyRaw:undefined});}} prefix="" suffix="pz" type="text" inputMode="numeric"/>
+                            <Field label="Costo unit. c/IVA" value={l.costoUnit||0} onChange={v=>updLinea(idx,{costoUnit:v})} onBlur={()=>updLinea(idx,{costoUnit:safeNumber(l.costoUnit)})} type="text" inputMode="decimal"/>
+                            <Field label="Gasolina" value={l.gasolina||0} onChange={v=>updLinea(idx,{gasolina:v})} onBlur={()=>updLinea(idx,{gasolina:safeNumber(l.gasolina)})} type="text" inputMode="decimal"/>
+                            <Field label="Otros gastos" value={l.otros||0} onChange={v=>updLinea(idx,{otros:v})} onBlur={()=>updLinea(idx,{otros:safeNumber(l.otros)})} type="text" inputMode="decimal"/>
                           </div>
-                          {(l.qty||1)>1&&<div style={{fontSize:7,color:C.t3,marginBottom:5,fontFamily:"'Courier New',monospace"}}>{l.qty} × {mxn(l.costoUnit||0)} = {mxn(costo)} costo total</div>}
+                          {(safeNumber(l.qty,1))>1&&<div style={{fontSize:7,color:C.t3,marginBottom:5,fontFamily:"'Courier New',monospace"}}>{l.qty} × {mxn(safeNumber(l.costoUnit))} = {mxn(safeNumber(l.costoUnit)*safeNumber(l.qty,1))} costo total</div>}
                           {/* Modo precio */}
                           <div style={{display:"flex",gap:7,alignItems:"center"}}>
                             <div style={{display:"flex",borderRadius:3,overflow:"hidden",border:`1px solid ${C.border}`,flexShrink:0}}>
@@ -2856,7 +3039,9 @@ function Historial({state,dispatch,toast}) {
                               <div style={{display:"flex",alignItems:"center",gap:5,flex:1}}>
                                 <span style={{fontSize:7,color:C.t3}}>Margen:</span>
                                 {l.customMgn ? (
-                                  <input type="text" inputMode="decimal" value={l.customVal} onChange={e=>updLinea(idx,{customVal:parseFloat(e.target.value)||0})}
+                                  <input type="text" inputMode="decimal" value={l._customValRaw!==undefined?l._customValRaw:String(l.customVal||27)}
+                                  onChange={e=>updLinea(idx,{_customValRaw:e.target.value})}
+                                  onBlur={()=>updLinea(idx,{customVal:safeNumber(l._customValRaw,27),_customValRaw:undefined})}
                                     style={{width:55,background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:3,padding:"3px 5px",color:C.cyan,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace",textAlign:"right"}}/>
                                 ) : (
                                   <span style={{fontSize:11,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{fpct(mg)}</span>
@@ -2974,13 +3159,37 @@ function Historial({state,dispatch,toast}) {
 
         {/* Total global */}
         <div style={{display:"grid",gridTemplateColumns:"1.6fr 0.5fr 0.6fr 0.7fr 0.6fr 0.7fr 0.7fr 56px 20px",padding:"8px 9px",background:C.blueDim,borderTop:`2px solid ${C.blue}`,gap:4,alignItems:"center"}}>
-          <div><div style={{fontSize:8,color:C.cyan,fontWeight:700}}>TOTAL GLOBAL</div><div style={{fontSize:7,color:C.t3}}>{tickets.length} operaciones</div></div>
+          <div><div style={{fontSize:8,color:C.cyan,fontWeight:700}}>TOTAL GLOBAL</div><div style={{fontSize:7,color:C.t3}}>{activeTickets.length} operaciones{trashedTickets.length>0?` · ${trashedTickets.length} en papelera`:""}</div></div>
           <div/><div/><div/><div/>
           <div style={{fontSize:11,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(totalFact)}</div>
           <div style={{fontSize:11,fontWeight:800,fontFamily:"'Courier New',monospace",color:totalNeta>=0?C.green:C.red}}>{hide?"---":mxn(totalNeta)}</div>
           <div/><div/>
         </div>
       </div>
+
+      {/* Papelera */}
+      {trashedTickets.length>0&&(
+        <div style={{margin:"10px 0",padding:"0 9px"}}>
+          <button onClick={()=>setShowTrash(v=>!v)}
+            style={{fontSize:8,color:C.t3,background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,padding:"3px 8px",cursor:"pointer"}}>
+            🗑 Papelera ({trashedTickets.length}) {showTrash?"▲":"▼"}
+          </button>
+          {showTrash&&trashedTickets.map(t=>(
+            <div key={t.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 9px",background:C.bg1,borderBottom:`1px solid ${C.border}`,opacity:0.6}}>
+              <div>
+                <span style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace"}}>{t.id}</span>
+                <span style={{fontSize:9,color:C.t2,marginLeft:8}}>{t.titulo}</span>
+              </div>
+              <div style={{display:"flex",gap:6}}>
+                <button onClick={()=>{dispatch({type:"TKT_RESTORE",id:t.id});toast("Ticket restaurado","success");}}
+                  style={{fontSize:8,padding:"2px 8px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,cursor:"pointer"}}>↩ Restaurar</button>
+                <button onClick={()=>dispatch({type:"TKT_DELETE",id:t.id})}
+                  style={{fontSize:8,padding:"2px 8px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:3,color:C.red,cursor:"pointer"}}>✕ Borrar</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -3019,7 +3228,7 @@ function MField({label,value,onChange,type="text",placeholder,suffix,color}) {
     <div style={{marginBottom:10}}>
       {label&&<div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase"}}>{label}</div>}
       <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-        <input type={type} value={value} placeholder={placeholder||""} onChange={e=>onChange(type==="number"?parseFloat(e.target.value)||0:e.target.value)}
+        <input type={type} value={value} placeholder={placeholder||""} onChange={e=>onChange(e.target.value)}
           style={{flex:1,background:"transparent",border:"none",outline:"none",color:color||C.t1,fontSize:15,padding:"12px 14px",fontFamily:"'Courier New',monospace"}}/>
         {suffix&&<span style={{padding:"0 12px",color:C.t3,fontSize:12}}>{suffix}</span>}
       </div>
@@ -3587,8 +3796,8 @@ function MCotizador({state,dispatch,toast}) {
                 <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
                   <input type="text" inputMode="numeric"
                     value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)}
-                    onChange={e=>{const raw=e.target.value;const n=parseInt(raw);upd(i,{_qtyRaw:raw,qty:(!isNaN(n)&&n>=1)?n:(l.qty||1)});}}
-                    onBlur={e=>{const n=parseInt(e.target.value);upd(i,{qty:(!isNaN(n)&&n>=1)?n:1,_qtyRaw:undefined});}}
+                    onChange={e=>upd(i,{_qtyRaw:e.target.value})}
+                    onBlur={()=>{const n=parseInt(l._qtyRaw);upd(i,{qty:isFinite(n)&&n>=1?n:1,_qtyRaw:undefined});}}
                     style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:20,fontWeight:800,padding:"10px 0 10px 12px",fontFamily:"'Courier New',monospace"}}/>
                   <span style={{padding:"0 10px",color:C.t3,fontSize:11}}>pz</span>
                 </div>
@@ -3597,7 +3806,9 @@ function MCotizador({state,dispatch,toast}) {
                 <div style={{fontSize:10,color:C.t3,marginBottom:5,letterSpacing:"0.12em"}}>COSTO UNIT. (c/IVA)</div>
                 <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
                   <span style={{padding:"0 10px",color:C.t3,fontSize:14,fontFamily:"'Courier New',monospace"}}>$</span>
-                  <input type="number" min={0} value={l.costoUnit||0} onChange={e=>upd(i,{costoUnit:parseFloat(e.target.value)||0})}
+                  <input type="text" inputMode="decimal" value={l._costoRaw!==undefined?l._costoRaw:String(l.costoUnit||0)}
+                    onChange={e=>upd(i,{_costoRaw:e.target.value})}
+                    onBlur={()=>{const n=safeNumber(l._costoRaw);upd(i,{costoUnit:n,_costoRaw:undefined});}}
                     style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:16,padding:"10px 0",fontFamily:"'Courier New',monospace"}}/>
                 </div>
               </div>
@@ -3605,7 +3816,7 @@ function MCotizador({state,dispatch,toast}) {
 
             {(l.qty||1)>1&&(
               <div style={{fontSize:12,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:8}}>
-                {l.qty} x {mxn(l.costoUnit||0)} = <span style={{color:C.t2,fontWeight:700}}>{mxn((l.costoUnit||0)*(l.qty||1))}</span>
+                {l.qty} × {mxn(safeNumber(l.costoUnit))} = <span style={{color:C.t2,fontWeight:700}}>{mxn(safeNumber(l.costoUnit)*safeNumber(l.qty,1))}</span>
               </div>
             )}
 
@@ -3615,7 +3826,10 @@ function MCotizador({state,dispatch,toast}) {
                 <div style={{fontSize:10,color:C.t3,marginBottom:5,letterSpacing:"0.12em"}}>GASOLINA</div>
                 <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
                   <span style={{padding:"0 10px",color:C.t3,fontSize:14,fontFamily:"'Courier New',monospace"}}>$</span>
-                  <input type="number" min={0} value={l.gasolina||0} onChange={e=>upd(i,{gasolina:parseFloat(e.target.value)||0})}
+                  <input type="text" inputMode="decimal"
+                    value={l._gasolinaRaw!==undefined?l._gasolinaRaw:String(l.gasolina||0)}
+                    onChange={e=>upd(i,{_gasolinaRaw:e.target.value})}
+                    onBlur={()=>upd(i,{gasolina:safeNumber(l._gasolinaRaw),_gasolinaRaw:undefined})}
                     style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:16,padding:"10px 0",fontFamily:"'Courier New',monospace"}}/>
                 </div>
               </div>
@@ -3623,7 +3837,10 @@ function MCotizador({state,dispatch,toast}) {
                 <div style={{fontSize:10,color:C.t3,marginBottom:5,letterSpacing:"0.12em"}}>OTROS</div>
                 <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
                   <span style={{padding:"0 10px",color:C.t3,fontSize:14,fontFamily:"'Courier New',monospace"}}>$</span>
-                  <input type="number" min={0} value={l.otros||0} onChange={e=>upd(i,{otros:parseFloat(e.target.value)||0})}
+                  <input type="text" inputMode="decimal"
+                    value={l._otrosRaw!==undefined?l._otrosRaw:String(l.otros||0)}
+                    onChange={e=>upd(i,{_otrosRaw:e.target.value})}
+                    onBlur={()=>upd(i,{otros:safeNumber(l._otrosRaw),_otrosRaw:undefined})}
                     style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:16,padding:"10px 0",fontFamily:"'Courier New',monospace"}}/>
                 </div>
               </div>
@@ -3765,7 +3982,51 @@ function MCartera({state,dispatch,toast}) {
   );
 }
 
-// ── MHistorial — Historial móvil con edición completa y líneas ───────────────
+// ── DEBOUNCE HOOK ─────────────────────────────────────────────────────────────
+function useDebounce(value, delay=250) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(()=>{
+    const t = setTimeout(()=>setDebounced(value), delay);
+    return ()=>clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}
+
+// ── OPERATIONAL LOG ───────────────────────────────────────────────────────────
+const opLog = {
+  _logs: [],
+  push(action, detail={}) {
+    const entry = { ts: new Date().toISOString(), action, ...detail };
+    this._logs.push(entry);
+    if (this._logs.length > 200) this._logs.shift();
+    if (detail.error) console.warn("[LogiSolve]", action, detail);
+  },
+  get() { return [...this._logs]; },
+};
+
+// ── SAVING STATE HOOK ─────────────────────────────────────────────────────────
+function useSyncStatus() {
+  const [status, setStatus] = useState("idle"); // idle | saving | saved | offline | error
+  const timerRef = useRef(null);
+  const setSaving  = ()=>setStatus("saving");
+  const setSaved   = ()=>{ setStatus("saved"); clearTimeout(timerRef.current); timerRef.current=setTimeout(()=>setStatus("idle"),2500); };
+  const setOffline = ()=>setStatus("offline");
+  const setError   = ()=>{ setStatus("error"); clearTimeout(timerRef.current); timerRef.current=setTimeout(()=>setStatus("idle"),4000); };
+  return { status, setSaving, setSaved, setOffline, setError };
+}
+
+// ── PENDING CHANGES QUEUE (offline support) ───────────────────────────────────
+const pendingQueue = {
+  _q: [],
+  push(op) { this._q.push({ ...op, ts: Date.now() }); this._persist(); },
+  flush() { const q=[...this._q]; this._q=[]; this._persist(); return q; },
+  peek() { return [...this._q]; },
+  _persist() { try { localStorage.setItem("lgs_pending", JSON.stringify(this._q)); } catch{} },
+  _restore() { try { const s=localStorage.getItem("lgs_pending"); if(s) this._q=JSON.parse(s)||[]; } catch{} },
+};
+pendingQueue._restore();
+
+
 function MHistorial({state,dispatch,toast}) {
   const {tickets,clients,units,suppliers} = state;
   const realizados = useMemo(()=>tickets.filter(t=>!FORECAST_SET.has(t.status)&&t.status!=="cancelado"),[tickets]);
@@ -3783,21 +4044,22 @@ function MHistorial({state,dispatch,toast}) {
   const delLinea = idx => setEditLineas(p=>p.filter((_,i)=>i!==idx));
   const addLinea = () => setEditLineas(p=>[...p,{titulo:"",partRef:"",costoUnit:0,gasolina:0,otros:0,qty:1,mode:"manual",manualPrice:"0",customMgn:false,customVal:27}]);
 
-  // Snap igual que cotizador
+  // Snap igual que cotizador — usa safeNumber y qty
   const liveSnap = useMemo(()=>{
     if(!editId||!editLineas.length) return null;
-    const iva=parseFloat(ef.iva)||16; const isr=parseFloat(ef.isr)||20;
+    const iva=safeNumber(ef.iva,16); const isr=safeNumber(ef.isr,20);
     const opType=ef.opType||"consumable"; const priority=ef.priority||"P3";
-    const activeMods=ef.activeMods||[];
+    const activeMods=safeArr(ef.activeMods);
     const sharedMgn=effectiveMargin(opType,priority,activeMods,false,27);
     const snaps=editLineas.map(l=>{
-      const mg=l.customMgn?Math.min(l.customVal,99):sharedMgn;
-      const costo=(l.costoUnit||0)*(l.qty||1);
-      return computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,iva,isr,
+      const mg=l.customMgn?Math.min(safeNumber(l.customVal),99):sharedMgn;
+      const qty=safeNumber(l.qty,1)||1;
+      const costo=safeNumber(l.costoUnit)*qty;
+      return computeSnap({costo,gasolina:safeNumber(l.gasolina),otros:safeNumber(l.otros),iva,isr,
         compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,
         mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
     });
-    const sum=k=>snaps.reduce((s,sn)=>s+sn[k],0);
+    const sum=k=>snaps.reduce((s,sn)=>s+safeNumber(sn[k]),0);
     const precioSinIVA=sum("precioSinIVA"); const uNeta=sum("uNeta");
     return {
       precioConIVA:sum("precioConIVA"),precioSinIVA,
@@ -3893,7 +4155,13 @@ function MHistorial({state,dispatch,toast}) {
   return (
     <div style={{padding:"14px"}}>
       {pdfPending&&<PDFConfirm {...pdfPending} onClose={()=>setPdfPending(null)}/>}
-      {confirm&&<Confirm msg={"Eliminar: "+confirm.titulo+"?"} onConfirm={()=>{dispatch({type:"TKT_DELETE",id:confirm.id});setConfirm(null);setExpId(null);toast("Eliminado","info");}} onCancel={()=>setConfirm(null)}/>}
+      {confirm&&<Confirm msg={"Eliminar: "+confirm.titulo+"?"} onConfirm={()=>{
+        const id=confirm.id;
+        dispatch({type:"TKT_SOFT_DEL",id});
+        toast("Ticket a papelera — restaurable","info");
+        setConfirm(null);setExpId(null);
+        setTimeout(()=>dispatch({type:"TKT_DELETE",id}),8000);
+      }} onCancel={()=>setConfirm(null)}/>}
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
         <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px"}}>
@@ -3906,7 +4174,7 @@ function MHistorial({state,dispatch,toast}) {
         </div>
       </div>
 
-      {tickets.slice().reverse().map(t=>{
+      {tickets.filter(t=>!t._deleted).slice().reverse().map(t=>{
         const cl=clients.find(c=>c.id===t.clientId);
         const un=units.find(u=>u.id===t.unitId);
         const exp=expId===t.id;
@@ -4091,7 +4359,10 @@ function MHistorial({state,dispatch,toast}) {
                           <div>
                             <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>CANT.</div>
                             <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                              <input type="text" inputMode="numeric" value={l.qty||1} onChange={e=>updLinea(idx,{qty:parseInt(e.target.value)||1})}
+                              <input type="text" inputMode="numeric"
+                                value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)}
+                                onChange={e=>updLinea(idx,{_qtyRaw:e.target.value})}
+                                onBlur={()=>{const n=parseInt(l._qtyRaw);updLinea(idx,{qty:isFinite(n)&&n>=1?n:1,_qtyRaw:undefined});}}
                                 style={{flex:1,minWidth:0,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:16,fontWeight:700,padding:"10px 10px",fontFamily:"'Courier New',monospace"}}/>
                               <span style={{padding:"0 8px",color:C.t3,fontSize:11,flexShrink:0}}>pz</span>
                             </div>
@@ -4100,7 +4371,10 @@ function MHistorial({state,dispatch,toast}) {
                             <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>COSTO UNIT. C/IVA</div>
                             <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
                               <span style={{padding:"0 8px",color:C.t3,fontSize:13,fontFamily:"'Courier New',monospace",flexShrink:0}}>$</span>
-                              <input type="text" inputMode="decimal" value={l.costoUnit||0} onChange={e=>updLinea(idx,{costoUnit:parseFloat(e.target.value)||0})}
+                              <input type="text" inputMode="decimal"
+                                value={l._costoRaw!==undefined?l._costoRaw:String(l.costoUnit||0)}
+                                onChange={e=>updLinea(idx,{_costoRaw:e.target.value})}
+                                onBlur={()=>updLinea(idx,{costoUnit:safeNumber(l._costoRaw),_costoRaw:undefined})}
                                 style={{flex:1,minWidth:0,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:14,padding:"10px 8px 10px 0",fontFamily:"'Courier New',monospace"}}/>
                             </div>
                           </div>
@@ -4112,13 +4386,16 @@ function MHistorial({state,dispatch,toast}) {
                               <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>{lbl}</div>
                               <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
                                 <span style={{padding:"0 8px",color:C.t3,fontSize:13,fontFamily:"'Courier New',monospace",flexShrink:0}}>$</span>
-                                <input type="text" inputMode="decimal" value={l[k]||0} onChange={e=>updLinea(idx,{[k]:parseFloat(e.target.value)||0})}
+                                <input type="text" inputMode="decimal"
+                                  value={l[`_${k}Raw`]!==undefined?l[`_${k}Raw`]:String(l[k]||0)}
+                                  onChange={e=>updLinea(idx,{[`_${k}Raw`]:e.target.value})}
+                                  onBlur={()=>updLinea(idx,{[k]:safeNumber(l[`_${k}Raw`]),[`_${k}Raw`]:undefined})}
                                   style={{flex:1,minWidth:0,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:14,padding:"10px 8px 10px 0",fontFamily:"'Courier New',monospace"}}/>
                               </div>
                             </div>
                           ))}
                         </div>
-                        {(l.qty||1)>1&&<div style={{fontSize:11,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:8}}>{l.qty} × {mxn(l.costoUnit||0)} = {mxn(costo)}</div>}
+                        {(safeNumber(l.qty,1))>1&&<div style={{fontSize:11,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:8}}>{l.qty} × {mxn(safeNumber(l.costoUnit))} = {mxn(safeNumber(l.costoUnit)*safeNumber(l.qty,1))}</div>}
                         {/* Modo */}
                         <div style={{marginBottom:8}}>
                           <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:6}}>MODO PRECIO</div>
@@ -4284,16 +4561,27 @@ export default function App() {
   const [search,setSearch]=useState(false);
   const [loading,setLoading]=useState(true);
   const [mobileView,setMobileView]=useState(()=>window.innerWidth<768);
+  const { status: syncStatus, setSaving, setSaved, setOffline, setError: setSyncError } = useSyncStatus();
+
+  // Double-click / concurrent save protection
+  const savingRef = useRef(false);
+
+  // Soft-delete trash (restore within session)
+  const [trash, setTrash] = useState([]);
+  const softDelete = useCallback((item, type) => {
+    setTrash(p=>[...p, {item, type, deletedAt: Date.now()}]);
+  }, []);
 
   // Track deleted IDs so sync can remove them from Supabase
   const deletedRef = useRef({tickets:new Set(),clients:new Set(),suppliers:new Set(),units:new Set(),parts:new Set()});
 
   const dispatchWithDelete = useCallback((action)=>{
-    if(action.type==="TKT_DELETE")    deletedRef.current.tickets.add(action.id);
-    if(action.type==="CLI_DELETE")    deletedRef.current.clients.add(action.id);
-    if(action.type==="SUP_DELETE")    deletedRef.current.suppliers.add(action.id);
-    if(action.type==="UNIT_DELETE")   deletedRef.current.units.add(action.id);
-    if(action.type==="PART_DELETE")   deletedRef.current.parts.add(action.id);
+    if(action.type==="TKT_DELETE")    { deletedRef.current.tickets.add(action.id); }
+    if(action.type==="CLI_DELETE")    { deletedRef.current.clients.add(action.id); }
+    if(action.type==="SUP_DELETE")    { deletedRef.current.suppliers.add(action.id); }
+    if(action.type==="UNIT_DELETE")   { deletedRef.current.units.add(action.id); }
+    if(action.type==="PART_DELETE")   { deletedRef.current.parts.add(action.id); }
+    opLog.push(action.type, {id: action.id||action.c?.id||action.u?.id||""});
     dispatch(action);
   },[]);
 
@@ -4304,32 +4592,72 @@ export default function App() {
         await seedIfEmpty();
         const data = await loadAllFromSupabase();
         if(data) dispatch({type:"IMPORT",data});
-      } catch(e){ console.warn("Supabase load error:",e); }
+        opLog.push("LOAD_OK");
+      } catch(e){
+        opLog.push("LOAD_ERROR", {error: e?.message});
+        console.warn("Supabase load error:",e);
+      }
       finally { setLoading(false); }
     })();
   },[]);
 
-  // Sync to Supabase on every state change (debounced)
+  // Sync to Supabase — debounced 1200ms, with status indicator and offline queue
   const syncRef = useRef(null);
   useEffect(()=>{
     if(loading) return;
     saveToStorage(state);
     clearTimeout(syncRef.current);
-    syncRef.current = setTimeout(()=>{
-      // Upsert current rows
-      state.tickets.forEach(t=>upsertRow("tickets",t.id,t));
-      state.clients.forEach(c=>upsertRow("clients",c.id,c));
-      state.suppliers.forEach(s=>upsertRow("suppliers",s.id,s));
-      state.units.forEach(u=>upsertRow("units",u.id,u));
-      state.parts.forEach(p=>upsertRow("parts",p.id,p));
-      // Delete removed rows from Supabase
-      deletedRef.current.tickets.forEach(id=>{ deleteRow("tickets",id); deletedRef.current.tickets.delete(id); });
-      deletedRef.current.clients.forEach(id=>{ deleteRow("clients",id); deletedRef.current.clients.delete(id); });
-      deletedRef.current.suppliers.forEach(id=>{ deleteRow("suppliers",id); deletedRef.current.suppliers.delete(id); });
-      deletedRef.current.units.forEach(id=>{ deleteRow("units",id); deletedRef.current.units.delete(id); });
-      deletedRef.current.parts.forEach(id=>{ deleteRow("parts",id); deletedRef.current.parts.delete(id); });
+    syncRef.current = setTimeout(async ()=>{
+      if(savingRef.current) return; // prevent concurrent saves
+      savingRef.current = true;
+      setSaving();
+      try {
+        const online = navigator.onLine !== false;
+        if(!online) {
+          pendingQueue.push({type:"full_sync", ts: Date.now()});
+          setOffline();
+          opLog.push("SYNC_DEFERRED", {reason:"offline"});
+          return;
+        }
+        // Flush any pending queue first
+        pendingQueue.flush();
+        // Upsert current rows
+        await Promise.all([
+          ...state.tickets.map(t=>upsertRow("tickets",t.id,t)),
+          ...state.clients.map(c=>upsertRow("clients",c.id,c)),
+          ...state.suppliers.map(s=>upsertRow("suppliers",s.id,s)),
+          ...state.units.map(u=>upsertRow("units",u.id,u)),
+          ...state.parts.map(p=>upsertRow("parts",p.id,p)),
+        ]);
+        // Delete removed rows
+        deletedRef.current.tickets.forEach(id=>{ deleteRow("tickets",id); deletedRef.current.tickets.delete(id); });
+        deletedRef.current.clients.forEach(id=>{ deleteRow("clients",id); deletedRef.current.clients.delete(id); });
+        deletedRef.current.suppliers.forEach(id=>{ deleteRow("suppliers",id); deletedRef.current.suppliers.delete(id); });
+        deletedRef.current.units.forEach(id=>{ deleteRow("units",id); deletedRef.current.units.delete(id); });
+        deletedRef.current.parts.forEach(id=>{ deleteRow("parts",id); deletedRef.current.parts.delete(id); });
+        setSaved();
+        opLog.push("SYNC_OK");
+      } catch(e) {
+        setSyncError();
+        opLog.push("SYNC_ERROR", {error: e?.message});
+        pendingQueue.push({type:"full_sync", ts: Date.now()});
+      } finally {
+        savingRef.current = false;
+      }
     },1200);
   },[state,loading]);
+
+  // Retry pending when back online
+  useEffect(()=>{
+    const onOnline = () => {
+      if(pendingQueue.peek().length > 0) {
+        opLog.push("RETRY_SYNC", {pending: pendingQueue.peek().length});
+        dispatch({type:"NOOP"}); // trigger re-sync
+      }
+    };
+    window.addEventListener("online", onOnline);
+    return ()=>window.removeEventListener("online", onOnline);
+  },[]);
 
   useEffect(()=>{
     const h=e=>{if((e.ctrlKey||e.metaKey)&&e.key==="k"){e.preventDefault();setSearch(s=>!s);}};
@@ -4340,6 +4668,16 @@ export default function App() {
   const p1Active  = useMemo(()=>state.tickets.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status)).length,[state.tickets]);
   const vencidos  = useMemo(()=>state.tickets.filter(t=>{if(!t.promesaPago||t.cobrado||t.status==="cancelado")return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}).length,[state.tickets]);
   const abiertas  = useMemo(()=>state.tickets.filter(t=>!CLOSED_SET.has(t.status)).length,[state.tickets]);
+
+  // Sync status display config
+  const syncDisplay = {
+    idle:    { label:"",            color:"transparent",  dot:"transparent" },
+    saving:  { label:"Guardando…",  color:C.t3,           dot:C.yellow      },
+    saved:   { label:"Guardado",    color:C.green,        dot:C.green       },
+    offline: { label:"Sin conexión",color:C.yellow,       dot:C.yellow      },
+    error:   { label:"Error sync",  color:C.red,          dot:C.red         },
+  };
+  const sd = syncDisplay[syncStatus] || syncDisplay.idle;
 
   if(loading) return (
     <div style={{minHeight:"100vh",background:C.bg0,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
@@ -4372,6 +4710,14 @@ export default function App() {
           {!mobileView&&<button onClick={()=>setSearch(true)} style={{padding:"3px 8px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:10,cursor:"pointer"}}>
             &#9906; <span style={{fontSize:7,color:C.t3}}>Ctrl+K</span>
           </button>}
+          {/* Sync status indicator */}
+          {syncStatus!=="idle"&&(
+            <div style={{display:"flex",alignItems:"center",gap:4,padding:"2px 8px",borderRadius:3,border:`1px solid ${C.border}`}}>
+              <span style={{width:6,height:6,borderRadius:"50%",background:sd.dot,flexShrink:0,
+                animation:syncStatus==="saving"?"pulse 1s infinite":"none"}}/>
+              <span style={{fontSize:8,color:sd.color,letterSpacing:"0.06em"}}>{sd.label}</span>
+            </div>
+          )}
           {/* Mobile/Desktop toggle */}
           <button onClick={()=>setMobileView(v=>!v)}
             style={{padding:"3px 9px",background:mobileView?C.blueDim:"transparent",border:`1px solid ${mobileView?C.blueHi:C.border}`,borderRadius:3,color:mobileView?C.cyan:C.t3,fontSize:10,cursor:"pointer",letterSpacing:"0.04em"}}>
@@ -4452,6 +4798,7 @@ export default function App() {
         ::-webkit-scrollbar-track{background:${C.bg1}}
         ::-webkit-scrollbar-thumb{background:${C.border};border-radius:2px}
         textarea{color:${C.t2};resize:vertical;font-family:'Courier New',monospace}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
       `}</style>
     </div>
   );
