@@ -91,7 +91,6 @@ const PAID_SET      = new Set(["cobrado","cerrado"]);
 // REVENUE states: only tickets that have been billed/collected count as real revenue
 const REVENUE_SET   = new Set(["facturado","cobrado","cerrado"]);
 // Cartera: billed but not yet collected
-const CARTERA_SET   = new Set(["facturado"]);
 const CARTERA_SET   = new Set(["entregado","facturado"]);
 
 const PROB = [
