@@ -520,66 +520,80 @@ function useToasts() {
 // ═══════════════════════════════════════════════════════════════════════════════
 function generarCotizacionPDF(tkt, cl, un, supp) {
   const totals = calculateTicketTotals(tkt);
-  const folio = tkt.id.replace("TKT","COT");
-  const fechaLarga = (()=>{
-    const p=tkt.date.split("/");
-    if(p.length!==3) return tkt.date;
-    const meses=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-    return `${parseInt(p[0])} de ${meses[parseInt(p[1])-1]} de ${p[2]}`;
-  })();
-  const formaPago = tkt.payType==="credit"
-    ? "Cr\u00e9dito"+(tkt.promesaPago?" \u2014 Fecha l\u00edmite: "+tkt.promesaPago:"")
-    : "Contado / Transferencia bancaria";
-  const entrega = supp&&supp.entregaDias
-    ? supp.entregaDias+" d\u00eda"+(supp.entregaDias>1?"s":"")+" h\u00e1biles"
-    : "24-48 hrs h\u00e1biles";
-  const unidadStr = un?(un.economico?"Eco. "+un.economico+" \u00b7 ":"")+un.marca+" "+un.modelo+" "+un.anio:"";
-  const clDirParts=[];
-  if(cl?.direccion) clDirParts.push(cl.direccion);
-  if(cl?.ciudad)    clDirParts.push(cl.ciudad);
-  if(cl?.estado)    clDirParts.push(cl.estado);
-  const clLine = cl?(cl.empresa+(clDirParts.length?" \u00b7 "+clDirParts.join(", "):"")):"&mdash;";
-  const fmtMXN = n=>safeNumber(n).toLocaleString("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2});
-  const notaLine = tkt.notes?`<li>${tkt.notes}</li>`:"";
 
-  // Si ticket viejo sin lineas, crear una fila con datos del snap
-  const conceptos = (tkt.lineas&&tkt.lineas.length>0)
-    ? tkt.lineas
-    : [{titulo:tkt.titulo, partRef:tkt.partRef||"", snap:tkt.snap, qty:1, descripcionPDF:""}];
+  const folio = tkt.id.replace("TKT", "COT");
+
+  const fechaLarga = (() => {
+    const p = tkt.date.split("/");
+    if (p.length !== 3) return tkt.date;
+    const meses = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+    return `${parseInt(p[0])} de ${meses[parseInt(p[1]) - 1]} de ${p[2]}`;
+  })();
+
+  const formaPago =
+    tkt.payType === "credit"
+      ? "Cr\u00e9dito" + (tkt.promesaPago ? " \u2014 Fecha l\u00edmite: " + tkt.promesaPago : "")
+      : "Contado / Transferencia bancaria";
+
+  const entrega =
+    supp && supp.entregaDias
+      ? supp.entregaDias + " d\u00eda" + (supp.entregaDias > 1 ? "s" : "") + " h\u00e1biles"
+      : "24-48 hrs h\u00e1biles";
+
+  const unidadStr = un
+    ? (un.economico ? "Eco. " + un.economico + " \u00b7 " : "") + un.marca + " " + un.modelo + " " + un.anio
+    : "";
+
+  const clDirParts = [];
+  if (cl?.direccion) clDirParts.push(cl.direccion);
+  if (cl?.ciudad)    clDirParts.push(cl.ciudad);
+  if (cl?.estado)    clDirParts.push(cl.estado);
+
+  const clLine = cl
+    ? cl.empresa + (clDirParts.length ? " \u00b7 " + clDirParts.join(", ") : "")
+    : "&mdash;";
+
+  const fmtMXN = (n) =>
+    safeNumber(n).toLocaleString("es-MX", { style:"currency", currency:"MXN", minimumFractionDigits:2 });
+
+  const notaLine = tkt.notes ? `<li>${tkt.notes}</li>` : "";
+
+  const conceptos =
+    tkt.lineas && tkt.lineas.length > 0
+      ? tkt.lineas
+      : [{ titulo: tkt.titulo, partRef: tkt.partRef || "", snap: tkt.snap, qty: 1, descripcionPDF: "" }];
 
   const multiLinea = conceptos.length > 1;
 
-  const filas = conceptos.map((c,i)=>{
-    const ml = migrateLinea(c, tkt.snap);
-    const qty = safeNumber(ml.qty,1)||1;
-    const lsnap = ml.snap||tkt.snap||{};
+  const filas = conceptos.map((c, i) => {
+    const ml       = migrateLinea(c, tkt.snap);
+    const qty      = safeNumber(ml.qty, 1) || 1;
+    const lsnap    = ml.snap || tkt.snap || {};
     const precioUnit = safeNumber(lsnap.precioConIVA);
     const lineTotal  = precioUnit * qty;
     const desc = ml.descripcionPDF ||
-      "Atenci\u00f3n correctiva para continuidad operativa de unidad en CEDIS SMO. "+
-      "Incluye integraci\u00f3n de componente compatible, validaci\u00f3n operativa y seguimiento log\u00edstico.";
-    const unTag = unidadStr&&i===0?`<br><br><strong>Unidad:</strong> ${unidadStr}`:"";
-    const refTag = ml.partRef?`<br><br><strong>Clave:</strong> ${ml.partRef}`:"";
+      "Atenci\u00f3n correctiva para continuidad operativa de unidad en CEDIS SMO. Incluye integraci\u00f3n de componente compatible, validaci\u00f3n operativa y seguimiento log\u00edstico.";
+    const unTag = unidadStr && i === 0
+      ? `<div class="operational-tag">UNIDAD \u00b7 ${unidadStr}</div>` : "";
+    const refTag = ml.partRef
+      ? `<div class="operational-tag">CLAVE \u00b7 ${ml.partRef}</div>` : "";
 
-    if(multiLinea) {
-      // Tabla con columnas: # | Cant. | Concepto | Descripción | Unitario | Total
+    if (multiLinea) {
       return `<tr>
-        <td style="text-align:center">${String(i+1).padStart(2,"0")}</td>
-        <td style="text-align:center">${qty}</td>
-        <td>${ml.titulo}</td>
-        <td>${desc}${unTag}${refTag}</td>
-        <td style="text-align:right;white-space:nowrap">${fmtMXN(precioUnit)}</td>
-        <td style="text-align:right;white-space:nowrap;font-weight:700">${fmtMXN(lineTotal)}</td>
-      </tr>`;
-    } else {
-      // Tabla simple: # | Concepto | Descripción | Importe
-      return `<tr>
+          <td style="text-align:center">${String(i+1).padStart(2,"0")}</td>
+          <td style="text-align:center">${qty}</td>
+          <td>${ml.titulo}</td>
+          <td>${desc}${unTag}${refTag}</td>
+          <td style="text-align:right;white-space:nowrap">${fmtMXN(precioUnit)}</td>
+          <td style="text-align:right;white-space:nowrap;font-weight:700">${fmtMXN(lineTotal)}</td>
+        </tr>`;
+    }
+    return `<tr>
         <td>${String(i+1).padStart(2,"0")}</td>
         <td>${ml.titulo}</td>
         <td>${desc}${unTag}${refTag}</td>
         <td style="text-align:right;white-space:nowrap;font-weight:700">${fmtMXN(precioUnit*qty)}</td>
       </tr>`;
-    }
   }).join("");
 
   const theadMulti = `<thead><tr>
@@ -606,50 +620,41 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
 <style>
 *{box-sizing:border-box}
 html,body{width:210mm;margin:0;padding:0;background:#fff;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;color:#111}
-.page{width:210mm;min-height:297mm;background:#fff;margin:0 auto;padding:14mm 14mm 10mm 14mm;position:relative;box-sizing:border-box}
+.page{width:210mm;min-height:297mm;background:#fff;margin:0 auto;padding:16mm 16mm 14mm 16mm;position:relative}
 .toolbar{text-align:right;margin-bottom:6mm}
 .toolbar button{padding:2mm 5mm;border:none;border-radius:2px;font-size:10px;font-weight:700;cursor:pointer;margin-left:4px}
 .tb-close{background:#ddd;color:#444}.tb-save{background:#111;color:#fff}
-.top-header{border:1px solid #d9d9d9;background:#fafafa;padding:6mm 6mm;display:flex;justify-content:space-between;align-items:flex-start}
+.top-header{border:1px solid #dcdcdc;background:#fafafa;padding:5mm 6mm;display:flex;justify-content:space-between;align-items:flex-start}
 .brand h1{margin:0;font-size:34px;font-weight:800;letter-spacing:-1px}
 .brand p{margin:2mm 0 0;font-size:9px;color:#666;font-weight:700;letter-spacing:.4px}
 .issuer{text-align:right;font-size:9.5px;line-height:1.65}
 .issuer strong{font-size:10.5px}
 .hero{margin-top:4mm;background:#050505;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:7mm 7mm}
-.hero-title{font-size:20px;font-weight:800;letter-spacing:.4px}
+.hero-title{font-size:22px;font-weight:800;letter-spacing:.4px}
 .hero-meta{text-align:right;line-height:1.3}
 .hero-meta .label{font-size:10px;opacity:.85}
 .hero-meta .folio{font-size:16px;font-weight:800}
 .hero-meta .date{font-size:12px;font-weight:700}
-.meta-table{width:100%;border-collapse:collapse;margin-top:2mm}
-.meta-table td{border:1px solid #e1e1e1;padding:1.8mm 3mm;font-size:10.5px}
+.ops-strip{display:flex;gap:6mm;margin-top:3mm;padding:2.5mm 3mm;background:#f7f7f7;border:1px solid #e5e5e5;font-size:9px;font-weight:700;letter-spacing:.2px}
+.meta-table{width:100%;border-collapse:collapse;margin-top:3mm}
+.meta-table td{border:1px solid #e1e1e1;padding:2.2mm 3mm;font-size:10.5px}
 .meta-table td:first-child{width:28mm;background:#fafafa;font-weight:700}
-.section-title{margin-top:3.5mm;margin-bottom:1.5mm;font-size:12.5px;font-weight:800;letter-spacing:.2px}
-.detail-table{width:100%;border-collapse:collapse;page-break-inside:avoid}
-.detail-table th{background:#0c0c0c;color:#fff;text-align:left;padding:2mm 2.5mm;font-size:9.5px;font-weight:700}
-.detail-table td{border:1px solid #e4e4e4;padding:3.2mm 3mm;vertical-align:top;font-size:11px;line-height:1.55}
-.detail-table strong{display:inline-block;margin-top:0}
-.totals{width:92mm;margin-left:auto;margin-top:5mm;border-collapse:collapse;page-break-inside:avoid}
-.totals td{border:1px solid #e3e3e3;padding:2.5mm 3.5mm;font-size:11px}
+.section-title{margin-top:5mm;margin-bottom:2mm;font-size:12.5px;font-weight:800;letter-spacing:.2px}
+.detail-table{width:100%;border-collapse:collapse}
+.detail-table th{background:#050505;color:#fff;text-align:left;padding:2.5mm 3mm;font-size:9px;letter-spacing:.2px;font-weight:700}
+.detail-table td{border:1px solid #ececec;padding:4mm 3.5mm;vertical-align:top;font-size:10.5px;line-height:1.6}
+.operational-tag{display:inline-block;margin-top:3mm;padding:1.5mm 2mm;background:#f5f5f5;border-left:2px solid #111;font-size:10px;font-weight:700}
+.totals{width:96mm;margin-left:auto;margin-top:6mm;border-collapse:collapse}
+.totals td{border:1px solid #e3e3e3;padding:3mm 3.5mm;font-size:11px}
 .totals td:last-child{text-align:right;font-weight:700}
-.totals .grand-total td{background:#0c0c0c;color:#fff;font-weight:800;font-size:11.5px}
-.block{margin-top:6mm;page-break-inside:avoid}
+.totals .grand-total td{background:#050505;color:#fff;font-weight:800;font-size:12px}
+.block{margin-top:7mm;page-break-inside:avoid}
 .block h3{margin:0 0 2mm;font-size:12px;font-weight:800}
 .block ul{margin:0;padding-left:3.5mm}
-.block li{margin-bottom:1.5mm;line-height:1.5;font-size:10px}
-.footer{margin-top:8mm;padding-top:2.5mm;border-top:1px solid #e3e3e3;display:flex;justify-content:space-between;font-size:9.5px;color:#444;page-break-inside:avoid}
+.block li{margin-bottom:1.6mm;line-height:1.55;font-size:10px}
+.footer{margin-top:10mm;padding-top:3mm;border-top:1px solid #e5e5e5;display:flex;justify-content:space-between;font-size:9px;color:#555}
 table,tr,td,th{page-break-inside:avoid !important}
-@media print{
-  .toolbar{display:none}
-  html,body{background:#fff;width:210mm}
-  @page{
-    size:A4 portrait;
-    margin:0;
-    /* Suppress browser header/footer (URL, date, page number) */
-    margin-top:0;
-    margin-bottom:0;
-  }
-}
+@media print{.toolbar{display:none}html,body{background:#fff;width:210mm}@page{size:A4 portrait;margin:0}}
 </style>
 </head>
 <body>
@@ -681,10 +686,16 @@ table,tr,td,th{page-break-inside:avoid !important}
   </div>
 </div>
 
+<div class="ops-strip">
+  <div><strong>TIPO:</strong> ${tkt.opShort||"CORRECTIVO"}</div>
+  <div><strong>PRIORIDAD:</strong> ${tkt.priority||"P3"}</div>
+  ${unidadStr?`<div><strong>UNIDAD:</strong> ${unidadStr}</div>`:""}
+</div>
+
 <table class="meta-table">
   <tr><td>Cliente</td><td>${clLine}</td></tr>
-  <tr><td>Atenci&oacute;n</td><td>&Aacute;rea de Compras / Operaciones</td></tr>
   <tr><td>Vigencia</td><td>3 d&iacute;as naturales</td></tr>
+  <tr><td>Atenci&oacute;n</td><td>&Aacute;rea de Compras / Operaciones</td></tr>
 </table>
 
 <div class="section-title">DETALLE DEL CONCEPTO</div>
@@ -740,11 +751,9 @@ table,tr,td,th{page-break-inside:avoid !important}
 </body>
 </html>`;
 
-  const win=window.open("","_blank");
-  if(win){win.document.open();win.document.write(html);win.document.close();}
+  const win = window.open("", "_blank");
+  if (win) { win.document.open(); win.document.write(html); win.document.close(); }
 }
-
-
 // Modal de confirmacion PDF
 function PDFConfirm({tkt,cl,un,supp,onClose}) {
   return (
