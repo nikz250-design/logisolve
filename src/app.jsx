@@ -778,11 +778,9 @@ html,body{margin:0;padding:0;background:#ffffff;font-family:Arial,Helvetica,sans
 </body>
 </html>`;
 
-  // Contenedor temporal en el DOM
+  // Contenedor temporal — debe ser visible para que html2canvas lo renderice
   const container = document.createElement("div");
-  container.style.position = "absolute";
-  container.style.left = "-9999px";
-  container.style.top = "0";
+  container.style.cssText = "position:fixed;top:0;left:0;width:210mm;background:#fff;z-index:-9999;pointer-events:none;";
   container.innerHTML = html;
   document.body.appendChild(container);
 
@@ -792,22 +790,35 @@ html,body{margin:0;padding:0;background:#ffffff;font-family:Arial,Helvetica,sans
       .set({
         margin: 0,
         filename: `${folio}.pdf`,
-        image: { type:"jpeg", quality:1 },
-        html2canvas: { scale:2, useCORS:true, backgroundColor:"#ffffff" },
+        image: { type:"jpeg", quality:0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          logging: false,
+          windowWidth: container.scrollWidth,
+          windowHeight: container.scrollHeight,
+        },
         jsPDF: { unit:"mm", format:"a4", orientation:"portrait" },
       })
       .from(container)
       .save()
-      .then(() => { document.body.removeChild(container); });
+      .then(() => {
+        document.body.removeChild(container);
+      })
+      .catch(() => {
+        document.body.removeChild(container);
+      });
   };
 
   // Load html2pdf.js from CDN if not already available
   if (typeof html2pdf !== "undefined") {
-    generate();
+    // Small delay to ensure DOM is painted
+    setTimeout(generate, 100);
   } else {
     const script = document.createElement("script");
     script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-    script.onload = generate;
+    script.onload = () => setTimeout(generate, 100);
     script.onerror = () => {
       document.body.removeChild(container);
       alert("No se pudo cargar html2pdf.js. Verifica tu conexión a internet.");
