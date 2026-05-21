@@ -2241,6 +2241,667 @@ function Cotizador({state,dispatch,toast}) {
   );
 }
 
+// ── COTIZADOR REFACCIONES ─────────────────────────────────────────────────────
+let _cotSeq = 1;
+function mkCotId(dateStr) {
+  const p=(dateStr||"").replace(/\//g,"-").split("-");
+  let y,m,d;
+  if(p.length===3){p[0].length===4?([y,m,d]=p):([d,m,y]=p);}
+  else{const n=new Date();y=n.getFullYear();m=String(n.getMonth()+1).padStart(2,"0");d=String(n.getDate()).padStart(2,"0");}
+  return `COT-${y}${String(m).padStart(2,"0")}${String(d).padStart(2,"0")}-${String(_cotSeq++).padStart(3,"0")}`;
+}
+
+const emptyRefLine = () => ({
+  key:         genId("REF"),
+  descripcion: "",
+  oem:         "",
+  aftermarket: "",
+  qty:         1,
+  costoUnit:   0,
+  modo:        "auto",
+  margen:      30,
+  precioManual:"0",
+  notas:       "",
+});
+
+function CotizadorRefacciones({state,dispatch,toast}) {
+  const {clients,units,suppliers,parts} = state;
+
+  const [fecha,      setFecha]      = useState(todayMX());
+  const [clientId,   setClientId]   = useState("");
+  const [unitId,     setUnitId]     = useState("");
+  const [supplierId, setSupplierId] = useState("");
+  const [vigencia,   setVigencia]   = useState(3);
+  const [payType,    setPayType]    = useState("contado");
+  const [promesa,    setPromesa]    = useState("");
+  const [notes,      setNotes]      = useState("");
+  const [iva,        setIva]        = useState(16);
+  const [cIVA,       setCIVA]       = useState(true);
+  const [vIVA,       setVIVA]       = useState(true);
+  const [globalMargen, setGlobalMargen] = useState(30);
+  const [useGlobal,    setUseGlobal]    = useState(true);
+  const [lineas,       setLineas]       = useState([emptyRefLine()]);
+  const [catalogSearch,setCatalogSearch]= useState(null);
+  const [catalogQ,     setCatalogQ]     = useState("");
+  const [isSaving,     setIsSaving]     = useState(false);
+
+  const lineSnaps = useMemo(()=>lineas.map(l=>{
+    const mg  = useGlobal ? globalMargen : l.margen;
+    const qty = safeNumber(l.qty,1)||1;
+    const costo = safeNumber(l.costoUnit)*qty;
+    return computeSnap({costo,gasolina:0,otros:0,iva,isr:0,compraConIVA:cIVA,ventaConIVA:vIVA,mode:l.modo,margin:mg,manualPrice:l.precioManual||"0"});
+  }),[lineas,globalMargen,useGlobal,iva,cIVA,vIVA]);
+
+  const totalSnap = useMemo(()=>{
+    const sum=k=>lineSnaps.reduce((s,sn)=>s+safeNumber(sn[k]),0);
+    const precioSinIVA=sum("precioSinIVA"), uNeta=sum("uNeta");
+    return {
+      precioConIVA:sum("precioConIVA"), precioSinIVA,
+      costoTotal:sum("costoTotal"), uNeta, uBruta:sum("uBruta"),
+      ivaTraslad:sum("ivaTraslad"), ivaAcred:sum("ivaAcred"), ivaNeto:sum("ivaNeto"),
+      margenNetoPrecio: precioSinIVA>0?(uNeta/precioSinIVA)*100:0,
+    };
+  },[lineSnaps]);
+
+  const aggMargen = totalSnap.margenNetoPrecio;
+  const mColor    = margenColor(aggMargen);
+
+  const updateLinea = useCallback((idx,patch)=>setLineas(p=>p.map((l,i)=>i===idx?{...l,...patch}:l)),[]);
+  const removeLinea = useCallback(idx=>setLineas(p=>p.filter((_,i)=>i!==idx)),[]);
+  const addLinea    = useCallback(()=>setLineas(p=>[...p,emptyRefLine()]),[]);
+
+  const catalogResults = useMemo(()=>{
+    if(catalogSearch===null) return [];
+    const q=(catalogQ||"").toLowerCase().trim();
+    if(!q) return parts.slice(0,12);
+    return parts.filter(p=>
+      p.nombre.toLowerCase().includes(q)||
+      (p.oem||"").toLowerCase().includes(q)||
+      (p.aftermarket||"").toLowerCase().includes(q)||
+      (p.aplicacion||"").toLowerCase().includes(q)
+    ).slice(0,12);
+  },[catalogQ,catalogSearch,parts]);
+
+  const selectFromCatalog = useCallback(p=>{
+    const idx=catalogSearch;
+    updateLinea(idx,{descripcion:p.nombre,oem:p.oem||"",aftermarket:p.aftermarket||"",costoUnit:p.ultimoPrecio||0,precioManual:String(p.ultimoPrecio||0)});
+    setCatalogSearch(null); setCatalogQ("");
+  },[catalogSearch,updateLinea]);
+
+  const generarPDF = useCallback(()=>{
+    const cl   = clients.find(c=>c.id===clientId);
+    const un   = units.find(u=>u.id===unitId);
+    const supp = suppliers.find(s=>s.id===supplierId);
+    const folio = mkCotId(fecha);
+
+    const fechaLarga=(()=>{
+      const p=fecha.split("/");
+      if(p.length!==3) return fecha;
+      const meses=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+      return `${parseInt(p[0])} de ${meses[parseInt(p[1])-1]} de ${p[2]}`;
+    })();
+
+    const unidadStr=un?`${un.economico?"Eco. "+un.economico+" · ":""}${un.marca} ${un.modelo} ${un.anio}${un.placa?" · Placa: "+un.placa:""}${un.vin?" · VIN: "+un.vin:""}` : "";
+    const clLine=cl?cl.empresa+(cl.ciudad?` · ${cl.ciudad}${cl.estado?", "+cl.estado:""}` :""):"—";
+    const formaPago=payType==="credit"?`Crédito`+(promesa?` — Fecha límite: ${promesa}`:""):"Contado / Transferencia bancaria";
+    const entrega=supp?.entregaDias?`${supp.entregaDias} día${supp.entregaDias>1?"s":""} hábiles`:"24-48 hrs hábiles";
+    const fmtMXN=n=>safeNumber(n).toLocaleString("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2});
+    const vigenciaStr=`${vigencia} día${vigencia!==1?"s":""} naturales`;
+    const notaLine=notes?`<li>${notes}</li>`:"";
+    const unidadRow=unidadStr?`<tr><td>Unidad</td><td>${unidadStr}</td></tr>`:"";
+
+    const filas=lineas.map((l,i)=>{
+      const lsnap=lineSnaps[i]||{};
+      const qty=safeNumber(l.qty,1)||1;
+      const unitPrice=qty>0?safeNumber(lsnap.precioConIVA)/qty:0;
+      const refs=[l.oem&&`OEM: ${l.oem}`,l.aftermarket&&`Alt: ${l.aftermarket}`].filter(Boolean).join(" · ");
+      return `<tr>
+        <td>${String(i+1).padStart(2,"0")}</td>
+        <td><strong>${l.descripcion||"Sin descripción"}</strong>${refs?`<br><span style="font-size:10px;color:#666">${refs}</span>`:""}</td>
+        <td class="money">${qty}</td>
+        <td class="money">${fmtMXN(unitPrice)}</td>
+        <td class="money">${fmtMXN(lsnap.precioConIVA)}</td>
+      </tr>`;
+    }).join("");
+
+    const innerHTML=`
+      <style>
+        *{box-sizing:border-box;margin:0;padding:0}
+        .page{width:794px;background:#fff;padding:50px;font-family:Arial,Helvetica,sans-serif;color:#111;font-size:14px;line-height:1.5}
+        .top-header{border:1px solid #dcdcdc;padding:20px;display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0}
+        .brand h1{font-size:28px;font-weight:800;margin:0}
+        .brand p{font-size:10px;color:#666;font-weight:700;margin-top:4px}
+        .issuer{text-align:right;font-size:11px;line-height:1.6}
+        .hero{background:#000;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:20px;margin-top:14px}
+        .hero-title{font-size:20px;font-weight:800}
+        .hero-meta{text-align:right}
+        .hero-meta .folio{font-size:18px;font-weight:800}
+        .hero-meta .date{font-size:13px;font-weight:700}
+        .meta-table{width:100%;border-collapse:collapse;margin-top:14px}
+        .meta-table td{border:1px solid #e3e3e3;padding:10px 12px;font-size:11px}
+        .meta-table td:first-child{width:120px;background:#fafafa;font-weight:700}
+        .section-title{margin-top:22px;margin-bottom:10px;font-size:13px;font-weight:800}
+        .detail-table{width:100%;border-collapse:collapse}
+        .detail-table th{background:#000;color:#fff;padding:10px 12px;text-align:left;font-size:10px}
+        .detail-table td{border:1px solid #e5e5e5;padding:10px 12px;vertical-align:top;font-size:11px;line-height:1.5}
+        .money{text-align:right;white-space:nowrap;font-weight:700}
+        .totals{width:320px;margin-left:auto;margin-top:16px;border-collapse:collapse}
+        .totals td{border:1px solid #e3e3e3;padding:10px 12px;font-size:11px}
+        .totals td:last-child{text-align:right;font-weight:700}
+        .grand-total td{background:#000;color:#fff;font-weight:800}
+        .block{margin-top:22px}
+        .block h3{font-size:13px;font-weight:800;margin-bottom:8px}
+        .block ul{padding-left:16px}
+        .block li{margin-bottom:5px;font-size:11px;line-height:1.6}
+        .footer{margin-top:28px;border-top:1px solid #e5e5e5;padding-top:10px;display:flex;justify-content:space-between;font-size:10px;color:#444}
+      </style>
+      <div class="page">
+        <div class="top-header">
+          <div class="brand"><h1>LOGISOLVE</h1><p>Logistics &middot; Supply &middot; Solutions</p></div>
+          <div class="issuer"><strong>Alejandro Saucedo</strong><br>RFC: SAME9612277T9<br>Tel. 5562321807<br>contacto@logisolve.mx</div>
+        </div>
+        <div class="hero">
+          <div class="hero-title">COTIZACIÓN DE REFACCIONES</div>
+          <div class="hero-meta"><div>No.</div><div class="folio">${folio}</div><div class="date">Fecha: ${fecha.replace(/\//g," / ")}</div></div>
+        </div>
+        <table class="meta-table">
+          <tr><td>Cliente</td><td>${clLine}</td></tr>
+          ${unidadRow}
+          <tr><td>Vigencia</td><td>${vigenciaStr}</td></tr>
+          <tr><td>Forma de pago</td><td>${formaPago}</td></tr>
+          <tr><td>Atención</td><td>Área de Compras / Operaciones</td></tr>
+        </table>
+        <div class="section-title">REFACCIONES COTIZADAS</div>
+        <table class="detail-table">
+          <thead><tr>
+            <th style="width:36px">No.</th>
+            <th>Descripción / Número de parte</th>
+            <th style="width:55px;text-align:right">Cant.</th>
+            <th style="width:120px;text-align:right">P. Unit. c/IVA</th>
+            <th style="width:130px;text-align:right">Importe c/IVA</th>
+          </tr></thead>
+          <tbody>${filas}</tbody>
+        </table>
+        <table class="totals">
+          <tr><td>Subtotal (sin IVA)</td><td>${fmtMXN(totalSnap.precioSinIVA)} MXN</td></tr>
+          <tr><td>IVA (${iva}%)</td><td>${fmtMXN(totalSnap.ivaTraslad)} MXN</td></tr>
+          <tr class="grand-total"><td>TOTAL &middot; IVA INCLUIDO</td><td>${fmtMXN(totalSnap.precioConIVA)} MXN</td></tr>
+        </table>
+        <div class="block">
+          <h3>CONDICIONES COMERCIALES</h3>
+          <ul>
+            <li>Precios incluyen IVA en el total general.</li>
+            <li>Forma de pago: ${formaPago}.</li>
+            <li>Entrega estimada: ${entrega} después de confirmación de pedido.</li>
+            <li>Precios sujetos a disponibilidad al momento de autorización.</li>
+            <li>Vigencia: ${vigenciaStr} a partir de la fecha de emisión.</li>
+            ${notaLine}
+          </ul>
+        </div>
+        <div class="block">
+          <h3>OBSERVACIONES</h3>
+          <ul>
+            <li>La compatibilidad final de las refacciones debe ser validada por el técnico responsable.</li>
+            <li>La garantía aplica conforme a políticas del fabricante o proveedor.</li>
+            <li>Números de parte OEM/aftermarket indicados para referencia — confirmar aplicación antes de instalar.</li>
+          </ul>
+        </div>
+        <div class="footer">
+          <div>Quedo atento para cualquier duda o confirmación.</div>
+          <div>LogiSolve &middot; ${fechaLarga}</div>
+        </div>
+      </div>`;
+
+    const container=document.createElement("div");
+    container.style.cssText="position:absolute;top:0;left:0;width:794px;background:white;opacity:1;pointer-events:none;";
+    container.innerHTML=innerHTML;
+    document.body.appendChild(container);
+
+    const generate=()=>{
+      // eslint-disable-next-line no-undef
+      html2pdf().set({margin:0,filename:`${folio}.pdf`,image:{type:"jpeg",quality:0.98},
+        html2canvas:{scale:2,useCORS:true,backgroundColor:"#ffffff",logging:false,scrollX:0,scrollY:0},
+        jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},
+      }).from(container.firstElementChild).save().finally(()=>{container.remove();});
+    };
+    const go=()=>requestAnimationFrame(()=>requestAnimationFrame(generate));
+    if(typeof html2pdf!=="undefined"){go();}
+    else{
+      const script=document.createElement("script");
+      script.src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+      script.onload=go;
+      script.onerror=()=>{container.remove();toast("Error cargando generador PDF","error");};
+      document.head.appendChild(script);
+    }
+  },[lineas,lineSnaps,totalSnap,fecha,clientId,unitId,supplierId,vigencia,payType,promesa,notes,iva,clients,units,suppliers,toast]);
+
+  const convertirATicket = useCallback(()=>{
+    if(isSaving) return;
+    const titulo=lineas.map(l=>l.descripcion.trim()||"Sin descripción").join(" / ");
+    if(!titulo||titulo==="Sin descripción"){toast("Agrega al menos una refacción","error");return;}
+    setIsSaving(true);
+    const lineasConSnap=lineas.map((l,i)=>({
+      titulo:l.descripcion||"Sin descripción", partRef:l.oem||l.aftermarket||"",
+      qty:safeNumber(l.qty,1)||1, costoUnit:safeNumber(l.costoUnit),
+      gasolina:0, otros:0, mode:l.modo, manualPrice:l.precioManual||"0",
+      descripcionPDF:l.notas||"", snap:lineSnaps[i],
+    }));
+    const snapAgregado={
+      ...totalSnap,
+      markupSobre:totalSnap.costoTotal>0?((totalSnap.precioSinIVA-totalSnap.costoTotal)/totalSnap.costoTotal)*100:0,
+      margenNetoPrecio:aggMargen, params:{iva,isr:0},
+    };
+    const tkt={
+      id:mkTicketId(fecha), titulo, opId:"general", opShort:"REF-G", priority:"P3",
+      clientId, supplierId, unitId,
+      partRef:lineas.map(l=>l.oem||l.aftermarket).filter(Boolean).join(", "),
+      date:fecha, status:"cotizado", payType,
+      promesaPago:payType==="credit"?promesa:null,
+      cobrado:false, mods:[], prob:"high", horasOp:0, notes,
+      mode:lineas.length>1?"multilinea":"auto",
+      lineas:lineasConSnap, snap:snapAgregado,
+      timeline:[{ts:nowISO(),evento:"Creado desde Cotizador de Refacciones",actor:"Operador"}],
+      history:[mkEvent("created",{titulo,status:"cotizado",priority:"P3"})],
+    };
+    dispatch({type:"TKT_ADD",t:tkt});
+    opLog.push("TKT_CREATED",{id:tkt.id,titulo});
+    toast("Ticket registrado: "+tkt.id,"success");
+    setTimeout(()=>setIsSaving(false),1500);
+  },[isSaving,lineas,lineSnaps,totalSnap,aggMargen,fecha,clientId,supplierId,unitId,payType,promesa,notes,iva,dispatch,toast]);
+
+  const reset=useCallback(()=>{
+    setLineas([emptyRefLine()]); setClientId(""); setUnitId(""); setSupplierId("");
+    setNotes(""); setPayType("contado"); setPromesa(""); setFecha(todayMX());
+  },[]);
+
+  const selectedUnit = units.find(u=>u.id===unitId);
+
+  return (
+    <div style={{padding:"10px 13px",maxWidth:1200,margin:"0 auto"}}>
+
+      {/* Catalog modal */}
+      {catalogSearch!==null&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}
+          onClick={()=>{setCatalogSearch(null);setCatalogQ("");}}>
+          <div style={{background:C.bg1,border:`1px solid ${C.borderHi}`,borderRadius:5,width:"90%",maxWidth:520,overflow:"hidden"}}
+            onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderBottom:`1px solid ${C.border}`,background:C.bg2}}>
+              <span style={{fontSize:9,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>CATÁLOGO — REF {String(catalogSearch+1).padStart(2,"0")}</span>
+              <input autoFocus value={catalogQ} onChange={e=>setCatalogQ(e.target.value)}
+                placeholder="Buscar por nombre, OEM, aplicación..."
+                style={{flex:1,background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 8px",color:C.t1,fontSize:10,outline:"none",fontFamily:"'Courier New',monospace"}}/>
+              <button onClick={()=>{setCatalogSearch(null);setCatalogQ("");}}
+                style={{padding:"3px 8px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t3,fontSize:10,cursor:"pointer"}}>x</button>
+            </div>
+            {parts.length===0&&<div style={{padding:"20px",textAlign:"center",color:C.t3,fontSize:9}}>Sin partes en el catálogo.</div>}
+            {catalogResults.map((p,i)=>(
+              <div key={p.id} onClick={()=>selectFromCatalog(p)}
+                style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 12px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",background:i%2===0?C.bg1:C.bg0}}>
+                <div style={{minWidth:0,flex:1,marginRight:10}}>
+                  <div style={{fontSize:10,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
+                  <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace"}}>
+                    {p.oem&&<span style={{color:C.cyan}}>{p.oem}</span>}
+                    {p.oem&&p.aplicacion&&" · "}
+                    {p.aplicacion&&<span>{p.aplicacion}</span>}
+                  </div>
+                </div>
+                <div style={{textAlign:"right",flexShrink:0}}>
+                  {p.ultimoPrecio>0&&<div style={{fontSize:10,fontWeight:700,color:C.yellow,fontFamily:"'Courier New',monospace"}}>{mxn(p.ultimoPrecio)}</div>}
+                  <div style={{fontSize:7,color:C.t3}}>{p.ultimaFecha||""}</div>
+                </div>
+              </div>
+            ))}
+            {catalogResults.length===0&&catalogQ&&<div style={{padding:"16px",textAlign:"center",color:C.t3,fontSize:9}}>Sin resultados para "{catalogQ}"</div>}
+          </div>
+        </div>
+      )}
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 320px",gap:10}}>
+
+        {/* LEFT */}
+        <div>
+
+          {/* Quote header */}
+          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+            <SHdr title="DATOS DE LA COTIZACIÓN"/>
+            <div style={{padding:9}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:5,marginBottom:5}}>
+                <div>
+                  <div style={{fontSize:7,color:C.t3,marginBottom:2}}>FECHA</div>
+                  <input value={fecha} onChange={e=>setFecha(e.target.value)} placeholder="DD/MM/AAAA"
+                    style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 6px",color:C.t1,fontSize:10,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace"}}/>
+                </div>
+                <div>
+                  <div style={{fontSize:7,color:C.t3,marginBottom:2}}>VIGENCIA</div>
+                  <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,overflow:"hidden"}}>
+                    <input type="text" inputMode="numeric" value={vigencia}
+                      onChange={e=>setVigencia(e.target.value)}
+                      onBlur={()=>setVigencia(v=>Math.max(1,parseInt(v)||3))}
+                      style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:11,padding:"5px 7px",fontFamily:"'Courier New',monospace"}}/>
+                    <span style={{padding:"0 6px",color:C.t3,fontSize:9}}>días</span>
+                  </div>
+                </div>
+                <Sel label="Pago" value={payType} onChange={setPayType}
+                  options={[{value:"contado",label:"Contado"},{value:"credit",label:"Crédito"}]}/>
+              </div>
+              {payType==="credit"&&(
+                <div style={{marginBottom:5}}>
+                  <div style={{fontSize:7,color:C.t3,marginBottom:2}}>PROMESA DE PAGO</div>
+                  <input value={promesa} onChange={e=>setPromesa(e.target.value)} placeholder="DD/MM/AAAA"
+                    style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 6px",color:C.yellow,fontSize:10,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace"}}/>
+                </div>
+              )}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:5}}>
+                <Sel label="Cliente" value={clientId} onChange={setClientId}
+                  options={[{value:"",label:"-- Sin cliente --"},...clients.map(c=>({value:c.id,label:c.empresa}))]}/>
+                <Sel label="Proveedor" value={supplierId} onChange={setSupplierId}
+                  options={[{value:"",label:"-- Sin proveedor --"},...suppliers.map(s=>({value:s.id,label:s.nombre}))]}/>
+              </div>
+              <UnitPicker units={units} value={unitId} onChange={setUnitId}/>
+              {selectedUnit&&(
+                <div style={{background:C.bg3,border:`1px solid ${C.borderHi}`,borderRadius:3,padding:"6px 9px",marginTop:4,marginBottom:4}}>
+                  <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
+                    <span style={{fontSize:9,color:C.t1,fontWeight:700}}>{selectedUnit.marca} {selectedUnit.modelo} {selectedUnit.anio}</span>
+                    {selectedUnit.motor&&<span style={{fontSize:8,color:C.t3}}>{selectedUnit.motor}</span>}
+                    {selectedUnit.vin&&<span style={{fontSize:8,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{selectedUnit.vin}</span>}
+                    {selectedUnit.placa&&<span style={{fontSize:8,color:C.t2,fontFamily:"'Courier New',monospace"}}>Placa: {selectedUnit.placa}</span>}
+                    {selectedUnit.economico&&<span style={{fontSize:8,color:C.t2,fontFamily:"'Courier New',monospace"}}>Eco: {selectedUnit.economico}</span>}
+                  </div>
+                </div>
+              )}
+              <div style={{marginTop:4}}>
+                <div style={{fontSize:7,color:C.t3,marginBottom:2}}>NOTAS / OBSERVACIONES</div>
+                <textarea rows={2} value={notes} onChange={e=>setNotes(e.target.value)}
+                  placeholder="Diagnóstico, condiciones especiales..."
+                  style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 7px",color:C.t2,fontSize:9,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
+              </div>
+            </div>
+          </div>
+
+          {/* Parts table */}
+          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+            <SHdr title={`REFACCIONES (${lineas.length})`} right={
+              <button onClick={addLinea}
+                style={{fontSize:8,background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,padding:"2px 8px",cursor:"pointer",fontWeight:600}}>
+                + Agregar refacción
+              </button>
+            }/>
+            <div style={{padding:9}}>
+              {lineas.map((l,i)=>{
+                const lsnap=lineSnaps[i]||{precioConIVA:0,uNeta:0,margenNetoPrecio:0};
+                const lmc=margenColor(lsnap.margenNetoPrecio);
+                const qty=safeNumber(l.qty,1)||1;
+                const unitPriceConIVA=qty>0?lsnap.precioConIVA/qty:0;
+                return (
+                  <div key={l.key} style={{background:C.bg0,border:`1px solid ${C.borderHi}`,borderRadius:3,marginBottom:i<lineas.length-1?7:0,overflow:"hidden"}}>
+                    {/* Line header */}
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 9px",background:C.bg3,borderBottom:`1px solid ${C.border}`}}>
+                      <span style={{fontSize:8,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>
+                        REFACCIÓN {String(i+1).padStart(2,"0")}
+                      </span>
+                      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                        <span style={{fontSize:10,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(lsnap.precioConIVA)}</span>
+                        <span style={{fontSize:8,color:lmc,fontFamily:"'Courier New',monospace"}}>{fpct(lsnap.margenNetoPrecio)}</span>
+                        {lineas.length>1&&(
+                          <button onClick={()=>removeLinea(i)}
+                            style={{padding:"1px 6px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:2,color:C.red,fontSize:8,cursor:"pointer",fontWeight:700}}>x</button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{padding:"8px 9px"}}>
+                      {/* Row 1: Description + OEM + Aftermarket + Catalog button */}
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 120px 120px auto",gap:5,marginBottom:6}}>
+                        <div>
+                          <div style={{fontSize:7,color:C.t3,marginBottom:2}}>DESCRIPCIÓN</div>
+                          <input value={l.descripcion} onChange={e=>updateLinea(i,{descripcion:e.target.value})}
+                            placeholder={`Refacción ${i+1}`}
+                            style={{width:"100%",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.t1,fontSize:10,outline:"none",fontFamily:"inherit"}}/>
+                        </div>
+                        <div>
+                          <div style={{fontSize:7,color:C.t3,marginBottom:2}}>NUM. OEM</div>
+                          <input value={l.oem} onChange={e=>updateLinea(i,{oem:e.target.value})} placeholder="A0012345..."
+                            style={{width:"100%",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.cyan,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace"}}/>
+                        </div>
+                        <div>
+                          <div style={{fontSize:7,color:C.t3,marginBottom:2}}>AFTERMARKET</div>
+                          <input value={l.aftermarket} onChange={e=>updateLinea(i,{aftermarket:e.target.value})} placeholder="Alt. compatible"
+                            style={{width:"100%",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.t2,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace"}}/>
+                        </div>
+                        <div style={{display:"flex",alignItems:"flex-end"}}>
+                          <button onClick={()=>setCatalogSearch(i)}
+                            style={{padding:"4px 8px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,fontSize:8,cursor:"pointer",fontWeight:600,whiteSpace:"nowrap"}}>
+                            Catálogo
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Row 2: Qty + Cost + Mode + Price */}
+                      <div style={{display:"grid",gridTemplateColumns:"80px 1fr auto",gap:5,alignItems:"end"}}>
+                        <div>
+                          <div style={{fontSize:7,color:C.t3,marginBottom:2}}>CANT.</div>
+                          <div style={{display:"flex",alignItems:"center",background:C.bg1,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
+                            <input type="text" inputMode="numeric"
+                              value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)}
+                              onChange={e=>updateLinea(i,{_qtyRaw:e.target.value})}
+                              onBlur={()=>{const n=parseInt(l._qtyRaw);updateLinea(i,{qty:isFinite(n)&&n>=1?n:1,_qtyRaw:undefined});}}
+                              style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:12,fontWeight:700,padding:"5px 0 5px 7px",fontFamily:"'Courier New',monospace"}}/>
+                            <span style={{padding:"0 5px",color:C.t3,fontSize:9}}>pz</span>
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{fontSize:7,color:C.t3,marginBottom:2}}>COSTO UNIT. {cIVA?"(c/IVA)":"(s/IVA)"}</div>
+                          <div style={{display:"flex",alignItems:"center",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,overflow:"hidden"}}>
+                            <span style={{padding:"0 5px",color:C.t3,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
+                            <input type="text" inputMode="decimal"
+                              value={l._costoRaw!==undefined?l._costoRaw:String(l.costoUnit||0)}
+                              onChange={e=>updateLinea(i,{_costoRaw:e.target.value})}
+                              onBlur={()=>updateLinea(i,{costoUnit:safeNumber(l._costoRaw),_costoRaw:undefined})}
+                              style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:10,padding:"5px 0",fontFamily:"'Courier New',monospace"}}/>
+                          </div>
+                        </div>
+                        {/* Mode + margin or manual price */}
+                        <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                          <div style={{display:"flex",borderRadius:3,overflow:"hidden",border:`1px solid ${C.border}`,flexShrink:0}}>
+                            {[["auto","Auto"],["manual","Manual"]].map(([id,lbl])=>(
+                              <button key={id} onClick={()=>updateLinea(i,{modo:id})}
+                                style={{padding:"4px 7px",border:"none",cursor:"pointer",fontSize:8,fontWeight:600,background:l.modo===id?C.blue:C.bg2,color:l.modo===id?C.t1:C.t2}}>
+                                {lbl}
+                              </button>
+                            ))}
+                          </div>
+                          {l.modo==="auto"?(
+                            <div style={{display:"flex",alignItems:"center",gap:5}}>
+                              <span style={{fontSize:7,color:C.t3,flexShrink:0}}>Mgn:</span>
+                              {useGlobal?(
+                                <span style={{fontSize:11,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{fpct(globalMargen)}</span>
+                              ):(
+                                <input type="number" min={0} step={0.5}
+                                  value={l._mgnRaw!==undefined?l._mgnRaw:String(l.margen||30)}
+                                  onChange={e=>updateLinea(i,{_mgnRaw:e.target.value})}
+                                  onBlur={()=>updateLinea(i,{margen:safeNumber(l._mgnRaw,30),_mgnRaw:undefined})}
+                                  style={{width:52,background:C.bg1,border:`1px solid ${C.blueHi}`,borderRadius:3,padding:"3px 5px",color:C.cyan,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace",textAlign:"right"}}/>
+                              )}
+                              <span style={{fontSize:8,color:C.t3}}>→</span>
+                              <span style={{fontSize:9,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{mxn(unitPriceConIVA)}/pz</span>
+                            </div>
+                          ):(
+                            <div style={{display:"flex",alignItems:"center",gap:5}}>
+                              <span style={{fontSize:7,color:C.t3,flexShrink:0}}>Precio c/IVA:</span>
+                              <div style={{display:"flex",alignItems:"center",background:C.bg1,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
+                                <span style={{padding:"0 4px",color:C.cyan,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
+                                <input type="number" min={0} step={0.01} value={l.precioManual}
+                                  onChange={e=>updateLinea(i,{precioManual:e.target.value})}
+                                  style={{width:90,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:11,fontWeight:700,padding:"4px 0",fontFamily:"'Courier New',monospace"}}/>
+                              </div>
+                              <span style={{fontSize:8,color:lmc,fontFamily:"'Courier New',monospace",flexShrink:0}}>{fpct(lsnap.margenNetoPrecio)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {qty>1&&(
+                        <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace",marginTop:5}}>
+                          {qty} × {mxn(unitPriceConIVA)} = <span style={{color:C.cyan,fontWeight:700}}>{mxn(lsnap.precioConIVA)}</span> total
+                        </div>
+                      )}
+
+                      <input value={l.notas} onChange={e=>updateLinea(i,{notas:e.target.value})}
+                        placeholder="Aplicación, compatibilidad, notas internas..."
+                        style={{width:"100%",background:"transparent",border:"none",borderBottom:`1px solid ${C.border}`,outline:"none",color:C.t3,fontSize:8,padding:"5px 0",marginTop:6,fontFamily:"inherit",boxSizing:"border-box"}}/>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Tax params */}
+          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+            <SHdr title="PARÁMETROS FISCALES"/>
+            <div style={{padding:9,display:"grid",gridTemplateColumns:"80px 1fr 1fr",gap:8,alignItems:"center"}}>
+              <div>
+                <div style={{fontSize:7,color:C.t3,marginBottom:2}}>IVA (%)</div>
+                <input type="number" min={0} step={0.1} value={iva}
+                  onChange={e=>setIva(e.target.value)} onBlur={()=>setIva(v=>String(safeNumber(v,16)))}
+                  style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 7px",color:C.t1,fontSize:11,outline:"none",fontFamily:"'Courier New',monospace"}}/>
+              </div>
+              <Toggle label="Compra incluye IVA" value={cIVA} onChange={setCIVA}/>
+              <Toggle label="Venta incluye IVA"  value={vIVA} onChange={setVIVA}/>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
+            <button onClick={generarPDF}
+              style={{padding:"9px",background:C.blue,border:"none",borderRadius:4,color:C.t1,fontSize:10,fontWeight:700,cursor:"pointer",letterSpacing:"0.06em"}}>
+              Generar PDF
+            </button>
+            <button onClick={convertirATicket} disabled={isSaving}
+              style={{padding:"9px",background:isSaving?C.bg2:C.green,border:"none",borderRadius:4,color:isSaving?C.t3:C.t1,fontSize:10,fontWeight:700,cursor:isSaving?"not-allowed":"pointer",letterSpacing:"0.06em",opacity:isSaving?0.6:1}}>
+              {isSaving?"Registrando…":"Convertir a ticket"}
+            </button>
+            <button onClick={reset}
+              style={{padding:"9px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:4,color:C.t2,fontSize:10,cursor:"pointer"}}>
+              Limpiar
+            </button>
+          </div>
+        </div>
+
+        {/* RIGHT — margin + summary */}
+        <div>
+          {/* Global margin */}
+          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:6,overflow:"hidden"}}>
+            <SHdr title="MARGEN GLOBAL" right={
+              <div style={{display:"flex",alignItems:"center",gap:4}}>
+                <span style={{fontSize:7,color:C.t3}}>Por línea</span>
+                <div onClick={()=>setUseGlobal(!useGlobal)}
+                  style={{width:26,height:14,borderRadius:7,cursor:"pointer",position:"relative",background:!useGlobal?C.blue:C.bg4,border:`1px solid ${!useGlobal?C.blueHi:C.border}`}}>
+                  <div style={{position:"absolute",top:2,left:!useGlobal?11:2,width:8,height:8,borderRadius:"50%",background:!useGlobal?C.t1:C.t3,transition:"left .15s"}}/>
+                </div>
+              </div>
+            }/>
+            <div style={{padding:9}}>
+              {useGlobal?(
+                <div>
+                  <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:6}}>
+                    <div style={{fontSize:24,fontWeight:800,fontFamily:"'Courier New',monospace",color:C.cyan,lineHeight:1}}>
+                      {fpct(globalMargen)}
+                    </div>
+                    <div style={{fontSize:8,color:C.t3}}>aplicado a todas las líneas</div>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
+                    <input type="number" min={0} step={0.5} value={globalMargen}
+                      onChange={e=>setGlobalMargen(safeNumber(e.target.value,30))}
+                      style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:13,fontWeight:700,padding:"6px 8px",fontFamily:"'Courier New',monospace"}}/>
+                    <span style={{padding:"0 7px",color:C.t3,fontSize:10}}>%</span>
+                  </div>
+                </div>
+              ):(
+                <div style={{fontSize:9,color:C.t3,padding:"8px 0"}}>Margen configurado por refacción individualmente.</div>
+              )}
+            </div>
+          </div>
+
+          {/* KPI totals */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:5}}>
+            <KPI label="Total c/IVA" value={mxn(totalSnap.precioConIVA)} color={C.cyan} accent
+              sub={lineas.length>1?lineas.length+" refacciones":""}/>
+            <KPI label="Util. neta" value={mxn(totalSnap.uNeta)}
+              color={totalSnap.uNeta>=0?C.green:C.red}
+              sub={fpct(aggMargen)+" del precio"}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:5}}>
+            <KPI label="Subtotal s/IVA" value={mxn(totalSnap.precioSinIVA)}/>
+            <KPI label="Costo total"    value={mxn(totalSnap.costoTotal)}/>
+          </div>
+
+          {/* IVA breakdown */}
+          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:5,overflow:"hidden"}}>
+            <SHdr title="FISCAL — IVA"/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr"}}>
+              {[
+                ["IVA Acreditable","Recuperas",mxn(totalSnap.ivaAcred),C.blueHi],
+                ["IVA Trasladado","Cobras",mxn(totalSnap.ivaTraslad),C.cyan],
+                ["IVA Neto SAT","Pagas al SAT",mxn(totalSnap.ivaNeto),totalSnap.ivaNeto>=0?C.yellow:C.green],
+              ].map(([lbl,sub,val,col],i)=>(
+                <div key={i} style={{padding:"7px 8px",borderRight:i<2?`1px solid ${C.border}`:"none"}}>
+                  <div style={{fontSize:7,color:C.t3,marginBottom:2}}>{lbl}</div>
+                  <div style={{fontSize:11,fontWeight:800,color:col,fontFamily:"'Courier New',monospace"}}>{val}</div>
+                  <div style={{fontSize:7,color:C.t3,marginTop:1}}>{sub}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Per-line breakdown */}
+          {lineas.length>1&&(
+            <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:5}}>
+              <SHdr title="DESGLOSE POR REFACCIÓN"/>
+              {lineas.map((l,i)=>{
+                const lsnap=lineSnaps[i]||{precioConIVA:0,uNeta:0};
+                return (
+                  <div key={l.key} style={{display:"flex",justifyContent:"space-between",padding:"5px 9px",borderBottom:i<lineas.length-1?`1px solid ${C.border}`:"none",background:i%2===0?C.bg1:C.bg0}}>
+                    <div style={{minWidth:0,flex:1,marginRight:8}}>
+                      <div style={{fontSize:9,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.descripcion||`Refacción ${i+1}`}</div>
+                      {l.oem&&<div style={{fontSize:7,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{l.oem}</div>}
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0}}>
+                      <div style={{fontSize:10,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(lsnap.precioConIVA)}</div>
+                      <div style={{fontSize:8,color:lsnap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(lsnap.uNeta)}</div>
+                    </div>
+                  </div>
+                );
+              })}
+              <div style={{display:"flex",justifyContent:"space-between",padding:"6px 9px",background:C.blueDim,borderTop:`1px solid ${C.blueHi}`}}>
+                <span style={{fontSize:9,fontWeight:700,color:C.t1}}>TOTAL</span>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:11,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(totalSnap.precioConIVA)}</div>
+                  <div style={{fontSize:9,fontWeight:700,color:totalSnap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(totalSnap.uNeta)}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Margin bar */}
+          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,padding:8}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+              <span style={{fontSize:8,color:C.t2}}>Margen neto s/precio</span>
+              <span style={{fontSize:9,fontWeight:700,color:mColor,fontFamily:"'Courier New',monospace"}}>{fpct(aggMargen)}</span>
+            </div>
+            <div style={{height:4,background:C.bg4,borderRadius:2,overflow:"hidden"}}>
+              <div style={{height:"100%",width:`${clamp(aggMargen,0,100)}%`,background:mColor,transition:"width .3s"}}/>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",marginTop:3,fontSize:7,color:C.t3}}>
+              <span>Bajo &lt;10%</span><span>Aceptable 10-20%</span><span>Óptimo &gt;20%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── UNIDADES ──────────────────────────────────────────────────────────────────
 function Unidades({state,dispatch,toast}) {
   const {units,clients,tickets} = state;
@@ -4978,6 +5639,7 @@ const TABS = [
   {id:"tickets",      label:"Pipeline"},
   {id:"historial",    label:"Historial"},
   {id:"cotizador",    label:"Cotizador"},
+  {id:"refacciones",  label:"Refacciones"},
   {id:"unidades",     label:"Unidades"},
   {id:"catalogo",     label:"Catalogo"},
   {id:"proveedores",  label:"Proveedores"},
@@ -5234,7 +5896,8 @@ export default function App() {
         {tab==="ops"        &&(mobileView?<MOps       state={state} setTab={setTab}/>                                    :<CentroOps   state={state}/>)}
         {tab==="tickets"    &&(mobileView?<MPipeline  state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Tickets     state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="historial"  &&(mobileView?<MHistorial state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>:<Historial   state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>)}
-        {tab==="cotizador"  &&(mobileView?<MCotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Cotizador   state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
+        {tab==="cotizador"  &&(mobileView?<MCotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Cotizador              state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
+        {tab==="refacciones"&&<CotizadorRefacciones state={state} dispatch={dispatchWithDelete} toast={toast}/>}
         {tab==="cartera"    &&(mobileView?<MCartera   state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Cartera     state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="unidades"   &&<Unidades    state={state} dispatch={dispatchWithDelete} toast={toast}/>}
         {tab==="catalogo"   &&<Catalogo    state={state} dispatch={dispatchWithDelete} toast={toast}/>}
