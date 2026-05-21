@@ -587,7 +587,6 @@ function useToasts() {
 // PDF GENERATOR — formato oficial Logisolve
 // ═══════════════════════════════════════════════════════════════════════════════
 function generarCotizacionPDF(tkt, cl, un, supp) {
-
   const totals = calculateTicketTotals(tkt);
   const folio = tkt.id.replace("TKT", "COT");
 
@@ -600,16 +599,16 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
 
   const formaPago =
     tkt.payType === "credit"
-      ? "Crédito" + (tkt.promesaPago ? ` — Fecha límite: ${tkt.promesaPago}` : "")
+      ? "Cr\u00e9dito" + (tkt.promesaPago ? ` \u2014 Fecha l\u00edmite: ${tkt.promesaPago}` : "")
       : "Contado / Transferencia bancaria";
 
   const entrega =
     supp && supp.entregaDias
-      ? `${supp.entregaDias} día${supp.entregaDias > 1 ? "s" : ""} hábiles`
-      : "24-48 hrs hábiles";
+      ? `${supp.entregaDias} d\u00eda${supp.entregaDias > 1 ? "s" : ""} h\u00e1biles`
+      : "24-48 hrs h\u00e1biles";
 
   const unidadStr = un
-    ? `${un.economico ? "Eco. " + un.economico + " · " : ""}${un.marca} ${un.modelo} ${un.anio}`
+    ? `${un.economico ? "Eco. " + un.economico + " \u00b7 " : ""}${un.marca} ${un.modelo} ${un.anio}`
     : "";
 
   const clDirParts = [];
@@ -618,8 +617,8 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
   if (cl?.estado)    clDirParts.push(cl.estado);
 
   const clLine = cl
-    ? cl.empresa + (clDirParts.length ? " · " + clDirParts.join(", ") : "")
-    : "—";
+    ? cl.empresa + (clDirParts.length ? " \u00b7 " + clDirParts.join(", ") : "")
+    : "\u2014";
 
   const fmtMXN = (n) =>
     safeNumber(n).toLocaleString("es-MX", { style:"currency", currency:"MXN", minimumFractionDigits:2 });
@@ -632,159 +631,149 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
       : [{ titulo:tkt.titulo, partRef:tkt.partRef||"", snap:tkt.snap, qty:1, descripcionPDF:"" }];
 
   const filas = conceptos.map((c,i) => {
-    const ml       = migrateLinea(c, tkt.snap);
-    const qty      = safeNumber(ml.qty, 1) || 1;
-    const lsnap    = ml.snap || tkt.snap || {};
-    // Use resolveLineFinancials — prevents double multiplication
-    const fin      = resolveLineFinancials(ml, tkt.snap, qty);
-    const unitPrice  = fin.unitPrice;
-    const lineTotal  = fin.lineTotal;
-    const desc = ml.descripcionPDF ||
-      "Atención correctiva para continuidad operativa de unidad en CEDIS SMO. Incluye integración de componente compatible, validación operativa y seguimiento logístico.";
-    const unTag = unidadStr && i === 0 ? `<br><br><strong>Unidad:</strong> ${unidadStr}` : "";
-    const refTag = ml.partRef ? `<br><br><strong>Clave:</strong> ${ml.partRef}` : "";
+    const ml      = migrateLinea(c, tkt.snap);
+    const qty     = safeNumber(ml.qty, 1) || 1;
+    const fin     = resolveLineFinancials(ml, tkt.snap, qty);
+    const desc    = ml.descripcionPDF ||
+      "Atenci\u00f3n correctiva para continuidad operativa de unidad en CEDIS SMO. Incluye integraci\u00f3n de componente compatible, validaci\u00f3n operativa y seguimiento log\u00edstico.";
+    const unTag   = unidadStr && i === 0 ? `<br><br><strong>Unidad:</strong> ${unidadStr}` : "";
+    const refTag  = ml.partRef ? `<br><br><strong>Clave:</strong> ${ml.partRef}` : "";
     return `<tr>
-          <td>${String(i+1).padStart(2,"0")}</td>
-          <td>${ml.titulo}</td>
-          <td>${desc}${unTag}${refTag}</td>
-          <td class="money">${fmtMXN(lineTotal)}</td>
-        </tr>`;
+      <td>${String(i+1).padStart(2,"0")}</td>
+      <td>${ml.titulo||"Sin descripcion"}</td>
+      <td>${desc}${unTag}${refTag}</td>
+      <td class="money">${fmtMXN(fin.lineTotal)}</td>
+    </tr>`;
   }).join("");
 
-  const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8"/>
-<style>
-*{box-sizing:border-box}
-html,body{margin:0;padding:0;background:#ffffff;font-family:Arial,Helvetica,sans-serif;color:#111;-webkit-font-smoothing:antialiased;text-rendering:geometricPrecision}
-.page{width:210mm;min-height:297mm;padding:14mm;background:#fff}
-.top-header{border:1px solid #dcdcdc;padding:7mm;display:flex;justify-content:space-between;align-items:flex-start}
-.brand h1{margin:0;font-size:30px;font-weight:800}
-.brand p{margin-top:4px;font-size:10px;color:#666;font-weight:700}
-.issuer{text-align:right;font-size:11px;line-height:1.5}
-.hero{margin-top:5mm;background:#000;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:8mm}
-.hero-title{font-size:20px;font-weight:800}
-.hero-meta{text-align:right}
-.hero-meta .folio{font-size:16px;font-weight:800}
-.hero-meta .date{font-size:13px;font-weight:700}
-.meta-table{width:100%;border-collapse:collapse;margin-top:4mm}
-.meta-table td{border:1px solid #e3e3e3;padding:3mm;font-size:11px}
-.meta-table td:first-child{width:35mm;background:#fafafa;font-weight:700}
-.section-title{margin-top:7mm;margin-bottom:3mm;font-size:13px;font-weight:800}
-.detail-table{width:100%;border-collapse:collapse}
-.detail-table th{background:#000;color:#fff;padding:3mm;text-align:left;font-size:10px}
-.detail-table td{border:1px solid #e5e5e5;padding:4mm 3mm;vertical-align:top;font-size:11px;line-height:1.6}
-.detail-table td.money{text-align:right;white-space:nowrap;font-weight:700}
-.totals{width:90mm;margin-left:auto;margin-top:5mm;border-collapse:collapse}
-.totals td{border:1px solid #e3e3e3;padding:3mm;font-size:11px}
-.totals td:last-child{text-align:right;font-weight:700}
-.grand-total td{background:#000;color:#fff;font-weight:800}
-.block{margin-top:8mm}
-.block h3{margin:0 0 3mm;font-size:13px;font-weight:800}
-.block ul{margin:0;padding-left:5mm}
-.block li{margin-bottom:2mm;font-size:11px;line-height:1.6}
-.footer{margin-top:10mm;border-top:1px solid #e5e5e5;padding-top:3mm;display:flex;justify-content:space-between;font-size:10px;color:#444}
-</style>
-</head>
-<body>
-<div class="page">
+  // Validación defensiva
+  if (!filas.trim()) {
+    console.warn("[PDF] filas vacías, abortando");
+    return;
+  }
 
-  <div class="top-header">
-    <div class="brand">
-      <h1>LOGISOLVE</h1>
-      <p>Logistics · Supply · Solutions</p>
-    </div>
-    <div class="issuer">
-      <strong>Alejandro Saucedo</strong><br>
-      RFC: SAME9612277T9<br>
-      Tel. 5562321807<br>
-      contacto@logisolve.mx
-    </div>
-  </div>
+  // HTML del contenido — SIN <html><head><body>, solo estilos + .page
+  const innerHTML = `
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      .page{width:794px;background:#fff;padding:50px;font-family:Arial,Helvetica,sans-serif;color:#111;font-size:14px;line-height:1.5}
+      .top-header{border:1px solid #dcdcdc;padding:20px;display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0}
+      .brand h1{font-size:28px;font-weight:800;margin:0}
+      .brand p{font-size:10px;color:#666;font-weight:700;margin-top:4px}
+      .issuer{text-align:right;font-size:11px;line-height:1.6}
+      .hero{background:#000;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:20px;margin-top:14px}
+      .hero-title{font-size:22px;font-weight:800}
+      .hero-meta{text-align:right}
+      .hero-meta .folio{font-size:18px;font-weight:800}
+      .hero-meta .date{font-size:13px;font-weight:700}
+      .meta-table{width:100%;border-collapse:collapse;margin-top:14px}
+      .meta-table td{border:1px solid #e3e3e3;padding:10px 12px;font-size:11px}
+      .meta-table td:first-child{width:100px;background:#fafafa;font-weight:700}
+      .section-title{margin-top:22px;margin-bottom:10px;font-size:13px;font-weight:800}
+      .detail-table{width:100%;border-collapse:collapse}
+      .detail-table th{background:#000;color:#fff;padding:10px 12px;text-align:left;font-size:10px}
+      .detail-table td{border:1px solid #e5e5e5;padding:12px;vertical-align:top;font-size:11px;line-height:1.6}
+      .money{text-align:right;white-space:nowrap;font-weight:700}
+      .totals{width:300px;margin-left:auto;margin-top:16px;border-collapse:collapse}
+      .totals td{border:1px solid #e3e3e3;padding:10px 12px;font-size:11px}
+      .totals td:last-child{text-align:right;font-weight:700}
+      .grand-total td{background:#000;color:#fff;font-weight:800}
+      .block{margin-top:22px}
+      .block h3{font-size:13px;font-weight:800;margin-bottom:8px}
+      .block ul{padding-left:16px}
+      .block li{margin-bottom:5px;font-size:11px;line-height:1.6}
+      .footer{margin-top:28px;border-top:1px solid #e5e5e5;padding-top:10px;display:flex;justify-content:space-between;font-size:10px;color:#444}
+    </style>
+    <div class="page">
+      <div class="top-header">
+        <div class="brand">
+          <h1>LOGISOLVE</h1>
+          <p>Logistics &middot; Supply &middot; Solutions</p>
+        </div>
+        <div class="issuer">
+          <strong>Alejandro Saucedo</strong><br>
+          RFC: SAME9612277T9<br>
+          Tel. 5562321807<br>
+          contacto@logisolve.mx
+        </div>
+      </div>
+      <div class="hero">
+        <div class="hero-title">COTIZACI&Oacute;N</div>
+        <div class="hero-meta">
+          <div>No.</div>
+          <div class="folio">${folio}</div>
+          <div class="date">Fecha: ${tkt.date.replace(/\//g," / ")}</div>
+        </div>
+      </div>
+      <table class="meta-table">
+        <tr><td>Cliente</td><td>${clLine}</td></tr>
+        <tr><td>Vigencia</td><td>3 d&iacute;as naturales</td></tr>
+        <tr><td>Atenci&oacute;n</td><td>&Aacute;rea de Compras / Operaciones</td></tr>
+      </table>
+      <div class="section-title">DETALLE DEL CONCEPTO</div>
+      <table class="detail-table">
+        <thead><tr>
+          <th style="width:36px">No.</th>
+          <th style="width:160px">Concepto</th>
+          <th>Descripci&oacute;n t&eacute;cnica / operativa</th>
+          <th style="width:110px;text-align:right">Importe</th>
+        </tr></thead>
+        <tbody>${filas}</tbody>
+      </table>
+      <table class="totals">
+        <tr><td>Subtotal</td><td>${fmtMXN(totals.subtotal)} MXN</td></tr>
+        <tr><td>IVA (${totals.ivaPct}%)</td><td>${fmtMXN(totals.ivaAmt)} MXN</td></tr>
+        <tr class="grand-total"><td>TOTAL &middot; IVA INCLUIDO</td><td>${fmtMXN(totals.total)} MXN</td></tr>
+      </table>
+      <div class="block">
+        <h3>ALCANCE DEL SERVICIO</h3>
+        <ul>
+          <li>Integraci&oacute;n y coordinaci&oacute;n de componente requerido para continuidad operativa.</li>
+          <li>Validaci&oacute;n y coordinaci&oacute;n operativa.</li>
+          <li>Entrega directa en CEDIS SMO.</li>
+          <li>Seguimiento y trazabilidad log&iacute;stica.</li>
+        </ul>
+      </div>
+      <div class="block">
+        <h3>CONDICIONES COMERCIALES</h3>
+        <ul>
+          <li>Precio IVA incluido en el total.</li>
+          <li>Forma de pago: ${formaPago}.</li>
+          <li>Entrega conforme a disponibilidad confirmada al momento de autorizaci&oacute;n.</li>
+          <li>Precios sujetos a cambio y disponibilidad al momento de confirmar.</li>
+          <li>Vigencia: 3 d&iacute;as naturales a partir de la fecha de emisi&oacute;n.</li>
+          ${notaLine}
+        </ul>
+      </div>
+      <div class="block">
+        <h3>OBSERVACIONES</h3>
+        <ul>
+          <li>Tiempo estimado de entrega: ${entrega}, sujeto a disponibilidad.</li>
+          <li>La validaci&oacute;n t&eacute;cnica final de compatibilidad corresponde al cliente.</li>
+          <li>La garant&iacute;a aplica conforme a pol&iacute;ticas del fabricante o proveedor.</li>
+        </ul>
+      </div>
+      <div class="footer">
+        <div>Quedo atento para cualquier duda o confirmaci&oacute;n.</div>
+        <div>LogiSolve &middot; ${fechaLarga}</div>
+      </div>
+    </div>`;
 
-  <div class="hero">
-    <div class="hero-title">COTIZACIÓN</div>
-    <div class="hero-meta">
-      <div>No.</div>
-      <div class="folio">${folio}</div>
-      <div class="date">Fecha: ${tkt.date.replace(/\//g," / ")}</div>
-    </div>
-  </div>
-
-  <table class="meta-table">
-    <tr><td>Cliente</td><td>${clLine}</td></tr>
-    <tr><td>Vigencia</td><td>3 días naturales</td></tr>
-    <tr><td>Atención</td><td>Área de Compras / Operaciones</td></tr>
-  </table>
-
-  <div class="section-title">DETALLE DEL CONCEPTO</div>
-
-  <table class="detail-table">
-    <thead>
-      <tr>
-        <th style="width:40px">No.</th>
-        <th style="width:170px">Concepto</th>
-        <th>Descripción técnica / operativa</th>
-        <th style="width:120px;text-align:right">Importe</th>
-      </tr>
-    </thead>
-    <tbody>${filas}</tbody>
-  </table>
-
-  <table class="totals">
-    <tr><td>Subtotal</td><td>${fmtMXN(totals.subtotal)} MXN</td></tr>
-    <tr><td>IVA (${totals.ivaPct}%)</td><td>${fmtMXN(totals.ivaAmt)} MXN</td></tr>
-    <tr class="grand-total"><td>TOTAL · IVA INCLUIDO</td><td>${fmtMXN(totals.total)} MXN</td></tr>
-  </table>
-
-  <div class="block">
-    <h3>ALCANCE DEL SERVICIO</h3>
-    <ul>
-      <li>Integración y coordinación de componente requerido para continuidad operativa.</li>
-      <li>Validación y coordinación operativa.</li>
-      <li>Entrega directa en CEDIS SMO.</li>
-      <li>Seguimiento y trazabilidad logística.</li>
-    </ul>
-  </div>
-
-  <div class="block">
-    <h3>CONDICIONES COMERCIALES</h3>
-    <ul>
-      <li>Precio IVA incluido en el total.</li>
-      <li>Forma de pago: ${formaPago}.</li>
-      <li>Entrega conforme a disponibilidad confirmada al momento de autorización.</li>
-      <li>Precios sujetos a cambio y disponibilidad al momento de confirmar.</li>
-      <li>Vigencia: 3 días naturales a partir de la fecha de emisión.</li>
-      ${notaLine}
-    </ul>
-  </div>
-
-  <div class="block">
-    <h3>OBSERVACIONES</h3>
-    <ul>
-      <li>Tiempo estimado de entrega: ${entrega}, sujeto a disponibilidad.</li>
-      <li>La validación técnica final de compatibilidad corresponde al cliente.</li>
-      <li>La garantía aplica conforme a políticas del fabricante o proveedor.</li>
-    </ul>
-  </div>
-
-  <div class="footer">
-    <div>Quedo atento para cualquier duda o confirmación.</div>
-    <div>LogiSolve · ${fechaLarga}</div>
-  </div>
-
-</div>
-</body>
-</html>`;
-
-  // Contenedor temporal — debe ser visible para que html2canvas lo renderice
+  // Contenedor: position:absolute en (0,0), visible, sin z-index negativo
   const container = document.createElement("div");
-  container.style.cssText = "position:fixed;top:0;left:0;width:210mm;background:#fff;z-index:-9999;pointer-events:none;";
-  container.innerHTML = html;
+  container.style.cssText = "position:absolute;top:0;left:0;width:794px;background:white;opacity:1;pointer-events:none;";
+  container.innerHTML = innerHTML;
   document.body.appendChild(container);
 
   const generate = () => {
+    // Validate DOM has content before proceeding
+    const text = container.innerText || "";
+    if (!text.trim()) {
+      console.warn("[PDF] contenedor vacío, abortando");
+      container.remove();
+      return;
+    }
+
     // eslint-disable-next-line no-undef
     html2pdf()
       .set({
@@ -796,32 +785,28 @@ html,body{margin:0;padding:0;background:#ffffff;font-family:Arial,Helvetica,sans
           useCORS: true,
           backgroundColor: "#ffffff",
           logging: false,
-          windowWidth: container.scrollWidth,
-          windowHeight: container.scrollHeight,
+          scrollX: 0,
+          scrollY: 0,
         },
         jsPDF: { unit:"mm", format:"a4", orientation:"portrait" },
       })
-      .from(container)
+      .from(container.firstElementChild)
       .save()
-      .then(() => {
-        document.body.removeChild(container);
-      })
-      .catch(() => {
-        document.body.removeChild(container);
-      });
+      .finally(() => { container.remove(); });
   };
 
-  // Load html2pdf.js from CDN if not already available
+  // doble rAF — garantiza que el DOM esté pintado
+  const go = () => requestAnimationFrame(() => requestAnimationFrame(generate));
+
   if (typeof html2pdf !== "undefined") {
-    // Small delay to ensure DOM is painted
-    setTimeout(generate, 100);
+    go();
   } else {
     const script = document.createElement("script");
     script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-    script.onload = () => setTimeout(generate, 100);
+    script.onload = go;
     script.onerror = () => {
-      document.body.removeChild(container);
-      alert("No se pudo cargar html2pdf.js. Verifica tu conexión a internet.");
+      container.remove();
+      alert("No se pudo cargar html2pdf.js. Verifica tu conexi\u00f3n.");
     };
     document.head.appendChild(script);
   }
@@ -3118,12 +3103,14 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
 
   const sortedTickets = useMemo(()=>{
     const arr = [...activeTickets];
+    // Convert DD/MM/YYYY to YYYY/MM/DD for correct date sort
+    const toSortable = (d="") => { const p=d.split("/"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; };
     switch(sortBy){
-      case "date_asc":   return arr.sort((a,b)=>a.date.localeCompare(b.date));
+      case "date_asc":   return arr.sort((a,b)=>toSortable(a.date).localeCompare(toSortable(b.date)));
       case "total_desc": return arr.sort((a,b)=>safeNumber(b.snap.precioConIVA)-safeNumber(a.snap.precioConIVA));
       case "uneta_desc": return arr.sort((a,b)=>safeNumber(b.snap.uNeta)-safeNumber(a.snap.uNeta));
       case "priority":   return arr.sort((a,b)=>a.priority.localeCompare(b.priority));
-      default:           return arr.sort((a,b)=>b.date.localeCompare(a.date));
+      default:           return arr.sort((a,b)=>toSortable(b.date).localeCompare(toSortable(a.date)));
     }
   },[activeTickets,sortBy]);
 
