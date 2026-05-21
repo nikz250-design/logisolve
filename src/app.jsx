@@ -1,4 +1,5 @@
 import React, { useState, useReducer, useEffect, useRef, useCallback, useMemo } from "react";
+import html2pdf from "html2pdf.js";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // L1 — DESIGN TOKENS
@@ -83,9 +84,14 @@ const TICKET_TRANSITIONS = {
   cancelado:  [],
 };
 
+// Operational pipeline states (visible in ops, not yet revenue)
 const FORECAST_SET  = new Set(["recibido","validando","sourcing","cotizado","autorizado","comprado","transito"]);
 const CLOSED_SET    = new Set(["cerrado","cancelado","cobrado"]);
 const PAID_SET      = new Set(["cobrado","cerrado"]);
+// REVENUE states: only tickets that have been billed/collected count as real revenue
+const REVENUE_SET   = new Set(["facturado","cobrado","cerrado"]);
+// Cartera: billed but not yet collected
+const CARTERA_SET   = new Set(["facturado"]);
 const CARTERA_SET   = new Set(["entregado","facturado"]);
 
 const PROB = [
@@ -149,14 +155,16 @@ async function loadAllFromSupabase() {
     loadTable("tickets"), loadTable("clients"), loadTable("suppliers"),
     loadTable("units"),   loadTable("parts"),
   ]);
-  if (!tickets && !clients) return null;
-  return {
-    tickets:   tickets   || initialState.tickets,
-    clients:   clients   || initialState.clients,
-    suppliers: suppliers || initialState.suppliers,
-    units:     units     || initialState.units,
-    parts:     parts     || initialState.parts,
-  };
+  // CRITICAL: never fall back to seed data silently.
+  // If Supabase returns null for a table, keep current state (handled upstream).
+  if (!tickets && !clients && !suppliers && !units && !parts) return null;
+  const result = {};
+  if (Array.isArray(tickets))   result.tickets   = tickets;
+  if (Array.isArray(clients))   result.clients   = clients;
+  if (Array.isArray(suppliers)) result.suppliers = suppliers;
+  if (Array.isArray(units))     result.units     = units;
+  if (Array.isArray(parts))     result.parts     = parts;
+  return result;
 }
 
 async function seedIfEmpty() {
@@ -262,15 +270,40 @@ function migrateLinea(l, fallbackSnap, ivaR=0.16) {
 }
 
 // ── HELPER CENTRALIZADO DE TOTALES ───────────────────────────────────────────
+// ── FINANCIAL HELPERS — always above calculateTicketTotals ────────────────────
+const calcMarkup = (precioSinIVA, costoTotal) =>
+  safeNumber(costoTotal) > 0
+    ? ((safeNumber(precioSinIVA) - safeNumber(costoTotal)) / safeNumber(costoTotal)) * 100
+    : 0;
+
+// Resolves unit price vs line total unambiguously — prevents double multiplication.
+// After Fase 2, lines have explicit unitPrice/lineTotal.
+// Legacy lines only have snap.precioConIVA which is always unit price (qty was 1).
+function resolveLineFinancials(ml, fallbackSnap, qty) {
+  const lsnap = ml.snap || fallbackSnap || {};
+  const q = Math.max(safeNumber(qty, 1), 1);
+  // Prefer explicit fields (post-Fase2 saves)
+  const unitPrice = safeNumber(
+    ml.unitPrice ?? lsnap.unitPrice ?? lsnap.precioUnitario ?? lsnap.precioConIVA
+  );
+  const unitSinIVA = safeNumber(
+    ml.unitSinIVA ?? lsnap.unitSinIVA ?? lsnap.precioSinIVA
+  );
+  // If explicit lineTotal exists, use it — don't multiply again
+  const lineTotal        = ml.lineTotal != null ? safeNumber(ml.lineTotal) : unitPrice * q;
+  const lineTotalSinIVA  = ml.lineTotalSinIVA != null ? safeNumber(ml.lineTotalSinIVA) : unitSinIVA * q;
+  return { unitPrice, lineTotal, unitSinIVA, lineTotalSinIVA, qty: q };
+}
+
 function calculateTicketTotals(ticket) {
   if (!ticket) return null;
-  const snap = ticket.snap || {};
+  const snap   = ticket.snap || {};
   const lineas = safeArr(ticket.lineas);
-  const iva = safeNumber(snap.params?.iva, 16);
-  const isr = safeNumber(snap.params?.isr, 20);
+  const iva    = safeNumber(snap.params?.iva, 16);
+  const isr    = safeNumber(snap.params?.isr, 20);
 
   if (lineas.length === 0) {
-    // Ticket viejo sin lineas — usar snap directamente
+    // Legacy ticket — snap is the source of truth
     return {
       lineas: [],
       subtotal:    safeNumber(snap.precioSinIVA),
@@ -281,44 +314,57 @@ function calculateTicketTotals(ticket) {
       uBruta:      safeNumber(snap.uBruta),
       isrAmt:      safeNumber(snap.isr),
       ivaNeto:     safeNumber(snap.ivaNeto),
-      markupSobre: calcMarkup(safeNumber(snap.precioSinIVA), safeNumber(snap.costoTotal)),
+      markupSobre: calcMarkup(snap.precioSinIVA, snap.costoTotal),
       margenNeto:  safeNumber(snap.margenNetoPrecio),
       ivaPct: iva, isrPct: isr,
     };
   }
 
-  // Agregar totales de todas las líneas
-  const ivaR = iva/100;
+  const ivaR = iva / 100;
   let subtotal=0, ivaAmt=0, total=0, costoTotal=0, uNeta=0, uBruta=0, isrAmt=0, ivaNeto=0;
+
   const lineasCalc = lineas.map(l => {
-    const ml = migrateLinea(l, snap, ivaR);
+    const ml  = migrateLinea(l, snap, ivaR);
     const qty = safeNumber(ml.qty, 1) || 1;
-    const lsnap = ml.snap || {};
-    const precioUnit  = safeNumber(lsnap.precioConIVA);
-    const precioUnitSinIVA = safeNumber(lsnap.precioSinIVA);
-    const lineTotal   = precioUnit * qty;
-    const lineTotalSinIVA = precioUnitSinIVA * qty;
-    const lineIVA     = safeNumber(lsnap.ivaTraslad) * qty;
-    subtotal   += lineTotalSinIVA;
+    const lsnap = ml.snap || snap || {};
+
+    // Defensive validation
+    if (qty <= 0) opLog.push("WARN_QTY_INVALID", {id: ticket.id, qty});
+
+    const fin = resolveLineFinancials(ml, snap, qty);
+
+    const lineIVA    = safeNumber(lsnap.ivaTraslad) * qty;
+    const lineCosto  = safeNumber(lsnap.costoTotal) * qty;
+    const lineUNeta  = safeNumber(lsnap.uNeta) * qty;
+    const lineUBruta = safeNumber(lsnap.uBruta) * qty;
+    const lineISR    = safeNumber(lsnap.isr) * qty;
+    const lineIVANeto= safeNumber(lsnap.ivaNeto) * qty;
+
+    subtotal   += fin.lineTotalSinIVA;
     ivaAmt     += lineIVA;
-    total      += lineTotal;
-    costoTotal += safeNumber(lsnap.costoTotal) * qty;
-    uNeta      += safeNumber(lsnap.uNeta) * qty;
-    uBruta     += safeNumber(lsnap.uBruta) * qty;
-    isrAmt     += safeNumber(lsnap.isr) * qty;
-    ivaNeto    += safeNumber(lsnap.ivaNeto) * qty;
-    return { ...ml, precioUnit, precioUnitSinIVA, lineTotal, lineTotalSinIVA, lineIVA };
+    total      += fin.lineTotal;
+    costoTotal += lineCosto;
+    uNeta      += lineUNeta;
+    uBruta     += lineUBruta;
+    isrAmt     += lineISR;
+    ivaNeto    += lineIVANeto;
+
+    return {
+      ...ml,
+      unitPrice: fin.unitPrice, lineTotal: fin.lineTotal,
+      unitSinIVA: fin.unitSinIVA, lineTotalSinIVA: fin.lineTotalSinIVA,
+      lineIVA, lineCosto, lineUNeta,
+    };
   });
 
-  const markupSobre = costoTotal>0 ? ((subtotal-costoTotal)/costoTotal)*100 : 0;
-  const margenNeto  = subtotal>0 ? (uNeta/subtotal)*100 : 0;
+  const markupSobre = costoTotal > 0 ? ((subtotal - costoTotal) / costoTotal) * 100 : 0;
+  const margenNeto  = subtotal > 0 ? (uNeta / subtotal) * 100 : 0;
 
   return {
     lineas: lineasCalc,
     subtotal, ivaAmt, total,
     costoTotal, uNeta, uBruta, isrAmt, ivaNeto,
-    markupSobre, margenNeto,
-    ivaPct: iva, isrPct: isr,
+    markupSobre, margenNeto, ivaPct: iva, isrPct: isr,
   };
 }
 
@@ -479,21 +525,37 @@ function reducer(state,action) {
     case "UNIT_ADD":      return {...state,units:[...state.units,action.u]};
     case "UNIT_UPDATE":   return {...state,units:state.units.map(u=>u.id===action.id?{...u,...action.patch}:u)};
     case "UNIT_DELETE":   return {...state,units:state.units.filter(u=>u.id!==action.id)};
-    case "UNITS_CLEAR":   return {...state,units:[]};
-    case "UNITS_REPLACE": return {...state,units:safeArr(action.units)};
+    case "UNITS_CLEAR":   return {...state, units: []};
+    case "UNITS_REPLACE": {
+      // Deduplicate by id first, then vin, then economico to prevent ghost units
+      const incoming = safeArr(action.units);
+      const seen = new Set();
+      const deduped = incoming.filter(u => {
+        const key = u.id || u.vin || u.economico;
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      opLog.push("UNITS_REPLACE", {count: deduped.length, raw: incoming.length});
+      return {...state, units: deduped};
+    }
     // PARTS
     case "PART_ADD":    return {...state,parts:[...state.parts,action.p]};
     case "PART_UPDATE": return {...state,parts:state.parts.map(p=>p.id===action.id?{...p,...action.patch}:p)};
     case "PART_DELETE": return {...state,parts:state.parts.filter(p=>p.id!==action.id)};
     // PERSISTENCE
     case "IMPORT": {
-      const d=action.data;
+      const d = action.data;
+      // Only replace a table if the incoming data is a real non-empty array.
+      // Never overwrite production data with empty or null from a partial Supabase failure.
+      const merge = (incoming, current) =>
+        Array.isArray(incoming) && incoming.length > 0 ? incoming : current;
       return {
-        tickets:   Array.isArray(d.tickets)   ? d.tickets   : state.tickets,
-        clients:   Array.isArray(d.clients)   ? d.clients   : state.clients,
-        suppliers: Array.isArray(d.suppliers) ? d.suppliers : state.suppliers,
-        units:     Array.isArray(d.units)     ? d.units     : state.units,
-        parts:     Array.isArray(d.parts)     ? d.parts     : state.parts,
+        tickets:   merge(d.tickets,   state.tickets),
+        clients:   merge(d.clients,   state.clients),
+        suppliers: merge(d.suppliers, state.suppliers),
+        units:     merge(d.units,     state.units),
+        parts:     merge(d.parts,     state.parts),
       };
     }
     case "RESET": return {...initialState};
@@ -519,29 +581,29 @@ function useToasts() {
 // PDF GENERATOR — formato oficial Logisolve
 // ═══════════════════════════════════════════════════════════════════════════════
 function generarCotizacionPDF(tkt, cl, un, supp) {
-  const totals = calculateTicketTotals(tkt);
 
+  const totals = calculateTicketTotals(tkt);
   const folio = tkt.id.replace("TKT", "COT");
 
-  const fechaLarga = (() => {
+  const fechaLarga = (()=>{
     const p = tkt.date.split("/");
     if (p.length !== 3) return tkt.date;
     const meses = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-    return `${parseInt(p[0])} de ${meses[parseInt(p[1]) - 1]} de ${p[2]}`;
+    return `${parseInt(p[0])} de ${meses[parseInt(p[1])-1]} de ${p[2]}`;
   })();
 
   const formaPago =
     tkt.payType === "credit"
-      ? "Cr\u00e9dito" + (tkt.promesaPago ? " \u2014 Fecha l\u00edmite: " + tkt.promesaPago : "")
+      ? "Crédito" + (tkt.promesaPago ? ` — Fecha límite: ${tkt.promesaPago}` : "")
       : "Contado / Transferencia bancaria";
 
   const entrega =
     supp && supp.entregaDias
-      ? supp.entregaDias + " d\u00eda" + (supp.entregaDias > 1 ? "s" : "") + " h\u00e1biles"
-      : "24-48 hrs h\u00e1biles";
+      ? `${supp.entregaDias} día${supp.entregaDias > 1 ? "s" : ""} hábiles`
+      : "24-48 hrs hábiles";
 
   const unidadStr = un
-    ? (un.economico ? "Eco. " + un.economico + " \u00b7 " : "") + un.marca + " " + un.modelo + " " + un.anio
+    ? `${un.economico ? "Eco. " + un.economico + " · " : ""}${un.marca} ${un.modelo} ${un.anio}`
     : "";
 
   const clDirParts = [];
@@ -550,8 +612,8 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
   if (cl?.estado)    clDirParts.push(cl.estado);
 
   const clLine = cl
-    ? cl.empresa + (clDirParts.length ? " \u00b7 " + clDirParts.join(", ") : "")
-    : "&mdash;";
+    ? cl.empresa + (clDirParts.length ? " · " + clDirParts.join(", ") : "")
+    : "—";
 
   const fmtMXN = (n) =>
     safeNumber(n).toLocaleString("es-MX", { style:"currency", currency:"MXN", minimumFractionDigits:2 });
@@ -561,198 +623,178 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
   const conceptos =
     tkt.lineas && tkt.lineas.length > 0
       ? tkt.lineas
-      : [{ titulo: tkt.titulo, partRef: tkt.partRef || "", snap: tkt.snap, qty: 1, descripcionPDF: "" }];
+      : [{ titulo:tkt.titulo, partRef:tkt.partRef||"", snap:tkt.snap, qty:1, descripcionPDF:"" }];
 
-  const multiLinea = conceptos.length > 1;
-
-  const filas = conceptos.map((c, i) => {
+  const filas = conceptos.map((c,i) => {
     const ml       = migrateLinea(c, tkt.snap);
     const qty      = safeNumber(ml.qty, 1) || 1;
     const lsnap    = ml.snap || tkt.snap || {};
-    const precioUnit = safeNumber(lsnap.precioConIVA);
-    const lineTotal  = precioUnit * qty;
+    // Use resolveLineFinancials — prevents double multiplication
+    const fin      = resolveLineFinancials(ml, tkt.snap, qty);
+    const unitPrice  = fin.unitPrice;
+    const lineTotal  = fin.lineTotal;
     const desc = ml.descripcionPDF ||
-      "Atenci\u00f3n correctiva para continuidad operativa de unidad en CEDIS SMO. Incluye integraci\u00f3n de componente compatible, validaci\u00f3n operativa y seguimiento log\u00edstico.";
-    const unTag = unidadStr && i === 0
-      ? `<div class="operational-tag">UNIDAD \u00b7 ${unidadStr}</div>` : "";
-    const refTag = ml.partRef
-      ? `<div class="operational-tag">CLAVE \u00b7 ${ml.partRef}</div>` : "";
-
-    if (multiLinea) {
-      return `<tr>
-          <td style="text-align:center">${String(i+1).padStart(2,"0")}</td>
-          <td style="text-align:center">${qty}</td>
+      "Atención correctiva para continuidad operativa de unidad en CEDIS SMO. Incluye integración de componente compatible, validación operativa y seguimiento logístico.";
+    const unTag = unidadStr && i === 0 ? `<br><br><strong>Unidad:</strong> ${unidadStr}` : "";
+    const refTag = ml.partRef ? `<br><br><strong>Clave:</strong> ${ml.partRef}` : "";
+    return `<tr>
+          <td>${String(i+1).padStart(2,"0")}</td>
           <td>${ml.titulo}</td>
           <td>${desc}${unTag}${refTag}</td>
-          <td style="text-align:right;white-space:nowrap">${fmtMXN(precioUnit)}</td>
-          <td style="text-align:right;white-space:nowrap;font-weight:700">${fmtMXN(lineTotal)}</td>
+          <td class="money">${fmtMXN(lineTotal)}</td>
         </tr>`;
-    }
-    return `<tr>
-        <td>${String(i+1).padStart(2,"0")}</td>
-        <td>${ml.titulo}</td>
-        <td>${desc}${unTag}${refTag}</td>
-        <td style="text-align:right;white-space:nowrap;font-weight:700">${fmtMXN(precioUnit*qty)}</td>
-      </tr>`;
   }).join("");
-
-  const theadMulti = `<thead><tr>
-    <th style="width:36px;text-align:center">#</th>
-    <th style="width:55px;text-align:center">Cant.</th>
-    <th style="width:150px">Concepto</th>
-    <th style="width:360px">Descripci\u00f3n t\u00e9cnica / operativa</th>
-    <th style="width:100px;text-align:right">Unitario</th>
-    <th style="width:110px;text-align:right">Total</th>
-  </tr></thead>`;
-
-  const theadSimple = `<thead><tr>
-    <th style="width:36px">No.</th>
-    <th style="width:150px">Concepto</th>
-    <th style="width:420px">Descripci\u00f3n t\u00e9cnica / operativa</th>
-    <th style="width:110px;text-align:right">Importe</th>
-  </tr></thead>`;
 
   const html = `<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8"/>
-<title>${folio}</title>
 <style>
 *{box-sizing:border-box}
-html,body{width:210mm;margin:0;padding:0;background:#fff;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;color:#111}
-.page{width:210mm;min-height:297mm;background:#fff;margin:0 auto;padding:16mm 16mm 14mm 16mm;position:relative}
-.toolbar{text-align:right;margin-bottom:6mm}
-.toolbar button{padding:2mm 5mm;border:none;border-radius:2px;font-size:10px;font-weight:700;cursor:pointer;margin-left:4px}
-.tb-close{background:#ddd;color:#444}.tb-save{background:#111;color:#fff}
-.top-header{border:1px solid #dcdcdc;background:#fafafa;padding:5mm 6mm;display:flex;justify-content:space-between;align-items:flex-start}
-.brand h1{margin:0;font-size:34px;font-weight:800;letter-spacing:-1px}
-.brand p{margin:2mm 0 0;font-size:9px;color:#666;font-weight:700;letter-spacing:.4px}
-.issuer{text-align:right;font-size:9.5px;line-height:1.65}
-.issuer strong{font-size:10.5px}
-.hero{margin-top:4mm;background:#050505;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:7mm 7mm}
-.hero-title{font-size:22px;font-weight:800;letter-spacing:.4px}
-.hero-meta{text-align:right;line-height:1.3}
-.hero-meta .label{font-size:10px;opacity:.85}
+html,body{margin:0;padding:0;background:#ffffff;font-family:Arial,Helvetica,sans-serif;color:#111;-webkit-font-smoothing:antialiased;text-rendering:geometricPrecision}
+.page{width:210mm;min-height:297mm;padding:14mm;background:#fff}
+.top-header{border:1px solid #dcdcdc;padding:7mm;display:flex;justify-content:space-between;align-items:flex-start}
+.brand h1{margin:0;font-size:30px;font-weight:800}
+.brand p{margin-top:4px;font-size:10px;color:#666;font-weight:700}
+.issuer{text-align:right;font-size:11px;line-height:1.5}
+.hero{margin-top:5mm;background:#000;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:8mm}
+.hero-title{font-size:20px;font-weight:800}
+.hero-meta{text-align:right}
 .hero-meta .folio{font-size:16px;font-weight:800}
-.hero-meta .date{font-size:12px;font-weight:700}
-.ops-strip{display:flex;gap:6mm;margin-top:3mm;padding:2.5mm 3mm;background:#f7f7f7;border:1px solid #e5e5e5;font-size:9px;font-weight:700;letter-spacing:.2px}
-.meta-table{width:100%;border-collapse:collapse;margin-top:3mm}
-.meta-table td{border:1px solid #e1e1e1;padding:2.2mm 3mm;font-size:10.5px}
-.meta-table td:first-child{width:28mm;background:#fafafa;font-weight:700}
-.section-title{margin-top:5mm;margin-bottom:2mm;font-size:12.5px;font-weight:800;letter-spacing:.2px}
+.hero-meta .date{font-size:13px;font-weight:700}
+.meta-table{width:100%;border-collapse:collapse;margin-top:4mm}
+.meta-table td{border:1px solid #e3e3e3;padding:3mm;font-size:11px}
+.meta-table td:first-child{width:35mm;background:#fafafa;font-weight:700}
+.section-title{margin-top:7mm;margin-bottom:3mm;font-size:13px;font-weight:800}
 .detail-table{width:100%;border-collapse:collapse}
-.detail-table th{background:#050505;color:#fff;text-align:left;padding:2.5mm 3mm;font-size:9px;letter-spacing:.2px;font-weight:700}
-.detail-table td{border:1px solid #ececec;padding:4mm 3.5mm;vertical-align:top;font-size:10.5px;line-height:1.6}
-.operational-tag{display:inline-block;margin-top:3mm;padding:1.5mm 2mm;background:#f5f5f5;border-left:2px solid #111;font-size:10px;font-weight:700}
-.totals{width:96mm;margin-left:auto;margin-top:6mm;border-collapse:collapse}
-.totals td{border:1px solid #e3e3e3;padding:3mm 3.5mm;font-size:11px}
+.detail-table th{background:#000;color:#fff;padding:3mm;text-align:left;font-size:10px}
+.detail-table td{border:1px solid #e5e5e5;padding:4mm 3mm;vertical-align:top;font-size:11px;line-height:1.6}
+.detail-table td.money{text-align:right;white-space:nowrap;font-weight:700}
+.totals{width:90mm;margin-left:auto;margin-top:5mm;border-collapse:collapse}
+.totals td{border:1px solid #e3e3e3;padding:3mm;font-size:11px}
 .totals td:last-child{text-align:right;font-weight:700}
-.totals .grand-total td{background:#050505;color:#fff;font-weight:800;font-size:12px}
-.block{margin-top:7mm;page-break-inside:avoid}
-.block h3{margin:0 0 2mm;font-size:12px;font-weight:800}
-.block ul{margin:0;padding-left:3.5mm}
-.block li{margin-bottom:1.6mm;line-height:1.55;font-size:10px}
-.footer{margin-top:10mm;padding-top:3mm;border-top:1px solid #e5e5e5;display:flex;justify-content:space-between;font-size:9px;color:#555}
-table,tr,td,th{page-break-inside:avoid !important}
-@media print{.toolbar{display:none}html,body{background:#fff;width:210mm}@page{size:A4 portrait;margin:0}}
+.grand-total td{background:#000;color:#fff;font-weight:800}
+.block{margin-top:8mm}
+.block h3{margin:0 0 3mm;font-size:13px;font-weight:800}
+.block ul{margin:0;padding-left:5mm}
+.block li{margin-bottom:2mm;font-size:11px;line-height:1.6}
+.footer{margin-top:10mm;border-top:1px solid #e5e5e5;padding-top:3mm;display:flex;justify-content:space-between;font-size:10px;color:#444}
 </style>
 </head>
 <body>
 <div class="page">
 
-<div class="toolbar">
-  <button class="tb-close" onclick="window.close()">&#x2715; Cerrar</button>
-  <button class="tb-save" onclick="document.body.style.zoom='100%';window.print()">&#x2193; Guardar PDF</button>
-</div>
-
-<div class="top-header">
-  <div class="brand">
-    <h1>LOGISOLVE</h1>
-    <p>Logistics &middot; Supply &middot; Solutions</p>
+  <div class="top-header">
+    <div class="brand">
+      <h1>LOGISOLVE</h1>
+      <p>Logistics · Supply · Solutions</p>
+    </div>
+    <div class="issuer">
+      <strong>Alejandro Saucedo</strong><br>
+      RFC: SAME9612277T9<br>
+      Tel. 5562321807<br>
+      contacto@logisolve.mx
+    </div>
   </div>
-  <div class="issuer">
-    <strong>Alejandro Saucedo</strong><br>
-    RFC: SAME9612277T9<br>
-    Tel. 5562321807
+
+  <div class="hero">
+    <div class="hero-title">COTIZACIÓN</div>
+    <div class="hero-meta">
+      <div>No.</div>
+      <div class="folio">${folio}</div>
+      <div class="date">Fecha: ${tkt.date.replace(/\//g," / ")}</div>
+    </div>
   </div>
-</div>
 
-<div class="hero">
-  <div class="hero-title">COTIZACI&Oacute;N</div>
-  <div class="hero-meta">
-    <div class="label">No.</div>
-    <div class="folio">${folio}</div>
-    <div class="date">Fecha: ${tkt.date.replace(/\//g," / ")}</div>
+  <table class="meta-table">
+    <tr><td>Cliente</td><td>${clLine}</td></tr>
+    <tr><td>Vigencia</td><td>3 días naturales</td></tr>
+    <tr><td>Atención</td><td>Área de Compras / Operaciones</td></tr>
+  </table>
+
+  <div class="section-title">DETALLE DEL CONCEPTO</div>
+
+  <table class="detail-table">
+    <thead>
+      <tr>
+        <th style="width:40px">No.</th>
+        <th style="width:170px">Concepto</th>
+        <th>Descripción técnica / operativa</th>
+        <th style="width:120px;text-align:right">Importe</th>
+      </tr>
+    </thead>
+    <tbody>${filas}</tbody>
+  </table>
+
+  <table class="totals">
+    <tr><td>Subtotal</td><td>${fmtMXN(totals.subtotal)} MXN</td></tr>
+    <tr><td>IVA (${totals.ivaPct}%)</td><td>${fmtMXN(totals.ivaAmt)} MXN</td></tr>
+    <tr class="grand-total"><td>TOTAL · IVA INCLUIDO</td><td>${fmtMXN(totals.total)} MXN</td></tr>
+  </table>
+
+  <div class="block">
+    <h3>ALCANCE DEL SERVICIO</h3>
+    <ul>
+      <li>Integración y coordinación de componente requerido para continuidad operativa.</li>
+      <li>Validación y coordinación operativa.</li>
+      <li>Entrega directa en CEDIS SMO.</li>
+      <li>Seguimiento y trazabilidad logística.</li>
+    </ul>
   </div>
-</div>
 
-<div class="ops-strip">
-  <div><strong>TIPO:</strong> ${tkt.opShort||"CORRECTIVO"}</div>
-  <div><strong>PRIORIDAD:</strong> ${tkt.priority||"P3"}</div>
-  ${unidadStr?`<div><strong>UNIDAD:</strong> ${unidadStr}</div>`:""}
-</div>
+  <div class="block">
+    <h3>CONDICIONES COMERCIALES</h3>
+    <ul>
+      <li>Precio IVA incluido en el total.</li>
+      <li>Forma de pago: ${formaPago}.</li>
+      <li>Entrega conforme a disponibilidad confirmada al momento de autorización.</li>
+      <li>Precios sujetos a cambio y disponibilidad al momento de confirmar.</li>
+      <li>Vigencia: 3 días naturales a partir de la fecha de emisión.</li>
+      ${notaLine}
+    </ul>
+  </div>
 
-<table class="meta-table">
-  <tr><td>Cliente</td><td>${clLine}</td></tr>
-  <tr><td>Vigencia</td><td>3 d&iacute;as naturales</td></tr>
-  <tr><td>Atenci&oacute;n</td><td>&Aacute;rea de Compras / Operaciones</td></tr>
-</table>
+  <div class="block">
+    <h3>OBSERVACIONES</h3>
+    <ul>
+      <li>Tiempo estimado de entrega: ${entrega}, sujeto a disponibilidad.</li>
+      <li>La validación técnica final de compatibilidad corresponde al cliente.</li>
+      <li>La garantía aplica conforme a políticas del fabricante o proveedor.</li>
+    </ul>
+  </div>
 
-<div class="section-title">DETALLE DEL CONCEPTO</div>
-
-<table class="detail-table">
-  ${multiLinea?theadMulti:theadSimple}
-  <tbody>${filas}</tbody>
-</table>
-
-<table class="totals">
-  <tr><td>Subtotal</td><td>${fmtMXN(totals.subtotal)} MXN</td></tr>
-  <tr><td>IVA (${totals.ivaPct}%)</td><td>${fmtMXN(totals.ivaAmt)} MXN</td></tr>
-  <tr class="grand-total"><td>TOTAL &middot; IVA INCLUIDO</td><td>${fmtMXN(totals.total)} MXN</td></tr>
-</table>
-
-<div class="block">
-  <h3>ALCANCE DEL SERVICIO</h3>
-  <ul>
-    <li>Integraci&oacute;n y coordinaci&oacute;n de componente requerido para continuidad operativa.</li>
-    <li>Validaci&oacute;n y coordinaci&oacute;n operativa.</li>
-    <li>Entrega directa en CEDIS SMO.</li>
-    <li>Seguimiento y trazabilidad log&iacute;stica.</li>
-  </ul>
-</div>
-
-<div class="block">
-  <h3>CONDICIONES COMERCIALES</h3>
-  <ul>
-    <li>Precio IVA incluido en el total.</li>
-    <li>Forma de pago: ${formaPago}.</li>
-    <li>Entrega conforme a disponibilidad confirmada al momento de autorizaci&oacute;n.</li>
-    <li>Precios sujetos a cambio y disponibilidad al momento de confirmar.</li>
-    <li>Vigencia: 3 d&iacute;as naturales a partir de la fecha de emisi&oacute;n.</li>
-    ${notaLine}
-  </ul>
-</div>
-
-<div class="block">
-  <h3>OBSERVACIONES</h3>
-  <ul>
-    <li>Tiempo estimado de entrega: ${entrega}, sujeto a disponibilidad.</li>
-    <li>La validaci&oacute;n t&eacute;cnica final de compatibilidad corresponde al cliente.</li>
-    <li>La garant&iacute;a aplica conforme a pol&iacute;ticas del fabricante o proveedor.</li>
-  </ul>
-</div>
-
-<div class="footer">
-  <div>Quedo atento para cualquier duda o confirmaci&oacute;n.</div>
-  <div>LogiSolve &middot; ${fechaLarga}</div>
-</div>
+  <div class="footer">
+    <div>Quedo atento para cualquier duda o confirmación.</div>
+    <div>LogiSolve · ${fechaLarga}</div>
+  </div>
 
 </div>
 </body>
 </html>`;
 
-  const win = window.open("", "_blank");
-  if (win) { win.document.open(); win.document.write(html); win.document.close(); }
+  // Contenedor temporal en el DOM
+  const container = document.createElement("div");
+  container.style.position = "absolute";
+  container.style.left = "-9999px";
+  container.style.top = "0";
+  container.innerHTML = html;
+  document.body.appendChild(container);
+
+  // Generar PDF real con html2pdf.js
+  // eslint-disable-next-line no-undef
+  html2pdf()
+    .set({
+      margin: 0,
+      filename: `${folio}.pdf`,
+      image: { type:"jpeg", quality:1 },
+      html2canvas: { scale:2, useCORS:true, backgroundColor:"#ffffff" },
+      jsPDF: { unit:"mm", format:"a4", orientation:"portrait" },
+    })
+    .from(container)
+    .save()
+    .then(() => {
+      document.body.removeChild(container);
+    });
 }
 // Modal de confirmacion PDF
 function PDFConfirm({tkt,cl,un,supp,onClose}) {
@@ -1108,17 +1150,12 @@ const Timeline = React.memo(function Timeline({events}) {
 // L9 — MODULES
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// ── HELPER CENTRALIZADO ───────────────────────────────────────────────────────
-const calcMarkup = (precioSinIVA, costoTotal) =>
-  safeNumber(costoTotal) > 0
-    ? ((safeNumber(precioSinIVA) - safeNumber(costoTotal)) / safeNumber(costoTotal)) * 100
-    : 0;
-
 // ── CENTRO DE OPERACIONES (Dashboard) ────────────────────────────────────────
 function CentroOps({state}) {
   const {tickets,clients,suppliers,units} = state;
 
-  const realizados = useMemo(()=>tickets.filter(t=>!t._deleted&&!FORECAST_SET.has(t.status)&&t.status!=="cancelado"),[tickets]);
+  // Revenue: only facturado/cobrado/cerrado count as real financial metrics
+  const realizados = useMemo(()=>tickets.filter(t=>!t._deleted&&REVENUE_SET.has(t.status)),[tickets]);
   const totalFact  = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[realizados]);
   const totalNeta  = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),[realizados]);
   const totalInv   = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.costoBase)*(1+safeNumber(t.snap.params?.iva,16)/100),0),[realizados]);
@@ -1143,7 +1180,7 @@ function CentroOps({state}) {
   const eficienciaFiscalGlobal = utilidadBrutaTotal>0?(totalNeta/utilidadBrutaTotal)*100:0;
   const roi = totalInv>0?(totalNeta/totalInv)*100:0;
   const cxp = useMemo(()=>tickets.filter(t=>!t._deleted&&!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap.costoTotal),0),[tickets]);
-  const carteraPend  = useMemo(()=>tickets.filter(t=>!t._deleted&&t.payType==="credit"&&!t.cobrado&&t.status!=="cancelado").reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[tickets]);
+  const carteraPend  = useMemo(()=>tickets.filter(t=>!t._deleted&&CARTERA_SET.has(t.status)&&!t.cobrado).reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[tickets]);
   const flujoOp      = carteraPend - cargaFiscalTotal - cxp;
   const forecast     = useMemo(()=>tickets.filter(t=>!t._deleted&&FORECAST_SET.has(t.status)).reduce((s,t)=>s+utilidadPonderada(safeNumber(t.snap.uNeta),t.prob),0),[tickets]);
   const abiertas     = useMemo(()=>tickets.filter(t=>!t._deleted&&!CLOSED_SET.has(t.status)),[tickets]);
@@ -1389,12 +1426,11 @@ function Tickets({state,dispatch,toast}) {
   return (
     <div style={{padding:"10px 13px",maxWidth:1200,margin:"0 auto"}}>
       {confirm&&<Confirm msg={"Eliminar ticket: "+confirm.titulo+"?"} onConfirm={()=>{
-        dispatch({type:"TKT_SOFT_DEL",id:confirm.id});
         const id=confirm.id;
-        toast("Ticket eliminado — click para deshacer","info");
+        dispatch({type:"TKT_SOFT_DEL",id});
+        scheduleHardDelete(id);
+        toast("Ticket a papelera — restaurable","info");
         setConfirm(null);setExpId(null);
-        // Hard delete after 8s if not restored
-        setTimeout(()=>dispatch({type:"TKT_DELETE",id}),8000);
       }} onCancel={()=>setConfirm(null)}/>}
 
       {/* Filtros */}
@@ -2950,7 +2986,7 @@ function Ajustes({state,dispatch,toast}) {
 }
 
 // ── HISTORIAL ─────────────────────────────────────────────────────────────────
-function Historial({state,dispatch,toast}) {
+function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
   const {tickets,clients,units,suppliers} = state;
   const [hide,    setHide]   = useState(false);
   const [expId,   setExpId]  = useState(null);
@@ -2958,12 +2994,24 @@ function Historial({state,dispatch,toast}) {
   const [ef,      setEf]     = useState({});
   const [confirm, setConfirm]= useState(null);
   const [showTrash, setShowTrash] = useState(false);
+  const [sortBy, setSortBy]  = useState("date_desc");
   const sfn = k => v => setEf(p=>({...p,[k]:v}));
 
-  const activeTickets = useMemo(()=>tickets.filter(t=>!t._deleted),[tickets]);
+  const activeTickets  = useMemo(()=>tickets.filter(t=>!t._deleted),[tickets]);
   const trashedTickets = useMemo(()=>tickets.filter(t=>t._deleted),[tickets]);
 
-  const realizados = useMemo(()=>activeTickets.filter(t=>!FORECAST_SET.has(t.status)&&t.status!=="cancelado"),[activeTickets]);
+  const sortedTickets = useMemo(()=>{
+    const arr = [...activeTickets];
+    switch(sortBy){
+      case "date_asc":   return arr.sort((a,b)=>a.date.localeCompare(b.date));
+      case "total_desc": return arr.sort((a,b)=>safeNumber(b.snap.precioConIVA)-safeNumber(a.snap.precioConIVA));
+      case "uneta_desc": return arr.sort((a,b)=>safeNumber(b.snap.uNeta)-safeNumber(a.snap.uNeta));
+      case "priority":   return arr.sort((a,b)=>a.priority.localeCompare(b.priority));
+      default:           return arr.sort((a,b)=>b.date.localeCompare(a.date));
+    }
+  },[activeTickets,sortBy]);
+
+  const realizados = useMemo(()=>activeTickets.filter(t=>REVENUE_SET.has(t.status)),[activeTickets]);
   const totalFact = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[realizados]);
   const totalNeta = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),[realizados]);
   const totalInv  = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.costoBase)*(1+(safeNumber(t.snap.params?.iva,16))/100),0),[realizados]);
@@ -3119,9 +3167,9 @@ function Historial({state,dispatch,toast}) {
       {confirm&&<Confirm msg={"Eliminar: "+confirm.titulo+"?"} onConfirm={()=>{
         const id=confirm.id;
         dispatch({type:"TKT_SOFT_DEL",id});
+        scheduleHardDelete(id);
         toast("Ticket a papelera — restaurable","info");
         setConfirm(null);setExpId(null);
-        setTimeout(()=>dispatch({type:"TKT_DELETE",id}),8000);
       }} onCancel={()=>setConfirm(null)}/>}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
         <div style={{fontSize:7,color:C.t3,letterSpacing:"0.2em"}}>HISTORIAL DE OPERACIONES</div>
@@ -3142,7 +3190,17 @@ function Historial({state,dispatch,toast}) {
           <span>ID / TITULO</span><span>TIPO</span><span>PRIO</span><span>ESTADO</span><span>MARKUP</span><span>PRECIO</span><span>UTIL.</span><span/><span/>
         </div>
 
-        {activeTickets.map((t,i)=>{
+        {/* Sort controls */}
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+          <span style={{fontSize:7,color:C.t3}}>ORDENAR:</span>
+          {[["date_desc","Más reciente"],["date_asc","Más antiguo"],["total_desc","Mayor total"],["uneta_desc","Mayor utilidad"],["priority","Prioridad"]].map(([v,l])=>(
+            <button key={v} onClick={()=>setSortBy(v)}
+              style={{padding:"2px 7px",background:sortBy===v?C.blueDim:"transparent",border:`1px solid ${sortBy===v?C.blueHi:C.border}`,borderRadius:3,color:sortBy===v?C.cyan:C.t3,fontSize:7,cursor:"pointer"}}>
+              {l}
+            </button>
+          ))}
+        </div>
+        {sortedTickets.map((t,i)=>{
           const exp=expId===t.id;
           const editing=editId===t.id;
           const cl=clients.find(c=>c.id===t.clientId);
@@ -3410,7 +3468,7 @@ function Historial({state,dispatch,toast}) {
                 <span style={{fontSize:9,color:C.t2,marginLeft:8}}>{t.titulo}</span>
               </div>
               <div style={{display:"flex",gap:6}}>
-                <button onClick={()=>{dispatch({type:"TKT_RESTORE",id:t.id});toast("Ticket restaurado","success");}}
+                <button onClick={()=>{dispatch({type:"TKT_RESTORE",id:t.id});cancelHardDelete(t.id);toast("Ticket restaurado","success");}}
                   style={{fontSize:8,padding:"2px 8px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,cursor:"pointer"}}>↩ Restaurar</button>
                 <button onClick={()=>dispatch({type:"TKT_DELETE",id:t.id})}
                   style={{fontSize:8,padding:"2px 8px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:3,color:C.red,cursor:"pointer"}}>✕ Borrar</button>
@@ -3484,7 +3542,7 @@ function MOps({state,setTab}) {
   const p2       = useMemo(()=>tickets.filter(t=>!t._deleted&&t.priority==="P2"&&!CLOSED_SET.has(t.status)),[tickets]);
   const abiertos = useMemo(()=>tickets.filter(t=>!t._deleted&&!CLOSED_SET.has(t.status)),[tickets]);
   const vencidos = useMemo(()=>tickets.filter(t=>{if(t._deleted||!t.promesaPago||t.cobrado||t.status==="cancelado")return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}),[tickets]);
-  const realizados = useMemo(()=>tickets.filter(t=>!t._deleted&&!FORECAST_SET.has(t.status)&&t.status!=="cancelado"),[tickets]);
+  const realizados = useMemo(()=>tickets.filter(t=>!t._deleted&&REVENUE_SET.has(t.status)),[tickets]);
   const totalFact = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[realizados]);
   const totalNeta = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),[realizados]);
   const totalInv  = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.costoBase)*(1+safeNumber(t.snap.params?.iva,16)/100),0),[realizados]);
@@ -3498,7 +3556,7 @@ function MOps({state,setTab}) {
   const eficienciaFiscalGlobal = utilidadBrutaTotal>0?(totalNeta/utilidadBrutaTotal)*100:0;
   const roi = totalInv>0?(totalNeta/totalInv)*100:0;
   const cxp = useMemo(()=>tickets.filter(t=>!t._deleted&&!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap.costoTotal),0),[tickets]);
-  const cartera   = useMemo(()=>tickets.filter(t=>!t._deleted&&t.payType==="credit"&&!t.cobrado&&t.status!=="cancelado").reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[tickets]);
+  const cartera   = useMemo(()=>tickets.filter(t=>!t._deleted&&CARTERA_SET.has(t.status)&&!t.cobrado).reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[tickets]);
   const flujoOp = cartera - cargaFiscalTotal - cxp;
   const forecast  = useMemo(()=>tickets.filter(t=>!t._deleted&&FORECAST_SET.has(t.status)).reduce((s,t)=>s+utilidadPonderada(safeNumber(t.snap.uNeta),t.prob),0),[tickets]);
   const totalHoras= useMemo(()=>tickets.filter(t=>!t._deleted).reduce((s,t)=>s+safeNumber(t.horasOp),0),[tickets]);
@@ -4272,9 +4330,9 @@ const pendingQueue = {
 pendingQueue._restore();
 
 
-function MHistorial({state,dispatch,toast}) {
+function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
   const {tickets,clients,units,suppliers} = state;
-  const realizados = useMemo(()=>tickets.filter(t=>!FORECAST_SET.has(t.status)&&t.status!=="cancelado"),[tickets]);
+  const realizados = useMemo(()=>tickets.filter(t=>REVENUE_SET.has(t.status)),[tickets]);
   const totalFact  = useMemo(()=>realizados.reduce((s,t)=>s+t.snap.precioConIVA,0),[realizados]);
   const totalNeta  = useMemo(()=>realizados.reduce((s,t)=>s+t.snap.uNeta,0),[realizados]);
   const [expId,     setExpId]     = useState(null);
@@ -4403,9 +4461,9 @@ function MHistorial({state,dispatch,toast}) {
       {confirm&&<Confirm msg={"Eliminar: "+confirm.titulo+"?"} onConfirm={()=>{
         const id=confirm.id;
         dispatch({type:"TKT_SOFT_DEL",id});
+        scheduleHardDelete(id);
         toast("Ticket a papelera — restaurable","info");
         setConfirm(null);setExpId(null);
-        setTimeout(()=>dispatch({type:"TKT_DELETE",id}),8000);
       }} onCancel={()=>setConfirm(null)}/>}
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
@@ -4817,6 +4875,31 @@ export default function App() {
 
   // Double-click / concurrent save protection
   const savingRef = useRef(false);
+  // Safe soft-delete timers — keyed by ticket ID to allow cancel on restore/undo
+  const deleteTimersRef = useRef({});
+
+  const scheduleHardDelete = useCallback((id) => {
+    // Cancel any existing timer for this ID first
+    if (deleteTimersRef.current[id]) clearTimeout(deleteTimersRef.current[id]);
+    deleteTimersRef.current[id] = setTimeout(() => {
+      delete deleteTimersRef.current[id];
+      dispatch({type:"TKT_DELETE", id});
+    }, 8000);
+  }, []);
+
+  const cancelHardDelete = useCallback((id) => {
+    if (deleteTimersRef.current[id]) {
+      clearTimeout(deleteTimersRef.current[id]);
+      delete deleteTimersRef.current[id];
+    }
+  }, []);
+
+  // Cancel all pending hard deletes on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(deleteTimersRef.current).forEach(clearTimeout);
+    };
+  }, []);
 
   // Soft-delete trash (restore within session)
   const [trash, setTrash] = useState([]);
@@ -5028,7 +5111,7 @@ export default function App() {
       <div style={{paddingBottom:mobileView?(["unidades","catalogo","proveedores","clientes","ajustes"].includes(tab)?130:80):0}}>
         {tab==="ops"        &&(mobileView?<MOps       state={state} setTab={setTab}/>                                    :<CentroOps   state={state}/>)}
         {tab==="tickets"    &&(mobileView?<MPipeline  state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Tickets     state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
-        {tab==="historial"  &&(mobileView?<MHistorial state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Historial   state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
+        {tab==="historial"  &&(mobileView?<MHistorial state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>:<Historial   state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>)}
         {tab==="cotizador"  &&(mobileView?<MCotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Cotizador   state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="cartera"    &&(mobileView?<MCartera   state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Cartera     state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="unidades"   &&<Unidades    state={state} dispatch={dispatchWithDelete} toast={toast}/>}
