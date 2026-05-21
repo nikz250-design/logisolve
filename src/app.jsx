@@ -1244,6 +1244,13 @@ function CentroOps({state}) {
   const cobradas   = useMemo(()=>active.filter(t=>PAID_SET.has(t.status)),[active]);
   const conversion = active.length > 0 ? (cobradas.length / active.length) * 100 : 0;
 
+  // Aging cartera
+  const aging = useMemo(()=>{
+    const pend=tickets.filter(t=>t.payType==="credit"&&!t.cobrado&&t.status!=="cancelado"&&t.promesaPago);
+    const bucket=(mn,mx)=>pend.filter(t=>{const d=parseDateMX(t.promesaPago);if(!d)return false;const ms=Date.now()-d.getTime();return ms>=mn*86400000&&(mx==null||ms<mx*86400000);}).reduce((s,t)=>s+t.snap.precioConIVA,0);
+    return{a30:bucket(0,30),a60:bucket(30,60),mas60:bucket(60,null)};
+  },[tickets]);
+
   // Top proveedores
   const topSupp = useMemo(()=>suppliers.map(s=>{
     const so=tickets.filter(t=>t.supplierId===s.id);
@@ -1499,7 +1506,7 @@ function CentroOps({state}) {
 }
 
 // ── TICKETS (pipeline operativo) ─────────────────────────────────────────────
-function Tickets({state,dispatch,toast}) {
+function Tickets({state,dispatch,toast,scheduleHardDelete}) {
   const {tickets,clients,suppliers,units} = state;
   const [fStatus, setFStatus] = useState("all");
   const [fPrio,   setFPrio]   = useState("all");
@@ -1748,8 +1755,10 @@ function Cotizador({state,dispatch,toast}) {
   const removeLinea = useCallback(idx=>setLineas(p=>p.filter((_,i)=>i!==idx)),[]);
   const addLinea    = useCallback(()=>setLineas(p=>[...p,emptyLine(opType,priority,activeMods)]),[opType,priority,activeMods]);
 
-  // Reset custom margin when opType/priority changes
-  useEffect(()=>{setCustomMgn(false);setActiveMods([]);},[opType,priority]);
+  // Reset custom margin when opType/priority changes (state update during render — safe pattern)
+  const [lastOpKey, setLastOpKey] = useState(()=>opType+priority);
+  const curOpKey = opType+priority;
+  if(lastOpKey!==curOpKey){setLastOpKey(curOpKey);setCustomMgn(false);setActiveMods([]);}
 
   const [isSaving, setIsSaving] = useState(false);
   const save = useCallback(()=>{
@@ -3496,7 +3505,7 @@ function Ajustes({state,dispatch,toast}) {
   const [confirmDel, setConfirmDel] = useState(null);
   const [importMode, setImportMode] = useState("merge"); // "merge" | "replace"
 
-  const savedAt=(()=>{try{const r=localStorage.getItem(STORAGE_KEY);if(r){const p=JSON.parse(r);return p.savedAt?new Date(p.savedAt).toLocaleString("es-MX"):"---";}}catch{}return "---";})();
+  const savedAt=(()=>{try{const r=localStorage.getItem(STORAGE_KEY);if(r){const p=JSON.parse(r);return p.savedAt?new Date(p.savedAt).toLocaleString("es-MX"):"---";}}catch(_e){}return "---";})();
 
   const importUnitsJSON=(file, mode="merge")=>{
     const r=new FileReader();
@@ -3549,7 +3558,7 @@ function Ajustes({state,dispatch,toast}) {
       const json = JSON.stringify(payload, null, 2);
       // Save a copy in localStorage as backup
       const backupKey = "lgs_backup_"+Date.now();
-      try { localStorage.setItem(backupKey, json); } catch {}
+      try { localStorage.setItem(backupKey, json); } catch(_e) {}
       const blob = new Blob([json],{type:"application/json"});
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
@@ -5019,8 +5028,7 @@ function MCartera({state,dispatch,toast}) {
   const {tickets,clients} = state;
   const pendientes = useMemo(()=>tickets.filter(t=>t.payType==="credit"&&!t.cobrado&&t.status!=="cancelado"),[tickets]);
   const totalPend  = pendientes.reduce((s,t)=>s+t.snap.precioConIVA,0);
-  const now        = useMemo(()=>new Date(),[]);
-  const venc       = useMemo(()=>pendientes.filter(t=>{const d=parseDateMX(t.promesaPago);return d&&now>d;}),[pendientes,now]);
+  const venc       = pendientes.filter(t=>{const d=parseDateMX(t.promesaPago);return d&&new Date()>d;});
 
   return (
     <div style={{padding:"14px"}}>
@@ -5107,8 +5115,8 @@ const pendingQueue = {
   push(op) { this._q.push({ ...op, ts: Date.now() }); this._persist(); },
   flush() { const q=[...this._q]; this._q=[]; this._persist(); return q; },
   peek() { return [...this._q]; },
-  _persist() { try { localStorage.setItem("lgs_pending", JSON.stringify(this._q)); } catch{} },
-  _restore() { try { const s=localStorage.getItem("lgs_pending"); if(s) this._q=JSON.parse(s)||[]; } catch{} },
+  _persist() { try { localStorage.setItem("lgs_pending", JSON.stringify(this._q)); } catch(_e) {} },
+  _restore() { try { const s=localStorage.getItem("lgs_pending"); if(s) this._q=JSON.parse(s)||[]; } catch(_e) {} },
 };
 pendingQueue._restore();
 
@@ -5216,7 +5224,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
       titulo, lineas:lineasConSnap,
       opId:opType, opShort:opMeta.short, priority, mods:[...activeMods],
       date:ef.date, clientId:ef.clientId, supplierId:ef.supplierId, unitId:ef.unitId||"",
-      status:ef.status, payType:ef.payType, priority,
+      status:ef.status, payType:ef.payType,
       promesaPago:ef.payType==="credit"?ef.promesaPago:null,
       cobrado:PAID_SET.has(ef.status), prob:ef.prob,
       horasOp:parseFloat(ef.horasOp)||0, notes:ef.notes,
@@ -5894,7 +5902,7 @@ export default function App() {
       {/* Content */}
       <div style={{paddingBottom:mobileView?(["unidades","catalogo","proveedores","clientes","ajustes"].includes(tab)?130:80):0}}>
         {tab==="ops"        &&(mobileView?<MOps       state={state} setTab={setTab}/>                                    :<CentroOps   state={state}/>)}
-        {tab==="tickets"    &&(mobileView?<MPipeline  state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Tickets     state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
+        {tab==="tickets"    &&(mobileView?<MPipeline  state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Tickets     state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete}/>)}
         {tab==="historial"  &&(mobileView?<MHistorial state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>:<Historial   state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>)}
         {tab==="cotizador"  &&(mobileView?<MCotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Cotizador              state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="refacciones"&&<CotizadorRefacciones state={state} dispatch={dispatchWithDelete} toast={toast}/>}
