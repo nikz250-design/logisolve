@@ -1,5 +1,4 @@
 import React, { useState, useReducer, useEffect, useRef, useCallback, useMemo } from "react";
-import html2pdf from "html2pdf.js";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // L1 — DESIGN TOKENS
@@ -84,14 +83,22 @@ const TICKET_TRANSITIONS = {
   cancelado:  [],
 };
 
-// Operational pipeline states (visible in ops, not yet revenue)
-const FORECAST_SET  = new Set(["recibido","validando","sourcing","cotizado","autorizado","comprado","transito"]);
+// ── FINANCIAL STATUS SETS — 4-layer architecture ─────────────────────────────
+// Layer 1: OPERADO — trabajo ya ejecutado (genera utilidad operativa)
+const OPERADO_SET   = new Set(["entregado","facturado","cobrado","cerrado"]);
+// Layer 2: CASH — dinero ya recibido
+const CASH_SET      = new Set(["cobrado","cerrado"]);
+// Layer 3: CARTERA — entregado/facturado pero no cobrado
+const CARTERA_SET   = new Set(["entregado","facturado"]);
+// Layer 4: FORECAST — pipeline probable, NO contamina revenue
+const FORECAST_SET  = new Set(["cotizado","autorizado"]);
+// Operational pipeline (en proceso, aún no entregado)
+const PIPELINE_SET  = new Set(["recibido","validando","sourcing","comprado","transito"]);
+// Closed states
 const CLOSED_SET    = new Set(["cerrado","cancelado","cobrado"]);
 const PAID_SET      = new Set(["cobrado","cerrado"]);
-// REVENUE states: only tickets that have been billed/collected count as real revenue
-const REVENUE_SET   = new Set(["facturado","cobrado","cerrado"]);
-// Cartera: billed but not yet collected
-const CARTERA_SET   = new Set(["entregado","facturado"]);
+// Legacy alias — kept for backward compat
+const REVENUE_SET   = OPERADO_SET;
 
 const PROB = [
   { id:"high",   label:"Alta",  pct:90 },
@@ -779,21 +786,34 @@ html,body{margin:0;padding:0;background:#ffffff;font-family:Arial,Helvetica,sans
   container.innerHTML = html;
   document.body.appendChild(container);
 
-  // Generar PDF real con html2pdf.js
-  // eslint-disable-next-line no-undef
-  html2pdf()
-    .set({
-      margin: 0,
-      filename: `${folio}.pdf`,
-      image: { type:"jpeg", quality:1 },
-      html2canvas: { scale:2, useCORS:true, backgroundColor:"#ffffff" },
-      jsPDF: { unit:"mm", format:"a4", orientation:"portrait" },
-    })
-    .from(container)
-    .save()
-    .then(() => {
+  const generate = () => {
+    // eslint-disable-next-line no-undef
+    html2pdf()
+      .set({
+        margin: 0,
+        filename: `${folio}.pdf`,
+        image: { type:"jpeg", quality:1 },
+        html2canvas: { scale:2, useCORS:true, backgroundColor:"#ffffff" },
+        jsPDF: { unit:"mm", format:"a4", orientation:"portrait" },
+      })
+      .from(container)
+      .save()
+      .then(() => { document.body.removeChild(container); });
+  };
+
+  // Load html2pdf.js from CDN if not already available
+  if (typeof html2pdf !== "undefined") {
+    generate();
+  } else {
+    const script = document.createElement("script");
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+    script.onload = generate;
+    script.onerror = () => {
       document.body.removeChild(container);
-    });
+      alert("No se pudo cargar html2pdf.js. Verifica tu conexión a internet.");
+    };
+    document.head.appendChild(script);
+  }
 }
 // Modal de confirmacion PDF
 function PDFConfirm({tkt,cl,un,supp,onClose}) {
@@ -1152,62 +1172,75 @@ const Timeline = React.memo(function Timeline({events}) {
 // ── CENTRO DE OPERACIONES (Dashboard) ────────────────────────────────────────
 function CentroOps({state}) {
   const {tickets,clients,suppliers,units} = state;
+  const active = useMemo(()=>tickets.filter(t=>!t._deleted&&t.status!=="cancelado"),[tickets]);
 
-  // Revenue: only facturado/cobrado/cerrado count as real financial metrics
-  const realizados = useMemo(()=>tickets.filter(t=>!t._deleted&&REVENUE_SET.has(t.status)),[tickets]);
-  const totalFact  = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[realizados]);
-  const totalNeta  = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),[realizados]);
-  const totalInv   = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.costoBase)*(1+safeNumber(t.snap.params?.iva,16)/100),0),[realizados]);
-  const pctNeta    = totalFact>0?(totalNeta/totalFact)*100:0;
-  const totalHoras = useMemo(()=>tickets.filter(t=>!t._deleted).reduce((s,t)=>s+safeNumber(t.horasOp),0),[tickets]);
-  const uPorHora   = totalHoras>0?totalNeta/totalHoras:0;
-  // Fiscal aggregates — always recalculated from real snap values
-  const ivaAcredTotal  = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.ivaAcred),0),[realizados]);
-  const ivaTrasTotal   = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.ivaTraslad),0),[realizados]);
-  const ivaNetoTotal   = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.ivaNeto),0),[realizados]);
-  const isrTotal       = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.isr),0),[realizados]);
-  const cargaFiscalTotal = ivaNetoTotal + isrTotal;
-  const utilidadBrutaTotal = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.uBruta),0),[realizados]);
-  const markupProm = useMemo(()=>{
-    const v=realizados.filter(t=>safeNumber(t.snap.costoTotal)>0);
-    return v.length>0?v.reduce((s,t)=>s+calcMarkup(t.snap.precioSinIVA,t.snap.costoTotal),0)/v.length:0;
-  },[realizados]);
-  const rentabilidadProm = useMemo(()=>{
-    const v=realizados.filter(t=>safeNumber(t.snap.precioSinIVA)>0);
-    return v.length>0?v.reduce((s,t)=>s+(safeNumber(t.snap.uNeta)/safeNumber(t.snap.precioSinIVA))*100,0)/v.length:0;
-  },[realizados]);
-  const eficienciaFiscalGlobal = utilidadBrutaTotal>0?(totalNeta/utilidadBrutaTotal)*100:0;
-  const roi = totalInv>0?(totalNeta/totalInv)*100:0;
-  const cxp = useMemo(()=>tickets.filter(t=>!t._deleted&&!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap.costoTotal),0),[tickets]);
-  const carteraPend  = useMemo(()=>tickets.filter(t=>!t._deleted&&CARTERA_SET.has(t.status)&&!t.cobrado).reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[tickets]);
-  const flujoOp      = carteraPend - cargaFiscalTotal - cxp;
-  const forecast     = useMemo(()=>tickets.filter(t=>!t._deleted&&FORECAST_SET.has(t.status)).reduce((s,t)=>s+utilidadPonderada(safeNumber(t.snap.uNeta),t.prob),0),[tickets]);
-  const abiertas     = useMemo(()=>tickets.filter(t=>!t._deleted&&!CLOSED_SET.has(t.status)),[tickets]);
-  const cobradas     = useMemo(()=>tickets.filter(t=>!t._deleted&&PAID_SET.has(t.status)),[tickets]);
-  const conversion   = tickets.filter(t=>!t._deleted).length>0?(cobradas.length/tickets.filter(t=>!t._deleted).length)*100:0;
-  const p1Active     = useMemo(()=>tickets.filter(t=>!t._deleted&&t.priority==="P1"&&!CLOSED_SET.has(t.status)),[tickets]);
-  const vencidos     = useMemo(()=>tickets.filter(t=>{if(t._deleted||!t.promesaPago||t.cobrado||t.status==="cancelado")return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}),[tickets]);
+  // ── LAYER 1: OPERADO — entregado+facturado+cobrado+cerrado ─────────────────
+  const operados = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)),[active]);
+  const revenueOp   = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[operados]);
+  const utilidadOp  = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),[operados]);
+  const uBrutaOp    = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.uBruta),0),[operados]);
+  const costoOp        = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.costoTotal),0),[operados]);
+  const costoProducto  = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.costoBase)*(1+safeNumber(t.snap.params?.iva,16)/100),0),[operados]);
+  const gastosOp       = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.gastos),0),[operados]);
+  const totalInv       = costoProducto;
+  const ivaNetoOp   = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.ivaNeto),0),[operados]);
+  const isrOp       = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.isr),0),[operados]);
+  const cargaFiscal = ivaNetoOp + isrOp;
+  const margenOp    = revenueOp>0?(utilidadOp/revenueOp)*100:0;
+  const eficienciaFiscal = uBrutaOp>0?(utilidadOp/uBrutaOp)*100:0;
+  const roi         = totalInv>0?(utilidadOp/totalInv)*100:0;
+  const markupProm  = useMemo(()=>{const v=operados.filter(t=>safeNumber(t.snap.costoTotal)>0);return v.length>0?v.reduce((s,t)=>s+calcMarkup(t.snap.precioSinIVA,t.snap.costoTotal),0)/v.length:0;},[operados]);
 
-  // Aging cartera
-  const aging = useMemo(()=>{
-    const pend=tickets.filter(t=>t.payType==="credit"&&!t.cobrado&&t.status!=="cancelado"&&t.promesaPago);
-    const bucket=(mn,mx)=>pend.filter(t=>{const d=parseDateMX(t.promesaPago);if(!d)return false;const ms=Date.now()-d.getTime();return ms>=mn*86400000&&(mx==null||ms<mx*86400000);}).reduce((s,t)=>s+t.snap.precioConIVA,0);
-    return{a30:bucket(0,30),a60:bucket(30,60),mas60:bucket(60,null)};
-  },[tickets]);
+  // ── LAYER 2: CASH — solo cobrado/cerrado ───────────────────────────────────
+  const cobrados    = useMemo(()=>active.filter(t=>CASH_SET.has(t.status)),[active]);
+  const cashTotal   = useMemo(()=>cobrados.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[cobrados]);
+  const cashNeta    = useMemo(()=>cobrados.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),[cobrados]);
 
-  // Por categoria
+  // ── LAYER 3: CARTERA — entregado+facturado no cobrado ──────────────────────
+  const cartera     = useMemo(()=>active.filter(t=>CARTERA_SET.has(t.status)&&!t.cobrado),[active]);
+  const carteraMonto= useMemo(()=>cartera.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[cartera]);
+  const cxp         = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)&&!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap.costoTotal),0),[active]);
+  const flujoOp     = carteraMonto - cargaFiscal - cxp;
+  const vencidos    = useMemo(()=>cartera.filter(t=>{if(!t.promesaPago)return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}),[cartera]);
+
+  // ── LAYER 4: FORECAST — cotizado+autorizado ────────────────────────────────
+  const forecastTkts= useMemo(()=>active.filter(t=>FORECAST_SET.has(t.status)),[active]);
+  const forecastMonto=useMemo(()=>forecastTkts.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[forecastTkts]);
+  const forecastUtil= useMemo(()=>forecastTkts.reduce((s,t)=>s+utilidadPonderada(safeNumber(t.snap.uNeta),t.prob),0),[forecastTkts]);
+  const cotizados   = useMemo(()=>forecastTkts.filter(t=>t.status==="cotizado"),[forecastTkts]);
+  const autorizados = useMemo(()=>forecastTkts.filter(t=>t.status==="autorizado"),[forecastTkts]);
+
+  // ── OPERATIONAL ────────────────────────────────────────────────────────────
+  const totalHoras  = useMemo(()=>active.reduce((s,t)=>s+safeNumber(t.horasOp),0),[active]);
+  const uPorHora    = totalHoras>0?utilidadOp/totalHoras:0;
+  const p1Active    = useMemo(()=>active.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status)),[active]);
+
+  // By category — only operados
   const byOp = useMemo(()=>OP_TYPES.map(op=>{
-    const sub=tickets.filter(t=>t.opId===op.id);
-    return{label:op.label,short:op.short,count:sub.length,neta:sub.reduce((s,t)=>s+t.snap.uNeta,0),fact:sub.reduce((s,t)=>s+t.snap.precioConIVA,0)};
-  }).sort((a,b)=>b.neta-a.neta),[tickets]);
+    const sub=operados.filter(t=>t.opId===op.id);
+    return{label:op.label,short:op.short,count:sub.length,neta:sub.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),fact:sub.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0)};
+  }).sort((a,b)=>b.neta-a.neta),[operados]);
   const maxByOp = Math.max(...byOp.map(o=>o.neta),1);
 
-  // Top clientes
+  // Top clientes — only operados
   const topClients = useMemo(()=>clients.map(c=>{
-    const co=tickets.filter(t=>t.clientId===c.id);
-    return{label:c.empresa,neta:co.reduce((s,t)=>s+t.snap.uNeta,0),fact:co.reduce((s,t)=>s+t.snap.precioConIVA,0),count:co.length};
-  }).filter(c=>c.count>0).sort((a,b)=>b.neta-a.neta).slice(0,5),[tickets,clients]);
+    const co=operados.filter(t=>t.clientId===c.id);
+    return{label:c.empresa,neta:co.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),fact:co.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),count:co.length};
+  }).filter(c=>c.count>0).sort((a,b)=>b.neta-a.neta).slice(0,5),[operados,clients]);
   const maxClient = Math.max(...topClients.map(c=>c.neta),1);
+
+  // Legacy aliases for existing UI code below
+  const realizados = operados;
+  const totalFact  = revenueOp;
+  const totalNeta  = utilidadOp;
+  const rentabilidadProm = margenOp;
+  const ivaNetoTotal = ivaNetoOp;
+  const isrTotal = isrOp;
+  const cargaFiscalTotal = cargaFiscal;
+  const carteraPend = carteraMonto;
+  const forecast = forecastUtil;
+  const eficienciaFiscalGlobal = eficienciaFiscal;
+  const utilidadBrutaTotal = uBrutaOp;
 
   // Top proveedores
   const topSupp = useMemo(()=>suppliers.map(s=>{
@@ -1356,12 +1389,85 @@ function CentroOps({state}) {
         </div>
       </div>
 
-      {/* Fila inferior: Resumen financiero + Prioridades */}
+      {/* Resumen financiero — 3 bloques separados */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7,marginBottom:7}}>
+
+        {/* BLOQUE 1 — OPERACIÓN */}
+        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
+          <SHdr title="OPERACIÓN REALIZADA"/>
+          <div style={{fontSize:7,color:C.t3,marginBottom:6}}>Entregado · Facturado · Cobrado · {operados.length} tickets</div>
+          {[
+            ["Revenue operado",   mxn(revenueOp),  C.cyan],
+            ["Costo producto",    mxn(costoProducto), C.t2],
+            ["Gastos operativos", mxn(gastosOp),   C.t2],
+            ["Costo total",       mxn(costoOp),    C.t2],
+            ["Utilidad operativa",mxn(utilidadOp), utilidadOp>=0?C.green:C.red],
+            ["Margen neto",       fpct(margenOp),  margenColor(margenOp)],
+            ["Markup promedio",   fpct(markupProm),C.blueHi],
+            ["ROI operativo",     fpct(roi),        roi>=25?C.green:C.yellow],
+            ["IVA neto SAT",      mxn(ivaNetoOp),  C.yellow],
+            ["ISR estimado",      mxn(isrOp),       C.yellow],
+            ["Carga fiscal",      mxn(cargaFiscal), C.red],
+            ["Eficiencia fiscal", fpct(eficienciaFiscal),eficienciaFiscal>=75?C.green:C.yellow],
+          ].map(([lbl,val,col],i)=>(
+            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:`1px solid ${C.border}`}}>
+              <span style={{fontSize:8,color:C.t3}}>{lbl}</span>
+              <span style={{fontSize:10,fontWeight:800,color:col,fontFamily:"'Courier New',monospace"}}>{val}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* BLOQUE 2 — COBRANZA */}
+        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
+          <SHdr title="COBRANZA"/>
+          <div style={{fontSize:7,color:C.t3,marginBottom:6}}>Cash recibido vs cartera pendiente</div>
+          {[
+            ["Cash cobrado",     mxn(cashTotal),    C.green],
+            ["Util. sobre cobrado",mxn(cashNeta),   C.green],
+            ["Cartera pendiente",mxn(carteraMonto), C.yellow],
+            ["Vencidas",         String(vencidos.length)+" tickets", vencidos.length>0?C.red:C.t3],
+            ["CxP proveedores",  mxn(cxp),          C.t2],
+            ["Flujo operativo",  mxn(flujoOp),      flujoOp>=0?C.green:C.red],
+          ].map(([lbl,val,col],i)=>(
+            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:`1px solid ${C.border}`}}>
+              <span style={{fontSize:8,color:C.t3}}>{lbl}</span>
+              <span style={{fontSize:10,fontWeight:800,color:col,fontFamily:"'Courier New',monospace"}}>{val}</span>
+            </div>
+          ))}
+          <div style={{marginTop:8,fontSize:7,color:C.t3}}>DESGLOSE CARTERA</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4,marginTop:4}}>
+            <KPI label="Por cobrar" value={String(cartera.length)} sub="tickets"/>
+            <KPI label="Cobrados" value={String(cobrados.length)} sub="tickets"/>
+          </div>
+        </div>
+
+        {/* BLOQUE 3 — FORECAST */}
+        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
+          <SHdr title="FORECAST / PIPELINE"/>
+          <div style={{fontSize:7,color:C.t3,marginBottom:6}}>Cotizado + Autorizado — NO contamina revenue</div>
+          {[
+            ["Cotizados",        String(cotizados.length)+" tickets",  C.t2],
+            ["Autorizados",      String(autorizados.length)+" tickets",C.cyan],
+            ["Revenue forecast", mxn(forecastMonto),                   C.cyan],
+            ["Util. forecast",   mxn(forecastUtil),                    C.blueHi],
+          ].map(([lbl,val,col],i)=>(
+            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:`1px solid ${C.border}`}}>
+              <span style={{fontSize:8,color:C.t3}}>{lbl}</span>
+              <span style={{fontSize:10,fontWeight:800,color:col,fontFamily:"'Courier New',monospace"}}>{val}</span>
+            </div>
+          ))}
+          <div style={{marginTop:8}}>
+            <KPI label="P1 abiertos" value={String(p1Active.length)} color={p1Active.length>0?C.red:C.t3}/>
+          </div>
+        </div>
+      </div>
+
+      {/* Fila inferior: categorías + prioridades */}
       <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:7}}>
         <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
-          <SHdr title="RESUMEN FINANCIERO GLOBAL"/>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:5,marginTop:8}}>
-            {[["Facturado",mxn(totalFact),C.cyan],["Invertido",mxn(totalInv),C.t2],["Util. neta",mxn(totalNeta),totalNeta>=0?C.green:C.red],["Markup prom.",fpct(markupProm),C.blueHi],["Rentabilidad neta",fpct(rentabilidadProm),margenColor(rentabilidadProm)],["ROI operativo",fpct(roi),roi>=25?C.green:C.yellow],["IVA neto SAT",mxn(ivaNetoTotal),C.yellow],["ISR estimado",mxn(isrTotal),C.yellow],["Carga fiscal",mxn(cargaFiscalTotal),C.red],["Eficiencia fiscal",fpct(eficienciaFiscalGlobal),eficienciaFiscalGlobal>=75?C.green:C.yellow],["Cartera pend.",mxn(carteraPend),C.yellow],["CxP proveedores",mxn(cxp),C.t2],["Flujo operativo",mxn(flujoOp),flujoOp>=0?C.green:C.red],["Forecast util.",mxn(forecast),C.cyan]].map(([lbl,val,col],i)=>(
+          <SHdr title="RESUMEN RÁPIDO"/>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5,marginTop:8}}>
+            {[["Revenue op.",mxn(revenueOp),C.cyan],["Cash cobrado",mxn(cashTotal),C.green],["Cartera",mxn(carteraMonto),C.yellow],["Util. operativa",mxn(utilidadOp),utilidadOp>=0?C.green:C.red],["Forecast",mxn(forecastMonto),C.t2]].map(([lbl,val,col],i)=>(
               <div key={i} style={{padding:"5px 8px",background:C.bg2,borderRadius:3,border:`1px solid ${C.border}`}}>
                 <div style={{fontSize:7,color:C.t3,marginBottom:2}}>{lbl}</div>
                 <div style={{fontSize:12,fontWeight:800,color:col,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{val}</div>
@@ -3536,29 +3642,37 @@ function MSel({label,value,onChange,options}) {
 // ── MOps — Dashboard móvil ───────────────────────────────────────────────────
 function MOps({state,setTab}) {
   const {tickets,clients,suppliers,units} = state;
-
-  const p1       = useMemo(()=>tickets.filter(t=>!t._deleted&&t.priority==="P1"&&!CLOSED_SET.has(t.status)),[tickets]);
-  const p2       = useMemo(()=>tickets.filter(t=>!t._deleted&&t.priority==="P2"&&!CLOSED_SET.has(t.status)),[tickets]);
-  const abiertos = useMemo(()=>tickets.filter(t=>!t._deleted&&!CLOSED_SET.has(t.status)),[tickets]);
-  const vencidos = useMemo(()=>tickets.filter(t=>{if(t._deleted||!t.promesaPago||t.cobrado||t.status==="cancelado")return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}),[tickets]);
-  const realizados = useMemo(()=>tickets.filter(t=>!t._deleted&&REVENUE_SET.has(t.status)),[tickets]);
-  const totalFact = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[realizados]);
-  const totalNeta = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),[realizados]);
-  const totalInv  = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.costoBase)*(1+safeNumber(t.snap.params?.iva,16)/100),0),[realizados]);
+  const active   = useMemo(()=>tickets.filter(t=>!t._deleted&&t.status!=="cancelado"),[tickets]);
+  const p1       = useMemo(()=>active.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status)),[active]);
+  const p2       = useMemo(()=>active.filter(t=>t.priority==="P2"&&!CLOSED_SET.has(t.status)),[active]);
+  const abiertos = useMemo(()=>active.filter(t=>!CLOSED_SET.has(t.status)),[active]);
+  const vencidos = useMemo(()=>active.filter(t=>{if(!t.promesaPago||t.cobrado)return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}),[active]);
+  // Layer 1: Operado
+  const operados  = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)),[active]);
+  const totalFact = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[operados]);
+  const totalNeta = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),[operados]);
+  const totalInv  = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.costoBase)*(1+safeNumber(t.snap.params?.iva,16)/100),0),[operados]);
+  const costoProducto = totalInv;
+  const gastosOp  = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.gastos),0),[operados]);
   const pctNeta   = totalFact>0?(totalNeta/totalFact)*100:0;
-  const ivaNetoTotal = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.ivaNeto),0),[realizados]);
-  const isrTotal     = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.isr),0),[realizados]);
+  const ivaNetoTotal = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.ivaNeto),0),[operados]);
+  const isrTotal     = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.isr),0),[operados]);
   const cargaFiscalTotal = ivaNetoTotal + isrTotal;
-  const rentabilidadProm = useMemo(()=>{const v=realizados.filter(t=>safeNumber(t.snap.precioSinIVA)>0);return v.length>0?v.reduce((s,t)=>s+(safeNumber(t.snap.uNeta)/safeNumber(t.snap.precioSinIVA))*100,0)/v.length:0;},[realizados]);
-  const markupProm = useMemo(()=>{const v=realizados.filter(t=>safeNumber(t.snap.costoTotal)>0);return v.length>0?v.reduce((s,t)=>s+calcMarkup(t.snap.precioSinIVA,t.snap.costoTotal),0)/v.length:0;},[realizados]);
-  const utilidadBrutaTotal = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.uBruta),0),[realizados]);
-  const eficienciaFiscalGlobal = utilidadBrutaTotal>0?(totalNeta/utilidadBrutaTotal)*100:0;
+  const rentabilidadProm = totalFact>0?(totalNeta/totalFact)*100:0;
+  const markupProm = useMemo(()=>{const v=operados.filter(t=>safeNumber(t.snap.costoTotal)>0);return v.length>0?v.reduce((s,t)=>s+calcMarkup(t.snap.precioSinIVA,t.snap.costoTotal),0)/v.length:0;},[operados]);
+  const uBrutaTotal = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.uBruta),0),[operados]);
+  const eficienciaFiscalGlobal = uBrutaTotal>0?(totalNeta/uBrutaTotal)*100:0;
   const roi = totalInv>0?(totalNeta/totalInv)*100:0;
-  const cxp = useMemo(()=>tickets.filter(t=>!t._deleted&&!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap.costoTotal),0),[tickets]);
-  const cartera   = useMemo(()=>tickets.filter(t=>!t._deleted&&CARTERA_SET.has(t.status)&&!t.cobrado).reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[tickets]);
-  const flujoOp = cartera - cargaFiscalTotal - cxp;
-  const forecast  = useMemo(()=>tickets.filter(t=>!t._deleted&&FORECAST_SET.has(t.status)).reduce((s,t)=>s+utilidadPonderada(safeNumber(t.snap.uNeta),t.prob),0),[tickets]);
-  const totalHoras= useMemo(()=>tickets.filter(t=>!t._deleted).reduce((s,t)=>s+safeNumber(t.horasOp),0),[tickets]);
+  // Layer 2: Cash
+  const cashTotal = useMemo(()=>active.filter(t=>CASH_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[active]);
+  // Layer 3: Cartera
+  const carteraMonto = useMemo(()=>active.filter(t=>CARTERA_SET.has(t.status)&&!t.cobrado).reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[active]);
+  const cxp = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)&&!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap.costoTotal),0),[active]);
+  const flujoOp = carteraMonto - cargaFiscalTotal - cxp;
+  // Layer 4: Forecast
+  const forecast  = useMemo(()=>active.filter(t=>FORECAST_SET.has(t.status)).reduce((s,t)=>s+utilidadPonderada(safeNumber(t.snap.uNeta),t.prob),0),[active]);
+  const forecastMonto = useMemo(()=>active.filter(t=>FORECAST_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[active]);
+  const totalHoras= useMemo(()=>active.reduce((s,t)=>s+safeNumber(t.horasOp),0),[active]);
   const uPH       = totalHoras>0?totalNeta/totalHoras:0;
 
   // Aging cartera
@@ -3615,7 +3729,7 @@ function MOps({state,setTab}) {
         {[
           ["Realizado (entregado+)", mxn(totalFact), C.cyan],
           ["Utilidad neta",   mxn(totalNeta), totalNeta>=0?C.green:C.red],
-          ["Cartera pend.",   mxn(cartera),   C.yellow],
+          ["Cartera pend.",   mxn(carteraMonto),   C.yellow],
           ["Forecast",        mxn(forecast),  C.cyan],
         ].map(([l,v,c])=>(
           <div key={l} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px"}}>
@@ -3767,21 +3881,24 @@ function MOps({state,setTab}) {
           <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em"}}>RESUMEN FINANCIERO</div>
         </div>
         {[
-          ["Facturado total",   mxn(totalFact),              C.cyan],
-          ["Total invertido",   mxn(totalInv),               C.t2],
-          ["Utilidad neta",     mxn(totalNeta),              totalNeta>=0?C.green:C.red],
-          ["Markup promedio",   fpct(markupProm),            C.blueHi],
-          ["Rentabilidad neta", fpct(rentabilidadProm),      margenColor(rentabilidadProm)],
-          ["ROI operativo",     fpct(roi),                   roi>=25?C.green:C.yellow],
-          ["IVA neto SAT",      mxn(ivaNetoTotal),           C.yellow],
-          ["ISR estimado",      mxn(isrTotal),               C.yellow],
-          ["Carga fiscal",      mxn(cargaFiscalTotal),       C.red],
-          ["Eficiencia fiscal", fpct(eficienciaFiscalGlobal),eficienciaFiscalGlobal>=75?C.green:C.yellow],
-          ["Cartera pend.",     mxn(cartera),                C.yellow],
-          ["Flujo operativo",   mxn(flujoOp),                flujoOp>=0?C.green:C.red],
-          ["Forecast util.",    mxn(forecast),               C.cyan],
-          ["P1 activos",        String(p1.length),           p1.length>0?C.p1dot:C.t3],
-          ["P2 activos",        String(p2.length),           p2.length>0?C.p2dot:C.t3],
+          ["Revenue operado",    mxn(totalFact),              C.cyan],
+          ["Costo producto",     mxn(costoProducto),          C.t2],
+          ["Gastos operativos",  mxn(gastosOp),               C.t2],
+          ["Cash cobrado",       mxn(cashTotal),              C.green],
+          ["Utilidad operativa", mxn(totalNeta),              totalNeta>=0?C.green:C.red],
+          ["Markup promedio",    fpct(markupProm),            C.blueHi],
+          ["Rentabilidad neta",  fpct(rentabilidadProm),      margenColor(rentabilidadProm)],
+          ["ROI operativo",      fpct(roi),                   roi>=25?C.green:C.yellow],
+          ["IVA neto SAT",       mxn(ivaNetoTotal),           C.yellow],
+          ["ISR estimado",       mxn(isrTotal),               C.yellow],
+          ["Carga fiscal",       mxn(cargaFiscalTotal),       C.red],
+          ["Eficiencia fiscal",  fpct(eficienciaFiscalGlobal),eficienciaFiscalGlobal>=75?C.green:C.yellow],
+          ["Cartera pendiente",  mxn(carteraMonto),           C.yellow],
+          ["Flujo operativo",    mxn(flujoOp),                flujoOp>=0?C.green:C.red],
+          ["Forecast revenue",   mxn(forecastMonto),          C.t2],
+          ["Forecast utilidad",  mxn(forecast),               C.cyan],
+          ["P1 activos",         String(p1.length),           p1.length>0?C.p1dot:C.t3],
+          ["P2 activos",         String(p2.length),           p2.length>0?C.p2dot:C.t3],
         ].map(([l,v,c],i,arr)=>(
           <div key={l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 14px",borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none"}}>
             <span style={{fontSize:12,color:C.t2}}>{l}</span>
