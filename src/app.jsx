@@ -584,18 +584,18 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
 
   const theadMulti = `<thead><tr>
     <th style="width:36px;text-align:center">#</th>
-    <th style="width:60px;text-align:center">Cant.</th>
-    <th style="width:160px">Concepto</th>
-    <th>Descripci\u00f3n t\u00e9cnica / operativa</th>
-    <th style="width:110px;text-align:right">Unitario</th>
-    <th style="width:120px;text-align:right">Total</th>
+    <th style="width:55px;text-align:center">Cant.</th>
+    <th style="width:150px">Concepto</th>
+    <th style="width:360px">Descripci\u00f3n t\u00e9cnica / operativa</th>
+    <th style="width:100px;text-align:right">Unitario</th>
+    <th style="width:110px;text-align:right">Total</th>
   </tr></thead>`;
 
   const theadSimple = `<thead><tr>
     <th style="width:36px">No.</th>
-    <th style="width:190px">Concepto</th>
-    <th>Descripci\u00f3n t\u00e9cnica / operativa</th>
-    <th style="width:130px;text-align:right">Importe</th>
+    <th style="width:150px">Concepto</th>
+    <th style="width:420px">Descripci\u00f3n t\u00e9cnica / operativa</th>
+    <th style="width:110px;text-align:right">Importe</th>
   </tr></thead>`;
 
   const html = `<!DOCTYPE html>
@@ -605,44 +605,50 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
 <title>${folio}</title>
 <style>
 *{box-sizing:border-box}
-html,body{width:210mm;margin:0;padding:0;background:#fff;font-family:Arial,Helvetica,sans-serif;color:#111}
-.page{width:210mm;height:297mm;background:#fff;margin:0 auto;padding:14mm;overflow:hidden;position:relative;box-sizing:border-box}
+html,body{width:210mm;margin:0;padding:0;background:#fff;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;color:#111}
+.page{width:210mm;min-height:297mm;background:#fff;margin:0 auto;padding:14mm 14mm 10mm 14mm;position:relative;box-sizing:border-box}
 .toolbar{text-align:right;margin-bottom:6mm}
 .toolbar button{padding:2mm 5mm;border:none;border-radius:2px;font-size:10px;font-weight:700;cursor:pointer;margin-left:4px}
 .tb-close{background:#ddd;color:#444}.tb-save{background:#111;color:#fff}
-.top-header{border:1px solid #d9d9d9;background:#fafafa;padding:4.5mm 5mm;display:flex;justify-content:space-between;align-items:flex-start}
-.brand h1{margin:0;font-size:20px;font-weight:800;letter-spacing:.5px}
-.brand p{margin:2mm 0 0;font-size:9px;color:#555;font-weight:600}
+.top-header{border:1px solid #d9d9d9;background:#fafafa;padding:6mm 6mm;display:flex;justify-content:space-between;align-items:flex-start}
+.brand h1{margin:0;font-size:34px;font-weight:800;letter-spacing:-1px}
+.brand p{margin:2mm 0 0;font-size:9px;color:#666;font-weight:700;letter-spacing:.4px}
 .issuer{text-align:right;font-size:9.5px;line-height:1.65}
 .issuer strong{font-size:10.5px}
-.hero{margin-top:3.5mm;background:#0c0c0c;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:3.5mm 5mm}
+.hero{margin-top:4mm;background:#050505;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:7mm 7mm}
 .hero-title{font-size:20px;font-weight:800;letter-spacing:.4px}
 .hero-meta{text-align:right;line-height:1.3}
 .hero-meta .label{font-size:10px;opacity:.85}
 .hero-meta .folio{font-size:16px;font-weight:800}
 .hero-meta .date{font-size:12px;font-weight:700}
-.meta-table{width:100%;border-collapse:collapse;margin-top:3mm}
-.meta-table td{border:1px solid #e1e1e1;padding:2.2mm 3mm;font-size:10.5px}
+.meta-table{width:100%;border-collapse:collapse;margin-top:2mm}
+.meta-table td{border:1px solid #e1e1e1;padding:1.8mm 3mm;font-size:10.5px}
 .meta-table td:first-child{width:28mm;background:#fafafa;font-weight:700}
-.section-title{margin-top:4.5mm;margin-bottom:2mm;font-size:12.5px;font-weight:800;letter-spacing:.2px}
+.section-title{margin-top:3.5mm;margin-bottom:1.5mm;font-size:12.5px;font-weight:800;letter-spacing:.2px}
 .detail-table{width:100%;border-collapse:collapse;page-break-inside:avoid}
 .detail-table th{background:#0c0c0c;color:#fff;text-align:left;padding:2mm 2.5mm;font-size:9.5px;font-weight:700}
-.detail-table td{border:1px solid #e4e4e4;padding:2.5mm 2.5mm;vertical-align:top;font-size:10px;line-height:1.45}
+.detail-table td{border:1px solid #e4e4e4;padding:3.2mm 3mm;vertical-align:top;font-size:11px;line-height:1.55}
 .detail-table strong{display:inline-block;margin-top:0}
-.totals{width:88mm;margin-left:auto;margin-top:2.5mm;border-collapse:collapse;page-break-inside:avoid}
-.totals td{border:1px solid #e3e3e3;padding:1.8mm 3mm;font-size:10.5px}
+.totals{width:92mm;margin-left:auto;margin-top:5mm;border-collapse:collapse;page-break-inside:avoid}
+.totals td{border:1px solid #e3e3e3;padding:2.5mm 3.5mm;font-size:11px}
 .totals td:last-child{text-align:right;font-weight:700}
 .totals .grand-total td{background:#0c0c0c;color:#fff;font-weight:800;font-size:11.5px}
-.block{margin-top:4mm;page-break-inside:avoid}
-.block h3{margin:0 0 1.5mm;font-size:12px;font-weight:800}
-.block ul{margin:0;padding-left:4mm}
-.block li{margin-bottom:1.2mm;line-height:1.45;font-size:10px}
-.footer{margin-top:4mm;padding-top:2mm;border-top:1px solid #e3e3e3;display:flex;justify-content:space-between;font-size:9.5px;color:#444;page-break-inside:avoid}
+.block{margin-top:6mm;page-break-inside:avoid}
+.block h3{margin:0 0 2mm;font-size:12px;font-weight:800}
+.block ul{margin:0;padding-left:3.5mm}
+.block li{margin-bottom:1.5mm;line-height:1.5;font-size:10px}
+.footer{margin-top:8mm;padding-top:2.5mm;border-top:1px solid #e3e3e3;display:flex;justify-content:space-between;font-size:9.5px;color:#444;page-break-inside:avoid}
 table,tr,td,th{page-break-inside:avoid !important}
 @media print{
   .toolbar{display:none}
   html,body{background:#fff;width:210mm}
-  @page{size:A4 portrait;margin:0}
+  @page{
+    size:A4 portrait;
+    margin:0;
+    /* Suppress browser header/footer (URL, date, page number) */
+    margin-top:0;
+    margin-bottom:0;
+  }
 }
 </style>
 </head>
@@ -662,9 +668,7 @@ table,tr,td,th{page-break-inside:avoid !important}
   <div class="issuer">
     <strong>Alejandro Saucedo</strong><br>
     RFC: SAME9612277T9<br>
-    Tel. 5562321807<br>
-    contacto@logisolve.mx<br>
-    https://logisolve-sistema.vercel.app/
+    Tel. 5562321807
   </div>
 </div>
 
