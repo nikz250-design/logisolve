@@ -3684,9 +3684,9 @@ function MOps({state,setTab}) {
 
   // Por categoria
   const byOp = useMemo(()=>OP_TYPES.map(op=>{
-    const sub=tickets.filter(t=>t.opId===op.id);
-    return{label:op.label,count:sub.length,neta:sub.reduce((s,t)=>s+t.snap.uNeta,0)};
-  }).filter(o=>o.count>0).sort((a,b)=>b.neta-a.neta),[tickets]);
+    const sub=operados.filter(t=>t.opId===op.id);
+    return{label:op.label,count:sub.length,neta:sub.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0)};
+  }).filter(o=>o.count>0).sort((a,b)=>b.neta-a.neta),[operados]);
   const maxByOp=Math.max(...byOp.map(o=>o.neta),1);
 
   // Top clientes
