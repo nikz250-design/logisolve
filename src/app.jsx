@@ -1209,6 +1209,7 @@ function CentroOps({state}) {
   // ── OPERATIONAL ────────────────────────────────────────────────────────────
   const totalHoras  = useMemo(()=>active.reduce((s,t)=>s+safeNumber(t.horasOp),0),[active]);
   const uPorHora    = totalHoras>0?utilidadOp/totalHoras:0;
+  const uPH         = uPorHora;
   const p1Active    = useMemo(()=>active.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status)),[active]);
 
   // By category — only operados
@@ -1237,6 +1238,11 @@ function CentroOps({state}) {
   const forecast = forecastUtil;
   const eficienciaFiscalGlobal = eficienciaFiscal;
   const utilidadBrutaTotal = uBrutaOp;
+  // Additional derived vars used in UI
+  const pctNeta    = revenueOp > 0 ? (utilidadOp / revenueOp) * 100 : 0;
+  const abiertas   = useMemo(()=>active.filter(t=>!CLOSED_SET.has(t.status)),[active]);
+  const cobradas   = useMemo(()=>active.filter(t=>PAID_SET.has(t.status)),[active]);
+  const conversion = active.length > 0 ? (cobradas.length / active.length) * 100 : 0;
 
   // Top proveedores
   const topSupp = useMemo(()=>suppliers.map(s=>{
@@ -3099,6 +3105,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
   const sfn = k => v => setEf(p=>({...p,[k]:v}));
 
   const activeTickets  = useMemo(()=>tickets.filter(t=>!t._deleted),[tickets]);
+  const active = activeTickets; // alias
   const trashedTickets = useMemo(()=>tickets.filter(t=>t._deleted),[tickets]);
 
   const sortedTickets = useMemo(()=>{
@@ -3666,6 +3673,7 @@ function MOps({state,setTab}) {
   // Layer 3: Cartera
   const carteraMonto = useMemo(()=>active.filter(t=>CARTERA_SET.has(t.status)&&!t.cobrado).reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[active]);
   const cxp = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)&&!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap.costoTotal),0),[active]);
+  const cartera = carteraMonto; // alias for UI compatibility
   const flujoOp = carteraMonto - cargaFiscalTotal - cxp;
   // Layer 4: Forecast
   const forecast  = useMemo(()=>active.filter(t=>FORECAST_SET.has(t.status)).reduce((s,t)=>s+utilidadPonderada(safeNumber(t.snap.uNeta),t.prob),0),[active]);
