@@ -583,6 +583,103 @@ function useToasts() {
   return {toasts,push};
 }
 
+// ── buildCotizacionHTML — genera HTML del documento (usado en preview y download) ─
+function buildCotizacionHTML(tkt, cl, un, supp) {
+  const totals = calculateTicketTotals(tkt);
+  const folio  = tkt.id.replace("TKT","COT");
+  const fechaLarga=(()=>{
+    const p=tkt.date.split("/"); if(p.length!==3) return tkt.date;
+    const m=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+    return `${parseInt(p[0])} de ${m[parseInt(p[1])-1]} de ${p[2]}`;
+  })();
+  const formaPago = tkt.payType==="credit"
+    ? "Crédito"+(tkt.promesaPago?` — Fecha límite: ${tkt.promesaPago}`:"")
+    : "Contado / Transferencia bancaria";
+  const entrega = supp&&supp.entregaDias
+    ? `${supp.entregaDias} día${supp.entregaDias>1?"s":""} hábiles`
+    : "24-48 hrs hábiles";
+  const unidadStr = un
+    ? `${un.economico?"Eco. "+un.economico+" · ":""}${un.marca} ${un.modelo} ${un.anio}`
+    : "";
+  const clDirParts=[]; if(cl?.direccion)clDirParts.push(cl.direccion); if(cl?.ciudad)clDirParts.push(cl.ciudad); if(cl?.estado)clDirParts.push(cl.estado);
+  const clLine = cl ? cl.empresa+(clDirParts.length?" · "+clDirParts.join(", "):"") : "—";
+  const fmtMXN = n=>safeNumber(n).toLocaleString("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2});
+  const notaLine = tkt.notes?`<li>${tkt.notes}</li>`:"";
+  const conceptos = tkt.lineas&&tkt.lineas.length>0
+    ? tkt.lineas
+    : [{titulo:tkt.titulo,partRef:tkt.partRef||"",snap:tkt.snap,qty:1,descripcionPDF:""}];
+  const filas = conceptos.map((c,i)=>{
+    const ml=migrateLinea(c,tkt.snap); const qty=safeNumber(ml.qty,1)||1;
+    const fin=resolveLineFinancials(ml,tkt.snap,qty);
+    const desc=ml.descripcionPDF||"Atención correctiva para continuidad operativa de unidad en CEDIS SMO. Incluye integración de componente compatible, validación operativa y seguimiento logístico.";
+    const unTag=unidadStr&&i===0?`<br><br><strong>Unidad:</strong> ${unidadStr}`:"";
+    const refTag=ml.partRef?`<br><br><strong>Clave:</strong> ${ml.partRef}`:"";
+    return `<tr><td>${String(i+1).padStart(2,"0")}</td><td>${ml.titulo||"Sin descripcion"}</td><td>${desc}${unTag}${refTag}</td><td class="money">${fmtMXN(fin.lineTotal)}</td></tr>`;
+  }).join("");
+  if(!filas.trim()) return null;
+  const body=`<style>*{box-sizing:border-box;margin:0;padding:0}.page{width:794px;background:#fff;padding:50px;font-family:Arial,Helvetica,sans-serif;color:#111;font-size:14px;line-height:1.5}.top-header{border:1px solid #dcdcdc;padding:20px;display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0}.brand h1{font-size:28px;font-weight:800;margin:0}.brand p{font-size:10px;color:#666;font-weight:700;margin-top:4px}.issuer{text-align:right;font-size:11px;line-height:1.6}.hero{background:#000;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:20px;margin-top:14px}.hero-title{font-size:22px;font-weight:800}.hero-meta{text-align:right}.hero-meta .folio{font-size:18px;font-weight:800}.hero-meta .date{font-size:13px;font-weight:700}.meta-table{width:100%;border-collapse:collapse;margin-top:14px}.meta-table td{border:1px solid #e3e3e3;padding:10px 12px;font-size:11px}.meta-table td:first-child{width:100px;background:#fafafa;font-weight:700}.section-title{margin-top:22px;margin-bottom:10px;font-size:13px;font-weight:800}.detail-table{width:100%;border-collapse:collapse}.detail-table th{background:#000;color:#fff;padding:10px 12px;text-align:left;font-size:10px}.detail-table td{border:1px solid #e5e5e5;padding:12px;vertical-align:top;font-size:11px;line-height:1.6}.money{text-align:right;white-space:nowrap;font-weight:700}.totals{width:300px;margin-left:auto;margin-top:16px;border-collapse:collapse}.totals td{border:1px solid #e3e3e3;padding:10px 12px;font-size:11px}.totals td:last-child{text-align:right;font-weight:700}.grand-total td{background:#000;color:#fff;font-weight:800}.block{margin-top:22px}.block h3{font-size:13px;font-weight:800;margin-bottom:8px}.block ul{padding-left:16px}.block li{margin-bottom:5px;font-size:11px;line-height:1.6}.footer{margin-top:28px;border-top:1px solid #e5e5e5;padding-top:10px;display:flex;justify-content:space-between;font-size:10px;color:#444}</style><div class="page"><div class="top-header"><div class="brand"><h1>LOGISOLVE</h1><p>Logistics &middot; Supply &middot; Solutions</p></div><div class="issuer"><strong>Alejandro Saucedo</strong><br>RFC: SAME9612277T9<br>Tel. 5562321807<br>contacto@logisolve.mx</div></div><div class="hero"><div class="hero-title">COTIZACI&Oacute;N</div><div class="hero-meta"><div>No.</div><div class="folio">${folio}</div><div class="date">Fecha: ${tkt.date.replace(/\//g," / ")}</div></div></div><table class="meta-table"><tr><td>Cliente</td><td>${clLine}</td></tr><tr><td>Vigencia</td><td>3 d&iacute;as naturales</td></tr><tr><td>Atenci&oacute;n</td><td>&Aacute;rea de Compras / Operaciones</td></tr></table><div class="section-title">DETALLE DEL CONCEPTO</div><table class="detail-table"><thead><tr><th style="width:36px">No.</th><th style="width:160px">Concepto</th><th>Descripci&oacute;n t&eacute;cnica / operativa</th><th style="width:110px;text-align:right">Importe</th></tr></thead><tbody>${filas}</tbody></table><table class="totals"><tr><td>Subtotal</td><td>${fmtMXN(totals.subtotal)} MXN</td></tr><tr><td>IVA (${totals.ivaPct}%)</td><td>${fmtMXN(totals.ivaAmt)} MXN</td></tr><tr class="grand-total"><td>TOTAL &middot; IVA INCLUIDO</td><td>${fmtMXN(totals.total)} MXN</td></tr></table><div class="block"><h3>ALCANCE DEL SERVICIO</h3><ul><li>Integraci&oacute;n y coordinaci&oacute;n de componente requerido para continuidad operativa.</li><li>Validaci&oacute;n y coordinaci&oacute;n operativa.</li><li>Entrega directa en CEDIS SMO.</li><li>Seguimiento y trazabilidad log&iacute;stica.</li></ul></div><div class="block"><h3>CONDICIONES COMERCIALES</h3><ul><li>Precio IVA incluido en el total.</li><li>Forma de pago: ${formaPago}.</li><li>Entrega conforme a disponibilidad confirmada al momento de autorizaci&oacute;n.</li><li>Precios sujetos a cambio y disponibilidad al momento de confirmar.</li><li>Vigencia: 3 d&iacute;as naturales a partir de la fecha de emisi&oacute;n.</li>${notaLine}</ul></div><div class="block"><h3>OBSERVACIONES</h3><ul><li>Tiempo estimado de entrega: ${entrega}, sujeto a disponibilidad.</li><li>La validaci&oacute;n t&eacute;cnica final de compatibilidad corresponde al cliente.</li><li>La garant&iacute;a aplica conforme a pol&iacute;ticas del fabricante o proveedor.</li></ul></div><div class="footer"><div>Quedo atento para cualquier duda o confirmaci&oacute;n.</div><div>LogiSolve &middot; ${fechaLarga}</div></div></div>`;
+  return {folio, body};
+}
+
+// ── PDFPreviewModal — preview nativo para iPhone/Safari ──────────────────────
+function PDFPreviewModal({tkt,cl,un,supp,onClose}) {
+  const frameRef=useRef(null);
+  const [ready,setReady]=useState(false);
+  const result=useMemo(()=>buildCotizacionHTML(tkt,cl,un,supp),[tkt]);
+  const htmlDoc=useMemo(()=>{
+    if(!result) return null;
+    return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=794px"><style>body{margin:0;background:#f0f0f0;display:flex;justify-content:center;min-height:100vh;}@media print{body{background:white;margin:0;}}</style></head><body>${result.body}</body></html>`;
+  },[result]);
+
+  const handlePrint=()=>frameRef.current?.contentWindow?.print();
+  const handleShare=()=>{
+    if(navigator.share){
+      navigator.share({title:`Cotización ${tkt.id}`,text:`${tkt.titulo||""}\nTotal: ${mxn(tkt.snap?.precioConIVA||0)}\n${tkt.id}`}).catch(()=>{});
+    } else { handlePrint(); }
+  };
+
+  if(!htmlDoc) return (
+    <div style={{position:"fixed",inset:0,zIndex:700,background:C.bg0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
+      <div style={{fontSize:13,color:C.red}}>No se pudo generar el documento</div>
+      <button onClick={onClose} style={{padding:"12px 24px",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,color:C.t1,fontSize:14,cursor:"pointer"}}>Cerrar</button>
+    </div>
+  );
+
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:700,background:C.bg0,display:"flex",flexDirection:"column"}}>
+      {/* Header */}
+      <div style={{background:C.bg1,borderBottom:`1px solid ${C.border}`,
+        padding:`calc(env(safe-area-inset-top,44px) + 10px) 16px 12px`,
+        display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+        <button onClick={onClose} style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:10,
+          color:C.t1,padding:"10px 14px",cursor:"pointer",fontSize:14,minWidth:44,minHeight:44,lineHeight:1}}>←</button>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:11,color:C.cyan,fontWeight:700,fontFamily:"'Courier New',monospace"}}>{result.folio}</div>
+          <div style={{fontSize:11,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(tkt.titulo||"").substring(0,44)}</div>
+        </div>
+        {typeof navigator!=="undefined"&&navigator.share&&(
+          <button onClick={handleShare} style={{background:C.bg0,border:`1px solid ${C.border}`,borderRadius:10,
+            color:C.t1,padding:"10px 14px",cursor:"pointer",fontSize:13,minWidth:44,minHeight:44,fontWeight:600}}>↑</button>
+        )}
+        <button onClick={handlePrint} style={{background:C.blue,border:`1px solid ${C.blueHi}`,borderRadius:10,
+          color:C.t1,padding:"10px 16px",cursor:"pointer",fontSize:13,fontWeight:700,minHeight:44,whiteSpace:"nowrap"}}>↓ PDF</button>
+      </div>
+      {/* Loading */}
+      {!ready&&(
+        <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12}}>
+          <div style={{width:32,height:32,borderRadius:16,border:`3px solid ${C.border}`,borderTopColor:C.cyan,animation:"spin 0.8s linear infinite"}}/>
+          <div style={{fontSize:12,color:C.t3}}>Generando vista previa...</div>
+        </div>
+      )}
+      {/* Preview */}
+      <iframe ref={frameRef} srcDoc={htmlDoc} onLoad={()=>setReady(true)}
+        style={{flex:1,border:"none",display:ready?"block":"none",background:"white"}}
+        title="Vista previa cotización"
+        sandbox="allow-same-origin allow-scripts allow-modals allow-popups allow-forms"/>
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // PDF GENERATOR — formato oficial Logisolve
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -4268,7 +4365,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
 
 // ── Helpers móviles ──────────────────────────────────────────────────────────
 function MCard({children,style={}}) {
-  return <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:8,marginBottom:10,overflow:"hidden",...style}}>{children}</div>;
+  return <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:16,marginBottom:10,overflow:"hidden",...style}}>{children}</div>;
 }
 function MRow({label,value,color,bold}) {
   return (
@@ -4386,208 +4483,153 @@ function MOps({state,setTab}) {
     open:tickets.filter(t=>t.priority===pr.id&&!CLOSED_SET.has(t.status)).length,
   })),[tickets]);
 
-  return (
-    <div style={{padding:"12px 14px"}}>
+  const lastTkts = useMemo(()=>tickets.filter(t=>!t._deleted).slice(-5).reverse(),[tickets]);
 
-      {/* Alertas */}
+  return (
+    <div style={{padding:"14px 16px"}}>
+
+      {/* Alertas críticas */}
       {p1.length>0&&(
-        <div style={{background:C.p1dim,border:`1px solid ${C.p1dot}44`,borderRadius:8,padding:"12px 14px",marginBottom:8}}>
-          <div style={{fontSize:13,fontWeight:800,color:C.p1dot,marginBottom:3}}>P1 ACTIVO — {p1.length} unidad{p1.length>1?"es":""} detenida{p1.length>1?"s":""}</div>
-          {p1.map(t=><div key={t.id} style={{fontSize:11,color:C.t2,fontFamily:"'Courier New',monospace"}}>{t.id} · {t.titulo.substring(0,30)}</div>)}
+        <div style={{background:C.p1dim,border:`1px solid ${C.p1dot}55`,borderRadius:14,padding:"14px 16px",marginBottom:10,display:"flex",alignItems:"center",gap:12}}>
+          <div style={{width:8,height:8,borderRadius:4,background:C.p1dot,flexShrink:0,boxShadow:`0 0 8px ${C.p1dot}`}}/>
+          <div>
+            <div style={{fontSize:13,fontWeight:800,color:C.p1dot,lineHeight:1.2}}>P1 — {p1.length} unidad{p1.length>1?"es":""} detenida{p1.length>1?"s":""}</div>
+            <div style={{fontSize:11,color:C.t2,marginTop:2,fontFamily:"'Courier New',monospace"}}>{p1.slice(0,2).map(t=>t.id).join(" · ")}</div>
+          </div>
         </div>
       )}
       {vencidos.length>0&&(
-        <div style={{background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",marginBottom:8}}>
-          <div style={{fontSize:13,fontWeight:800,color:"#C04040"}}>CARTERA VENCIDA — {vencidos.length} op. · {mxn(vencidos.reduce((s,t)=>s+t.snap.precioConIVA,0))}</div>
+        <div style={{background:C.redDim,border:`1px solid ${C.red}55`,borderRadius:14,padding:"12px 16px",marginBottom:10,display:"flex",alignItems:"center",gap:12}}>
+          <div style={{width:8,height:8,borderRadius:4,background:"#C04040",flexShrink:0}}/>
+          <div style={{fontSize:13,fontWeight:800,color:"#C04040"}}>Cartera vencida · {vencidos.length} op. · {mxn(vencidos.reduce((s,t)=>s+t.snap.precioConIVA,0))}</div>
         </div>
       )}
 
-      {/* KPIs principales */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+      {/* 5 KPIs principales */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
         {[
-          ["Realizado (entregado+)", mxn(totalFact), C.cyan],
-          ["Utilidad neta",   mxn(totalNeta), totalNeta>=0?C.green:C.red],
-          ["Cartera pend.",   mxn(carteraMonto),   C.yellow],
-          ["Forecast",        mxn(forecast),  C.cyan],
-        ].map(([l,v,c])=>(
-          <div key={l} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px"}}>
-            <div style={{fontSize:10,color:C.t3,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.1em"}}>{l}</div>
+          {l:"Realizado",     v:mxn(totalFact),          c:C.cyan,    sub:`${operados.length} ops`},
+          {l:"Utilidad neta", v:mxn(totalNeta),           c:totalNeta>=0?C.green:C.red, sub:fpct(pctNeta)},
+          {l:"Cartera pend.", v:mxn(carteraMonto),        c:C.yellow,  sub:`${vencidos.length} vencidas`},
+          {l:"Forecast",      v:mxn(forecast),            c:C.cyan,    sub:"ponderado"},
+        ].map(({l,v,c,sub})=>(
+          <div key={l} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px"}}>
+            <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",marginBottom:6,textTransform:"uppercase"}}>{l}</div>
+            <div style={{fontSize:20,fontWeight:800,color:c,fontFamily:"'Courier New',monospace",lineHeight:1,marginBottom:4}}>{v}</div>
+            <div style={{fontSize:10,color:C.t3}}>{sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Fila inferior: 3 métricas secundarias */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+        {[
+          {l:"Abiertos",    v:String(abiertos.length), c:C.t1},
+          {l:"Rentabilidad",v:fpct(pctNeta),           c:margenColor(pctNeta)},
+          {l:"Util/hora",   v:totalHoras>0?mxn(uPH):"—", c:C.cyan},
+        ].map(({l,v,c})=>(
+          <div key={l} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px",textAlign:"center"}}>
+            <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",marginBottom:6,textTransform:"uppercase"}}>{l}</div>
             <div style={{fontSize:17,fontWeight:800,color:c,fontFamily:"'Courier New',monospace",lineHeight:1}}>{v}</div>
           </div>
         ))}
       </div>
 
-      {/* KPIs secundarios */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
-        {[
-          ["Abiertos",    String(abiertos.length), C.t1],
-          ["Rentabilidad neta", fpct(rentabilidadProm),         margenColor(rentabilidadProm)],
-          ["Util/hora",   totalHoras>0?mxn(uPH):"---", C.cyan],
-        ].map(([l,v,c])=>(
-          <div key={l} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 12px"}}>
-            <div style={{fontSize:9,color:C.t3,marginBottom:3,textTransform:"uppercase",letterSpacing:"0.1em"}}>{l}</div>
-            <div style={{fontSize:14,fontWeight:800,color:c,fontFamily:"'Courier New',monospace",lineHeight:1}}>{v}</div>
-          </div>
-        ))}
+      {/* Pipeline resumen horizontal */}
+      <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:12}}>
+        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",marginBottom:10,textTransform:"uppercase"}}>Pipeline · {abiertos.length} activos</div>
+        <div style={{display:"flex",overflowX:"auto",gap:8,paddingBottom:4}}>
+          {TICKET_PIPELINE.slice(0,8).map(sid=>{
+            const s=TICKET_META[sid]; const n=tickets.filter(t=>t.status===sid).length;
+            return (
+              <div key={sid} style={{flexShrink:0,textAlign:"center",minWidth:44}}>
+                <div style={{fontSize:20,fontWeight:800,color:n>0?s.dot:C.t4,fontFamily:"'Courier New',monospace",lineHeight:1}}>{n}</div>
+                <div style={{fontSize:8,color:C.t3,marginTop:4,lineHeight:1.3,maxWidth:44}}>{s.label}</div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Pipeline strip */}
-      <MCard>
-        <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`}}>
-          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em"}}>DISTRIBUCION PIPELINE</div>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",borderBottom:`1px solid ${C.border}`}}>
-          {TICKET_PIPELINE.slice(0,6).map(sid=>{
-            const s=TICKET_META[sid];
-            const count=tickets.filter(t=>t.status===sid).length;
+      {/* Últimas operaciones */}
+      {lastTkts.length>0&&(
+        <div>
+          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",marginBottom:8,textTransform:"uppercase"}}>Últimas operaciones</div>
+          {lastTkts.map(t=>{
+            const cl=clients.find(c=>c.id===t.clientId); const pr=PRIORITY[t.priority]||PRIORITY.P4;
             return (
-              <div key={sid} style={{padding:"10px 4px",textAlign:"center",borderRight:`1px solid ${C.border}`}}>
-                <div style={{fontSize:18,fontWeight:800,color:count>0?s.dot:C.t3,fontFamily:"'Courier New',monospace",lineHeight:1}}>{count}</div>
-                <div style={{fontSize:7,color:C.t3,marginTop:3,lineHeight:1.2}}>{s.label}</div>
+              <div key={t.id} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px",marginBottom:8,borderLeft:`4px solid ${pr.dot}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:2}}>{t.id}</div>
+                  <div style={{fontSize:13,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                  {cl&&<div style={{fontSize:11,color:C.t3,marginTop:1}}>{cl.empresa.split(" ").slice(0,2).join(" ")}</div>}
+                </div>
+                <div style={{textAlign:"right",flexShrink:0,marginLeft:12}}>
+                  <div style={{fontSize:14,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap.precioConIVA)}</div>
+                  <StatusBadge sid={t.status} meta={TICKET_META} small/>
+                </div>
               </div>
             );
           })}
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)"}}>
-          {[...TICKET_PIPELINE.slice(6),"cancelado"].map(sid=>{
-            const s=TICKET_META[sid];
-            const count=tickets.filter(t=>t.status===sid).length;
-            return (
-              <div key={sid} style={{padding:"10px 4px",textAlign:"center",borderRight:`1px solid ${C.border}`}}>
-                <div style={{fontSize:18,fontWeight:800,color:count>0?s.dot:C.t3,fontFamily:"'Courier New',monospace",lineHeight:1}}>{count}</div>
-                <div style={{fontSize:7,color:C.t3,marginTop:3,lineHeight:1.2}}>{s.label}</div>
-              </div>
-            );
-          })}
-        </div>
-      </MCard>
-
-      {/* Prioridades */}
-      <MCard>
-        <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`}}>
-          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em"}}>PRIORIDADES</div>
-        </div>
-        {byPriority.map(({pr,count,open})=>(
-          <div key={pr.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderBottom:`1px solid ${C.border}`}}>
-            <div style={{width:10,height:10,borderRadius:"50%",background:pr.dot,flexShrink:0}}/>
-            <div style={{flex:1}}>
-              <div style={{fontSize:12,fontWeight:700,color:pr.dot,fontFamily:"'Courier New',monospace"}}>{pr.id}</div>
-              <div style={{fontSize:10,color:C.t3}}>{pr.label}</div>
-            </div>
-            <div style={{textAlign:"right"}}>
-              <div style={{fontSize:13,fontWeight:700,color:open>0?pr.dot:C.t3,fontFamily:"'Courier New',monospace"}}>{open} abiertos</div>
-              <div style={{fontSize:10,color:C.t3}}>{count} total</div>
-            </div>
-          </div>
-        ))}
-      </MCard>
-
-      {/* Utilidad por categoria */}
-      {byOp.length>0&&(
-        <MCard>
-          <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`}}>
-            <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em"}}>UTILIDAD POR CATEGORIA</div>
-          </div>
-          {byOp.map((o,i)=>(
-            <div key={o.label} style={{padding:"10px 14px",borderBottom:i<byOp.length-1?`1px solid ${C.border}`:"none"}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                <span style={{fontSize:12,color:C.t2}}>{o.label} <span style={{fontSize:10,color:C.t3}}>({o.count})</span></span>
-                <span style={{fontSize:13,fontWeight:700,color:o.neta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(o.neta)}</span>
-              </div>
-              <div style={{height:3,background:C.bg4,borderRadius:2,overflow:"hidden"}}>
-                <div style={{height:"100%",width:`${Math.max((o.neta/maxByOp)*100,0)}%`,background:C.cyanDim}}/>
-              </div>
-            </div>
-          ))}
-        </MCard>
       )}
 
-      {/* Top clientes */}
-      {topClients.length>0&&(
-        <MCard>
-          <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`}}>
-            <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em"}}>TOP CLIENTES</div>
-          </div>
-          {topClients.map((c,i)=>(
-            <div key={c.label} style={{padding:"10px 14px",borderBottom:i<topClients.length-1?`1px solid ${C.border}`:"none"}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                <span style={{fontSize:12,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"60%"}}>{c.label}</span>
-                <span style={{fontSize:13,fontWeight:700,color:c.neta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(c.neta)}</span>
-              </div>
-              <div style={{height:3,background:C.bg4,borderRadius:2,overflow:"hidden"}}>
-                <div style={{height:"100%",width:`${Math.max((c.neta/maxClient)*100,0)}%`,background:C.greenDim}}/>
-              </div>
-            </div>
-          ))}
-        </MCard>
-      )}
-
-      {/* Aging cartera */}
-      <MCard>
-        <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`}}>
-          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em"}}>AGING CARTERA</div>
+      {tickets.length===0&&(
+        <div style={{textAlign:"center",padding:"60px 0",color:C.t3}}>
+          <div style={{fontSize:32,marginBottom:12}}>📦</div>
+          <div style={{fontSize:14,fontWeight:600,marginBottom:6}}>Sin operaciones</div>
+          <div style={{fontSize:12}}>Crea tu primera cotización con el botón +</div>
         </div>
-        {[["Menos de 30 dias",aging.a30,C.green],["30 a 60 dias",aging.a60,C.yellow],["Mas de 60 dias",aging.mas60,C.red]].map(([l,v,c],i)=>(
-          <div key={l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 14px",borderBottom:i<2?`1px solid ${C.border}`:"none"}}>
-            <span style={{fontSize:12,color:C.t2}}>{l}</span>
-            <span style={{fontSize:14,fontWeight:700,color:v>0?c:C.t3,fontFamily:"'Courier New',monospace"}}>{mxn(v)}</span>
-          </div>
-        ))}
-      </MCard>
-
-      {/* Top proveedores */}
-      {topSupp.length>0&&(
-        <MCard>
-          <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`}}>
-            <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em"}}>TOP PROVEEDORES</div>
-          </div>
-          {topSupp.map((s,i)=>(
-            <div key={s.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 14px",borderBottom:i<topSupp.length-1?`1px solid ${C.border}`:"none"}}>
-              <div>
-                <div style={{fontSize:12,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:200}}>{s.label}</div>
-                <div style={{fontSize:10,color:C.t3}}>{s.count} ops</div>
-              </div>
-              <span style={{fontSize:13,fontWeight:700,color:s.neta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(s.neta)}</span>
-            </div>
-          ))}
-        </MCard>
       )}
-
-      {/* Resumen financiero */}
-      <MCard>
-        <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`}}>
-          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em"}}>RESUMEN FINANCIERO</div>
-        </div>
-        {[
-          ["Revenue operado",    mxn(totalFact),              C.cyan],
-          ["Costo producto",     mxn(costoProducto),          C.t2],
-          ["Gastos operativos",  mxn(gastosOp),               C.t2],
-          ["Cash cobrado",       mxn(cashTotal),              C.green],
-          ["Utilidad operativa", mxn(totalNeta),              totalNeta>=0?C.green:C.red],
-          ["Markup promedio",    fpct(markupProm),            C.blueHi],
-          ["Rentabilidad neta",  fpct(rentabilidadProm),      margenColor(rentabilidadProm)],
-          ["ROI operativo",      fpct(roi),                   roi>=25?C.green:C.yellow],
-          ["IVA neto SAT",       mxn(ivaNetoTotal),           C.yellow],
-          ["ISR estimado",       mxn(isrTotal),               C.yellow],
-          ["Carga fiscal",       mxn(cargaFiscalTotal),       C.red],
-          ["Eficiencia fiscal",  fpct(eficienciaFiscalGlobal),eficienciaFiscalGlobal>=75?C.green:C.yellow],
-          ["Cartera pendiente",  mxn(carteraMonto),           C.yellow],
-          ["Flujo operativo",    mxn(flujoOp),                flujoOp>=0?C.green:C.red],
-          ["Forecast revenue",   mxn(forecastMonto),          C.t2],
-          ["Forecast utilidad",  mxn(forecast),               C.cyan],
-          ["P1 activos",         String(p1.length),           p1.length>0?C.p1dot:C.t3],
-          ["P2 activos",         String(p2.length),           p2.length>0?C.p2dot:C.t3],
-        ].map(([l,v,c],i,arr)=>(
-          <div key={l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 14px",borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none"}}>
-            <span style={{fontSize:12,color:C.t2}}>{l}</span>
-            <span style={{fontSize:14,fontWeight:700,color:c,fontFamily:"'Courier New',monospace"}}>{v}</span>
-          </div>
-        ))}
-      </MCard>
-
-      <MBtn label="+ Nuevo ticket" full onClick={()=>setTab("cotizador")}/>
     </div>
   );
+}
+
+function StatusFlowSheet({tkt,dispatch,toast,onClose}) {
+  const allowed=TICKET_TRANSITIONS[tkt.status]||[];
+  const pr=PRIORITY[tkt.priority]||PRIORITY.P4;
+  return (<>
+    <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,.5)"}}/>
+    <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:201,
+      background:C.bg1,borderRadius:"18px 18px 0 0",borderTop:`1px solid ${C.borderHi}`,
+      padding:`0 16px calc(20px + env(safe-area-inset-bottom,0px))`,
+      boxShadow:"0 -12px 48px rgba(0,0,0,.5)"}}>
+      <div style={{display:"flex",justifyContent:"center",padding:"12px 0 6px"}}>
+        <div style={{width:40,height:4,borderRadius:2,background:C.border}}/>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,padding:"0 2px"}}>
+        <div style={{width:10,height:10,borderRadius:5,background:pr.dot,flexShrink:0}}/>
+        <div>
+          <div style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace"}}>{tkt.id}</div>
+          <div style={{fontSize:14,fontWeight:700,color:C.t1,lineHeight:1.3}}>{(tkt.titulo||"").substring(0,40)}</div>
+        </div>
+        <StatusBadge sid={tkt.status} meta={TICKET_META} small style={{marginLeft:"auto",flexShrink:0}}/>
+      </div>
+      {allowed.length===0
+        ? <div style={{padding:"20px 0",textAlign:"center",color:C.t3,fontSize:13}}>Sin transiciones disponibles</div>
+        : allowed.map(to=>{
+            const s=TICKET_META[to];
+            const isCancelado=to==="cancelado";
+            return (
+              <button key={to} onClick={()=>{dispatch({type:"TKT_STATUS",id:tkt.id,to});toast(s.label,"info");onClose();}}
+                style={{width:"100%",padding:"15px 16px",marginBottom:8,
+                  background:isCancelado?C.redDim:C.bg2,
+                  border:`1px solid ${isCancelado?C.red+"55":s.dot+"44"}`,
+                  borderRadius:12,cursor:"pointer",
+                  display:"flex",alignItems:"center",gap:12}}>
+                <div style={{width:10,height:10,borderRadius:5,background:s.dot,flexShrink:0}}/>
+                <span style={{fontSize:15,fontWeight:700,color:isCancelado?C.red:s.dot}}>{s.label}</span>
+                <span style={{fontSize:11,color:C.t3,marginLeft:"auto"}}>{isCancelado?"Cancelar operación":"→"}</span>
+              </button>
+            );
+          })
+      }
+      <button onClick={onClose} style={{width:"100%",padding:"14px",background:"transparent",
+        border:`1px solid ${C.border}`,borderRadius:12,color:C.t2,fontSize:14,cursor:"pointer",marginTop:4}}>
+        Cerrar
+      </button>
+    </div>
+  </>);
 }
 
 // ── MPipeline — Pipeline móvil ───────────────────────────────────────────────
@@ -4595,76 +4637,82 @@ function MPipeline({state,dispatch,toast}) {
   const {tickets,clients,units} = state;
   const [expId,setExpId] = useState(null);
   const [fPrio,setFPrio] = useState("all");
+  const [pdfPreview,setPdfPreview] = useState(null);
   const abiertos = useMemo(()=>tickets.filter(t=>!CLOSED_SET.has(t.status))
     .filter(t=>fPrio==="all"||t.priority===fPrio)
     .sort((a,b)=>a.priority.localeCompare(b.priority)),[tickets,fPrio]);
 
+  const [statusFlow,setStatusFlow]=useState(null); // tkt o null
+
   return (
-    <div style={{padding:"12px 14px"}}>
+    <div style={{padding:"14px 16px"}}>
+      {pdfPreview&&<PDFPreviewModal {...pdfPreview} onClose={()=>setPdfPreview(null)}/>}
+      {statusFlow&&<StatusFlowSheet tkt={statusFlow} dispatch={dispatch} toast={toast} onClose={()=>setStatusFlow(null)}/>}
+
       {/* Filtro prioridad */}
-      <div style={{display:"flex",gap:6,marginBottom:12,overflowX:"auto",paddingBottom:4}}>
-        {[["all","Todos"],["P1","P1"],["P2","P2"],["P3","P3"],["P4","P4"]].map(([v,l])=>(
+      <div style={{display:"flex",gap:8,marginBottom:14,overflowX:"auto",paddingBottom:4}}>
+        {[["all","Todos"],["P1","●P1"],["P2","●P2"],["P3","●P3"],["P4","●P4"]].map(([v,l])=>(
           <button key={v} onClick={()=>setFPrio(v)}
-            style={{padding:"7px 14px",borderRadius:20,border:`1px solid ${fPrio===v?C.cyan:C.border}`,background:fPrio===v?C.blueDim:"transparent",color:fPrio===v?C.cyan:C.t3,fontSize:12,cursor:"pointer",fontWeight:600,whiteSpace:"nowrap",flexShrink:0}}>
+            style={{padding:"8px 16px",borderRadius:20,flexShrink:0,
+              border:`1px solid ${fPrio===v?C.cyan:C.border}`,
+              background:fPrio===v?C.blueDim:"transparent",
+              color:fPrio===v?C.cyan:C.t3,
+              fontSize:12,cursor:"pointer",fontWeight:600,whiteSpace:"nowrap",minHeight:36}}>
             {l}
           </button>
         ))}
       </div>
 
-      {abiertos.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:C.t3,fontSize:13}}>Sin tickets abiertos</div>}
+      {abiertos.length===0&&(
+        <div style={{textAlign:"center",padding:"60px 0",color:C.t3}}>
+          <div style={{fontSize:28,marginBottom:12}}>✓</div>
+          <div style={{fontSize:14,fontWeight:600}}>Sin tickets pendientes</div>
+        </div>
+      )}
 
       {abiertos.map(t=>{
-        const exp=expId===t.id;
         const cl=clients.find(c=>c.id===t.clientId);
         const un=units.find(u=>u.id===t.unitId);
         const pr=PRIORITY[t.priority]||PRIORITY.P4;
-        const allowed=TICKET_TRANSITIONS[t.status]||[];
         const venc=t.promesaPago&&!t.cobrado&&parseDateMX(t.promesaPago)&&new Date()>parseDateMX(t.promesaPago);
+        const allowed=TICKET_TRANSITIONS[t.status]||[];
         return (
-          <MCard key={t.id}>
-            <div onClick={()=>setExpId(exp?null:t.id)} style={{padding:"14px",borderLeft:`5px solid ${pr.dot}`,cursor:"pointer"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-                <div style={{flex:1,marginRight:10}}>
-                  <div style={{fontSize:9,color:pr.dot,fontWeight:700,fontFamily:"'Courier New',monospace",marginBottom:3}}>{t.id} · {t.priority}</div>
-                  <div style={{fontSize:14,fontWeight:700,color:C.t1,lineHeight:1.3}}>{t.titulo}</div>
+          <div key={t.id} style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:16,marginBottom:10,overflow:"hidden"}}>
+            {/* Card principal — tap para StatusFlow */}
+            <div onClick={()=>setStatusFlow(t)}
+              style={{padding:"16px",borderLeft:`5px solid ${pr.dot}`,cursor:"pointer",
+                display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                  <span style={{fontSize:10,color:pr.dot,fontWeight:700,fontFamily:"'Courier New',monospace"}}>{t.priority}</span>
+                  <StatusBadge sid={t.status} meta={TICKET_META} small/>
                 </div>
-                <StatusBadge sid={t.status} meta={TICKET_META}/>
+                <div style={{fontSize:15,fontWeight:700,color:C.t1,lineHeight:1.3,marginBottom:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                <div style={{fontSize:11,color:C.t3}}>{cl?cl.empresa.split(" ").slice(0,2).join(" "):"—"}{un?` · Eco.${un.economico||"?"}`:""}</div>
+                {venc&&<div style={{marginTop:5,fontSize:10,color:C.red,fontWeight:700}}>⚠ CRÉDITO VENCIDO</div>}
               </div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span style={{fontSize:11,color:C.t3}}>{cl?cl.empresa:"---"}{un?" · "+un.marca+" "+un.modelo:""}</span>
-                <span style={{fontSize:15,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap.precioConIVA)}</span>
+              <div style={{textAlign:"right",flexShrink:0}}>
+                <div style={{fontSize:18,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap.precioConIVA)}</div>
+                <div style={{fontSize:10,color:C.t3,marginTop:2}}>{t.date}</div>
+                <div style={{fontSize:11,color:C.t3,marginTop:4}}>tap → estado</div>
               </div>
-              {venc&&<div style={{marginTop:4,fontSize:10,color:C.red,fontWeight:700}}>CREDITO VENCIDO — {t.promesaPago}</div>}
             </div>
-
-            {exp&&(
-              <div style={{borderTop:`1px solid ${C.border}`,padding:"12px 14px"}}>
-                {/* Timeline ultimos eventos */}
-                {t.timeline&&t.timeline.slice(-3).map((ev,j)=>(
-                  <div key={j} style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:4}}>{fmtTS(ev.ts)} — {ev.evento}</div>
-                ))}
-                {/* Mover estado */}
-                <div style={{fontSize:10,color:C.t3,letterSpacing:"0.1em",margin:"10px 0 8px"}}>MOVER A:</div>
-                <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:10}}>
-                  {allowed.map(to=>{
-                    const s=TICKET_META[to];
-                    return (
-                      <button key={to} onClick={()=>{if(!canTransition(t.status,to))return;dispatch({type:"TKT_STATUS",id:t.id,to});toast(s.label,"info");setExpId(null);}}
-                        style={{padding:"9px 16px",borderRadius:6,border:`1px solid ${s.dot}55`,background:s.color+"33",color:s.dot,fontSize:12,cursor:"pointer",fontWeight:700}}>
-                        {s.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div style={{display:"flex",gap:8}}>
-                  {t.payType==="credit"&&!t.cobrado&&(
-                    <MBtn label="Cobrado" bg={C.greenDim} border={C.green+"44"} color={C.green} small onClick={()=>{dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado","success");setExpId(null);}}/>
-                  )}
-                  <MBtn label="Cotizacion PDF" bg={C.blueDim} border={C.blueHi} color={C.cyan} small onClick={()=>{const cl2=state.clients.find(c=>c.id===t.clientId);const un2=state.units?.find(u=>u.id===t.unitId);const su2=state.suppliers?.find(s=>s.id===t.supplierId);generarCotizacionPDF(t,cl2,un2,su2);}}/>
-                </div>
-              </div>
-            )}
-          </MCard>
+            {/* Acciones rápidas */}
+            <div style={{display:"flex",borderTop:`1px solid ${C.border}`}}>
+              {t.payType==="credit"&&!t.cobrado&&(
+                <button onClick={()=>{dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado","success");}}
+                  style={{flex:1,padding:"12px 8px",background:"transparent",border:"none",borderRight:`1px solid ${C.border}`,
+                    cursor:"pointer",fontSize:12,fontWeight:700,color:C.green}}>
+                  ✓ Cobrado
+                </button>
+              )}
+              <button onClick={()=>{const cl2=state.clients.find(c=>c.id===t.clientId);const un2=state.units?.find(u=>u.id===t.unitId);const su2=state.suppliers?.find(s=>s.id===t.supplierId);setPdfPreview({tkt:t,cl:cl2,un:un2,supp:su2});}}
+                style={{flex:1,padding:"12px 8px",background:"transparent",border:"none",
+                  cursor:"pointer",fontSize:12,fontWeight:700,color:C.cyan}}>
+                ↗ PDF
+              </button>
+            </div>
+          </div>
         );
       })}
     </div>
@@ -5307,6 +5355,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
   const [ef,        setEf]        = useState({});
   const [editLineas,setEditLineas]= useState([]);
   const [pdfPending,setPdfPending]= useState(null);
+  const [pdfPreview,setPdfPreview]= useState(null);
   const [confirm,   setConfirm]   = useState(null);
   const sfn = k => v => setEf(p=>({...p,[k]:v}));
 
@@ -5425,6 +5474,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
   return (
     <div style={{padding:"14px"}}>
       {pdfPending&&<PDFConfirm {...pdfPending} onClose={()=>setPdfPending(null)}/>}
+      {pdfPreview&&<PDFPreviewModal {...pdfPreview} onClose={()=>setPdfPreview(null)}/>}
       {confirm&&<Confirm msg={"Eliminar: "+confirm.titulo+"?"} onConfirm={()=>{
         const id=confirm.id;
         dispatch({type:"TKT_SOFT_DEL",id});
@@ -5805,7 +5855,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                     <div style={{display:"flex",gap:8,marginTop:14,flexWrap:"wrap"}}>
                       <MBtn label="Editar" small bg={C.blueDim} border={C.blueHi} color={C.cyan} onClick={()=>startEdit(t)}/>
                       <MBtn label="PDF" small bg={C.bg2} border={C.border} color={C.t2}
-                        onClick={()=>{const cl2=clients.find(c=>c.id===t.clientId);const un2=units?.find(u=>u.id===t.unitId);const su2=suppliers?.find(s=>s.id===t.supplierId);setPdfPending({tkt:t,cl:cl2,un:un2,supp:su2});}}/>
+                        onClick={()=>{const cl=state.clients.find(c=>c.id===t.clientId);const un=state.units?.find(u=>u.id===t.unitId);const su=state.suppliers?.find(s=>s.id===t.supplierId);setPdfPreview({tkt:t,cl,un,supp:su});}}/>
                       <MBtn label="Eliminar" small bg={C.redDim} border={C.red+"44"} color={C.red} onClick={()=>setConfirm(t)}/>
                     </div>
                   </div>
