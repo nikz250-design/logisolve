@@ -4823,7 +4823,7 @@ function MPipeline({state,dispatch,toast}) {
               <div style={{textAlign:"right",flexShrink:0}}>
                 <div style={{fontSize:18,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap.precioConIVA)}</div>
                 <div style={{fontSize:10,color:C.t3,marginTop:2}}>{t.date}</div>
-                <div style={{fontSize:11,color:C.t3,marginTop:4}}>tap → estado</div>
+                {allowed.length>0&&<div style={{marginTop:6,fontSize:10,color:C.t4,background:C.bg2,borderRadius:6,padding:"3px 8px",display:"inline-block"}}>→ {TICKET_META[allowed[0]]?.label||"?"}</div>}
               </div>
             </div>
             {/* Acciones rápidas */}
@@ -4855,10 +4855,12 @@ function QuickQuoteSheet({state,dispatch,toast,open,onClose,onFull}) {
   const [costRaw,  setCostRaw]  = useState("");
   const [clientId, setClientId] = useState("");
   const [unitId,   setUnitId]   = useState("");
+  const [clientQ,  setClientQ]  = useState("");
+  const [unitQ,    setUnitQ]    = useState("");
   const descRef = useRef(null);
 
   useEffect(()=>{
-    if(open){ setDesc("");setCostRaw("");setClientId("");setUnitId("");
+    if(open){ setDesc("");setCostRaw("");setClientId("");setUnitId("");setClientQ("");setUnitQ("");
       setTimeout(()=>descRef.current?.focus(),320); }
   },[open]);
 
@@ -4869,12 +4871,29 @@ function QuickQuoteSheet({state,dispatch,toast,open,onClose,onFull}) {
       .map(([id])=>clients.find(c=>c.id===id)).filter(Boolean);
   },[state.tickets,clients]);
 
+  const filteredClients = useMemo(()=>{
+    if(!clientQ.trim()) return recentClients;
+    const q=clientQ.toLowerCase();
+    return clients.filter(c=>c.empresa.toLowerCase().includes(q)||(c.rfc||"").toLowerCase().includes(q)).slice(0,8);
+  },[clients,clientQ,recentClients]);
+
   const recentUnits = useMemo(()=>{
     const freq={};
     state.tickets.slice(-30).forEach(t=>{ if(t.unitId&&!t._deleted) freq[t.unitId]=(freq[t.unitId]||0)+1; });
     return Object.entries(freq).sort(([,a],[,b])=>b-a).slice(0,3)
       .map(([id])=>units.find(u=>u.id===id)).filter(Boolean);
   },[state.tickets,units]);
+
+  const filteredUnits = useMemo(()=>{
+    if(!unitQ.trim()) return recentUnits;
+    const q=unitQ.toLowerCase();
+    return units.filter(u=>
+      (u.economico||"").toLowerCase().includes(q)||
+      (u.marca||"").toLowerCase().includes(q)||
+      (u.modelo||"").toLowerCase().includes(q)||
+      (u.placa||"").toLowerCase().includes(q)
+    ).slice(0,8);
+  },[units,unitQ,recentUnits]);
 
   const cost = safeNumber(costRaw);
   const snap = useMemo(()=>computeSnap({costo:cost,gasolina:0,otros:0,iva:16,isr:20,
@@ -4960,27 +4979,91 @@ function QuickQuoteSheet({state,dispatch,toast,open,onClose,onFull}) {
       {/* Cliente */}
       <div style={{marginBottom:14}}>
         <div style={{fontSize:11,color:C.t3,letterSpacing:"0.12em",marginBottom:7,textTransform:"uppercase"}}>
-          Cliente{cl&&<span style={{color:C.cyan,fontWeight:700,textTransform:"none"}}> · {cl.empresa.split(" ").slice(0,2).join(" ")}</span>}
+          Cliente
         </div>
-        {recentClients.length>0
-          ? <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              {recentClients.map(c=><Chip key={c.id} label={c.empresa.split(" ").slice(0,2).join(" ")} active={clientId===c.id} onClick={()=>setClientId(clientId===c.id?"":c.id)}/>)}
+        {cl ? (
+          <div style={{background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:12,
+            padding:"12px 14px",marginBottom:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <div style={{fontSize:13,fontWeight:700,color:C.cyan,lineHeight:1.3}}>{cl.empresa}</div>
+              {cl.rfc&&<div style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",marginTop:2}}>{cl.rfc}</div>}
             </div>
-          : <div style={{fontSize:13,color:C.t3,padding:"8px 0"}}>Usa cotizador completo para seleccionar</div>}
+            <button onClick={()=>{setClientId("");setClientQ("");}}
+              style={{background:"transparent",border:"none",color:C.t3,fontSize:20,cursor:"pointer",padding:"4px 8px",lineHeight:1}}>×</button>
+          </div>
+        ) : (
+          <>
+            <div style={{position:"relative",marginBottom:8}}>
+              <input value={clientQ} onChange={e=>setClientQ(e.target.value)}
+                placeholder={recentClients.length>0?"Recientes · o buscar...":"Buscar cliente..."}
+                style={{width:"100%",background:C.bg0,border:`1px solid ${clientQ?C.blueHi:C.border}`,
+                  borderRadius:12,padding:"12px 40px 12px 16px",color:C.t1,fontSize:14,
+                  outline:"none",boxSizing:"border-box"}}/>
+              {clientQ&&<button onClick={()=>setClientQ("")}
+                style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",
+                  background:"transparent",border:"none",color:C.t3,fontSize:16,cursor:"pointer",padding:4}}>×</button>}
+            </div>
+            {filteredClients.length>0
+              ? <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  {filteredClients.map(c=>(
+                    <Chip key={c.id}
+                      label={clientQ?c.empresa.substring(0,24):c.empresa.split(" ").slice(0,2).join(" ")}
+                      active={false} onClick={()=>{setClientId(c.id);setClientQ("");}}/>
+                  ))}
+                </div>
+              : clientQ
+                ? <div style={{fontSize:12,color:C.t3,padding:"6px 4px"}}>Sin resultados para "{clientQ}"</div>
+                : <div style={{fontSize:12,color:C.t3,padding:"6px 4px"}}>Sin clientes registrados</div>
+            }
+          </>
+        )}
       </div>
 
       {/* Unidad */}
       <div style={{marginBottom:16}}>
         <div style={{fontSize:11,color:C.t3,letterSpacing:"0.12em",marginBottom:7,textTransform:"uppercase"}}>
-          Unidad{un&&<span style={{color:C.cyan,fontWeight:700,textTransform:"none"}}> · {un.economico?"Eco."+un.economico:un.marca+" "+un.modelo}</span>}
+          Unidad
         </div>
-        {recentUnits.length>0
-          ? <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              {recentUnits.map(u=><Chip key={u.id}
-                label={u.economico?"Eco."+u.economico:u.marca.split(" ")[0]+" "+u.modelo.split(" ")[0]}
-                active={unitId===u.id} onClick={()=>setUnitId(unitId===u.id?"":u.id)}/>)}
+        {un ? (
+          <div style={{background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:12,
+            padding:"12px 14px",marginBottom:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <div style={{fontSize:13,fontWeight:700,color:C.cyan,lineHeight:1.3}}>
+                {un.economico?"Eco. "+un.economico+" — ":""}{un.marca} {un.modelo}
+              </div>
+              {un.placa&&<div style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",marginTop:2}}>{un.placa}</div>}
             </div>
-          : <div style={{fontSize:13,color:C.t3,padding:"8px 0"}}>Usa cotizador completo para seleccionar</div>}
+            <button onClick={()=>{setUnitId("");setUnitQ("");}}
+              style={{background:"transparent",border:"none",color:C.t3,fontSize:20,cursor:"pointer",padding:"4px 8px",lineHeight:1}}>×</button>
+          </div>
+        ) : (
+          <>
+            <div style={{position:"relative",marginBottom:8}}>
+              <input value={unitQ} onChange={e=>setUnitQ(e.target.value)}
+                placeholder={recentUnits.length>0?"Recientes · o buscar eco/marca...":"Buscar unidad..."}
+                style={{width:"100%",background:C.bg0,border:`1px solid ${unitQ?C.blueHi:C.border}`,
+                  borderRadius:12,padding:"12px 40px 12px 16px",color:C.t1,fontSize:14,
+                  outline:"none",boxSizing:"border-box"}}/>
+              {unitQ&&<button onClick={()=>setUnitQ("")}
+                style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",
+                  background:"transparent",border:"none",color:C.t3,fontSize:16,cursor:"pointer",padding:4}}>×</button>}
+            </div>
+            {filteredUnits.length>0
+              ? <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  {filteredUnits.map(u=>(
+                    <Chip key={u.id}
+                      label={unitQ
+                        ? (u.economico?"Eco."+u.economico+" ":"")+u.marca.split(" ")[0]+" "+u.modelo.split(" ")[0]
+                        : u.economico?"Eco."+u.economico:u.marca.split(" ")[0]+" "+u.modelo.split(" ")[0]}
+                      active={false} onClick={()=>{setUnitId(u.id);setUnitQ("");}}/>
+                  ))}
+                </div>
+              : unitQ
+                ? <div style={{fontSize:12,color:C.t3,padding:"6px 4px"}}>Sin resultados para "{unitQ}"</div>
+                : <div style={{fontSize:12,color:C.t3,padding:"6px 4px"}}>Sin unidades registradas</div>
+            }
+          </>
+        )}
       </div>
 
       {/* Preview precio en tiempo real */}
@@ -5479,6 +5562,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
   const realizados = useMemo(()=>tickets.filter(t=>!t._deleted&&REVENUE_SET.has(t.status)),[tickets]);
   const totalFact  = useMemo(()=>realizados.reduce((s,t)=>s+t.snap.precioConIVA,0),[realizados]);
   const totalNeta  = useMemo(()=>realizados.reduce((s,t)=>s+t.snap.uNeta,0),[realizados]);
+  const [filterStatus, setFilterStatus] = useState("all");
   const [expId,     setExpId]     = useState(null);
   const [editId,    setEditId]    = useState(null);
   const [ef,        setEf]        = useState({});
@@ -5612,49 +5696,72 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
         setConfirm(null);setExpId(null);
       }} onCancel={()=>setConfirm(null)}/>}
 
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-        <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px"}}>
-          <div style={{fontSize:10,color:C.t3,marginBottom:4}}>REALIZADO</div>
-          <div style={{fontSize:16,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(totalFact)}</div>
-        </div>
-        <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px"}}>
-          <div style={{fontSize:10,color:C.t3,marginBottom:4}}>UTIL. NETA</div>
-          <div style={{fontSize:16,fontWeight:800,color:totalNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(totalNeta)}</div>
-        </div>
+      {/* KPI resumen del historial */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+        {[
+          {l:"Total facturado",v:mxn(totalFact),c:C.cyan,sub:`${realizados.length} ops cerradas`},
+          {l:"Utilidad neta",  v:mxn(totalNeta),c:totalNeta>=0?C.green:C.red,sub:totalFact>0?fpct((totalNeta/totalFact)*100):"—"},
+        ].map(({l,v,c,sub})=>(
+          <div key={l} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px"}}>
+            <div style={{fontSize:9,color:C.t3,letterSpacing:"0.14em",marginBottom:6,textTransform:"uppercase"}}>{l}</div>
+            <div style={{fontSize:18,fontWeight:800,color:c,fontFamily:"'Courier New',monospace",lineHeight:1,marginBottom:4}}>{v}</div>
+            <div style={{fontSize:10,color:C.t3}}>{sub}</div>
+          </div>
+        ))}
       </div>
 
-      {tickets.filter(t=>!t._deleted).slice().reverse().map(t=>{
+      {/* Filtros de estado */}
+      <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4,marginBottom:12}}>
+        {[["all","Todos"],["cerrado","Cerrado"],["cobrado","Cobrado"],["cancelado","Cancelado"]].map(([v,l])=>(
+          <button key={v} onClick={()=>setFilterStatus(v)}
+            style={{padding:"7px 14px",borderRadius:20,flexShrink:0,
+              border:`1px solid ${filterStatus===v?C.cyan:C.border}`,
+              background:filterStatus===v?C.blueDim:"transparent",
+              color:filterStatus===v?C.cyan:C.t3,
+              fontSize:12,cursor:"pointer",fontWeight:filterStatus===v?700:400,whiteSpace:"nowrap",minHeight:34}}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {tickets.filter(t=>!t._deleted&&(filterStatus==="all"||t.status===filterStatus)).slice().reverse().map(t=>{
         const cl=clients.find(c=>c.id===t.clientId);
         const un=units.find(u=>u.id===t.unitId);
         const exp=expId===t.id;
         const editing=editId===t.id;
         const pr=PRIORITY[t.priority]||PRIORITY.P4;
+        const meta=TICKET_META[t.status]||TICKET_META.recibido;
         return (
           <MCard key={t.id}>
-            {/* Header */}
-            <div onClick={()=>{if(!editing)setExpId(exp?null:t.id);}} style={{padding:"14px",cursor:"pointer",borderLeft:`4px solid ${pr.dot}`}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                <span style={{fontSize:9,color:C.t3,fontFamily:"'Courier New',monospace"}}>{t.id} · {t.date}</span>
+            {/* Header feed card */}
+            <div onClick={()=>{if(!editing)setExpId(exp?null:t.id);}} style={{padding:"14px 16px",cursor:"pointer",borderLeft:`3px solid ${pr.dot}`}}>
+              {/* Row 1: status dot + ID + date + status badge */}
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                <div style={{width:7,height:7,borderRadius:"50%",background:meta.dot,flexShrink:0}}/>
+                <span style={{fontSize:9,color:C.t3,fontFamily:"'Courier New',monospace",flex:1}}>{t.id} · {t.date}</span>
                 <StatusBadge sid={t.status} meta={TICKET_META} small/>
               </div>
-              {/* Mostrar líneas individuales en el header si existen */}
+              {/* Row 2: titulo */}
               {t.lineas&&t.lineas.length>1 ? (
-                <div style={{marginBottom:6}}>
+                <div style={{marginBottom:10}}>
                   {t.lineas.map((l,j)=>(
-                    <div key={j} style={{fontSize:12,color:C.t1,lineHeight:1.4}}>· {l.titulo}</div>
+                    <div key={j} style={{fontSize:13,color:C.t1,lineHeight:1.5,opacity:j===0?1:0.7}}>
+                      {j===0?"":"· "}{l.titulo}
+                    </div>
                   ))}
                 </div>
               ) : (
-                <div style={{fontSize:13,fontWeight:700,color:C.t1,marginBottom:6,lineHeight:1.3}}>{t.titulo}</div>
+                <div style={{fontSize:14,fontWeight:700,color:C.t1,marginBottom:10,lineHeight:1.4}}>{t.titulo}</div>
               )}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div>
-                  <span style={{fontSize:11,color:C.t3}}>{cl?cl.empresa:"---"}</span>
-                  {un&&<div style={{fontSize:10,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{un.economico?"Eco."+un.economico+" · ":""}{un.marca} {un.modelo}</div>}
+              {/* Row 3: client/unit left — price right */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
+                <div style={{minWidth:0,flex:1,marginRight:12}}>
+                  <div style={{fontSize:12,color:C.t2,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl?cl.empresa:"Sin cliente"}</div>
+                  {un&&<div style={{fontSize:10,color:C.t3,marginTop:2,fontFamily:"'Courier New',monospace"}}>{un.economico?"Eco."+un.economico+" · ":""}{un.marca} {un.modelo}</div>}
                 </div>
-                <div style={{textAlign:"right"}}>
-                  <div style={{fontSize:15,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap.precioConIVA)}</div>
-                  <div style={{fontSize:11,color:t.snap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap.uNeta)}</div>
+                <div style={{textAlign:"right",flexShrink:0}}>
+                  <div style={{fontSize:18,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",lineHeight:1}}>{mxn(t.snap.precioConIVA)}</div>
+                  <div style={{fontSize:11,color:t.snap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace",marginTop:3}}>{mxn(t.snap.uNeta)} neto</div>
                 </div>
               </div>
             </div>
