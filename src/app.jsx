@@ -5847,9 +5847,25 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
         const id=confirm.id;
         dispatch({type:"TKT_SOFT_DEL",id});
         scheduleHardDelete(id);
-        toast("Ticket a papelera — restaurable","info");
+        toast("Ticket eliminado","info");
         setConfirm(null);setExpId(null);
       }} onCancel={()=>setConfirm(null)}/>}
+
+      {/* Papelera — tickets soft-deleted con opción de restaurar */}
+      {tickets.filter(t=>t._deleted).length>0&&(
+        <div style={{background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:12,padding:"10px 14px",marginBottom:12}}>
+          <div style={{fontSize:10,color:C.red,fontWeight:700,marginBottom:6}}>🗑 Papelera ({tickets.filter(t=>t._deleted).length})</div>
+          {tickets.filter(t=>t._deleted).map(t=>(
+            <div key={t.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+              <div style={{fontSize:11,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,marginRight:8}}>{t.titulo}</div>
+              <button onClick={()=>{dispatch({type:"TKT_RESTORE",id:t.id});cancelHardDelete(t.id);toast("Restaurado","success");}}
+                style={{padding:"5px 12px",background:C.greenDim,border:`1px solid ${C.green}44`,borderRadius:8,color:C.green,fontSize:11,cursor:"pointer",fontWeight:700,flexShrink:0}}>
+                Restaurar
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* KPI resumen del historial */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
@@ -5867,16 +5883,19 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
 
       {/* Filtros de estado */}
       <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4,marginBottom:12}}>
-        {[["all","Todos"],["cerrado","Cerrado"],["cobrado","Cobrado"],["cancelado","Cancelado"]].map(([v,l])=>(
+        {[["all","Todos"],["cerrado","Cerrado"],["cobrado","Cobrado"],["cancelado","Cancelado"]].map(([v,l])=>{
+          const cnt=v==="all"?tickets.filter(t=>!t._deleted).length:tickets.filter(t=>!t._deleted&&t.status===v).length;
+          return (
           <button key={v} onClick={()=>setFilterStatus(v)}
             style={{padding:"7px 14px",borderRadius:20,flexShrink:0,
               border:`1px solid ${filterStatus===v?C.cyan:C.border}`,
               background:filterStatus===v?C.blueDim:"transparent",
               color:filterStatus===v?C.cyan:C.t3,
               fontSize:12,cursor:"pointer",fontWeight:filterStatus===v?700:400,whiteSpace:"nowrap",minHeight:34}}>
-            {l}
+            {l}{cnt>0&&<span style={{marginLeft:5,fontSize:10,opacity:0.7}}>{cnt}</span>}
           </button>
-        ))}
+        );
+        })}
       </div>
 
       {(()=>{const filtered2=tickets.filter(t=>!t._deleted&&(filterStatus==="all"||t.status===filterStatus));if(filtered2.length===0)return(<div style={{textAlign:"center",padding:"48px 0",color:C.t4}}><div style={{fontSize:28,marginBottom:8}}>📋</div><div style={{fontSize:13,fontWeight:600,color:C.t3}}>{filterStatus==="all"?"Sin registros":"Sin tickets "+filterStatus+"s"}</div></div>);})()}
