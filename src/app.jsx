@@ -4282,12 +4282,13 @@ function MBtn({label,color,bg,border,onClick,full,small}) {
   return (
     <button onClick={onClick} style={{
       width:full?"100%":"auto",
-      padding:small?"8px 14px":"13px 18px",
+      padding:small?"10px 16px":"15px 20px",
       background:bg||C.blue,
       border:`1px solid ${border||C.blueHi}`,
-      borderRadius:6,cursor:"pointer",
-      fontSize:small?11:13,fontWeight:700,
+      borderRadius:10,cursor:"pointer",
+      fontSize:small?12:14,fontWeight:700,
       color:color||C.t1,letterSpacing:"0.04em",
+      minHeight:small?40:48,
     }}>{label}</button>
   );
 }
@@ -4668,6 +4669,180 @@ function MPipeline({state,dispatch,toast}) {
       })}
     </div>
   );
+}
+
+// ── QuickQuoteSheet — Cotización rápida <20s ──────────────────────────────────
+function QuickQuoteSheet({state,dispatch,toast,open,onClose,onFull}) {
+  const {clients,units} = state;
+  const [desc,     setDesc]     = useState("");
+  const [costRaw,  setCostRaw]  = useState("");
+  const [clientId, setClientId] = useState("");
+  const [unitId,   setUnitId]   = useState("");
+  const descRef = useRef(null);
+
+  useEffect(()=>{
+    if(open){ setDesc("");setCostRaw("");setClientId("");setUnitId("");
+      setTimeout(()=>descRef.current?.focus(),320); }
+  },[open]);
+
+  const recentClients = useMemo(()=>{
+    const freq={};
+    state.tickets.slice(-30).forEach(t=>{ if(t.clientId&&!t._deleted) freq[t.clientId]=(freq[t.clientId]||0)+1; });
+    return Object.entries(freq).sort(([,a],[,b])=>b-a).slice(0,3)
+      .map(([id])=>clients.find(c=>c.id===id)).filter(Boolean);
+  },[state.tickets,clients]);
+
+  const recentUnits = useMemo(()=>{
+    const freq={};
+    state.tickets.slice(-30).forEach(t=>{ if(t.unitId&&!t._deleted) freq[t.unitId]=(freq[t.unitId]||0)+1; });
+    return Object.entries(freq).sort(([,a],[,b])=>b-a).slice(0,3)
+      .map(([id])=>units.find(u=>u.id===id)).filter(Boolean);
+  },[state.tickets,units]);
+
+  const cost = safeNumber(costRaw);
+  const snap = useMemo(()=>computeSnap({costo:cost,gasolina:0,otros:0,iva:16,isr:20,
+    compraConIVA:true,ventaConIVA:true,mode:"auto",margin:28}),[cost]);
+
+  const save = ()=>{
+    if(!desc.trim()) return;
+    const fecha = todayMX();
+    const tkt = {
+      id:mkTicketId(fecha), titulo:desc.trim(),
+      opId:"consumable", opShort:"CONS", priority:"P3",
+      clientId, supplierId:"", unitId,
+      partRef:"", date:fecha, status:"recibido",
+      payType:"contado", promesaPago:null, cobrado:false,
+      mods:[], prob:"high", horasOp:0, notes:"", mode:"multilinea",
+      lineas:[{titulo:desc.trim(),partRef:"",snap,qty:1}], snap,
+      timeline:[{ts:nowISO(),evento:"Ticket creado (acceso rápido)",actor:"Operador"}],
+      history:[mkEvent("created",{titulo:desc.trim(),status:"recibido",priority:"P3"})],
+    };
+    dispatch({type:"TKT_ADD",t:tkt});
+    toast("Ticket "+tkt.id+" creado","success");
+    onClose();
+  };
+
+  if(!open) return null;
+  const cl=clients.find(c=>c.id===clientId);
+  const un=units.find(u=>u.id===unitId);
+
+  const Chip = ({label,active,onClick})=>(
+    <button onClick={onClick} style={{padding:"10px 16px",background:active?C.blueDim:C.bg0,
+      border:`1px solid ${active?C.blueHi:C.border}`,borderRadius:20,
+      color:active?C.cyan:C.t2,fontSize:14,cursor:"pointer",fontWeight:active?700:400,
+      whiteSpace:"nowrap",flexShrink:0}}>
+      {label}
+    </button>
+  );
+
+  return (<>
+    <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,.6)"}}/>
+    <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:201,
+      background:C.bg1,borderRadius:"18px 18px 0 0",
+      borderTop:`1px solid ${C.borderHi}`,
+      padding:`0 16px calc(20px + env(safe-area-inset-bottom, 0px))`,
+      maxHeight:"88vh",overflowY:"auto",
+      boxShadow:"0 -12px 48px rgba(0,0,0,.6)"}}>
+
+      {/* Drag handle */}
+      <div style={{display:"flex",justifyContent:"center",padding:"12px 0 6px"}}>
+        <div style={{width:40,height:4,borderRadius:2,background:C.border}}/>
+      </div>
+
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+        <div style={{fontSize:11,color:C.t3,letterSpacing:"0.2em",fontWeight:700}}>COTIZACIÓN RÁPIDA</div>
+        <button onClick={onClose} style={{background:"transparent",border:"none",color:C.t2,
+          fontSize:22,cursor:"pointer",padding:"4px 8px",lineHeight:1}}>×</button>
+      </div>
+
+      {/* Descripción */}
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:11,color:C.t3,letterSpacing:"0.12em",marginBottom:7,textTransform:"uppercase"}}>Descripción</div>
+        <input ref={descRef} value={desc} onChange={e=>setDesc(e.target.value)}
+          placeholder="Balatas delanteras, filtro aceite..."
+          style={{width:"100%",background:C.bg0,border:`1px solid ${desc?C.blueHi:C.border}`,
+            borderRadius:12,padding:"15px 16px",color:C.t1,fontSize:16,outline:"none",
+            boxSizing:"border-box",fontFamily:"'Trebuchet MS',sans-serif"}}/>
+      </div>
+
+      {/* Costo */}
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:11,color:C.t3,letterSpacing:"0.12em",marginBottom:7,textTransform:"uppercase"}}>Costo unitario (c/IVA)</div>
+        <div style={{display:"flex",alignItems:"center",background:C.bg0,
+          border:`1px solid ${costRaw?C.blueHi:C.border}`,borderRadius:12,overflow:"hidden"}}>
+          <span style={{padding:"0 4px 0 16px",color:C.t3,fontSize:18}}>$</span>
+          <input type="text" inputMode="decimal" value={costRaw} onChange={e=>setCostRaw(e.target.value)}
+            placeholder="0"
+            style={{flex:1,background:"transparent",border:"none",outline:"none",
+              color:C.t1,fontSize:24,fontWeight:800,padding:"12px 16px",
+              fontFamily:"'Courier New',monospace"}}/>
+        </div>
+      </div>
+
+      {/* Cliente */}
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:11,color:C.t3,letterSpacing:"0.12em",marginBottom:7,textTransform:"uppercase"}}>
+          Cliente{cl&&<span style={{color:C.cyan,fontWeight:700,textTransform:"none"}}> · {cl.empresa.split(" ").slice(0,2).join(" ")}</span>}
+        </div>
+        {recentClients.length>0
+          ? <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {recentClients.map(c=><Chip key={c.id} label={c.empresa.split(" ").slice(0,2).join(" ")} active={clientId===c.id} onClick={()=>setClientId(clientId===c.id?"":c.id)}/>)}
+            </div>
+          : <div style={{fontSize:13,color:C.t3,padding:"8px 0"}}>Usa cotizador completo para seleccionar</div>}
+      </div>
+
+      {/* Unidad */}
+      <div style={{marginBottom:16}}>
+        <div style={{fontSize:11,color:C.t3,letterSpacing:"0.12em",marginBottom:7,textTransform:"uppercase"}}>
+          Unidad{un&&<span style={{color:C.cyan,fontWeight:700,textTransform:"none"}}> · {un.economico?"Eco."+un.economico:un.marca+" "+un.modelo}</span>}
+        </div>
+        {recentUnits.length>0
+          ? <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {recentUnits.map(u=><Chip key={u.id}
+                label={u.economico?"Eco."+u.economico:u.marca.split(" ")[0]+" "+u.modelo.split(" ")[0]}
+                active={unitId===u.id} onClick={()=>setUnitId(unitId===u.id?"":u.id)}/>)}
+            </div>
+          : <div style={{fontSize:13,color:C.t3,padding:"8px 0"}}>Usa cotizador completo para seleccionar</div>}
+      </div>
+
+      {/* Preview precio en tiempo real */}
+      {cost>0&&(
+        <div style={{background:C.bg0,border:`1px solid ${C.border}`,borderRadius:12,
+          padding:"14px 16px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:10,color:C.t3,letterSpacing:"0.1em",marginBottom:4}}>P3 · CONSUMIBLE · 28%</div>
+            <div style={{fontSize:22,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(snap.precioConIVA)}</div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontSize:10,color:C.t3,marginBottom:4}}>UTIL. NETA</div>
+            <div style={{fontSize:17,fontWeight:700,fontFamily:"'Courier New',monospace",
+              color:snap.uNeta>=0?C.green:C.red}}>{mxn(snap.uNeta)}</div>
+          </div>
+        </div>
+      )}
+
+      {/* CTA principal */}
+      <button onClick={save} disabled={!desc.trim()}
+        style={{width:"100%",padding:"18px 24px",
+          background:desc.trim()?C.blue:C.bg2,
+          border:`1px solid ${desc.trim()?C.blueHi:C.border}`,
+          borderRadius:14,color:desc.trim()?C.t1:C.t3,
+          fontSize:17,fontWeight:700,cursor:desc.trim()?"pointer":"default",
+          letterSpacing:"0.06em",marginBottom:10,
+          opacity:desc.trim()?1:0.5}}>
+        CREAR TICKET →
+      </button>
+
+      {/* Acceso al cotizador completo */}
+      <button onClick={()=>{onClose();onFull();}}
+        style={{width:"100%",padding:"14px 24px",background:"transparent",
+          border:`1px solid ${C.border}`,borderRadius:14,
+          color:C.t2,fontSize:14,cursor:"pointer",letterSpacing:"0.04em"}}>
+        Más opciones · tipo · prioridad · líneas múltiples
+      </button>
+    </div>
+  </>);
 }
 
 // ── MCotizador — Cotizador móvil simplificado ─────────────────────────────────
@@ -5664,6 +5839,7 @@ export default function App() {
   const [search,setSearch]=useState(false);
   const [loading,setLoading]=useState(true);
   const [mobileView,setMobileView]=useState(()=>window.innerWidth<768);
+  const [quickOpen,setQuickOpen]=useState(false);
   const { status: syncStatus, setSaving, setSaved, setOffline, setError: setSyncError } = useSyncStatus();
 
   // Double-click / concurrent save protection
@@ -5874,37 +6050,74 @@ export default function App() {
         </div>
       </div>
 
-      {/* Mobile bottom nav — solo 5 tabs principales */}
+      {/* ── Nav móvil nativa — 4 tabs + FAB ── */}
       {mobileView&&(
-        <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,background:C.bg1,borderTop:`1px solid ${C.border}`,display:"grid",gridTemplateColumns:"repeat(6,1fr)"}}>
+        <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,
+          background:C.bg1,borderTop:`1px solid ${C.border}`,
+          paddingBottom:"env(safe-area-inset-bottom,0px)",
+          display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr"}}>
           {[
-            {id:"ops",      label:"Ops",      icon:"*"},
-            {id:"tickets",  label:"Pipeline", icon:">"},
-            {id:"cotizador",label:"Nuevo",    icon:"+"},
-            {id:"cartera",  label:"Cartera",  icon:"$"},
-            {id:"historial",label:"Historial",icon:"="},
-            {id:"__mas__",  label:"Más",      icon:"≡"},
+            {id:"ops",      label:"Centro",  icon:"●"},
+            {id:"tickets",  label:"Pipeline",icon:"▷"},
+            {id:"historial",label:"Historial",icon:"≡"},
+            {id:"__mas__",  label:"Más",     icon:"⋯"},
           ].map(t=>{
-            const badge=t.id==="cartera"&&vencidos>0?vencidos:t.id==="tickets"&&abiertas>0?abiertas:t.id==="ops"&&p1Active>0?p1Active:0;
-            const isMore=t.id==="__mas__";
-            const moreActive=["unidades","catalogo","proveedores","clientes","ajustes"].includes(tab);
-            const active=isMore?moreActive:tab===t.id;
+            const badge = t.id==="tickets"&&abiertas>0?abiertas : t.id==="ops"&&p1Active>0?p1Active : 0;
+            const isMore = t.id==="__mas__";
+            const moreActive = ["unidades","catalogo","proveedores","clientes","ajustes","cartera"].includes(tab);
+            const active = isMore ? moreActive : tab===t.id;
             return (
-              <button key={t.id} onClick={()=>isMore?setTab(moreActive?"ops":"unidades"):setTab(t.id)}
-                style={{padding:"10px 2px 12px",border:"none",cursor:"pointer",background:active?C.blueDim:"transparent",borderTop:`3px solid ${active?C.cyan:"transparent"}`,position:"relative",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-                <span style={{fontSize:16,fontWeight:800,color:active?C.cyan:C.t3,fontFamily:"'Courier New',monospace",lineHeight:1}}>{t.icon}</span>
-                <span style={{fontSize:9,color:active?C.cyan:C.t3,letterSpacing:"0.04em",fontWeight:active?700:400}}>{t.label}</span>
-                {badge>0&&<span style={{position:"absolute",top:6,right:"calc(50% - 16px)",width:14,height:14,borderRadius:"50%",background:t.id==="cartera"?C.red:t.id==="ops"?C.p1dot:C.yellow,fontSize:8,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",color:"#000"}}>{badge}</span>}
+              <button key={t.id}
+                onClick={()=>{ setQuickOpen(false); isMore?setTab(moreActive?"ops":"cartera"):setTab(t.id); }}
+                style={{padding:"12px 4px calc(12px + env(safe-area-inset-bottom,0px) * 0)",
+                  border:"none",cursor:"pointer",background:active?C.blueDim:"transparent",
+                  borderTop:`3px solid ${active?C.cyan:"transparent"}`,
+                  position:"relative",display:"flex",flexDirection:"column",alignItems:"center",gap:4,
+                  minHeight:56}}>
+                <span style={{fontSize:18,fontWeight:800,color:active?C.cyan:C.t3,lineHeight:1}}>{t.icon}</span>
+                <span style={{fontSize:10,color:active?C.cyan:C.t3,letterSpacing:"0.04em",fontWeight:active?700:400}}>{t.label}</span>
+                {badge>0&&<span style={{position:"absolute",top:8,right:"calc(50% - 18px)",
+                  minWidth:16,height:16,borderRadius:8,padding:"0 3px",
+                  background:t.id==="ops"?C.p1dot:C.yellow,
+                  fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",color:"#000"}}>{badge}</span>}
               </button>
             );
           })}
         </div>
       )}
 
+      {/* FAB — Cotización rápida */}
+      {mobileView&&(
+        <button onClick={()=>setQuickOpen(v=>!v)}
+          style={{position:"fixed",
+            right:16,bottom:`calc(64px + env(safe-area-inset-bottom,0px) + 12px)`,
+            zIndex:101,width:56,height:56,borderRadius:28,
+            background:quickOpen?C.blueHi:C.blue,
+            border:`1px solid ${C.blueHi}`,
+            boxShadow:"0 4px 20px rgba(0,0,0,.5)",
+            display:"flex",alignItems:"center",justifyContent:"center",
+            cursor:"pointer",fontSize:26,color:C.t1,fontWeight:300,
+            transition:"transform 200ms ease,background 200ms ease",
+            transform:quickOpen?"rotate(45deg)":"rotate(0deg)"}}>
+          +
+        </button>
+      )}
+
+      {/* QuickQuoteSheet */}
+      {mobileView&&(
+        <QuickQuoteSheet
+          state={state} dispatch={dispatchWithDelete} toast={toast}
+          open={quickOpen} onClose={()=>setQuickOpen(false)}
+          onFull={()=>setTab("cotizador")}/>
+      )}
+
       {/* Submenú "Más" en móvil */}
-      {mobileView&&["unidades","catalogo","proveedores","clientes","ajustes"].includes(tab)&&(
-        <div style={{position:"fixed",bottom:64,left:0,right:0,zIndex:99,background:C.bg2,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-around",padding:"8px 0"}}>
+      {mobileView&&["unidades","catalogo","proveedores","clientes","ajustes","cartera"].includes(tab)&&(
+        <div style={{position:"fixed",bottom:"calc(56px + env(safe-area-inset-bottom,0px))",
+          left:0,right:0,zIndex:99,background:C.bg2,
+          borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-around",padding:"10px 0"}}>
           {[
+            {id:"cartera",    label:"Cartera",    icon:"💳"},
             {id:"unidades",   label:"Flotilla",   icon:"🚛"},
             {id:"catalogo",   label:"Catálogo",   icon:"📦"},
             {id:"clientes",   label:"Clientes",   icon:"🏢"},
@@ -5912,16 +6125,24 @@ export default function App() {
             {id:"ajustes",    label:"Ajustes",    icon:"⚙"},
           ].map(t=>(
             <button key={t.id} onClick={()=>setTab(t.id)}
-              style={{padding:"6px 10px",border:"none",cursor:"pointer",background:tab===t.id?C.blueDim:"transparent",borderRadius:6,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-              <span style={{fontSize:18}}>{t.icon}</span>
+              style={{padding:"8px 10px",border:"none",cursor:"pointer",
+                background:tab===t.id?C.blueDim:"transparent",
+                borderRadius:8,display:"flex",flexDirection:"column",alignItems:"center",gap:3,
+                minWidth:48}}>
+              <span style={{fontSize:20}}>{t.icon}</span>
               <span style={{fontSize:9,color:tab===t.id?C.cyan:C.t3,fontWeight:tab===t.id?700:400}}>{t.label}</span>
+              {t.id==="cartera"&&vencidos>0&&(
+                <span style={{position:"absolute",top:4,right:4,minWidth:14,height:14,borderRadius:7,
+                  background:C.red,fontSize:8,fontWeight:800,display:"flex",
+                  alignItems:"center",justifyContent:"center",color:"#fff"}}>{vencidos}</span>
+              )}
             </button>
           ))}
         </div>
       )}
 
       {/* Content */}
-      <div style={{paddingBottom:mobileView?(["unidades","catalogo","proveedores","clientes","ajustes"].includes(tab)?130:80):0}}>
+      <div style={{paddingBottom:mobileView?(["unidades","catalogo","proveedores","clientes","ajustes","cartera"].includes(tab)?"calc(120px + env(safe-area-inset-bottom,0px))":"calc(72px + env(safe-area-inset-bottom,0px))"):0}}>
         {tab==="ops"        &&(mobileView?<MOps       state={state} setTab={setTab}/>                                    :<CentroOps   state={state}/>)}
         {tab==="tickets"    &&(mobileView?<MPipeline  state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Tickets     state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete}/>)}
         {tab==="historial"  &&(mobileView?<MHistorial state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>:<Historial   state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>)}
