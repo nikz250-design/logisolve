@@ -6781,8 +6781,7 @@ function MProveedores({state,dispatch,toast}) {
 function MasSheet({open,onClose,tab,setTab}) {
   if(!open) return null;
   const items=[
-    {id:"cotizador",  label:"Cotizador",  icon:"🧾", desc:"Multi-línea"},
-    {id:"refacciones",label:"Refacciones",icon:"🔩", desc:"Cotiza partes"},
+    {id:"cotizador",  label:"Cotizador",  icon:"🧾", desc:"Nueva cotización"},
     {id:"cartera",    label:"Cartera",    icon:"💳", desc:"Por cobrar"},
     {id:"unidades",   label:"Flotilla",   icon:"🚛", desc:"Vehículos"},
     {id:"catalogo",   label:"Catálogo",   icon:"📦", desc:"Inventario"},
@@ -6870,7 +6869,7 @@ function App() {
   const [search,setSearch]=useState(false);
   const [loading,setLoading]=useState(true);
   const [mobileView,setMobileView]=useState(()=>window.innerWidth<768);
-  const [quickOpen,setQuickOpen]=useState(false);
+  const [quickOpen]=useState(false); // kept for scroll-lock compat
   const [masOpen,setMasOpen]=useState(false);
   const { status: syncStatus, setSaving, setSaved, setOffline, setError: setSyncError } = useSyncStatus();
 
@@ -7140,29 +7139,19 @@ function App() {
         </div>
       )}
 
-      {/* FAB — Cotización rápida */}
-      {mobileView&&(
-        <button onClick={()=>setQuickOpen(v=>!v)}
+      {/* FAB — Nueva cotización */}
+      {mobileView&&tab!=="cotizador"&&(
+        <button onClick={()=>setTab("cotizador")}
           style={{position:"fixed",
             right:16,bottom:`calc(64px + env(safe-area-inset-bottom,0px) + 12px)`,
             zIndex:101,width:56,height:56,borderRadius:28,
-            background:quickOpen?C.blueHi:C.blue,
+            background:C.blue,
             border:`1px solid ${C.blueHi}`,
             boxShadow:"0 4px 20px rgba(0,0,0,.5)",
             display:"flex",alignItems:"center",justifyContent:"center",
-            cursor:"pointer",fontSize:26,color:C.t1,fontWeight:300,
-            transition:"transform 200ms ease,background 200ms ease",
-            transform:quickOpen?"rotate(45deg)":"rotate(0deg)"}}>
+            cursor:"pointer",fontSize:26,color:C.t1,fontWeight:300}}>
           +
         </button>
-      )}
-
-      {/* QuickQuoteSheet */}
-      {mobileView&&(
-        <QuickQuoteSheet
-          state={state} dispatch={dispatchWithDelete} toast={toast}
-          open={quickOpen} onClose={()=>setQuickOpen(false)}
-          onFull={()=>setTab("cotizador")}/>
       )}
 
       {/* MasSheet — bottom sheet for "Más" modules */}
@@ -7174,8 +7163,7 @@ function App() {
         {tab==="ops"        &&(mobileView?<MOps       state={state} setTab={setTab}/>                                    :<CentroOps   state={state}/>)}
         {tab==="tickets"    &&(mobileView?<MPipeline  state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Tickets     state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete}/>)}
         {tab==="historial"  &&(mobileView?<MHistorial state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>:<Historial   state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>)}
-        {tab==="cotizador"  &&(mobileView?<MCotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Cotizador              state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
-        {tab==="refacciones"&&<CotizadorRefacciones state={state} dispatch={dispatchWithDelete} toast={toast}/>}
+        {(tab==="cotizador"||tab==="refacciones")&&(mobileView?<MCotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>:<CotizadorRefacciones state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="cartera"    &&(mobileView?<MCartera   state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Cartera     state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="unidades"   &&(mobileView?<MUnidades   state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Unidades    state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="catalogo"   &&(mobileView?<MCatalogo   state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Catalogo    state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
