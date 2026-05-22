@@ -6519,38 +6519,47 @@ function MCatalogo({state,dispatch,toast}) {
   const [editId,setEditId]=useState(null);
   const [adding,setAdding]=useState(false);
   const [confirm,setConfirm]=useState(null);
-  const empty={nombre:"",oem:"",aftermarket:"",aplicacion:"",notas:"",proveedor:"",ultimoPrecio:"",ultimaFecha:""};
+  const [view,setView]=useState("frecuentes"); // "frecuentes"|"todos"
+  const empty={nombre:"",oem:"",aftermarket:"",aplicacion:"",notas:"",proveedor:"",ultimoPrecio:"",ultimaFecha:"",frecuencia:0};
   const [form,setForm]=useState(empty);
   const sf=k=>v=>setForm(p=>({...p,[k]:v}));
   const dSearch=useDebounce(search,250);
 
-  const filtered=useMemo(()=>parts.filter(p=>{
-    if(!dSearch.trim()) return true;
+  const frecuentes=useMemo(()=>[...parts].filter(p=>(p.frecuencia||0)>0).sort((a,b)=>(b.frecuencia||0)-(a.frecuencia||0)).slice(0,10),[parts]);
+
+  const filtered=useMemo(()=>{
+    const base=view==="frecuentes"&&!dSearch.trim()?frecuentes:parts;
+    if(!dSearch.trim()) return base;
     const lq=safeLower(dSearch);
-    return safeLower(p.nombre).includes(lq)||safeLower(p.oem).includes(lq)||safeLower(p.aftermarket).includes(lq)||safeLower(p.aplicacion).includes(lq);
-  }),[parts,dSearch]);
+    return parts.filter(p=>safeLower(p.nombre).includes(lq)||safeLower(p.oem).includes(lq)||safeLower(p.aftermarket).includes(lq)||safeLower(p.aplicacion).includes(lq)||safeLower(p.proveedor).includes(lq));
+  },[parts,frecuentes,dSearch,view]);
 
   const startAdd=()=>{setAdding(true);setEditId(null);setSel(null);setForm(empty);window.scrollTo(0,0);};
-  const startEdit=(p)=>{setEditId(p.id);setAdding(false);setSel(null);setForm({...p,ultimoPrecio:String(p.ultimoPrecio||"")});window.scrollTo(0,0);};
+  const startEdit=(p)=>{setEditId(p.id);setAdding(false);setSel(null);setForm({...p,ultimoPrecio:String(p.ultimoPrecio||""),frecuencia:String(p.frecuencia||0)});window.scrollTo(0,0);};
   const cancel=()=>{setAdding(false);setEditId(null);setForm(empty);};
   const save=()=>{
-    const parsed={...form,ultimoPrecio:parseFloat(form.ultimoPrecio)||0};
+    const parsed={...form,ultimoPrecio:parseFloat(form.ultimoPrecio)||0,frecuencia:parseInt(form.frecuencia)||0};
     if(editId){dispatch({type:"PART_UPDATE",id:editId,patch:parsed});toast("Parte actualizada","success");}
     else{dispatch({type:"PART_ADD",p:{...parsed,id:mkPartId()}});toast("Parte registrada","success");}
     cancel();
   };
   const del=(p)=>setConfirm(p);
   const showForm=adding||!!editId;
+  const isSearching=dSearch.trim().length>0;
 
   return (
     <div style={{padding:"14px 14px 8px"}}>
       {confirm&&<Confirm msg={"Eliminar: "+confirm.nombre+"?"} onConfirm={()=>{dispatch({type:"PART_DELETE",id:confirm.id});setSel(null);setConfirm(null);toast("Eliminado","info");}} onCancel={()=>setConfirm(null)}/>}
+
+      {/* ── Header ── */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <div style={{fontSize:11,color:C.t3,letterSpacing:"0.15em",textTransform:"uppercase",fontWeight:700}}>Catálogo · {parts.length}</div>
         <button onClick={showForm?cancel:startAdd} style={{padding:"7px 14px",background:showForm?"transparent":C.blue,border:`1px solid ${showForm?C.border:C.blue}`,borderRadius:20,color:showForm?C.t2:C.t1,fontSize:12,fontWeight:700,cursor:"pointer",minHeight:36}}>
           {showForm?"× Cancelar":"+ Nueva parte"}
         </button>
       </div>
+
+      {/* ── Add/Edit Form ── */}
       {showForm&&(
         <div style={{background:C.bg1,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:14,padding:16,marginBottom:12}}>
           <div style={{fontSize:10,color:C.t3,letterSpacing:"0.15em",marginBottom:10}}>{editId?"EDITAR PARTE":"NUEVA PARTE"}</div>
@@ -6565,31 +6574,83 @@ function MCatalogo({state,dispatch,toast}) {
           <MBtn label={editId?"Guardar cambios":"Guardar parte"} full color={C.t1} bg={C.blue} border={C.blue} onClick={save}/>
         </div>
       )}
+
+      {/* ── Search & View Tabs ── */}
       {!showForm&&parts.length>0&&(
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar nombre, OEM, aftermarket..."
-          style={{width:"100%",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.t1,fontSize:16,outline:"none",marginBottom:12,fontFamily:"inherit"}}/>
+        <>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar nombre, OEM, proveedor, aplicación..."
+            style={{width:"100%",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.t1,fontSize:16,outline:"none",marginBottom:10,fontFamily:"inherit",boxSizing:"border-box"}}/>
+          {!isSearching&&frecuentes.length>0&&(
+            <div style={{display:"flex",gap:6,marginBottom:12}}>
+              {[["frecuentes","★ Frecuentes"],["todos","Todos"]].map(([v,l])=>(
+                <button key={v} onClick={()=>setView(v)}
+                  style={{padding:"6px 14px",borderRadius:20,fontSize:11,fontWeight:700,cursor:"pointer",
+                    background:"transparent",border:`1px solid ${view===v?C.cyan:C.border}`,
+                    color:view===v?C.cyan:C.t3}}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
       )}
-      {parts.length===0&&!showForm&&<EmptyState icon="📦" title="Sin partes en catálogo" sub='Agrega la primera con "+ Nueva parte"'/>}
-      <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        {filtered.map(p=>{
+
+      {parts.length===0&&!showForm&&<EmptyState icon="📦" title="Sin partes en catálogo" sub='Agrega la primera con "+ Nueva parte". Las partes que uses en cotizaciones aparecen aquí automáticamente.'/>}
+
+      {/* ── Frecuentes hero banner ── */}
+      {!showForm&&!isSearching&&view==="frecuentes"&&frecuentes.length>0&&(
+        <div style={{background:"linear-gradient(135deg,rgba(15,20,22,0.95) 0%,rgba(20,27,29,0.90) 100%)",
+          backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",
+          border:`1px solid rgba(38,122,144,0.25)`,borderRadius:16,padding:"14px 16px",marginBottom:12,
+          boxShadow:"0 4px 20px rgba(0,0,0,0.4)"}}>
+          <div style={{fontSize:9,color:C.cyan,letterSpacing:"0.16em",textTransform:"uppercase",fontWeight:700,marginBottom:6}}>
+            ★ MÁS USADAS EN COTIZACIONES
+          </div>
+          <div style={{fontSize:11,color:C.t3,lineHeight:1.5}}>
+            Top {frecuentes.length} piezas por frecuencia de uso. El catálogo se sincroniza automáticamente cuando creas una cotización.
+          </div>
+        </div>
+      )}
+
+      {/* ── Parts list ── */}
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {filtered.map((p,idx)=>{
           const exp=sel===p.id;
+          const freq=p.frecuencia||0;
+          const isFrecuente=freq>=2;
           return (
-            <div key={p.id} style={{background:C.bg1,border:`1px solid ${exp?C.cyan:C.border}`,borderRadius:14,overflow:"hidden"}}>
-              <div onClick={()=>setSel(exp?null:p.id)} style={{padding:"14px 16px",cursor:"pointer"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
-                  <div style={{fontSize:14,fontWeight:700,color:C.t1,flex:1,marginRight:8,lineHeight:1.3}}>{p.nombre}</div>
-                  {p.ultimoPrecio>0&&<div style={{fontSize:13,fontWeight:700,color:C.yellow,fontFamily:"'Courier New',monospace",flexShrink:0}}>{mxn(p.ultimoPrecio)}</div>}
+            <div key={p.id} style={{background:C.bg1,
+              border:`1px solid ${exp?C.cyan:isFrecuente?`rgba(38,122,144,0.2)`:C.border}`,
+              borderRadius:14,overflow:"hidden",
+              boxShadow:isFrecuente?"0 2px 8px rgba(0,0,0,0.3)":undefined}}>
+              <div onClick={()=>setSel(exp?null:p.id)} style={{padding:"13px 15px",cursor:"pointer"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:3}}>
+                  <div style={{fontSize:13,fontWeight:700,color:C.t1,flex:1,marginRight:8,lineHeight:1.3}}>{p.nombre}</div>
+                  <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                    {freq>0&&(
+                      <div style={{padding:"2px 7px",borderRadius:20,background:freq>=5?`${C.cyan}22`:freq>=2?`${C.blue}22`:`${C.border}`,
+                        border:`1px solid ${freq>=5?C.cyan+"44":freq>=2?C.blueHi+"44":C.border}`,
+                        fontSize:9,fontWeight:800,color:freq>=5?C.cyan:freq>=2?C.blueHi:C.t3,letterSpacing:"0.04em"}}>
+                        ×{freq}
+                      </div>
+                    )}
+                    {p.ultimoPrecio>0&&<div style={{fontSize:12,fontWeight:700,color:C.yellow,fontFamily:"'Courier New',monospace"}}>{mxn(p.ultimoPrecio)}</div>}
+                  </div>
                 </div>
-                {p.oem&&<div style={{fontSize:11,color:C.cyan,fontFamily:"'Courier New',monospace",marginBottom:2}}>OEM: {p.oem}</div>}
-                {p.aplicacion&&<div style={{fontSize:11,color:C.t3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.aplicacion}</div>}
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+                  {p.oem&&<div style={{fontSize:10,color:C.cyan,fontFamily:"'Courier New',monospace"}}>OEM: {p.oem}</div>}
+                  {p.proveedor&&<div style={{fontSize:10,color:C.t3}}>· {p.proveedor}</div>}
+                </div>
+                {p.aplicacion&&<div style={{fontSize:10,color:C.t3,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.aplicacion}</div>}
               </div>
               {exp&&(
-                <div style={{background:C.bg0,borderTop:`1px solid ${C.border}`,padding:"12px 16px"}}>
-                  {p.aftermarket&&<div style={{fontSize:11,color:C.t3,marginBottom:4}}>Aftermarket: <span style={{color:C.t2}}>{p.aftermarket}</span></div>}
-                  {p.proveedor&&<div style={{fontSize:11,color:C.t3,marginBottom:4}}>Proveedor: <span style={{color:C.t2}}>{p.proveedor}</span></div>}
-                  {p.ultimaFecha&&<div style={{fontSize:11,color:C.t3,marginBottom:4}}>Ult. fecha: <span style={{color:C.t2}}>{p.ultimaFecha}</span></div>}
+                <div style={{background:C.bg0,borderTop:`1px solid ${C.border}`,padding:"12px 15px"}}>
+                  {p.aftermarket&&<div style={{fontSize:11,color:C.t3,marginBottom:5}}>Aftermarket: <span style={{color:C.t2}}>{p.aftermarket}</span></div>}
+                  {p.proveedor&&<div style={{fontSize:11,color:C.t3,marginBottom:5}}>Proveedor: <span style={{color:C.t2}}>{p.proveedor}</span></div>}
+                  {p.ultimaFecha&&<div style={{fontSize:11,color:C.t3,marginBottom:5}}>Ult. compra: <span style={{color:C.t2}}>{p.ultimaFecha}</span></div>}
+                  {freq>0&&<div style={{fontSize:11,color:C.t3,marginBottom:5}}>Usado en cotizaciones: <span style={{color:C.cyan,fontWeight:700}}>×{freq} veces</span></div>}
                   {p.aplicacion&&<div style={{fontSize:11,color:C.t3,marginBottom:8,lineHeight:1.5}}>Aplicación: <span style={{color:C.t1}}>{p.aplicacion}</span></div>}
-                  {p.notas&&<div style={{fontSize:11,color:C.t3,fontStyle:"italic",marginBottom:8}}>"{p.notas}"</div>}
+                  {p.notas&&<div style={{fontSize:11,color:C.t3,fontStyle:"italic",marginBottom:8,lineHeight:1.5}}>"{p.notas}"</div>}
                   <div style={{display:"flex",gap:8}}>
                     <button onClick={()=>startEdit(p)} style={{flex:1,padding:"9px",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,color:C.t1,fontSize:13,cursor:"pointer",fontWeight:600}}>Editar</button>
                     <button onClick={()=>del(p)} style={{padding:"9px 14px",background:"transparent",border:`1px solid ${C.red}44`,borderRadius:10,color:C.red,fontSize:13,cursor:"pointer"}}>Eliminar</button>
@@ -6599,6 +6660,17 @@ function MCatalogo({state,dispatch,toast}) {
             </div>
           );
         })}
+        {filtered.length===0&&isSearching&&(
+          <div style={{textAlign:"center",padding:"32px 16px"}}>
+            <div style={{fontSize:28,marginBottom:8}}>🔍</div>
+            <div style={{fontSize:14,color:C.t2,fontWeight:600,marginBottom:4}}>Sin resultados</div>
+            <div style={{fontSize:12,color:C.t3}}>"{dSearch}" no está en el catálogo</div>
+            <button onClick={()=>{setAdding(true);setForm({...empty,nombre:dSearch.trim()});}}
+              style={{marginTop:14,padding:"10px 20px",background:C.blue,border:`1px solid ${C.blueHi}`,borderRadius:12,color:C.t1,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              + Agregar "{dSearch.trim()}"
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
