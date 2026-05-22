@@ -7163,7 +7163,8 @@ function App() {
         {tab==="ops"        &&(mobileView?<MOps       state={state} setTab={setTab}/>                                    :<CentroOps   state={state}/>)}
         {tab==="tickets"    &&(mobileView?<MPipeline  state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Tickets     state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete}/>)}
         {tab==="historial"  &&(mobileView?<MHistorial state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>:<Historial   state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>)}
-        {(tab==="cotizador"||tab==="refacciones")&&(mobileView?<MCotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>:<CotizadorRefacciones state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
+        {tab==="cotizador"  &&(mobileView?<MCotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Cotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
+        {tab==="refacciones"&&(mobileView?<MCotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>:<CotizadorRefacciones state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="cartera"    &&(mobileView?<MCartera   state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Cartera     state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="unidades"   &&(mobileView?<MUnidades   state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Unidades    state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="catalogo"   &&(mobileView?<MCatalogo   state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Catalogo    state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
