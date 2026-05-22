@@ -4025,8 +4025,8 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
     const toSortable = (d="") => { const p=d.split("/"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; };
     switch(sortBy){
       case "date_asc":   return arr.sort((a,b)=>toSortable(a.date).localeCompare(toSortable(b.date)));
-      case "total_desc": return arr.sort((a,b)=>safeNumber(b.snap.precioConIVA)-safeNumber(a.snap.precioConIVA));
-      case "uneta_desc": return arr.sort((a,b)=>safeNumber(b.snap.uNeta)-safeNumber(a.snap.uNeta));
+      case "total_desc": return arr.sort((a,b)=>safeNumber(b.snap?.precioConIVA)-safeNumber(a.snap?.precioConIVA));
+      case "uneta_desc": return arr.sort((a,b)=>safeNumber(b.snap?.uNeta)-safeNumber(a.snap?.uNeta));
       case "priority":   return arr.sort((a,b)=>a.priority.localeCompare(b.priority));
       default:           return arr.sort((a,b)=>toSortable(b.date).localeCompare(toSortable(a.date)));
     }
@@ -4074,7 +4074,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
         const costoXLinea=toConIVA(t.snap)/parts.length;
         lineas=parts.map(p=>({titulo:p.trim(),partRef:"",qty:1,costoUnit:costoXLinea,gasolina:0,otros:0,mode:"manual",manualPrice:pxLinea,customMgn:false,customVal:27,descripcionPDF:""}));
       } else {
-        lineas=[{titulo:t.titulo||"",partRef:t.partRef||"",qty:1,costoUnit:toConIVA(t.snap),gasolina:t.snap?.gastos||0,otros:0,mode:"manual",manualPrice:((t.snap?.precioConIVA||0)||0).toFixed(2),customMgn:false,customVal:27,descripcionPDF:""}];
+        lineas=[{titulo:t.titulo||"",partRef:t.partRef||"",qty:1,costoUnit:toConIVA(t.snap),gasolina:t.snap?.gastos||0,otros:0,mode:"manual",manualPrice:(t.snap?.precioConIVA||0).toFixed(2),customMgn:false,customVal:27,descripcionPDF:""}];
       }
     }
     setEditLineas(lineas);
@@ -4427,8 +4427,8 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                         ))
                       )}
                       <div style={{padding:"4px 11px",fontSize:7,color:C.t3,display:"flex",gap:8,flexWrap:"wrap"}}>
-                        <span>IVA {t.snap?.params.iva}%</span>
-                        <span>ISR {t.snap?.params.isr}%</span>
+                        <span>IVA {t.snap?.params?.iva||16}%</span>
+                        <span>ISR {t.snap?.params?.isr||20}%</span>
                         {cl&&<span>Cliente: {cl.empresa}</span>}
                         {t.mods&&t.mods.length>0&&<span>Mods: {t.mods.join(", ")}</span>}
                         {t.horasOp>0&&<span>Util/h: {mxn((t.snap?.uNeta||0)/t.horasOp)}</span>}
@@ -5907,7 +5907,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
         const costoXLinea=toConIVA(t.snap)/parts.length;
         lineas=parts.map(p=>({titulo:p.trim(),partRef:"",qty:1,costoUnit:costoXLinea,gasolina:0,otros:0,mode:"manual",manualPrice:pxLinea,customMgn:false,customVal:27}));
       } else {
-        lineas=[{titulo:t.titulo||"",partRef:t.partRef||"",qty:1,costoUnit:toConIVA(t.snap),gasolina:t.snap?.gastos||0,otros:0,mode:"manual",manualPrice:((t.snap?.precioConIVA||0)||0).toFixed(2),customMgn:false,customVal:27}];
+        lineas=[{titulo:t.titulo||"",partRef:t.partRef||"",qty:1,costoUnit:toConIVA(t.snap),gasolina:t.snap?.gastos||0,otros:0,mode:"manual",manualPrice:(t.snap?.precioConIVA||0).toFixed(2),customMgn:false,customVal:27}];
       }
     }
     setEditLineas(lineas);
