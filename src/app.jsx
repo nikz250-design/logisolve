@@ -4566,26 +4566,37 @@ function MOps({state,setTab}) {
         ))}
       </div>
 
-      {/* Pipeline resumen horizontal */}
+      {/* Pipeline widget — barras por estatus */}
       <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:12}}>
-        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",marginBottom:10,textTransform:"uppercase"}}>Pipeline · {abiertos.length} activos</div>
-        <div style={{display:"flex",overflowX:"auto",gap:8,paddingBottom:4}}>
-          {TICKET_PIPELINE.slice(0,8).map(sid=>{
-            const s=TICKET_META[sid]; const n=tickets.filter(t=>t.status===sid).length;
-            return (
-              <div key={sid} style={{flexShrink:0,textAlign:"center",minWidth:44}}>
-                <div style={{fontSize:20,fontWeight:800,color:n>0?s.dot:C.t4,fontFamily:"'Courier New',monospace",lineHeight:1}}>{n}</div>
-                <div style={{fontSize:8,color:C.t3,marginTop:4,lineHeight:1.3,maxWidth:44}}>{s.label}</div>
-              </div>
-            );
-          })}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",textTransform:"uppercase",fontWeight:700}}>Pipeline</div>
+          <div style={{fontSize:11,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>{abiertos.length} activos</div>
         </div>
+        {(()=>{
+          const pipeStatuses = TICKET_PIPELINE.slice(0,8);
+          const counts = pipeStatuses.map(sid=>({sid,s:TICKET_META[sid],n:tickets.filter(t=>t.status===sid).length}));
+          const maxN = Math.max(...counts.map(c=>c.n),1);
+          return counts.filter(c=>c.n>0||true).map(({sid,s,n})=>(
+            <div key={sid} style={{display:"flex",alignItems:"center",gap:10,marginBottom:7}}>
+              <div style={{fontSize:10,color:n>0?C.t2:C.t4,minWidth:64,lineHeight:1.2}}>{s.label}</div>
+              <div style={{flex:1,height:6,background:C.bg0,borderRadius:3,overflow:"hidden"}}>
+                <div style={{height:"100%",background:n>0?s.dot:C.border,borderRadius:3,
+                  width:`${(n/maxN)*100}%`,transition:"width 300ms ease"}}/>
+              </div>
+              <div style={{fontSize:11,fontWeight:700,color:n>0?s.dot:C.t4,
+                fontFamily:"'Courier New',monospace",minWidth:16,textAlign:"right"}}>{n}</div>
+            </div>
+          ));
+        })()}
       </div>
 
       {/* Últimas operaciones */}
       {lastTkts.length>0&&(
         <div>
-          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",marginBottom:8,textTransform:"uppercase"}}>Últimas operaciones</div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",textTransform:"uppercase",fontWeight:700}}>Últimas operaciones</div>
+            <div style={{fontSize:11,color:C.t3}}>{lastTkts.length} de {tickets.filter(t=>!t._deleted).length}</div>
+          </div>
           {lastTkts.map(t=>{
             const cl=clients.find(c=>c.id===t.clientId); const pr=PRIORITY[t.priority]||PRIORITY.P4;
             return (
@@ -5796,9 +5807,23 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
             {exp&&(
               <div style={{borderTop:`1px solid ${C.border}`}}>
                 {editing ? (
-                  <div style={{padding:"14px"}}>
+                  <>
+                    {/* Backdrop overlay */}
+                    <div onClick={cancelEdit} style={{position:"fixed",inset:0,zIndex:299,background:"rgba(0,0,0,.65)"}}/>
+                    {/* Bottom sheet */}
+                    <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:300,
+                      background:C.bg1,borderRadius:"18px 18px 0 0",
+                      borderTop:`1px solid ${C.borderHi}`,
+                      maxHeight:"92vh",overflowY:"auto",
+                      WebkitOverflowScrolling:"touch",
+                      boxShadow:"0 -16px 60px rgba(0,0,0,.65)"}}>
+                      {/* Drag handle */}
+                      <div style={{display:"flex",justifyContent:"center",padding:"12px 0 4px",position:"sticky",top:0,background:C.bg1,zIndex:1}}>
+                        <div style={{width:40,height:4,borderRadius:2,background:C.border}}/>
+                      </div>
+                    <div style={{padding:`0 16px calc(24px + env(safe-area-inset-bottom,0px))`}}>
                     {/* Sticky header con acciones — Save/Cancel siempre visibles */}
-                    <div style={{position:"sticky",top:0,zIndex:10,background:C.bg1,
+                    <div style={{position:"sticky",top:28,zIndex:10,background:C.bg1,
                       paddingBottom:10,marginBottom:12,
                       borderBottom:`1px solid ${C.border}`}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -6037,7 +6062,9 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                       <MBtn label="Guardar ✓" full onClick={()=>saveEdit(t.id)}/>
                       <MBtn label="Cancelar" bg="transparent" border={C.border} color={C.t2} small onClick={cancelEdit}/>
                     </div>
-                  </div>
+                    </div>{/* /padding inner */}
+                    </div>{/* /sheet */}
+                  </>
                 ) : (
                   /* ── VISTA DETALLE ── */
                   <div style={{padding:"12px 14px"}}>
