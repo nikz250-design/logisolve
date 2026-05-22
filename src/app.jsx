@@ -3325,7 +3325,7 @@ function Proveedores({state,dispatch,toast}) {
 
   const stats=useCallback(id=>{
     const so=tickets.filter(t=>t.supplierId===id);
-    return{total:so.length,neta:so.reduce((s,t)=>s+t.snap.uNeta,0),inv:so.reduce((s,t)=>s+t.snap.costoBase*(1+(t.snap.params.iva||16)/100),0)};
+    return{total:so.length,neta:so.reduce((s,t)=>s+(t.snap?.uNeta||0),0),inv:so.reduce((s,t)=>s+(t.snap?.costoBase||0)*(1+((t.snap?.params?.iva||16))/100),0)};
   },[tickets]);
   const maxNeta=useMemo(()=>Math.max(...suppliers.map(s=>stats(s.id).neta),1),[suppliers,tickets]);
 
@@ -3437,7 +3437,7 @@ function Clientes({state,dispatch,toast}) {
 
   const stats=useCallback(id=>{
     const co=tickets.filter(t=>t.clientId===id);
-    return{total:co.length,fact:co.reduce((s,t)=>s+t.snap.precioConIVA,0),neta:co.reduce((s,t)=>s+t.snap.uNeta,0),pend:co.filter(t=>t.payType==="credit"&&!t.cobrado).reduce((s,t)=>s+t.snap.precioConIVA,0)};
+    return{total:co.length,fact:co.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0),neta:co.reduce((s,t)=>s+(t.snap?.uNeta||0),0),pend:co.filter(t=>t.payType==="credit"&&!t.cobrado).reduce((s,t)=>s+(t.snap?.precioConIVA||0),0)};
   },[tickets]);
   const maxFact=useMemo(()=>Math.max(...clients.map(c=>stats(c.id).fact),1),[clients,tickets]);
 
@@ -3562,16 +3562,16 @@ function Cartera({state,dispatch,toast}) {
   return (
     <div style={{padding:"10px 13px",maxWidth:950,margin:"0 auto"}}>
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:8}}>
-        <KPI label="Cartera pendiente" value={mxn(pendientes.reduce((s,t)=>s+t.snap.precioConIVA,0))} color={C.yellow} accent sub={pendientes.length+" tickets"}/>
-        <KPI label="Vencidas"          value={mxn(vencidos.reduce((s,t)=>s+t.snap.precioConIVA,0))}   color={C.red}    alert={vencidos.length>0} sub={vencidos.length+" vencidas"}/>
-        <KPI label="Cobrado (credito)" value={mxn(cobrados.reduce((s,t)=>s+t.snap.precioConIVA,0))}   color={C.green}  sub={cobrados.length+" cobradas"}/>
-        <KPI label="Emision total"     value={mxn(creditOps.reduce((s,t)=>s+t.snap.precioConIVA,0))}  color={C.t1}     sub="credito emitido"/>
+        <KPI label="Cartera pendiente" value={mxn(pendientes.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0))} color={C.yellow} accent sub={pendientes.length+" tickets"}/>
+        <KPI label="Vencidas"          value={mxn(vencidos.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0))}   color={C.red}    alert={vencidos.length>0} sub={vencidos.length+" vencidas"}/>
+        <KPI label="Cobrado (credito)" value={mxn(cobrados.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0))}   color={C.green}  sub={cobrados.length+" cobradas"}/>
+        <KPI label="Emision total"     value={mxn(creditOps.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0))}  color={C.t1}     sub="credito emitido"/>
       </div>
       {vencidos.length>0&&(
         <div style={{background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:3,padding:"6px 10px",marginBottom:7}}>
           <div style={{fontSize:8,color:C.red,fontWeight:700,marginBottom:3}}>CARTERA VENCIDA — {vencidos.length} operaciones</div>
           {vencidos.map(t=>{const cl=clients.find(c=>c.id===t.clientId);return(
-            <div key={t.id} style={{fontSize:8,color:C.t2,marginBottom:2,fontFamily:"'Courier New',monospace"}}>{t.id} · {cl?.empresa||"---"} · {mxn(t.snap.precioConIVA)} · Vto: {t.promesaPago}</div>
+            <div key={t.id} style={{fontSize:8,color:C.t2,marginBottom:2,fontFamily:"'Courier New',monospace"}}>{t.id} · {cl?.empresa||"---"} · {mxn(t.snap?.precioConIVA||0)} · Vto: {t.promesaPago}</div>
           );})}
         </div>
       )}
@@ -3593,7 +3593,7 @@ function Cartera({state,dispatch,toast}) {
               </div>
               <div style={{fontSize:9,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl?.empresa||"---"}</div>
               <StatusBadge sid={t.status} meta={TICKET_META} small/>
-              <div style={{fontSize:10,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap.precioConIVA)}</div>
+              <div style={{fontSize:10,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap?.precioConIVA||0)}</div>
               <div style={{fontSize:9,color:C.t2,fontFamily:"'Courier New',monospace"}}>{t.promesaPago||"---"}</div>
               <div style={{fontSize:9,fontWeight:700,color:venc?C.red:C.green,fontFamily:"'Courier New',monospace"}}>{dias!=null?(venc?"+"+dias+"d":Math.abs(dias)+"d"):"---"}</div>
               <button onClick={()=>{dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado","success");}}
