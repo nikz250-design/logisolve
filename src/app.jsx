@@ -5124,7 +5124,7 @@ pendingQueue._restore();
 
 function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
   const {tickets,clients,units,suppliers} = state;
-  const realizados = useMemo(()=>tickets.filter(t=>REVENUE_SET.has(t.status)),[tickets]);
+  const realizados = useMemo(()=>tickets.filter(t=>!t._deleted&&REVENUE_SET.has(t.status)),[tickets]);
   const totalFact  = useMemo(()=>realizados.reduce((s,t)=>s+t.snap.precioConIVA,0),[realizados]);
   const totalNeta  = useMemo(()=>realizados.reduce((s,t)=>s+t.snap.uNeta,0),[realizados]);
   const [expId,     setExpId]     = useState(null);
@@ -5725,17 +5725,19 @@ export default function App() {
       try {
         await seedIfEmpty();
         const data = await loadAllFromSupabase();
-        if(data) { dispatch({type:"IMPORT",data}); bumpSeq(data.tickets); }
+        if(data) { dispatch({type:"IMPORT",data}); bumpSeq(data.tickets); opLog.push("LOAD_OK"); }
         else {
           const stored = loadFromStorage();
           if(stored) { dispatch({type:"IMPORT", data:stored}); bumpSeq(stored.tickets); }
+          toast("Sin datos Supabase — usando datos locales del dispositivo","info");
+          opLog.push("LOAD_LOCAL_FALLBACK");
         }
-        opLog.push("LOAD_OK");
       } catch(e){
         opLog.push("LOAD_ERROR", {error: e?.message});
         console.warn("Supabase load error:",e);
         const stored = loadFromStorage();
         if(stored) { dispatch({type:"IMPORT", data:stored}); bumpSeq(stored.tickets); }
+        toast("Error Supabase: "+e?.message+" — datos locales cargados","error");
       }
       finally { setLoading(false); }
     })();
@@ -5803,6 +5805,12 @@ export default function App() {
     const h=e=>{if((e.ctrlKey||e.metaKey)&&e.key==="k"){e.preventDefault();setSearch(s=>!s);}};
     window.addEventListener("keydown",h);
     return()=>window.removeEventListener("keydown",h);
+  },[]);
+
+  useEffect(()=>{
+    const h=()=>setMobileView(window.innerWidth<768);
+    window.addEventListener("resize",h);
+    return()=>window.removeEventListener("resize",h);
   },[]);
 
   const p1Active  = useMemo(()=>state.tickets.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status)).length,[state.tickets]);
