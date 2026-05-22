@@ -1361,18 +1361,18 @@ function CentroOps({state}) {
   // Aging cartera
   const aging = useMemo(()=>{
     const pend=tickets.filter(t=>t.payType==="credit"&&!t.cobrado&&t.status!=="cancelado"&&t.promesaPago);
-    const bucket=(mn,mx)=>pend.filter(t=>{const d=parseDateMX(t.promesaPago);if(!d)return false;const ms=Date.now()-d.getTime();return ms>=mn*86400000&&(mx==null||ms<mx*86400000);}).reduce((s,t)=>s+t.snap.precioConIVA,0);
+    const bucket=(mn,mx)=>pend.filter(t=>{const d=parseDateMX(t.promesaPago);if(!d)return false;const ms=Date.now()-d.getTime();return ms>=mn*86400000&&(mx==null||ms<mx*86400000);}).reduce((s,t)=>s+(t.snap?.precioConIVA||0),0);
     return{a30:bucket(0,30),a60:bucket(30,60),mas60:bucket(60,null)};
   },[tickets]);
 
   // Top proveedores
   const topSupp = useMemo(()=>suppliers.map(s=>{
     const so=tickets.filter(t=>t.supplierId===s.id);
-    return{label:s.nombre,neta:so.reduce((s,t)=>s+t.snap.uNeta,0),count:so.length};
+    return{label:s.nombre,neta:so.reduce((s,t)=>s+(t.snap?.uNeta||0),0),count:so.length};
   }).filter(s=>s.count>0).sort((a,b)=>b.neta-a.neta).slice(0,4),[tickets,suppliers]);
 
   // Eficiencia
-  const eficientes = useMemo(()=>tickets.filter(t=>t.horasOp>0).map(t=>({titulo:t.titulo,uPH:t.snap.uNeta/t.horasOp,uNeta:t.snap.uNeta,horas:t.horasOp})).sort((a,b)=>b.uPH-a.uPH).slice(0,4),[tickets]);
+  const eficientes = useMemo(()=>tickets.filter(t=>t.horasOp>0).map(t=>({titulo:t.titulo,uPH:(t.snap?.uNeta||0)/t.horasOp,uNeta:t.snap?.uNeta||0,horas:t.horasOp})).sort((a,b)=>b.uPH-a.uPH).slice(0,4),[tickets]);
 
   return (
     <div style={{padding:"10px 13px",maxWidth:1300,margin:"0 auto"}}>
@@ -4597,7 +4597,7 @@ function MOps({state,setTab}) {
   // Aging cartera
   const aging = useMemo(()=>{
     const pend=tickets.filter(t=>t.payType==="credit"&&!t.cobrado&&t.status!=="cancelado"&&t.promesaPago);
-    const bucket=(mn,mx)=>pend.filter(t=>{const d=parseDateMX(t.promesaPago);if(!d)return false;const ms=Date.now()-d.getTime();return ms>=mn*86400000&&(mx==null||ms<mx*86400000);}).reduce((s,t)=>s+t.snap.precioConIVA,0);
+    const bucket=(mn,mx)=>pend.filter(t=>{const d=parseDateMX(t.promesaPago);if(!d)return false;const ms=Date.now()-d.getTime();return ms>=mn*86400000&&(mx==null||ms<mx*86400000);}).reduce((s,t)=>s+(t.snap?.precioConIVA||0),0);
     return{a30:bucket(0,30),a60:bucket(30,60),mas60:bucket(60,null)};
   },[tickets]);
 
@@ -4618,7 +4618,7 @@ function MOps({state,setTab}) {
   // Top proveedores
   const topSupp=useMemo(()=>suppliers.map(s=>{
     const so=tickets.filter(t=>t.supplierId===s.id);
-    return{label:s.nombre,neta:so.reduce((s,t)=>s+t.snap.uNeta,0),count:so.length};
+    return{label:s.nombre,neta:so.reduce((s,t)=>s+(t.snap?.uNeta||0),0),count:so.length};
   }).filter(s=>s.count>0).sort((a,b)=>b.neta-a.neta).slice(0,3),[tickets,suppliers]);
 
   // Prioridades
