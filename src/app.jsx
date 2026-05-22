@@ -4499,8 +4499,26 @@ function MOps({state,setTab}) {
 
   const lastTkts = useMemo(()=>tickets.filter(t=>!t._deleted).slice(-5).reverse(),[tickets]);
 
+  const now=new Date();
+  const hour=now.getHours();
+  const greeting=hour<12?"Buenos días":hour<19?"Buenas tardes":"Buenas noches";
+  const dayLabel=now.toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"short"});
+
   return (
     <div style={{padding:"14px 16px"}}>
+
+      {/* Header saludo */}
+      <div style={{marginBottom:16}}>
+        <div style={{fontSize:11,color:C.t4,letterSpacing:"0.08em",textTransform:"capitalize",marginBottom:2}}>{dayLabel}</div>
+        <div style={{fontSize:18,fontWeight:700,color:C.t1,lineHeight:1.2}}>{greeting}</div>
+        {(p1.length>0||vencidos.length>0)&&(
+          <div style={{fontSize:11,color:C.red,marginTop:4,fontWeight:600}}>
+            {p1.length>0?`${p1.length} P1 activ${p1.length>1?"os":"o"}`:""}
+            {p1.length>0&&vencidos.length>0?" · ":""}
+            {vencidos.length>0?`${vencidos.length} crédit${vencidos.length>1?"os":"o"} vencid${vencidos.length>1?"os":"o"}`:""}
+          </div>
+        )}
+      </div>
 
       {/* Acciones rápidas */}
       <div style={{display:"flex",gap:8,marginBottom:14,overflowX:"auto",paddingBottom:2}}>
@@ -4746,8 +4764,8 @@ function StatusFlowSheet({tkt,dispatch,toast,onClose}) {
   const allowed=TICKET_TRANSITIONS[tkt.status]||[];
   const pr=PRIORITY[tkt.priority]||PRIORITY.P4;
   return (<>
-    <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,.5)"}}/>
-    <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:201,
+    <div onClick={onClose} className="fade-enter" style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,.5)"}}/>
+    <div className="sheet-enter" style={{position:"fixed",bottom:0,left:0,right:0,zIndex:201,
       background:C.bg1,borderRadius:"18px 18px 0 0",borderTop:`1px solid ${C.borderHi}`,
       padding:`0 16px calc(20px + env(safe-area-inset-bottom,0px))`,
       boxShadow:"0 -12px 48px rgba(0,0,0,.5)"}}>
@@ -4821,9 +4839,14 @@ function MPipeline({state,dispatch,toast}) {
       </div>
 
       {abiertos.length===0&&(
-        <div style={{textAlign:"center",padding:"60px 0",color:C.t3}}>
-          <div style={{fontSize:28,marginBottom:12}}>✓</div>
-          <div style={{fontSize:14,fontWeight:600}}>Sin tickets pendientes</div>
+        <div style={{textAlign:"center",padding:"60px 0",color:C.t4}}>
+          <div style={{fontSize:32,marginBottom:10}}>✓</div>
+          <div style={{fontSize:14,fontWeight:700,color:C.green,marginBottom:4}}>
+            {fPrio==="all"?"Pipeline limpio":"Sin "+fPrio+" activos"}
+          </div>
+          <div style={{fontSize:11,color:C.t4}}>
+            {fPrio==="all"?"No hay tickets en curso":"Cambia el filtro para ver otros tickets"}
+          </div>
         </div>
       )}
 
@@ -4960,8 +4983,8 @@ function QuickQuoteSheet({state,dispatch,toast,open,onClose,onFull}) {
   );
 
   return (<>
-    <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,.6)"}}/>
-    <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:201,
+    <div onClick={onClose} className="fade-enter" style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,.6)"}}/>
+    <div className="sheet-enter" style={{position:"fixed",bottom:0,left:0,right:0,zIndex:201,
       background:C.bg1,borderRadius:"18px 18px 0 0",
       borderTop:`1px solid ${C.borderHi}`,
       padding:`0 16px calc(20px + env(safe-area-inset-bottom, 0px))`,
@@ -5585,7 +5608,9 @@ function MCartera({state,dispatch,toast}) {
         const cl=clients.find(c=>c.id===t.clientId);
         const dias=daysFromNow(t.promesaPago);
         const esVenc=dias!=null&&dias>0;
-        const accentColor = esVenc?C.red:dias!=null&&dias<=7?C.yellow:C.cyan;
+        const daysLeft=t.promesaPago?(()=>{const d=parseDateMX(t.promesaPago);return d?Math.round((d-new Date())/(86400000)):null;})():null;
+        const pronto=!esVenc&&daysLeft!=null&&daysLeft<=7&&daysLeft>=0;
+        const accentColor = esVenc?C.red:pronto?C.yellow:C.cyan;
         return (
           <MCard key={t.id}>
             <div style={{padding:"14px 16px",borderLeft:`4px solid ${accentColor}`}}>
@@ -5602,7 +5627,7 @@ function MCartera({state,dispatch,toast}) {
               </div>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8}}>
                 <div style={{fontSize:11,color:esVenc?C.red:accentColor,fontWeight:600}}>
-                  {t.promesaPago||"Sin fecha"}{esVenc?` · VENCIDA ${dias}d`:dias!=null&&dias<=7?` · vence en ${Math.round((parseDateMX(t.promesaPago)-new Date())/(86400000))}d`:""}
+                  {t.promesaPago||"Sin fecha"}{esVenc?` · VENCIDA ${dias}d`:pronto?` · vence en ${daysLeft}d`:""}
                 </div>
                 <MBtn label="Cobrado ✓" small bg={C.greenDim} border={C.green+"44"} color={C.green}
                   onClick={()=>{dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado","success");}}/>
@@ -5885,9 +5910,9 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                 {editing ? (
                   <>
                     {/* Backdrop overlay */}
-                    <div onClick={cancelEdit} style={{position:"fixed",inset:0,zIndex:299,background:"rgba(0,0,0,.65)"}}/>
+                    <div onClick={cancelEdit} className="fade-enter" style={{position:"fixed",inset:0,zIndex:299,background:"rgba(0,0,0,.65)"}}/>
                     {/* Bottom sheet */}
-                    <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:300,
+                    <div className="sheet-enter" style={{position:"fixed",bottom:0,left:0,right:0,zIndex:300,
                       background:C.bg1,borderRadius:"18px 18px 0 0",
                       borderTop:`1px solid ${C.borderHi}`,
                       maxHeight:"92vh",overflowY:"auto",
@@ -6236,17 +6261,19 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
 function MasSheet({open,onClose,tab,setTab}) {
   if(!open) return null;
   const items=[
+    {id:"cotizador",  label:"Cotizador",  icon:"🧾", desc:"Multi-línea"},
+    {id:"refacciones",label:"Refacciones",icon:"🔩", desc:"Cotiza partes"},
     {id:"cartera",    label:"Cartera",    icon:"💳", desc:"Por cobrar"},
     {id:"unidades",   label:"Flotilla",   icon:"🚛", desc:"Vehículos"},
-    {id:"catalogo",   label:"Catálogo",   icon:"📦", desc:"Refacciones"},
+    {id:"catalogo",   label:"Catálogo",   icon:"📦", desc:"Inventario"},
     {id:"clientes",   label:"Clientes",   icon:"🏢", desc:"Directorio"},
     {id:"proveedores",label:"Proveedores",icon:"🔧", desc:"Suppliers"},
     {id:"ajustes",    label:"Ajustes",    icon:"⚙",  desc:"Config"},
   ];
   return (
     <>
-      <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:150,background:"rgba(0,0,0,.55)"}}/>
-      <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:151,
+      <div onClick={onClose} className="fade-enter" style={{position:"fixed",inset:0,zIndex:150,background:"rgba(0,0,0,.55)"}}/>
+      <div className="sheet-enter" style={{position:"fixed",bottom:0,left:0,right:0,zIndex:151,
         background:C.bg1,borderRadius:"20px 20px 0 0",
         borderTop:`1px solid ${C.borderHi}`,
         padding:`0 16px calc(16px + env(safe-area-inset-bottom,0px))`,
@@ -6256,7 +6283,7 @@ function MasSheet({open,onClose,tab,setTab}) {
         </div>
         <div style={{fontSize:10,color:C.t3,letterSpacing:"0.16em",marginBottom:14,
           textAlign:"center",textTransform:"uppercase",fontWeight:700}}>Más módulos</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:8}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:8}}>
           {items.map(item=>(
             <button key={item.id} onClick={()=>{setTab(item.id);onClose();}}
               style={{padding:"16px 8px",
@@ -6545,7 +6572,7 @@ export default function App() {
           ].map(t=>{
             const badge = t.id==="tickets"&&abiertas>0?abiertas : t.id==="ops"&&p1Active>0?p1Active : 0;
             const isMore = t.id==="__mas__";
-            const moreActive = ["unidades","catalogo","proveedores","clientes","ajustes","cartera"].includes(tab);
+            const moreActive = ["unidades","catalogo","proveedores","clientes","ajustes","cartera","cotizador","refacciones"].includes(tab);
             const active = isMore ? (moreActive||masOpen) : tab===t.id;
             return (
               <button key={t.id}
@@ -6613,17 +6640,24 @@ export default function App() {
       <Toasts items={toasts}/>
 
       <style>{`
-        html,body{overscroll-behavior:none;overflow-x:hidden}
+        html,body{overscroll-behavior:none;overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
         input[type=number]::-webkit-inner-spin-button{opacity:.2}
         input::placeholder,textarea::placeholder{color:${C.t3}}
         select option{background:${C.bg1};color:${C.t1}}
         *{box-sizing:border-box}
-        button:active{opacity:.75}
+        button{transition:opacity 120ms ease,background 120ms ease,border-color 120ms ease}
+        button:active{opacity:.72;transform:scale(.98)}
         ::-webkit-scrollbar{width:4px;height:4px}
         ::-webkit-scrollbar-track{background:${C.bg1}}
         ::-webkit-scrollbar-thumb{background:${C.border};border-radius:2px}
         textarea{color:${C.t2};resize:vertical;font-family:'Courier New',monospace}
+        input,select,textarea{transition:border-color 150ms ease}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes slideUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
+        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+        .sheet-enter{animation:slideUp 260ms cubic-bezier(.22,.8,.22,1) both}
+        .fade-enter{animation:fadeIn 180ms ease both}
       `}</style>
     </div>
   );
