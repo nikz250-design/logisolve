@@ -4502,6 +4502,23 @@ function MOps({state,setTab}) {
   return (
     <div style={{padding:"14px 16px"}}>
 
+      {/* Acciones rápidas */}
+      <div style={{display:"flex",gap:8,marginBottom:14,overflowX:"auto",paddingBottom:2}}>
+        {[
+          {label:"+ Cotizar",   id:"cotizador",  bg:C.blue,   bdr:C.blueHi, col:C.t1},
+          {label:"Pipeline",    id:"tickets",    bg:C.bg2,    bdr:C.border,  col:C.t2},
+          {label:"Cartera",     id:"cartera",    bg:C.bg2,    bdr:C.border,  col:C.t2},
+          {label:"Historial",   id:"historial",  bg:C.bg2,    bdr:C.border,  col:C.t2},
+        ].map(({label,id,bg,bdr,col})=>(
+          <button key={id} onClick={()=>setTab(id)}
+            style={{padding:"10px 18px",borderRadius:20,flexShrink:0,
+              background:bg,border:`1px solid ${bdr}`,color:col,
+              fontSize:13,cursor:"pointer",fontWeight:600,whiteSpace:"nowrap",minHeight:40}}>
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* Alertas críticas */}
       {p1.length>0&&(
         <div style={{background:C.p1dim,border:`1px solid ${C.p1dot}55`,borderRadius:14,padding:"14px 16px",marginBottom:10,display:"flex",alignItems:"center",gap:12}}>
@@ -5572,6 +5589,15 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
   const [confirm,   setConfirm]   = useState(null);
   const sfn = k => v => setEf(p=>({...p,[k]:v}));
 
+  // Body scroll lock when editing on mobile
+  useEffect(()=>{
+    if(!editId){ document.body.style.overflow=""; document.body.style.position=""; document.body.style.width=""; return; }
+    const y=window.scrollY;
+    document.body.style.overflow="hidden"; document.body.style.position="fixed";
+    document.body.style.top=`-${y}px`; document.body.style.width="100%";
+    return()=>{ document.body.style.overflow=""; document.body.style.position=""; document.body.style.top=""; document.body.style.width=""; window.scrollTo(0,y); };
+  },[editId]);
+
   const updLinea = (idx,patch) => setEditLineas(p=>p.map((l,i)=>i===idx?{...l,...patch}:l));
   const delLinea = idx => setEditLineas(p=>p.filter((_,i)=>i!==idx));
   const addLinea = () => setEditLineas(p=>[...p,{titulo:"",partRef:"",costoUnit:0,gasolina:0,otros:0,qty:1,mode:"manual",manualPrice:"0",customMgn:false,customVal:27}]);
@@ -5771,7 +5797,26 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
               <div style={{borderTop:`1px solid ${C.border}`}}>
                 {editing ? (
                   <div style={{padding:"14px"}}>
-                    <div style={{fontSize:10,color:C.cyan,letterSpacing:"0.14em",marginBottom:12,fontWeight:700}}>EDITANDO {t.id}</div>
+                    {/* Sticky header con acciones — Save/Cancel siempre visibles */}
+                    <div style={{position:"sticky",top:0,zIndex:10,background:C.bg1,
+                      paddingBottom:10,marginBottom:12,
+                      borderBottom:`1px solid ${C.border}`}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <div style={{fontSize:10,color:C.cyan,letterSpacing:"0.14em",fontWeight:700,fontFamily:"'Courier New',monospace"}}>{t.id} · EDITANDO</div>
+                        <div style={{display:"flex",gap:6}}>
+                          <button onClick={cancelEdit}
+                            style={{padding:"8px 14px",background:"transparent",border:`1px solid ${C.border}`,
+                              borderRadius:8,color:C.t2,fontSize:12,cursor:"pointer",fontWeight:600}}>
+                            Cancelar
+                          </button>
+                          <button onClick={()=>saveEdit(t.id)}
+                            style={{padding:"8px 18px",background:C.blue,border:`1px solid ${C.blueHi}`,
+                              borderRadius:8,color:C.t1,fontSize:12,cursor:"pointer",fontWeight:700}}>
+                            Guardar ✓
+                          </button>
+                        </div>
+                      </div>
+                    </div>
 
                     {/* Datos generales */}
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
@@ -5816,30 +5861,9 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                       </div>
                     )}
 
-                      {/* IVA/ISR */}
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-                      <div>
-                        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>IVA %</div>
-                        <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                          <input type="text" inputMode="decimal" value={ef.iva} onChange={e=>sfn("iva")(e.target.value)}
-                            style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:15,padding:"10px 14px",fontFamily:"'Courier New',monospace"}}/>
-                          <span style={{padding:"0 12px",color:C.t3,fontSize:13}}>%</span>
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>ISR %</div>
-                        <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                          <input type="text" inputMode="decimal" value={ef.isr} onChange={e=>sfn("isr")(e.target.value)}
-                            style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:15,padding:"10px 14px",fontFamily:"'Courier New',monospace"}}/>
-                          <span style={{padding:"0 12px",color:C.t3,fontSize:13}}>%</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Tipo operación */}
                     <MSel2 label="Tipo de operación" value={ef.opType||"consumable"} onChange={sfn("opType")} options={OP_TYPES.map(o=>({value:o.id,label:o.label+" ("+o.baseMin+"-"+o.baseMax+"%)"}))}/>
 
-                    {/* IVA/ISR */}
+                    {/* Fiscales */}
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
                       <div>
                         <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>IVA %</div>
@@ -6008,8 +6032,9 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                         style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t2,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
                     </div>
 
-                    <div style={{display:"flex",gap:8}}>
-                      <MBtn label="Guardar cambios" full onClick={()=>saveEdit(t.id)}/>
+                    {/* Acciones — también disponibles en el header sticky arriba */}
+                    <div style={{display:"flex",gap:8,paddingTop:8}}>
+                      <MBtn label="Guardar ✓" full onClick={()=>saveEdit(t.id)}/>
                       <MBtn label="Cancelar" bg="transparent" border={C.border} color={C.t2} small onClick={cancelEdit}/>
                     </div>
                   </div>
