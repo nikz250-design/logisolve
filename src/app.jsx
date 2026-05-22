@@ -2680,7 +2680,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
         </div>
       )}
 
-      <div style={{display:"grid",gridTemplateColumns:"1fr 320px",gap:10}}>
+      <div className="ref-grid" style={{display:"grid",gridTemplateColumns:"1fr 320px",gap:10}}>
 
         {/* LEFT */}
         <div>
@@ -6689,6 +6689,7 @@ export default function App() {
         ::-webkit-scrollbar-thumb{background:${C.border};border-radius:2px}
         textarea{color:${C.t2};resize:vertical;font-family:'Courier New',monospace}
         input,select,textarea{transition:border-color 150ms ease}
+        @media(max-width:640px){.ref-grid{grid-template-columns:1fr!important}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes slideUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
