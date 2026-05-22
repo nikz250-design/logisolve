@@ -1151,6 +1151,179 @@ function SearchPalette({state,onNavigate,onClose}) {
   );
 }
 
+// ── CLIENT PICKER (búsqueda por empresa, RFC, contacto) ─────────────────────
+function ClientPicker({clients, value, onChange, placeholder="Buscar cliente...", mobile=false}) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef();
+
+  const selected = clients.find(c => c.id === value);
+  const displayLabel = selected ? selected.empresa : "";
+
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    document.addEventListener("touchstart", h, {passive:true});
+    return () => { document.removeEventListener("mousedown", h); document.removeEventListener("touchstart", h); };
+  }, []);
+
+  const results = useMemo(() => {
+    if (!q.trim()) return clients.slice(0, 60);
+    const lq = q.toLowerCase();
+    return clients.filter(c =>
+      safeLower(c.empresa).includes(lq) ||
+      safeLower(c.rfc||"").includes(lq) ||
+      safeLower(c.contacto||"").includes(lq)
+    );
+  }, [q, clients]);
+
+  const triggerPad  = mobile ? "12px 14px" : "6px 8px";
+  const triggerFont = mobile ? 16 : 10;
+  const labelFont   = mobile ? 10 : 7;
+  const dropFont    = mobile ? 13 : 9;
+  const dropHeight  = mobile ? 280 : 220;
+  const itemPad     = mobile ? "10px 12px" : "6px 9px";
+
+  return (
+    <div ref={ref} style={{position:"relative", marginBottom: mobile ? 10 : 7}}>
+      <div style={{fontSize:labelFont,color:C.t3,letterSpacing:"0.14em",marginBottom: mobile ? 5 : 3,textTransform:"uppercase"}}>{mobile ? "Cliente" : "CLIENTE"}</div>
+      <div
+        onClick={() => { setOpen(o => !o); setQ(""); }}
+        style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:C.bg0,border:`1px solid ${open?C.blueHi:C.border}`,borderRadius: mobile ? 6 : 3,padding:triggerPad,cursor:"pointer",minHeight: mobile ? 46 : 28}}
+      >
+        {value ? (
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{fontSize:triggerFont,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayLabel}</div>
+            {selected?.rfc && <div style={{fontSize: mobile ? 11 : 7,color:C.t3,marginTop:2,fontFamily:"'Courier New',monospace"}}>{selected.rfc}</div>}
+          </div>
+        ) : (
+          <span style={{fontSize:triggerFont,color:C.t3}}>{placeholder}</span>
+        )}
+        <div style={{display:"flex",gap:5,alignItems:"center",flexShrink:0,marginLeft:6}}>
+          {value && <span onClick={e=>{e.stopPropagation();onChange("");}} style={{fontSize: mobile ? 18 : 10,color:C.red,cursor:"pointer",padding:"0 3px",lineHeight:1}}>×</span>}
+          <span style={{fontSize: mobile ? 10 : 8,color:C.t3}}>{open?"▲":"▼"}</span>
+        </div>
+      </div>
+      {open && (
+        <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:300,background:C.bg2,border:`1px solid ${C.blueHi}`,borderRadius: mobile ? 6 : 3,boxShadow:"0 4px 20px rgba(0,0,0,.6)",maxHeight:dropHeight,display:"flex",flexDirection:"column"}}>
+          <div style={{padding: mobile ? "10px 12px" : "5px 8px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
+            <input
+              autoFocus
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              placeholder="Empresa, RFC, contacto..."
+              style={{width:"100%",background:"transparent",border:"none",outline:"none",color:C.t1,fontSize: mobile ? 16 : 10,fontFamily:"inherit"}}
+            />
+          </div>
+          <div style={{overflowY:"auto",WebkitOverflowScrolling:"touch",flex:1}}>
+            {results.length === 0 ? (
+              <div style={{padding:itemPad,color:C.t3,fontSize:dropFont}}>Sin resultados</div>
+            ) : results.map(c => (
+              <div key={c.id}
+                onClick={() => { onChange(c.id); setOpen(false); setQ(""); }}
+                style={{padding:itemPad,cursor:"pointer",borderBottom:`1px solid ${C.border}`,background:c.id===value?C.blueDim:"transparent"}}>
+                <div style={{fontSize:dropFont,color:c.id===value?C.cyan:C.t1,fontWeight:c.id===value?700:400}}>{c.empresa}</div>
+                {c.rfc && <div style={{fontSize: mobile ? 11 : 7,color:C.t3,fontFamily:"'Courier New',monospace"}}>{c.rfc}</div>}
+              </div>
+            ))}
+          </div>
+          {value && (
+            <div style={{padding: mobile ? "10px 12px" : "5px 8px",borderTop:`1px solid ${C.border}`,flexShrink:0}}>
+              <div onClick={() => { onChange(""); setOpen(false); }} style={{fontSize:dropFont,color:C.red,cursor:"pointer"}}>× Quitar cliente</div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── SUPPLIER PICKER (búsqueda por nombre, especialidad) ──────────────────────
+function SupplierPicker({suppliers, value, onChange, placeholder="Buscar proveedor...", mobile=false}) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef();
+
+  const selected = suppliers.find(s => s.id === value);
+
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    document.addEventListener("touchstart", h, {passive:true});
+    return () => { document.removeEventListener("mousedown", h); document.removeEventListener("touchstart", h); };
+  }, []);
+
+  const results = useMemo(() => {
+    if (!q.trim()) return suppliers.slice(0, 60);
+    const lq = q.toLowerCase();
+    return suppliers.filter(s =>
+      safeLower(s.nombre).includes(lq) ||
+      safeLower(s.especialidad||"").includes(lq) ||
+      safeLower(s.cobertura||"").includes(lq)
+    );
+  }, [q, suppliers]);
+
+  const triggerPad  = mobile ? "12px 14px" : "6px 8px";
+  const triggerFont = mobile ? 16 : 10;
+  const labelFont   = mobile ? 10 : 7;
+  const dropFont    = mobile ? 13 : 9;
+  const dropHeight  = mobile ? 260 : 200;
+  const itemPad     = mobile ? "10px 12px" : "6px 9px";
+
+  return (
+    <div ref={ref} style={{position:"relative", marginBottom: mobile ? 10 : 7}}>
+      <div style={{fontSize:labelFont,color:C.t3,letterSpacing:"0.14em",marginBottom: mobile ? 5 : 3,textTransform:"uppercase"}}>{mobile ? "Proveedor" : "PROVEEDOR"}</div>
+      <div
+        onClick={() => { setOpen(o => !o); setQ(""); }}
+        style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:C.bg0,border:`1px solid ${open?C.blueHi:C.border}`,borderRadius: mobile ? 6 : 3,padding:triggerPad,cursor:"pointer",minHeight: mobile ? 46 : 28}}
+      >
+        {value ? (
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{fontSize:triggerFont,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selected?.nombre||value}</div>
+            {selected?.especialidad && <div style={{fontSize: mobile ? 11 : 7,color:C.t3,marginTop:2}}>{selected.especialidad}</div>}
+          </div>
+        ) : (
+          <span style={{fontSize:triggerFont,color:C.t3}}>{placeholder}</span>
+        )}
+        <div style={{display:"flex",gap:5,alignItems:"center",flexShrink:0,marginLeft:6}}>
+          {value && <span onClick={e=>{e.stopPropagation();onChange("");}} style={{fontSize: mobile ? 18 : 10,color:C.red,cursor:"pointer",padding:"0 3px",lineHeight:1}}>×</span>}
+          <span style={{fontSize: mobile ? 10 : 8,color:C.t3}}>{open?"▲":"▼"}</span>
+        </div>
+      </div>
+      {open && (
+        <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:300,background:C.bg2,border:`1px solid ${C.blueHi}`,borderRadius: mobile ? 6 : 3,boxShadow:"0 4px 20px rgba(0,0,0,.6)",maxHeight:dropHeight,display:"flex",flexDirection:"column"}}>
+          <div style={{padding: mobile ? "10px 12px" : "5px 8px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
+            <input
+              autoFocus
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              placeholder="Nombre, especialidad..."
+              style={{width:"100%",background:"transparent",border:"none",outline:"none",color:C.t1,fontSize: mobile ? 16 : 10,fontFamily:"inherit"}}
+            />
+          </div>
+          <div style={{overflowY:"auto",WebkitOverflowScrolling:"touch",flex:1}}>
+            {results.length === 0 ? (
+              <div style={{padding:itemPad,color:C.t3,fontSize:dropFont}}>Sin resultados</div>
+            ) : results.map(s => (
+              <div key={s.id}
+                onClick={() => { onChange(s.id); setOpen(false); setQ(""); }}
+                style={{padding:itemPad,cursor:"pointer",borderBottom:`1px solid ${C.border}`,background:s.id===value?C.blueDim:"transparent"}}>
+                <div style={{fontSize:dropFont,color:s.id===value?C.cyan:C.t1,fontWeight:s.id===value?700:400}}>{s.nombre}</div>
+                {s.especialidad && <div style={{fontSize: mobile ? 11 : 7,color:C.t3}}>{s.especialidad}</div>}
+              </div>
+            ))}
+          </div>
+          {value && (
+            <div style={{padding: mobile ? "10px 12px" : "5px 8px",borderTop:`1px solid ${C.border}`,flexShrink:0}}>
+              <div onClick={() => { onChange(""); setOpen(false); }} style={{fontSize:dropFont,color:C.red,cursor:"pointer"}}>× Quitar proveedor</div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── UNIT PICKER (búsqueda por económico, placa, marca, modelo) ──────────────
 function UnitPicker({units, value, onChange, placeholder="Buscar por eco, placa, marca...", mobile=false}) {
   const [q, setQ] = useState("");
@@ -1165,7 +1338,8 @@ function UnitPicker({units, value, onChange, placeholder="Buscar por eco, placa,
   useEffect(() => {
     const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
+    document.addEventListener("touchstart", h, {passive:true});
+    return () => { document.removeEventListener("mousedown", h); document.removeEventListener("touchstart", h); };
   }, []);
 
   const results = useMemo(() => {
@@ -4538,7 +4712,9 @@ function MField({label,value,onChange,type="text",placeholder,suffix,color}) {
       {label&&<div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase"}}>{label}</div>}
       <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
         <input type={type} value={value} placeholder={placeholder||""} onChange={e=>onChange(e.target.value)}
-          style={{flex:1,background:"transparent",border:"none",outline:"none",color:color||C.t1,fontSize:15,padding:"12px 14px",fontFamily:"'Courier New',monospace"}}/>
+          style={{flex:1,background:"transparent",border:"none",outline:"none",color:color||C.t1,
+            fontSize:16,/* 16px prevents iOS auto-zoom on focus */
+            padding:"12px 14px",fontFamily:"'Courier New',monospace"}}/>
         {suffix&&<span style={{padding:"0 12px",color:C.t3,fontSize:12}}>{suffix}</span>}
       </div>
     </div>
@@ -4549,7 +4725,9 @@ function MSel({label,value,onChange,options}) {
     <div style={{marginBottom:10}}>
       {label&&<div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase"}}>{label}</div>}
       <select value={value} onChange={e=>onChange(e.target.value)}
-        style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t1,fontSize:14,outline:"none",fontFamily:"'Courier New',monospace",minHeight:46}}>
+        style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t1,
+          fontSize:16,/* 16px prevents iOS auto-zoom on focus */
+          outline:"none",fontFamily:"'Courier New',monospace",minHeight:46}}>
         {options.map(o=><option key={o.value} value={o.value} style={{background:C.bg1}}>{o.label}</option>)}
       </select>
     </div>
@@ -5178,7 +5356,7 @@ function QuickQuoteSheet({state,dispatch,toast,open,onClose,onFull}) {
               <input value={clientQ} onChange={e=>setClientQ(e.target.value)}
                 placeholder={recentClients.length>0?"Recientes · o buscar...":"Buscar cliente..."}
                 style={{width:"100%",background:C.bg0,border:`1px solid ${clientQ?C.blueHi:C.border}`,
-                  borderRadius:12,padding:"12px 40px 12px 16px",color:C.t1,fontSize:14,
+                  borderRadius:12,padding:"12px 40px 12px 16px",color:C.t1,fontSize:16,
                   outline:"none",boxSizing:"border-box"}}/>
               {clientQ&&<button onClick={()=>setClientQ("")}
                 style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",
@@ -5223,7 +5401,7 @@ function QuickQuoteSheet({state,dispatch,toast,open,onClose,onFull}) {
               <input value={unitQ} onChange={e=>setUnitQ(e.target.value)}
                 placeholder={recentUnits.length>0?"Recientes · o buscar eco/marca...":"Buscar unidad..."}
                 style={{width:"100%",background:C.bg0,border:`1px solid ${unitQ?C.blueHi:C.border}`,
-                  borderRadius:12,padding:"12px 40px 12px 16px",color:C.t1,fontSize:14,
+                  borderRadius:12,padding:"12px 40px 12px 16px",color:C.t1,fontSize:16,
                   outline:"none",boxSizing:"border-box"}}/>
               {unitQ&&<button onClick={()=>setUnitQ("")}
                 style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",
@@ -5643,9 +5821,9 @@ function MCotizador({state,dispatch,toast}) {
           <div style={{fontSize:10,color:C.t3,marginBottom:4}}>FECHA</div>
           <input value={fecha} onChange={e=>setFecha(e.target.value)} placeholder="DD/MM/AAAA"
             style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t1,fontSize:15,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace",marginBottom:10}}/>
-          <MSel label="Cliente"   value={clientId}   onChange={setClientId}   options={[{value:"",label:"-- Sin cliente --"},...clients.map(c=>({value:c.id,label:c.empresa}))]}/>
+          <ClientPicker clients={clients} value={clientId} onChange={setClientId} mobile/>
           <UnitPicker units={units} value={unitId} onChange={setUnitId} placeholder="Buscar por eco., placa, marca..." mobile/>
-          <MSel label="Proveedor" value={supplierId} onChange={setSupplierId} options={[{value:"",label:"-- Sin proveedor --"},...suppliers.map(s=>({value:s.id,label:s.nombre}))]}/>
+          <SupplierPicker suppliers={suppliers} value={supplierId} onChange={setSupplierId} mobile/>
           <MSel label="Pago"      value={payType}    onChange={setPayType}    options={[{value:"contado",label:"Contado"},{value:"credit",label:"Credito"}]}/>
           {payType==="credit"&&<MField label="Promesa de pago" value={promesa} onChange={setPromesa} placeholder="DD/MM/AAAA" color={C.yellow}/>}
           <div>
@@ -6134,8 +6312,8 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                       </div>
                     </div>
 
-                    <MSel2 label="Cliente"   value={ef.clientId}   onChange={sfn("clientId")}   options={[{value:"",label:"-- Sin cliente --"},...clients.map(c=>({value:c.id,label:c.empresa}))]}/>
-                    <MSel2 label="Proveedor" value={ef.supplierId} onChange={sfn("supplierId")} options={[{value:"",label:"-- Sin proveedor --"},...suppliers.map(s=>({value:s.id,label:s.nombre}))]}/>
+                    <ClientPicker  clients={clients}     value={ef.clientId||""}   onChange={sfn("clientId")}   mobile/>
+                    <SupplierPicker suppliers={suppliers} value={ef.supplierId||""} onChange={sfn("supplierId")} mobile/>
                     <UnitPicker units={units} value={ef.unitId||""} onChange={sfn("unitId")} mobile/>
 
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
@@ -6481,7 +6659,7 @@ function MClientes({state,dispatch,toast}) {
       )}
       {!showForm&&clients.length>0&&(
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar empresa, contacto, tel..."
-          style={{width:"100%",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.t1,fontSize:13,outline:"none",marginBottom:12,fontFamily:"inherit"}}/>
+          style={{width:"100%",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.t1,fontSize:16,outline:"none",marginBottom:12,fontFamily:"inherit"}}/>
       )}
       {clients.length===0&&!showForm&&<EmptyState icon="🏢" title="Sin clientes" sub='Agrega el primero con "+ Nuevo"'/>}
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -6582,7 +6760,7 @@ function MUnidades({state,dispatch,toast}) {
           <MField label="Transmisión"     value={form.transmision}   onChange={sf("transmision")}/>
           <MField label="Configuración"   value={form.config}        onChange={sf("config")} placeholder="4x2, 6x4..."/>
           <MField label="Kilometraje"     value={form.km}            onChange={sf("km")} type="number" suffix="km"/>
-          <MSel   label="Cliente"         value={form.clientId}      onChange={sf("clientId")} options={[{value:"",label:"-- Sin cliente --"},...clients.map(c=>({value:c.id,label:c.empresa}))]}/>
+          <ClientPicker clients={clients} value={form.clientId||""} onChange={sf("clientId")} mobile/>
           <MSel   label="Estado"          value={form.statusOp}      onChange={sf("statusOp")} options={Object.entries(UNIT_STATUS).map(([k,v])=>({value:k,label:v.label}))}/>
           <MField label="Notas técnicas"  value={form.notas}         onChange={sf("notas")} placeholder="Historial, advertencias..."/>
           <MBtn label={editId?"Guardar cambios":"Guardar unidad"} full color={C.t1} bg={C.blue} border={C.blue} onClick={save}/>
@@ -6590,7 +6768,7 @@ function MUnidades({state,dispatch,toast}) {
       )}
       {!showForm&&units.length>0&&(
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar eco., placa, VIN, marca..."
-          style={{width:"100%",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.t1,fontSize:13,outline:"none",marginBottom:12,fontFamily:"inherit"}}/>
+          style={{width:"100%",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.t1,fontSize:16,outline:"none",marginBottom:12,fontFamily:"inherit"}}/>
       )}
       {units.length===0&&!showForm&&<EmptyState icon="🚛" title="Sin unidades" sub='Agrega la primera con "+ Nueva"'/>}
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -6708,7 +6886,7 @@ function MCatalogo({state,dispatch,toast}) {
       )}
       {!showForm&&parts.length>0&&(
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar nombre, OEM, aftermarket..."
-          style={{width:"100%",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.t1,fontSize:13,outline:"none",marginBottom:12,fontFamily:"inherit"}}/>
+          style={{width:"100%",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.t1,fontSize:16,outline:"none",marginBottom:12,fontFamily:"inherit"}}/>
       )}
       {parts.length===0&&!showForm&&<EmptyState icon="📦" title="Sin partes en catálogo" sub='Agrega la primera con "+ Nueva parte"'/>}
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -7238,7 +7416,8 @@ function App() {
       {mobileView&&<MasSheet open={masOpen} onClose={()=>setMasOpen(false)} tab={tab} setTab={t=>{setTab(t);setMasOpen(false);}}/>}
 
       {/* Content */}
-      <div style={{paddingBottom:mobileView?"calc(72px + env(safe-area-inset-bottom,0px))":0}}>
+      <div style={{paddingBottom:mobileView?"calc(72px + env(safe-area-inset-bottom,0px))":0,
+        WebkitOverflowScrolling:"touch"}}>
         {tab==="ops"        &&(mobileView?<MOps       state={state} setTab={setTab}/>                                    :<CentroOps   state={state}/>)}
         {tab==="tickets"    &&(mobileView?<MPipeline  state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Tickets     state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete}/>)}
         {tab==="historial"  &&(mobileView?<MHistorial state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>:<Historial   state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>)}
@@ -7255,7 +7434,8 @@ function App() {
       <Toasts items={toasts}/>
 
       <style>{`
-        html,body{overscroll-behavior:none;overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+        html,body{overscroll-behavior:none;overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;touch-action:pan-y}
+        .scroll-touch{-webkit-overflow-scrolling:touch;overflow-y:auto}
         input[type=number]::-webkit-inner-spin-button{opacity:.2}
         input::placeholder,textarea::placeholder{color:${C.t3}}
         select option{background:${C.bg1};color:${C.t1}}
