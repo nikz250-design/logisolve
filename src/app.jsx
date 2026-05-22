@@ -5531,15 +5531,29 @@ function MCotizador({state,dispatch,toast}) {
       </MCard>
 
       {/* Resumen final */}
-      <MCard>
-        <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,fontSize:10,color:C.t3,letterSpacing:"0.12em"}}>RESUMEN</div>
-        <MRow label="Total c/IVA" value={mxn(totalPrecio)} color={C.cyan} bold/>
-        <MRow label="Util. neta"  value={mxn(totalNeta)}   color={totalNeta>=0?C.green:C.red} bold/>
-        <MRow label="Lineas"      value={String(lineas.length)} color={C.t1}/>
-        <MRow label="Cliente"     value={clients.find(c=>c.id===clientId)?.empresa||"---"} color={C.t2}/>
-      </MCard>
+      <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",marginBottom:14}}>
+        <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`}}>
+          <div style={{fontSize:9,color:C.t3,letterSpacing:"0.14em",marginBottom:8,textTransform:"uppercase"}}>Resumen de cotización</div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
+            <div>
+              <div style={{fontSize:11,color:C.t3,marginBottom:2}}>Total c/IVA</div>
+              <div style={{fontSize:28,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",lineHeight:1}}>{mxn(totalPrecio)}</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:11,color:C.t3,marginBottom:2}}>Util. neta</div>
+              <div style={{fontSize:20,fontWeight:800,color:totalNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace",lineHeight:1}}>{mxn(totalNeta)}</div>
+              <div style={{fontSize:11,color:margenColor(aggMargen),marginTop:3,fontFamily:"'Courier New',monospace"}}>{fpct(aggMargen)}</div>
+            </div>
+          </div>
+        </div>
+        <div style={{padding:"10px 16px"}}>
+          <MRow label={`${lineas.length} línea${lineas.length>1?"s":""}`} value={clients.find(c=>c.id===clientId)?.empresa||"Sin cliente"} color={C.t2}/>
+          {unitId&&<MRow label="Unidad" value={(()=>{const u=units.find(u=>u.id===unitId);return u?(u.economico?"Eco."+u.economico+" · ":"")+u.marca+" "+u.modelo:"---";})() } color={C.cyan}/>}
+          <MRow label="Pago" value={payType==="credit"?"Crédito"+(promesa?" · "+promesa:""):"Contado"} color={payType==="credit"?C.yellow:C.green}/>
+        </div>
+      </div>
 
-      <MBtn label="Registrar ticket + PDF" full onClick={save}/>
+      <MBtn label="Registrar ticket + PDF →" full onClick={save}/>
     </div>
   );
 }
