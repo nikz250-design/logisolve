@@ -6906,7 +6906,33 @@ const TABS = [
   {id:"ajustes",      label:"Ajustes"},
 ];
 
-export default function App() {
+// ── ErrorBoundary — catches any render crash, shows recovery screen instead of blank ──
+class ErrorBoundary extends React.Component {
+  constructor(props){ super(props); this.state={error:null}; }
+  static getDerivedStateFromError(e){ return {error:e}; }
+  componentDidCatch(e,info){ console.error("[ErrorBoundary]",e,info); }
+  render(){
+    if(!this.state.error) return this.props.children;
+    const msg = this.state.error?.message||String(this.state.error);
+    return (
+      <div style={{minHeight:"100vh",background:"#070909",color:"#e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:24,fontFamily:"'Trebuchet MS',sans-serif"}}>
+        <div style={{fontSize:28,color:"#267A90"}}>⚠</div>
+        <div style={{fontSize:13,fontWeight:700,color:"#e2e8f0",textAlign:"center"}}>Algo salió mal</div>
+        <div style={{fontSize:10,color:"#94a3b8",fontFamily:"monospace",background:"#0f1515",padding:"8px 14px",borderRadius:4,maxWidth:320,wordBreak:"break-all",textAlign:"center"}}>{msg}</div>
+        <button onClick={()=>window.location.reload()}
+          style={{marginTop:8,padding:"9px 22px",background:"#267A90",border:"none",borderRadius:4,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",letterSpacing:"0.05em"}}>
+          REINICIAR APP
+        </button>
+      </div>
+    );
+  }
+}
+
+export default function AppRoot(){
+  return <ErrorBoundary><App/></ErrorBoundary>;
+}
+
+function App() {
   const [state,dispatch]=useReducer(reducer,initialState);
   const {toasts,push:toast}=useToasts();
   const [tab,setTab]=useState("ops");
@@ -7159,8 +7185,8 @@ export default function App() {
             {id:"historial",label:"Historial",icon:"≡"},
             {id:"__mas__",  label:"Más",     icon:"⋯"},
           ].map(t=>{
-            const badge = t.id==="tickets"&&abiertas>0?abiertas : t.id==="ops"&&p1Active>0?p1Active : isMore&&vencidos>0?vencidos : 0;
             const isMore = t.id==="__mas__";
+            const badge = t.id==="tickets"&&abiertas>0?abiertas : t.id==="ops"&&p1Active>0?p1Active : isMore&&vencidos>0?vencidos : 0;
             const moreActive = ["unidades","catalogo","proveedores","clientes","ajustes","cartera","cotizador","refacciones"].includes(tab);
             const active = isMore ? (moreActive||masOpen) : tab===t.id;
             return (
