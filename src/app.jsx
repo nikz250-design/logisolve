@@ -1097,10 +1097,14 @@ const Confirm = React.memo(function Confirm({msg,onConfirm,onCancel}) {
 
 const Toasts = React.memo(function Toasts({items}) {
   if(!items.length) return null;
-  const s=t=>t==="success"?{border:`1px solid ${C.green}55`,color:C.green}:t==="error"?{border:`1px solid ${C.red}55`,color:C.red}:{border:`1px solid ${C.border}`,color:C.t2};
+  const s=t=>t==="success"?{border:`1px solid ${C.green}55`,color:C.green,background:"#0d1a0d"}:t==="error"?{border:`1px solid ${C.red}55`,color:C.red,background:"#1a0d0d"}:{border:`1px solid ${C.border}`,color:C.t2,background:C.bg3};
   return (
-    <div style={{position:"fixed",bottom:14,right:14,zIndex:999,display:"flex",flexDirection:"column",gap:5}}>
-      {items.map(t=><div key={t.id} style={{background:C.bg3,borderRadius:3,padding:"7px 12px",fontSize:10,...s(t.type),fontFamily:"'Courier New',monospace",maxWidth:280}}>{t.msg}</div>)}
+    <div style={{position:"fixed",bottom:"calc(72px + env(safe-area-inset-bottom,0px) + 8px)",right:12,zIndex:999,display:"flex",flexDirection:"column",gap:5,maxWidth:"calc(100vw - 24px)"}}>
+      {items.map(t=>(
+        <div key={t.id} style={{borderRadius:10,padding:"9px 14px",fontSize:11,fontFamily:"'Courier New',monospace",maxWidth:300,...s(t.type),boxShadow:"0 4px 20px rgba(0,0,0,.4)"}}>
+          {t.msg}
+        </div>
+      ))}
     </div>
   );
 })
@@ -4625,7 +4629,7 @@ function MOps({state,setTab}) {
                   {cl&&<div style={{fontSize:11,color:C.t3,marginTop:1}}>{cl.empresa.split(" ").slice(0,2).join(" ")}</div>}
                 </div>
                 <div style={{textAlign:"right",flexShrink:0,marginLeft:12}}>
-                  <div style={{fontSize:14,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap.precioConIVA)}</div>
+                  <div style={{fontSize:14,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap?.precioConIVA||0)}</div>
                   <StatusBadge sid={t.status} meta={TICKET_META} small/>
                 </div>
               </div>
@@ -4872,7 +4876,7 @@ function MPipeline({state,dispatch,toast}) {
                 {venc&&<div style={{marginTop:5,fontSize:10,color:C.red,fontWeight:700}}>⚠ CRÉDITO VENCIDO</div>}
               </div>
               <div style={{textAlign:"right",flexShrink:0}}>
-                <div style={{fontSize:18,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap.precioConIVA)}</div>
+                <div style={{fontSize:18,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap?.precioConIVA||0)}</div>
                 <div style={{fontSize:10,color:C.t3,marginTop:2}}>{t.date}</div>
                 {allowed.length>0&&<div style={{marginTop:6,fontSize:10,color:C.t4,background:C.bg2,borderRadius:6,padding:"3px 8px",display:"inline-block"}}>→ {TICKET_META[allowed[0]]?.label||"?"}</div>}
               </div>
@@ -5862,7 +5866,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
       </div>
 
       {(()=>{const filtered2=tickets.filter(t=>!t._deleted&&(filterStatus==="all"||t.status===filterStatus));if(filtered2.length===0)return(<div style={{textAlign:"center",padding:"48px 0",color:C.t4}}><div style={{fontSize:28,marginBottom:8}}>📋</div><div style={{fontSize:13,fontWeight:600,color:C.t3}}>{filterStatus==="all"?"Sin registros":"Sin tickets "+filterStatus+"s"}</div></div>);})()}
-      {tickets.filter(t=>!t._deleted&&(filterStatus==="all"||t.status===filterStatus)).slice().reverse().map(t=>{
+      {tickets.filter(t=>!t._deleted&&(filterStatus==="all"||t.status===filterStatus)).map(t=>{
         const cl=clients.find(c=>c.id===t.clientId);
         const un=units.find(u=>u.id===t.unitId);
         const exp=expId===t.id;
@@ -5898,8 +5902,8 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                   {un&&<div style={{fontSize:10,color:C.t3,marginTop:2,fontFamily:"'Courier New',monospace"}}>{un.economico?"Eco."+un.economico+" · ":""}{un.marca} {un.modelo}</div>}
                 </div>
                 <div style={{textAlign:"right",flexShrink:0}}>
-                  <div style={{fontSize:18,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",lineHeight:1}}>{mxn(t.snap.precioConIVA)}</div>
-                  <div style={{fontSize:11,color:t.snap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace",marginTop:3}}>{mxn(t.snap.uNeta)} neto</div>
+                  <div style={{fontSize:18,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",lineHeight:1}}>{mxn(t.snap?.precioConIVA||0)}</div>
+                  <div style={{fontSize:11,color:(t.snap?.uNeta||0)>=0?C.green:C.red,fontFamily:"'Courier New',monospace",marginTop:3}}>{mxn(t.snap?.uNeta||0)} neto</div>
                 </div>
               </div>
             </div>
@@ -6570,7 +6574,7 @@ export default function App() {
             {id:"historial",label:"Historial",icon:"≡"},
             {id:"__mas__",  label:"Más",     icon:"⋯"},
           ].map(t=>{
-            const badge = t.id==="tickets"&&abiertas>0?abiertas : t.id==="ops"&&p1Active>0?p1Active : 0;
+            const badge = t.id==="tickets"&&abiertas>0?abiertas : t.id==="ops"&&p1Active>0?p1Active : isMore&&vencidos>0?vencidos : 0;
             const isMore = t.id==="__mas__";
             const moreActive = ["unidades","catalogo","proveedores","clientes","ajustes","cartera","cotizador","refacciones"].includes(tab);
             const active = isMore ? (moreActive||masOpen) : tab===t.id;
@@ -6586,7 +6590,7 @@ export default function App() {
                 <span style={{fontSize:10,color:active?C.cyan:C.t3,letterSpacing:"0.04em",fontWeight:active?700:400}}>{t.label}</span>
                 {badge>0&&<span style={{position:"absolute",top:8,right:"calc(50% - 18px)",
                   minWidth:16,height:16,borderRadius:8,padding:"0 3px",
-                  background:t.id==="ops"?C.p1dot:C.yellow,
+                  background:t.id==="ops"?C.p1dot:isMore?C.red:C.yellow,
                   fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",color:"#000"}}>{badge}</span>}
               </button>
             );
