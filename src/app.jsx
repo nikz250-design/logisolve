@@ -4765,14 +4765,15 @@ function MSel({label,value,onChange,options}) {
 // ── MOps — Dashboard móvil ───────────────────────────────────────────────────
 function MOps({state,setTab}) {
   const {tickets,clients,units} = state;
-  const [period,setPeriod] = useState("week"); // "week"|"month"|"3m"
+  const [period,setPeriod] = useState("week"); // "today"|"week"|"month"|"3m"
 
   const PIPELINE_STAGES = ["recibido","validando","sourcing","cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado"];
 
   // ── Period range ──────────────────────────────────────────────────────────
   const range = useMemo(()=>{
     const now=new Date(); const from=new Date(now);
-    if(period==="week")  from.setDate(now.getDate()-7);
+    if(period==="today") { from.setHours(0,0,0,0); }
+    else if(period==="week")  from.setDate(now.getDate()-7);
     else if(period==="month") from.setDate(now.getDate()-30);
     else from.setDate(now.getDate()-90);
     return {from,to:now};
@@ -4832,14 +4833,14 @@ function MOps({state,setTab}) {
     return cl?{empresa:cl.empresa,amount:top[1],pct:totalFact>0?(top[1]/totalFact)*100:0}:null;
   },[operados,clients,totalFact]);
 
-  const periodLabel={"week":"Esta semana","month":"Este mes","3m":"Últimos 3M"}[period];
+  const periodLabel={"today":"Hoy","week":"Esta semana","month":"Este mes","3m":"Últimos 3M"}[period]||"Período";
 
   return (
     <div style={{padding:"16px 14px 20px"}}>
 
       {/* ── Period selector ── */}
       <div style={{display:"flex",gap:6,marginBottom:18}}>
-        {[["week","Semana"],["month","Mes"],["3m","3 Meses"]].map(([v,l])=>(
+        {[["today","Hoy"],["week","Semana"],["month","Mes"],["3m","3M"]].map(([v,l])=>(
           <button key={v} onClick={()=>setPeriod(v)}
             style={{padding:"7px 14px",borderRadius:20,fontSize:11,fontWeight:700,
               border:`1px solid ${period===v?C.cyan:C.border}`,
@@ -4851,9 +4852,12 @@ function MOps({state,setTab}) {
       </div>
 
       {/* ── Hero card ── */}
-      <div style={{background:"linear-gradient(135deg,#0F1416 0%,#141B1D 100%)",
+      <div style={{
+        background:"linear-gradient(135deg,rgba(15,20,22,0.92) 0%,rgba(20,27,29,0.88) 100%)",
+        backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",
         border:`1px solid rgba(38,122,144,0.3)`,borderRadius:20,padding:"24px 20px",
-        marginBottom:12,position:"relative",overflow:"hidden"}}>
+        marginBottom:12,position:"relative",overflow:"hidden",
+        boxShadow:"0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.06)"}}>
         <div style={{position:"absolute",top:-50,right:-50,width:140,height:140,borderRadius:"50%",
           background:`radial-gradient(circle,${C.cyan}18 0%,transparent 70%)`,pointerEvents:"none"}}/>
         <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",marginBottom:10,textTransform:"uppercase"}}>
@@ -5140,7 +5144,17 @@ function MPipeline({state,dispatch,toast}) {
                     ))}
                   </div>
                   {t.notes&&<div style={{fontSize:11,color:C.t3,marginBottom:12,padding:"8px 10px",background:C.bg2,borderRadius:8}}>{t.notes}</div>}
-                  <div style={{fontSize:9,color:C.t3,marginBottom:8,letterSpacing:"0.08em",textTransform:"uppercase"}}>ID: {t.id}</div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                    <div style={{fontSize:9,color:C.t3,letterSpacing:"0.08em",textTransform:"uppercase"}}>ID: {t.id}</div>
+                    <button onClick={e=>{e.stopPropagation();
+                      const cl=clients.find(c=>c.id===t.clientId);
+                      const un=units.find(u=>u.id===t.unitId);
+                      generarCotizacionPDF(t,cl,un,null).catch(()=>toast("Error PDF","error"));}}
+                      style={{padding:"6px 12px",borderRadius:8,background:"transparent",border:`1px solid ${C.border}`,
+                        color:C.t3,fontSize:10,fontWeight:600,cursor:"pointer",letterSpacing:"0.06em"}}>
+                      PDF ↗
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -5156,23 +5170,33 @@ function MPipeline({state,dispatch,toast}) {
                   </div>
                 </div>
 
-                {!isClosed&&(
-                  <button onClick={e=>{e.stopPropagation();setStatusSheet(t);}}
-                    style={{padding:"10px 18px",borderRadius:10,background:C.blue,border:`1px solid ${C.blueHi}`,
-                      color:C.t1,fontSize:12,fontWeight:700,cursor:"pointer",letterSpacing:"0.04em"}}>
-                    Estado →
-                  </button>
-                )}
-                {isClosed&&(
-                  <div style={{padding:"8px 14px",borderRadius:10,
-                    background:t.status==="cancelado"?C.redDim:C.greenDim,
-                    border:`1px solid ${t.status==="cancelado"?C.red+"40":C.green+"40"}`}}>
-                    <div style={{fontSize:11,fontWeight:700,
-                      color:t.status==="cancelado"?C.red:C.green}}>
-                      {t.status==="cancelado"?"Cancelado":t.cobrado?"Cobrado ✓":"Cerrado"}
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  {/* Cobrar button for cartera states on credit tickets */}
+                  {CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t.cobrado&&(
+                    <button onClick={e=>{e.stopPropagation();dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado ✓","success");}}
+                      style={{padding:"10px 14px",borderRadius:10,background:C.greenDim,border:`1px solid ${C.green}50`,
+                        color:C.green,fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:"0.03em"}}>
+                      Cobrar
+                    </button>
+                  )}
+                  {!isClosed&&(
+                    <button onClick={e=>{e.stopPropagation();setStatusSheet(t);}}
+                      style={{padding:"10px 18px",borderRadius:10,background:C.blue,border:`1px solid ${C.blueHi}`,
+                        color:C.t1,fontSize:12,fontWeight:700,cursor:"pointer",letterSpacing:"0.04em"}}>
+                      Estado →
+                    </button>
+                  )}
+                  {isClosed&&(
+                    <div style={{padding:"8px 14px",borderRadius:10,
+                      background:t.status==="cancelado"?C.redDim:C.greenDim,
+                      border:`1px solid ${t.status==="cancelado"?C.red+"40":C.green+"40"}`}}>
+                      <div style={{fontSize:11,fontWeight:700,
+                        color:t.status==="cancelado"?C.red:C.green}}>
+                        {t.status==="cancelado"?"Cancelado":t.cobrado?"Cobrado ✓":"Cerrado"}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           );
@@ -5182,83 +5206,198 @@ function MPipeline({state,dispatch,toast}) {
   );
 }
 
-// ── MCotizador — Cotizador móvil simplificado ─────────────────────────────────
+// ── MCotizador — Flujo unificado mobile ────────────────────────────────────────
+// ── PartPicker — Autocomplete inteligente del catálogo ──────────────────────
+function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
+  const [open, setOpen] = useState(false);
+  const ref  = useRef();
+
+  useEffect(()=>{
+    const h=e=>{if(ref.current&&!ref.current.contains(e.target)){setOpen(false);}};
+    document.addEventListener("mousedown",h);
+    document.addEventListener("touchstart",h,{passive:true});
+    return()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
+  },[]);
+
+  const results = useMemo(()=>{
+    const q=(value||"").toLowerCase().trim();
+    if(!q||q.length<1){
+      // Show most frequent / recently used
+      return [...parts].sort((a,b)=>(b.frecuencia||0)-(a.frecuencia||0)).slice(0,8);
+    }
+    return parts.filter(p=>
+      safeLower(p.nombre).includes(q)||
+      safeLower(p.oem||"").includes(q)||
+      safeLower(p.aftermarket||"").includes(q)||
+      safeLower(p.aplicacion||"").includes(q)
+    ).slice(0,10);
+  },[value,parts]);
+
+  const showDropdown = open && (results.length>0 || (value||"").trim().length>0);
+
+  return (
+    <div ref={ref} style={{position:"relative",flex:1}}>
+      <input
+        value={value||""}
+        onChange={e=>{onChange(e.target.value);setOpen(true);}}
+        onFocus={()=>setOpen(true)}
+        placeholder={placeholder||"Buscar o describir pieza..."}
+        autoComplete="off"
+        style={{width:"100%",background:C.bg0,border:`1px solid ${open?C.blueHi:C.border}`,
+          borderRadius:10,padding:"13px 14px",color:C.t1,fontSize:16,
+          outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}
+      />
+      {showDropdown&&(
+        <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,zIndex:400,
+          background:C.bg2,border:`1px solid ${C.blueHi}`,borderRadius:10,
+          boxShadow:"0 8px 32px rgba(0,0,0,0.6)",maxHeight:280,overflowY:"auto",
+          WebkitOverflowScrolling:"touch"}}>
+          {results.map(p=>(
+            <div key={p.id}
+              onMouseDown={e=>{e.preventDefault();onSelect(p);setOpen(false);}}
+              onTouchEnd={e=>{e.preventDefault();onSelect(p);setOpen(false);}}
+              style={{padding:"11px 14px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",
+                display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:700,color:C.t1,overflow:"hidden",
+                  textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
+                <div style={{fontSize:10,color:C.t3,marginTop:1,fontFamily:"'Courier New',monospace"}}>
+                  {p.oem&&<span>OEM: {p.oem}</span>}
+                  {p.oem&&p.ultimoPrecio>0&&<span style={{color:C.border}}> · </span>}
+                  {p.ultimoPrecio>0&&<span style={{color:C.yellow}}>{mxn(p.ultimoPrecio)}</span>}
+                  {p.proveedor&&<span style={{color:C.border}}> · </span>}
+                  {p.proveedor&&<span>{p.proveedor}</span>}
+                </div>
+                {p.aplicacion&&<div style={{fontSize:9,color:C.t3,marginTop:1}}>{p.aplicacion}</div>}
+              </div>
+              {(p.frecuencia||0)>1&&(
+                <div style={{fontSize:9,color:C.cyan,background:C.cyanDim,padding:"2px 7px",
+                  borderRadius:10,flexShrink:0,fontWeight:700}}>×{p.frecuencia}</div>
+              )}
+            </div>
+          ))}
+          {(value||"").trim().length>2&&(
+            <div onMouseDown={e=>{e.preventDefault();onSelect({nombre:(value||"").trim(),oem:"",ultimoPrecio:0});setOpen(false);}}
+              onTouchEnd={e=>{e.preventDefault();onSelect({nombre:(value||"").trim(),oem:"",ultimoPrecio:0});setOpen(false);}}
+              style={{padding:"11px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:18,color:C.cyan,lineHeight:1}}>＋</span>
+              <span style={{fontSize:13,color:C.cyan,fontWeight:600}}>Agregar "{(value||"").trim().slice(0,30)}"</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── MCotizador — Flujo unificado mobile ──────────────────────────────────────
 function MCotizador({state,dispatch,toast}) {
   const {clients,suppliers,units} = state;
-  const [step,     setStep]     = useState(0); // 0=tipo, 1=lineas, 2=datos
-  const [priority, setPriority] = useState("P3");
-  const [opType,   setOpType]   = useState("consumable");
-  const [clientId, setClientId] = useState("");
-  const [unitId,   setUnitId]   = useState("");
-  const [supplierId,setSupplierId]=useState("");
-  const [payType,  setPayType]  = useState("contado");
-  const [promesa,  setPromesa]  = useState("");
-  const [fecha,    setFecha]    = useState(todayMX());
-  const [notes,    setNotes]    = useState("");
-  const [iva,      setIva]      = useState(16);
-  const [isr,      setIsr]      = useState(20);
-  const [lineas,   setLineas]   = useState([emptyLine("consumable","P3",[])]);
-  const [catalogSearch, setCatalogSearch] = useState(null);
-  const [catalogQ,      setCatalogQ]      = useState("");
-  const [activeMods,    setActiveMods]    = useState([]);
-  const [pdfPending,    setPdfPending]    = useState(null);
+
+  // ── Step navigation: 0=tipo, 1=lineas, 2=datos ────────────────────────────
+  const [step,setStep]          = useState(0);
+  const [priority,setPriority]  = useState("P3");
+  const [opType,setOpType]      = useState("consumable");
+  const [activeMods,setActiveMods] = useState([]);
+  const [iva,setIva]            = useState(16);
+  const [isr,setIsr]            = useState(20);
+
+  // ── Line items ─────────────────────────────────────────────────────────────
+  const [lineas,setLineas] = useState([emptyLine("consumable","P3",[])]);
+
+  // ── Per-line part search state ─────────────────────────────────────────────
+  const [partQ,setPartQ] = useState({}); // {lineIdx: searchText}
+
+  // ── Datos del ticket ───────────────────────────────────────────────────────
+  const [clientId,setClientId]    = useState("");
+  const [unitId,setUnitId]        = useState("");
+  const [supplierId,setSupplierId]= useState("");
+  const [payType,setPayType]      = useState("contado");
+  const [promesa,setPromesa]      = useState("");
+  const [fecha,setFecha]          = useState(todayMX());
+  const [notes,setNotes]          = useState("");
+  const [pdfPending,setPdfPending]= useState(null);
+
   const sharedMargin = useMemo(()=>effectiveMargin(opType,priority,activeMods,false,27),[opType,priority,activeMods]);
+
   const lineSnaps = useMemo(()=>lineas.map(l=>{
-    const mg   = l.customMgn?Math.min(l.customVal,100):sharedMargin;
-    const costo= (l.costoUnit||0)*(l.qty||1);
-    return computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,iva,isr,compraConIVA:true,ventaConIVA:true,mode:l.mode||"auto",margin:mg,manualPrice:l.manualPrice||"0"});
+    const mg = l.customMgn?Math.min(l.customVal,100):sharedMargin;
+    const costo=(l.costoUnit||0)*(l.qty||1);
+    return computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,iva,isr,
+      compraConIVA:true,ventaConIVA:true,mode:l.mode||"auto",margin:mg,manualPrice:l.manualPrice||"0"});
   }),[lineas,sharedMargin,iva,isr]);
+
   const totalPrecio = lineSnaps.reduce((s,sn)=>s+sn.precioConIVA,0);
   const totalNeta   = lineSnaps.reduce((s,sn)=>s+sn.uNeta,0);
-  const aggMargen   = lineSnaps.reduce((s,sn)=>s+sn.precioSinIVA,0)>0?(totalNeta/lineSnaps.reduce((s,sn)=>s+sn.precioSinIVA,0))*100:0;
+  const aggMargen   = lineSnaps.reduce((s,sn)=>s+sn.precioSinIVA,0)>0
+    ?(totalNeta/lineSnaps.reduce((s,sn)=>s+sn.precioSinIVA,0))*100:0;
 
   const upd = (i,patch)=>setLineas(p=>p.map((l,j)=>j===i?{...l,...patch}:l));
-  const addLinea = ()=>setLineas(p=>[...p,emptyLine(opType,priority,[])]);
+  const addLine = ()=>setLineas(p=>[...p,emptyLine(opType,priority,[])]);
+  const removeLine = i=>setLineas(p=>p.length>1?p.filter((_,j)=>j!==i):p);
+
+  // Select part from PartPicker → fill line
+  const selectPart = (i,p) => {
+    setPartQ(q=>({...q,[i]:""}));
+    upd(i,{titulo:p.nombre,partRef:p.oem||"",costoUnit:p.ultimoPrecio||0,
+            manualPrice:String(p.ultimoPrecio||0)});
+  };
+
+  const cl   = clients.find(c=>c.id===clientId);
+  const un   = units.find(u=>u.id===unitId);
+  const supp = suppliers.find(s=>s.id===supplierId);
 
   const save = ()=>{
-    const titulo = lineas.map(l=>l.titulo.trim()||"Sin descripcion").join(" / ");
-    const cl   = clients.find(c=>c.id===clientId);
-    const un   = units.find(u=>u.id===unitId);
-    const supp = suppliers.find(s=>s.id===supplierId);
-    const lineasConSnap = lineas.map((l,i)=>({titulo:l.titulo||"Sin descripcion",partRef:l.partRef||"",snap:lineSnaps[i]}));
-    const totalSnap = {
-      precioConIVA:totalPrecio,precioSinIVA:lineSnaps.reduce((s,sn)=>s+sn.precioSinIVA,0),
-      costoTotal:lineSnaps.reduce((s,sn)=>s+sn.costoTotal,0),costoBase:lineSnaps.reduce((s,sn)=>s+sn.costoBase,0),
-      gastos:lineSnaps.reduce((s,sn)=>s+sn.gastos,0),uNeta:totalNeta,uBruta:lineSnaps.reduce((s,sn)=>s+sn.uBruta,0),
-      isr:lineSnaps.reduce((s,sn)=>s+sn.isr,0),ivaTraslad:lineSnaps.reduce((s,sn)=>s+sn.ivaTraslad,0),
-      ivaAcred:lineSnaps.reduce((s,sn)=>s+sn.ivaAcred,0),ivaNeto:lineSnaps.reduce((s,sn)=>s+sn.ivaNeto,0),
+    if(!lineas.some(l=>l.titulo?.trim())) { toast("Agrega al menos una descripción","error"); return; }
+    const titulo=lineas.map(l=>l.titulo.trim()||"Sin descripción").join(" / ");
+    const lineasConSnap=lineas.map((l,i)=>({titulo:l.titulo||"Sin descripción",partRef:l.partRef||"",snap:lineSnaps[i]}));
+    const totalSnap={
+      precioConIVA:totalPrecio,
+      precioSinIVA:lineSnaps.reduce((s,sn)=>s+sn.precioSinIVA,0),
+      costoTotal:lineSnaps.reduce((s,sn)=>s+sn.costoTotal,0),
+      costoBase:lineSnaps.reduce((s,sn)=>s+sn.costoBase,0),
+      gastos:lineSnaps.reduce((s,sn)=>s+sn.gastos,0),
+      uNeta:totalNeta,uBruta:lineSnaps.reduce((s,sn)=>s+sn.uBruta,0),
+      isr:lineSnaps.reduce((s,sn)=>s+sn.isr,0),
+      ivaTraslad:lineSnaps.reduce((s,sn)=>s+sn.ivaTraslad,0),
+      ivaAcred:lineSnaps.reduce((s,sn)=>s+sn.ivaAcred,0),
+      ivaNeto:lineSnaps.reduce((s,sn)=>s+sn.ivaNeto,0),
       markupSobre:0,margenNetoPrecio:aggMargen,params:{iva,isr},
     };
     const tkt={
-      id:mkTicketId(fecha),titulo,opId:opType,opShort:(OP_TYPES.find(o=>o.id===opType)||OP_TYPES[0]).short,priority,
-      clientId,supplierId,unitId,partRef:lineas.map(l=>l.partRef).filter(Boolean).join(", "),
-      date:fecha,status:"recibido",payType,promesaPago:payType==="credit"?promesa:null,cobrado:false,
-      mods:[...activeMods],prob:"high",horasOp:0,notes,mode:"multilinea",lineas:lineasConSnap,snap:totalSnap,
+      id:mkTicketId(fecha),titulo,
+      opId:opType,opShort:(OP_TYPES.find(o=>o.id===opType)||OP_TYPES[0]).short,
+      priority,clientId,supplierId,unitId,
+      partRef:lineas.map(l=>l.partRef).filter(Boolean).join(", "),
+      date:fecha,status:"recibido",payType,
+      promesaPago:payType==="credit"?promesa:null,cobrado:false,
+      mods:[...activeMods],prob:"high",horasOp:0,notes,
+      mode:"multilinea",lineas:lineasConSnap,snap:totalSnap,
       timeline:[{ts:nowISO(),evento:"Ticket creado",actor:"Operador"}],
       history:[mkEvent("created",{titulo,status:"recibido",priority})],
     };
     dispatch({type:"TKT_ADD",t:tkt});
 
-    // ── Catálogo auto-sync: silencioso, deduplicado, inteligente ─────────
+    // ── Catálogo auto-sync silencioso ─────────────────────────────────────
     lineas.forEach(l=>{
       if(!l.titulo||!l.titulo.trim()) return;
-      const nomNorm = l.titulo.trim().toLowerCase();
-      const oem     = (l.partRef||"").trim();
-      const exists  = state.parts.find(p=>
-        (oem&&(oem===p.oem||oem===p.aftermarket)) ||
-        p.nombre.toLowerCase()===nomNorm ||
+      const nomNorm=(l.titulo||"").trim().toLowerCase();
+      const oem=(l.partRef||"").trim();
+      const exists=state.parts.find(p=>
+        (oem&&(oem===p.oem||oem===p.aftermarket))||
+        p.nombre.toLowerCase()===nomNorm||
         (nomNorm.length>6&&p.nombre.toLowerCase().startsWith(nomNorm.slice(0,Math.floor(nomNorm.length*0.75))))
       );
-      if(!exists&&(l.costoUnit>0||oem)) {
+      if(!exists&&(safeNumber(l.costoUnit)>0||oem)){
         dispatch({type:"PART_ADD",p:{
           id:mkPartId(),nombre:l.titulo.trim(),oem,aftermarket:"",
           aplicacion:un?`${un.marca} ${un.modelo} ${un.anio||""}`.trim():"",
           notas:`Auto: ${todayMX()}`,proveedor:supp?.nombre||"",
-          ultimoPrecio:l.costoUnit||0,ultimaFecha:fecha,frecuencia:1,
+          ultimoPrecio:safeNumber(l.costoUnit),ultimaFecha:fecha,frecuencia:1,
         }});
-      } else if(exists&&l.costoUnit>0&&(oem&&oem===exists.oem)) {
+      } else if(exists&&safeNumber(l.costoUnit)>0&&oem&&oem===exists.oem){
         dispatch({type:"PART_UPDATE",id:exists.id,patch:{
-          ultimoPrecio:l.costoUnit,ultimaFecha:fecha,
+          ultimoPrecio:safeNumber(l.costoUnit),ultimaFecha:fecha,
           frecuencia:(exists.frecuencia||1)+1,
           proveedor:supp?.nombre||exists.proveedor||"",
         }});
@@ -5268,49 +5407,33 @@ function MCotizador({state,dispatch,toast}) {
 
     toast("Ticket: "+tkt.id,"success");
     setPdfPending({tkt,cl,un,supp});
-    setLineas([emptyLine(opType,priority,[])]);setNotes("");setStep(0);
-    setClientId("");setUnitId("");setSupplierId("");setPayType("contado");setPromesa("");
-  };
-
-  const catalogResults = useMemo(()=>{
-    if(catalogSearch===null) return [];
-    const q=(catalogQ||"").toLowerCase().trim();
-    if(!q) return state.parts.slice(0,12);
-    return state.parts.filter(p=>
-      p.nombre.toLowerCase().includes(q)||
-      (p.oem||"").toLowerCase().includes(q)||
-      (p.aplicacion||"").toLowerCase().includes(q)
-    ).slice(0,12);
-  },[catalogQ,catalogSearch,state.parts]);
-
-  const selectFromCatalog = (p)=>{
-    const idx=catalogSearch;
-    upd(idx,{titulo:p.nombre,partRef:p.oem||p.aftermarket||"",costoUnit:p.ultimoPrecio||0,manualPrice:String(p.ultimoPrecio||0)});
-    setCatalogSearch(null); setCatalogQ("");
+    setLineas([emptyLine(opType,priority,[])]);
+    setNotes(""); setPartQ({});
+    setClientId(""); setUnitId(""); setSupplierId("");
+    setPayType("contado"); setPromesa(""); setStep(0);
   };
 
   const pr=PRIORITY[priority]||PRIORITY.P4;
   const stepNames=["Tipo","Líneas","Datos"];
+
   const StepBar=()=>(
-    <div style={{display:"flex",alignItems:"center",padding:"14px 0 10px",gap:0}}>
+    <div style={{display:"flex",alignItems:"center",padding:"0 0 16px",gap:0}}>
       {stepNames.map((name,i)=>{
         const done=i<step; const curr=i===step;
         return (
           <React.Fragment key={i}>
-            {i>0&&<div style={{flex:1,height:2,background:done?C.cyan:C.border,borderRadius:1,margin:"0 4px"}}/>}
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,minWidth:0}}>
-              <div style={{width:26,height:26,borderRadius:13,
+            {i>0&&<div style={{flex:1,height:2,background:done?C.cyan:C.border,borderRadius:1,margin:"0 6px"}}/>}
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,cursor:done?"pointer":"default"}}
+              onClick={()=>done&&setStep(i)}>
+              <div style={{width:28,height:28,borderRadius:14,
                 background:done?C.green:curr?C.cyan:C.bg2,
                 border:`2px solid ${done?C.green:curr?C.cyan:C.border}`,
                 display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:11,fontWeight:800,
-                color:done?"#0a0a0a":curr?C.bg0:C.t4,flexShrink:0}}>
+                fontSize:11,fontWeight:800,color:done?"#0a0a0a":curr?C.bg0:C.t4}}>
                 {done?"✓":i+1}
               </div>
               <div style={{fontSize:9,color:curr?C.cyan:done?C.green:C.t4,fontWeight:curr?700:400,
-                letterSpacing:"0.08em",textTransform:"uppercase",lineHeight:1}}>
-                {name}
-              </div>
+                letterSpacing:"0.08em",textTransform:"uppercase"}}>{name}</div>
             </div>
           </React.Fragment>
         );
@@ -5318,288 +5441,297 @@ function MCotizador({state,dispatch,toast}) {
     </div>
   );
 
+  // ════════════════════════════════════════════════════════════════════════
+  // STEP 0 — Tipo / Prioridad / Modificadores
+  // ════════════════════════════════════════════════════════════════════════
   if(step===0) return (
-    <div style={{padding:"14px"}}>
+    <div style={{padding:"16px 14px"}}>
       {pdfPending&&<PDFConfirm {...pdfPending} onClose={()=>setPdfPending(null)}/>}
       <StepBar/>
-      <div style={{fontSize:11,color:C.t3,letterSpacing:"0.14em",marginBottom:12}}>PRIORIDAD OPERATIVA</div>
+
+      {/* Priority */}
+      <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",marginBottom:10,textTransform:"uppercase"}}>Prioridad</div>
       {Object.values(PRIORITY).map(p=>(
         <div key={p.id} onClick={()=>setPriority(p.id)}
-          style={{padding:"14px",borderRadius:8,marginBottom:8,cursor:"pointer",background:priority===p.id?p.dim:C.bg1,border:`2px solid ${priority===p.id?p.dot:C.border}`,display:"flex",alignItems:"center",gap:12}}>
-          <div style={{width:14,height:14,borderRadius:"50%",background:priority===p.id?p.dot:C.t3,flexShrink:0}}/>
-          <div>
-            <div style={{fontSize:15,fontWeight:800,color:priority===p.id?p.dot:C.t2,fontFamily:"'Courier New',monospace"}}>{p.id}</div>
-            <div style={{fontSize:12,color:priority===p.id?C.t1:C.t3}}>{p.label}</div>
+          style={{padding:"13px 16px",borderRadius:12,marginBottom:8,cursor:"pointer",
+            background:priority===p.id?p.dim:C.bg2,
+            border:`2px solid ${priority===p.id?p.dot:C.border}`,
+            display:"flex",alignItems:"center",gap:12}}>
+          <div style={{width:12,height:12,borderRadius:"50%",background:priority===p.id?p.dot:C.t3,flexShrink:0}}/>
+          <div style={{flex:1}}>
+            <div style={{fontSize:14,fontWeight:800,color:priority===p.id?p.dot:C.t2}}>{p.id} — {p.label}</div>
           </div>
-          {priority===p.id&&p.marginBonus>0&&<span style={{marginLeft:"auto",fontSize:11,color:p.dot,fontWeight:700}}>+{p.marginBonus}% margen</span>}
+          {priority===p.id&&p.marginBonus>0&&(
+            <span style={{fontSize:11,color:p.dot,fontWeight:700}}>+{p.marginBonus}% margen</span>
+          )}
         </div>
       ))}
-      <div style={{height:1,background:C.border,margin:"14px 0"}}/>
-      <div style={{fontSize:11,color:C.t3,letterSpacing:"0.14em",marginBottom:12}}>TIPO DE OPERACION</div>
+
+      <div style={{height:1,background:C.border,margin:"16px 0"}}/>
+
+      {/* Op type */}
+      <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",marginBottom:10,textTransform:"uppercase"}}>Tipo de operación</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
         {OP_TYPES.map(op=>(
           <div key={op.id} onClick={()=>setOpType(op.id)}
-            style={{padding:"12px",borderRadius:8,cursor:"pointer",background:opType===op.id?C.blueDim:C.bg1,border:`1px solid ${opType===op.id?C.blueHi:C.border}`}}>
+            style={{padding:"12px",borderRadius:10,cursor:"pointer",
+              background:opType===op.id?C.blueDim:C.bg2,
+              border:`2px solid ${opType===op.id?C.blueHi:C.border}`}}>
             <div style={{fontSize:13,fontWeight:700,color:opType===op.id?C.t1:C.t2}}>{op.label}</div>
-            <div style={{fontSize:10,color:C.t3,marginTop:2}}>{op.baseMin}--{op.baseMax}%</div>
+            <div style={{fontSize:10,color:C.t3,marginTop:2}}>{op.baseMin}–{op.baseMax}%</div>
           </div>
         ))}
       </div>
-      <div style={{height:1,background:C.border,margin:"14px 0"}}/>
-      <div style={{fontSize:11,color:C.t3,letterSpacing:"0.14em",marginBottom:12}}>MODIFICADORES</div>
+
+      {/* Modifiers */}
+      <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",marginBottom:10,textTransform:"uppercase"}}>Modificadores</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:20}}>
         {MODIFIERS.map(mod=>{
-          const active=activeMods.includes(mod.id);
+          const on=activeMods.includes(mod.id);
           return (
             <div key={mod.id} onClick={()=>setActiveMods(p=>p.includes(mod.id)?p.filter(x=>x!==mod.id):[...p,mod.id])}
-              style={{padding:"12px 14px",borderRadius:8,cursor:"pointer",background:active?C.blueDim:C.bg1,border:`2px solid ${active?C.blueHi:C.border}`,display:"flex",alignItems:"center",gap:10}}>
-              <div style={{width:12,height:12,borderRadius:"50%",background:active?C.cyan:C.t3,flexShrink:0}}/>
+              style={{padding:"11px 12px",borderRadius:10,cursor:"pointer",
+                background:on?C.blueDim:C.bg2,border:`2px solid ${on?C.blueHi:C.border}`,
+                display:"flex",alignItems:"center",gap:8}}>
+              <div style={{width:10,height:10,borderRadius:"50%",background:on?C.cyan:C.t3,flexShrink:0}}/>
               <div>
-                <div style={{fontSize:13,fontWeight:700,color:active?C.t1:C.t2}}>{mod.label}</div>
-                <div style={{fontSize:11,color:active?C.cyan:C.t3}}>+{mod.pct}% margen</div>
+                <div style={{fontSize:12,fontWeight:700,color:on?C.t1:C.t2}}>{mod.label}</div>
+                <div style={{fontSize:10,color:on?C.cyan:C.t3}}>+{mod.pct}%</div>
               </div>
             </div>
           );
         })}
       </div>
-      {activeMods.length>0&&(
-        <div style={{background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:8,padding:"10px 14px",marginBottom:14}}>
-          <div style={{fontSize:11,color:C.t3,marginBottom:2}}>Margen efectivo con modificadores</div>
-          <div style={{fontSize:20,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{fpct(sharedMargin)}</div>
+
+      {/* Margen preview */}
+      <div style={{background:"linear-gradient(135deg,rgba(15,20,22,0.92),rgba(20,27,29,0.88))",
+        backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",
+        border:`1px solid rgba(38,122,144,0.3)`,borderRadius:14,
+        padding:"14px 16px",marginBottom:20,
+        boxShadow:"0 4px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05)"}}>
+        <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",marginBottom:4,textTransform:"uppercase"}}>Margen efectivo</div>
+        <div style={{fontSize:34,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",lineHeight:1}}>
+          {fpct(sharedMargin)}
         </div>
-      )}
-      <MBtn label="Siguiente: Lineas de cotizacion" full onClick={()=>setStep(1)}/>
+        <div style={{fontSize:10,color:C.t3,marginTop:4}}>
+          {opType} · P{priority.slice(1)} · {activeMods.length>0?activeMods.join(", "):"sin modificadores"}
+        </div>
+      </div>
+
+      <MBtn label="Siguiente: Líneas de cotización →" full onClick={()=>setStep(1)}/>
     </div>
   );
 
+  // ════════════════════════════════════════════════════════════════════════
+  // STEP 1 — Líneas con PartPicker
+  // ════════════════════════════════════════════════════════════════════════
   if(step===1) return (
-    <div style={{padding:"14px"}}>
+    <div style={{padding:"16px 14px"}}>
       <StepBar/>
-      {/* Modal catalogo */}
-      {catalogSearch!==null&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:500,display:"flex",flexDirection:"column"}}
-          onClick={()=>{setCatalogSearch(null);setCatalogQ("");}}>
-          <div style={{background:C.bg1,borderBottom:`1px solid ${C.border}`,padding:"12px 14px",display:"flex",gap:8,alignItems:"center"}}
-            onClick={e=>e.stopPropagation()}>
-            <input autoFocus value={catalogQ} onChange={e=>setCatalogQ(e.target.value)}
-              placeholder="Buscar en catalogo..."
-              style={{flex:1,background:C.bg0,border:`1px solid ${C.border}`,borderRadius:8,padding:"11px 14px",color:C.t1,fontSize:15,outline:"none",fontFamily:"'Courier New',monospace"}}/>
-            <button onClick={()=>{setCatalogSearch(null);setCatalogQ("");}}
-              style={{padding:"10px 16px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:8,color:C.red,fontSize:14,cursor:"pointer",fontWeight:700,flexShrink:0}}>x</button>
-          </div>
-          <div style={{flex:1,overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
-            {state.parts.length===0&&(
-              <div style={{padding:"32px",textAlign:"center",color:C.t3,fontSize:13}}>Sin partes en el catalogo.</div>
-            )}
-            {catalogResults.map((p,i)=>(
-              <div key={p.id} onClick={()=>selectFromCatalog(p)}
-                style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 16px",borderBottom:`1px solid ${C.border}`,background:i%2===0?C.bg1:C.bg0,cursor:"pointer"}}>
-                <div style={{flex:1,minWidth:0,marginRight:12}}>
-                  <div style={{fontSize:14,fontWeight:700,color:C.t1,marginBottom:4}}>{p.nombre}</div>
-                  <div style={{fontSize:11,color:C.t3,fontFamily:"'Courier New',monospace"}}>
-                    {p.oem&&<span style={{color:C.cyan}}>{p.oem}</span>}
-                    {p.oem&&p.aplicacion&&" · "}
-                    {p.aplicacion}
-                  </div>
-                </div>
-                <div style={{textAlign:"right",flexShrink:0}}>
-                  {p.ultimoPrecio>0&&<div style={{fontSize:15,fontWeight:800,color:C.yellow,fontFamily:"'Courier New',monospace"}}>{mxn(p.ultimoPrecio)}</div>}
-                  <div style={{fontSize:10,color:C.t3,marginTop:2}}>Toca para agregar</div>
-                </div>
-              </div>
-            ))}
-            {catalogResults.length===0&&catalogQ&&(
-              <div style={{padding:"32px",textAlign:"center",color:C.t3,fontSize:13}}>Sin resultados para "{catalogQ}"</div>
-            )}
-          </div>
-        </div>
-      )}
 
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <div>
-          <div style={{fontSize:11,color:C.t3,letterSpacing:"0.14em"}}>LINEAS DE COTIZACION</div>
-          <div style={{fontSize:10,color:pr.dot,marginTop:2}}>{pr.id} · {pr.label} · Margen {fpct(sharedMargin)}</div>
-        </div>
-        <button onClick={()=>setStep(0)} style={{fontSize:11,color:C.t3,background:"transparent",border:`1px solid ${C.border}`,borderRadius:6,padding:"6px 10px",cursor:"pointer"}}>Atras</button>
-      </div>
-
-      {lineas.map((l,i)=>(
-        <MCard key={l.key}>
-          <div style={{padding:"12px 14px"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <span style={{fontSize:10,color:C.cyan,fontWeight:700,fontFamily:"'Courier New',monospace"}}>LINEA {String(i+1).padStart(2,"0")}</span>
-              <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                <span style={{fontSize:14,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(lineSnaps[i]?.precioConIVA||0)}</span>
-                {lineas.length>1&&<button onClick={()=>setLineas(p=>p.filter((_,j)=>j!==i))} style={{padding:"5px 10px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:5,color:C.red,fontSize:12,cursor:"pointer",fontWeight:700}}>x</button>}
-              </div>
+      {lineas.map((l,i)=>{
+        const sn=lineSnaps[i];
+        const isManual=l.mode==="manual";
+        return (
+          <div key={i} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,
+            overflow:"hidden",marginBottom:12}}>
+            {/* Line header */}
+            <div style={{padding:"10px 12px",background:"#0a1012",display:"flex",alignItems:"center",
+              justifyContent:"space-between"}}>
+              <div style={{fontSize:10,color:C.t3,fontWeight:700,letterSpacing:"0.1em"}}>LÍNEA {i+1}</div>
+              {lineas.length>1&&(
+                <button onClick={()=>removeLine(i)}
+                  style={{background:"transparent",border:"none",color:C.red,fontSize:16,cursor:"pointer",padding:"0 4px",lineHeight:1}}>×</button>
+              )}
             </div>
 
-            {/* Descripcion */}
-            <MField label="Descripcion" value={l.titulo} onChange={v=>upd(i,{titulo:v})} placeholder={"Pieza o servicio "+(i+1)}/>
+            <div style={{padding:"12px"}}>
+              {/* PartPicker */}
+              <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase"}}>
+                Descripción / Pieza
+              </div>
+              <PartPicker
+                parts={state.parts}
+                value={partQ[i]!==undefined ? partQ[i] : (l.titulo||"")}
+                onChange={v=>{
+                  setPartQ(q=>({...q,[i]:v}));
+                  upd(i,{titulo:v});
+                }}
+                onSelect={p=>{
+                  selectPart(i,p);
+                }}
+                mobile
+              />
+              {/* OEM ref */}
+              {l.partRef&&(
+                <div style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",marginTop:4,marginBottom:8}}>
+                  OEM: {l.partRef}
+                </div>
+              )}
 
-            {/* Num parte + boton catalogo */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8,marginBottom:10}}>
-              <div>
-                <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>NUM. PARTE / OEM</div>
-                <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                  <input value={l.partRef||""} onChange={e=>upd(i,{partRef:e.target.value})} placeholder="OEM / referencia"
-                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t2,fontSize:14,padding:"12px 14px",fontFamily:"'Courier New',monospace"}}/>
-                </div>
+              {/* Costo + Qty row */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 80px",gap:8,marginBottom:8}}>
+                <MField label="Costo unitario (c/IVA)"
+                  value={String(l.costoUnit||"")} type="number" suffix="$"
+                  onChange={v=>upd(i,{costoUnit:safeNumber(v),manualPrice:String(safeNumber(v))})}/>
+                <MField label="Cant." value={String(l.qty||1)} type="number"
+                  onChange={v=>upd(i,{qty:Math.max(1,safeNumber(v,1))||1})}/>
               </div>
-              <div style={{display:"flex",alignItems:"flex-end"}}>
-                <button onClick={()=>setCatalogSearch(i)}
-                  style={{padding:"12px 14px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:6,color:C.cyan,fontSize:12,cursor:"pointer",fontWeight:700,whiteSpace:"nowrap",minHeight:46}}>
-                  Catalogo
-                </button>
-              </div>
-            </div>
 
-            {/* Cantidad + Costo unitario */}
-            <div style={{display:"grid",gridTemplateColumns:"90px 1fr",gap:8,marginBottom:8}}>
-              <div>
-                <div style={{fontSize:10,color:C.t3,marginBottom:5,letterSpacing:"0.12em"}}>CANTIDAD</div>
-                <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                  <input type="text" inputMode="numeric"
-                    value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)}
-                    onChange={e=>upd(i,{_qtyRaw:e.target.value})}
-                    onBlur={()=>{const n=parseInt(l._qtyRaw);upd(i,{qty:isFinite(n)&&n>=1?n:1,_qtyRaw:undefined});}}
-                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:20,fontWeight:800,padding:"10px 0 10px 12px",fontFamily:"'Courier New',monospace"}}/>
-                  <span style={{padding:"0 10px",color:C.t3,fontSize:11}}>pz</span>
-                </div>
+              {/* Mode toggle */}
+              <div style={{display:"flex",gap:8,marginBottom:8}}>
+                {[["auto","Auto (margen)"],["manual","Precio fijo"]].map(([m,lbl])=>(
+                  <button key={m} onClick={()=>upd(i,{mode:m})}
+                    style={{flex:1,padding:"8px",borderRadius:8,fontSize:11,fontWeight:700,
+                      border:`1px solid ${l.mode===m?C.cyan:C.border}`,
+                      background:l.mode===m?C.cyanDim:"transparent",
+                      color:l.mode===m?C.cyan:C.t3,cursor:"pointer"}}>
+                    {lbl}
+                  </button>
+                ))}
               </div>
-              <div>
-                <div style={{fontSize:10,color:C.t3,marginBottom:5,letterSpacing:"0.12em"}}>COSTO UNIT. (c/IVA)</div>
-                <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                  <span style={{padding:"0 10px",color:C.t3,fontSize:14,fontFamily:"'Courier New',monospace"}}>$</span>
-                  <input type="text" inputMode="decimal" value={l._costoRaw!==undefined?l._costoRaw:String(l.costoUnit||0)}
-                    onChange={e=>upd(i,{_costoRaw:e.target.value})}
-                    onBlur={()=>{const n=safeNumber(l._costoRaw);upd(i,{costoUnit:n,_costoRaw:undefined});}}
-                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:16,padding:"10px 0",fontFamily:"'Courier New',monospace"}}/>
-                </div>
-              </div>
-            </div>
 
-            {(l.qty||1)>1&&(
-              <div style={{fontSize:12,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:8}}>
-                {l.qty} × {mxn(safeNumber(l.costoUnit))} = <span style={{color:C.t2,fontWeight:700}}>{mxn(safeNumber(l.costoUnit)*safeNumber(l.qty,1))}</span>
-              </div>
-            )}
+              {/* Manual price or custom margin */}
+              {isManual ? (
+                <MField label="Precio al cliente (c/IVA)" value={l.manualPrice||""} type="number" suffix="$"
+                  onChange={v=>upd(i,{manualPrice:v})} color={C.yellow}/>
+              ) : (
+                <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
+                  <button onClick={()=>upd(i,{customMgn:!l.customMgn})}
+                    style={{padding:"8px 12px",borderRadius:8,fontSize:10,fontWeight:700,flexShrink:0,
+                      border:`1px solid ${l.customMgn?C.cyan:C.border}`,
+                      background:l.customMgn?C.cyanDim:"transparent",
+                      color:l.customMgn?C.cyan:C.t3,cursor:"pointer"}}>
+                    Margen personalizado
+                  </button>
+                  {l.customMgn&&(
+                    <MField label="" value={String(l.customVal||27)} type="number" suffix="%"
+                      onChange={v=>upd(i,{customVal:safeNumber(v)})}/>
+                  )}
+                </div>
+              )}
 
-            {/* Gasolina y otros */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-              <div>
-                <div style={{fontSize:10,color:C.t3,marginBottom:5,letterSpacing:"0.12em"}}>GASOLINA</div>
-                <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                  <span style={{padding:"0 10px",color:C.t3,fontSize:14,fontFamily:"'Courier New',monospace"}}>$</span>
-                  <input type="text" inputMode="decimal"
-                    value={l._gasolinaRaw!==undefined?l._gasolinaRaw:String(l.gasolina||0)}
-                    onChange={e=>upd(i,{_gasolinaRaw:e.target.value})}
-                    onBlur={()=>upd(i,{gasolina:safeNumber(l._gasolinaRaw),_gasolinaRaw:undefined})}
-                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:16,padding:"10px 0",fontFamily:"'Courier New',monospace"}}/>
+              {/* Line result preview */}
+              <div style={{background:"#0a1012",borderRadius:10,padding:"10px 12px",
+                display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+                <div>
+                  <div style={{fontSize:9,color:C.t3,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:2}}>Precio línea</div>
+                  <div style={{fontSize:18,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(sn.precioConIVA)}</div>
+                </div>
+                <div>
+                  <div style={{fontSize:9,color:C.t3,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:2}}>Util. línea</div>
+                  <div style={{fontSize:18,fontWeight:800,color:sn.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(sn.uNeta)}</div>
+                </div>
+                <div>
+                  <div style={{fontSize:9,color:C.t3,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:2}}>Margen</div>
+                  <div style={{fontSize:18,fontWeight:800,color:margenColor(sn.margenNetoPrecio||0),fontFamily:"'Courier New',monospace"}}>{fpct(sn.margenNetoPrecio||0)}</div>
                 </div>
               </div>
-              <div>
-                <div style={{fontSize:10,color:C.t3,marginBottom:5,letterSpacing:"0.12em"}}>OTROS</div>
-                <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                  <span style={{padding:"0 10px",color:C.t3,fontSize:14,fontFamily:"'Courier New',monospace"}}>$</span>
-                  <input type="text" inputMode="decimal"
-                    value={l._otrosRaw!==undefined?l._otrosRaw:String(l.otros||0)}
-                    onChange={e=>upd(i,{_otrosRaw:e.target.value})}
-                    onBlur={()=>upd(i,{otros:safeNumber(l._otrosRaw),_otrosRaw:undefined})}
-                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:16,padding:"10px 0",fontFamily:"'Courier New',monospace"}}/>
-                </div>
-              </div>
-            </div>
-
-            {/* Modo precio */}
-            <div style={{display:"flex",gap:6,marginBottom:8}}>
-              {[["auto","Auto"],["manual","Manual"]].map(([id,lbl])=>(
-                <button key={id} onClick={()=>upd(i,{mode:id})}
-                  style={{flex:1,padding:"10px",borderRadius:6,border:`1px solid ${l.mode===id?C.blueHi:C.border}`,background:l.mode===id?C.blue:"transparent",color:l.mode===id?C.t1:C.t2,fontSize:13,fontWeight:700,cursor:"pointer"}}>
-                  {lbl}
-                </button>
-              ))}
-            </div>
-            {l.mode==="manual"&&(
-              <div style={{marginBottom:6}}>
-                <div style={{fontSize:10,color:C.t3,marginBottom:5,letterSpacing:"0.12em"}}>PRECIO VENTA C/IVA</div>
-                <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:6,overflow:"hidden",minHeight:50}}>
-                  <span style={{padding:"0 12px",color:C.cyan,fontSize:18,fontFamily:"'Courier New',monospace"}}>$</span>
-                  <input type="number" min={0} step={0.01} value={l.manualPrice} onChange={e=>upd(i,{manualPrice:e.target.value})}
-                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:20,fontWeight:800,padding:"12px 0",fontFamily:"'Courier New',monospace"}}/>
-                </div>
-              </div>
-            )}
-            <div style={{fontSize:12,color:C.t3,fontFamily:"'Courier New',monospace",marginTop:4}}>
-              Precio: <span style={{color:C.cyan,fontWeight:700}}>{mxn(lineSnaps[i]?.precioConIVA||0)}</span>
-              {"  ·  "}Util: <span style={{color:(lineSnaps[i]?.uNeta||0)>=0?C.green:C.red,fontWeight:700}}>{mxn(lineSnaps[i]?.uNeta||0)}</span>
-              {"  ·  "}Margen: <span style={{color:margenColor(lineSnaps[i]?.margenNetoPrecio||0),fontWeight:700}}>{fpct(lineSnaps[i]?.margenNetoPrecio||0)}</span>
             </div>
           </div>
-        </MCard>
-      ))}
+        );
+      })}
 
-      <button onClick={addLinea} style={{width:"100%",padding:"12px",background:"transparent",border:`1px dashed ${C.blueHi}`,borderRadius:8,color:C.cyan,fontSize:13,fontWeight:700,cursor:"pointer",marginBottom:12}}>
-        + Agregar linea
+      {/* Add line */}
+      <button onClick={addLine}
+        style={{width:"100%",padding:"13px",borderRadius:12,
+          background:"transparent",border:`2px dashed ${C.border}`,
+          color:C.t3,fontSize:13,fontWeight:700,cursor:"pointer",
+          display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:16}}>
+        <span style={{fontSize:20,color:C.cyan,lineHeight:1}}>+</span>
+        Agregar línea
       </button>
 
-      {/* Total */}
-      <MCard>
-        <MRow label="Total c/IVA" value={mxn(totalPrecio)} color={C.cyan} bold/>
-        <MRow label="Util. neta"  value={mxn(totalNeta)}   color={totalNeta>=0?C.green:C.red} bold/>
-        <MRow label="Rentabilidad neta" value={fpct(aggMargen)}  color={margenColor(aggMargen)}/>
-      </MCard>
+      {/* Totals hero */}
+      <div style={{background:"linear-gradient(135deg,rgba(15,20,22,0.92),rgba(20,27,29,0.88))",
+        backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",
+        border:`1px solid rgba(38,122,144,0.25)`,borderRadius:16,padding:"16px",marginBottom:16,
+        boxShadow:"0 4px 16px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.05)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:4}}>
+          <div>
+            <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",marginBottom:3,textTransform:"uppercase"}}>
+              Total {lineas.length} línea{lineas.length>1?"s":""}
+            </div>
+            <div style={{fontSize:36,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",lineHeight:1}}>
+              {mxn(totalPrecio)}
+            </div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontSize:9,color:C.t3,marginBottom:2,textTransform:"uppercase",letterSpacing:"0.1em"}}>Util. neta</div>
+            <div style={{fontSize:24,fontWeight:800,color:totalNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(totalNeta)}</div>
+            <div style={{fontSize:11,color:margenColor(aggMargen),fontFamily:"'Courier New',monospace"}}>{fpct(aggMargen)}</div>
+          </div>
+        </div>
+      </div>
 
-      <MBtn label="Siguiente: Datos del ticket" full onClick={()=>setStep(2)}/>
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={()=>setStep(0)}
+          style={{padding:"13px 18px",borderRadius:12,background:"transparent",
+            border:`1px solid ${C.border}`,color:C.t3,fontSize:12,cursor:"pointer"}}>
+          ← Atrás
+        </button>
+        <MBtn label="Siguiente: Datos →" full onClick={()=>setStep(2)}/>
+      </div>
     </div>
   );
 
+  // ════════════════════════════════════════════════════════════════════════
+  // STEP 2 — Datos del ticket
+  // ════════════════════════════════════════════════════════════════════════
   return (
-    <div style={{padding:"14px"}}>
+    <div style={{padding:"16px 14px"}}>
       <StepBar/>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <div style={{fontSize:11,color:C.t3,letterSpacing:"0.14em"}}>DATOS DEL TICKET</div>
-        <button onClick={()=>setStep(1)} style={{fontSize:11,color:C.t3,background:"transparent",border:`1px solid ${C.border}`,borderRadius:6,padding:"6px 10px",cursor:"pointer"}}>Atras</button>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+        <div style={{fontSize:11,color:C.t3,letterSpacing:"0.14em",textTransform:"uppercase"}}>Datos del ticket</div>
+        <button onClick={()=>setStep(1)}
+          style={{fontSize:11,color:C.t3,background:"transparent",border:`1px solid ${C.border}`,
+            borderRadius:8,padding:"6px 12px",cursor:"pointer"}}>← Atrás</button>
       </div>
 
-      <MCard>
+      <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",marginBottom:12}}>
         <div style={{padding:"12px 14px"}}>
-          <div style={{fontSize:10,color:C.t3,marginBottom:4}}>FECHA</div>
-          <input value={fecha} onChange={e=>setFecha(e.target.value)} placeholder="DD/MM/AAAA"
-            style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t1,fontSize:15,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace",marginBottom:10}}/>
-          <ClientPicker clients={clients} value={clientId} onChange={setClientId} mobile/>
-          <UnitPicker units={units} value={unitId} onChange={setUnitId} placeholder="Buscar por eco., placa, marca..." mobile/>
+          <MField label="Fecha" value={fecha} onChange={setFecha} placeholder="DD/MM/AAAA"/>
+          <ClientPicker  clients={clients}   value={clientId}   onChange={setClientId}   mobile/>
+          <UnitPicker    units={units}        value={unitId}     onChange={setUnitId}     mobile/>
           <SupplierPicker suppliers={suppliers} value={supplierId} onChange={setSupplierId} mobile/>
-          <MSel label="Pago"      value={payType}    onChange={setPayType}    options={[{value:"contado",label:"Contado"},{value:"credit",label:"Credito"}]}/>
-          {payType==="credit"&&<MField label="Promesa de pago" value={promesa} onChange={setPromesa} placeholder="DD/MM/AAAA" color={C.yellow}/>}
+          <MSel label="Pago" value={payType} onChange={setPayType}
+            options={[{value:"contado",label:"Contado — sin seguimiento"},{value:"credit",label:"Crédito — genera cartera"}]}/>
+          {payType==="credit"&&(
+            <MField label="Promesa de pago" value={promesa} onChange={setPromesa}
+              placeholder="DD/MM/AAAA" color={C.yellow}/>
+          )}
           <div>
-            <div style={{fontSize:10,color:C.t3,marginBottom:5,letterSpacing:"0.12em"}}>NOTAS</div>
-            <textarea rows={3} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Diagnostico, observaciones..."
-              style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t2,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
+            <div style={{fontSize:10,color:C.t3,marginBottom:5,letterSpacing:"0.12em",textTransform:"uppercase"}}>Notas</div>
+            <textarea rows={3} value={notes} onChange={e=>setNotes(e.target.value)}
+              placeholder="Diagnóstico, observaciones..."
+              style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:8,
+                padding:"12px 14px",color:C.t2,fontSize:13,outline:"none",boxSizing:"border-box",
+                fontFamily:"inherit",resize:"vertical",marginBottom:6}}/>
           </div>
         </div>
-      </MCard>
+      </div>
 
-      {/* Resumen final */}
-      <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",marginBottom:14}}>
-        <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`}}>
-          <div style={{fontSize:9,color:C.t3,letterSpacing:"0.14em",marginBottom:8,textTransform:"uppercase"}}>Resumen de cotización</div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
-            <div>
-              <div style={{fontSize:11,color:C.t3,marginBottom:2}}>Total c/IVA</div>
-              <div style={{fontSize:28,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",lineHeight:1}}>{mxn(totalPrecio)}</div>
-            </div>
-            <div style={{textAlign:"right"}}>
-              <div style={{fontSize:11,color:C.t3,marginBottom:2}}>Util. neta</div>
-              <div style={{fontSize:20,fontWeight:800,color:totalNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace",lineHeight:1}}>{mxn(totalNeta)}</div>
-              <div style={{fontSize:11,color:margenColor(aggMargen),marginTop:3,fontFamily:"'Courier New',monospace"}}>{fpct(aggMargen)}</div>
-            </div>
+      {/* Final summary */}
+      <div style={{background:"linear-gradient(135deg,rgba(15,20,22,0.92),rgba(20,27,29,0.88))",
+        backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",
+        border:`1px solid rgba(38,122,144,0.25)`,borderRadius:16,padding:"16px",marginBottom:16,
+        boxShadow:"0 4px 16px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.05)"}}>
+        <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",marginBottom:10,textTransform:"uppercase"}}>Resumen</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:10}}>
+          <div>
+            <div style={{fontSize:9,color:C.t3,marginBottom:2,textTransform:"uppercase",letterSpacing:"0.1em"}}>Total c/IVA</div>
+            <div style={{fontSize:32,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",lineHeight:1}}>{mxn(totalPrecio)}</div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontSize:9,color:C.t3,marginBottom:2,textTransform:"uppercase",letterSpacing:"0.1em"}}>Util. neta</div>
+            <div style={{fontSize:22,fontWeight:800,color:totalNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(totalNeta)}</div>
           </div>
         </div>
-        <div style={{padding:"10px 16px"}}>
-          <MRow label={`${lineas.length} línea${lineas.length>1?"s":""}`} value={clients.find(c=>c.id===clientId)?.empresa||"Sin cliente"} color={C.t2}/>
-          {unitId&&<MRow label="Unidad" value={(()=>{const u=units.find(u=>u.id===unitId);return u?(u.economico?"Eco."+u.economico+" · ":"")+u.marca+" "+u.modelo:"---";})() } color={C.cyan}/>}
-          <MRow label="Pago" value={payType==="credit"?"Crédito"+(promesa?" · "+promesa:""):"Contado"} color={payType==="credit"?C.yellow:C.green}/>
+        <div style={{borderTop:`1px solid rgba(255,255,255,0.06)`,paddingTop:10,display:"flex",flexDirection:"column",gap:4}}>
+          {lineas.length>1&&<div style={{fontSize:10,color:C.t3}}>{lineas.length} líneas</div>}
+          {cl&&<div style={{fontSize:11,color:C.t2}}>Cliente: <span style={{fontWeight:700}}>{cl.empresa}</span></div>}
+          {un&&<div style={{fontSize:11,color:C.t2}}>Unidad: <span style={{fontFamily:"'Courier New',monospace",color:C.cyan}}>{un.economico?"Eco."+un.economico+" ":""}{un.marca} {un.modelo}</span></div>}
+          <div style={{fontSize:10,color:C.t3}}>Pago: {payType==="credit"?`Crédito${promesa?" · "+promesa:""}` : "Contado"}</div>
         </div>
       </div>
 
@@ -5611,739 +5743,542 @@ function MCotizador({state,dispatch,toast}) {
 // ── MCartera — Cartera móvil ──────────────────────────────────────────────────
 function MCartera({state,dispatch,toast}) {
   const {tickets,clients} = state;
-  const pendientes = useMemo(()=>tickets.filter(t=>t.payType==="credit"&&!t.cobrado&&t.status!=="cancelado"),[tickets]);
-  const totalPend  = pendientes.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
-  const venc       = pendientes.filter(t=>{const d=parseDateMX(t.promesaPago);return d&&new Date()>d;});
-  const totalVenc  = venc.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
-  const proximos   = pendientes.filter(t=>{const d=parseDateMX(t.promesaPago);if(!d)return false;const diff=(d-new Date())/(1000*60*60*24);return diff>=0&&diff<=7;});
-  const agingBuckets=[
-    {label:"0–30d",  count:pendientes.filter(t=>{const d=parseDateMX(t.promesaPago);if(!d)return false;const diff=(new Date()-d)/(86400000);return diff>=0&&diff<30;}).length},
-    {label:"30–60d", count:pendientes.filter(t=>{const d=parseDateMX(t.promesaPago);if(!d)return false;const diff=(new Date()-d)/(86400000);return diff>=30&&diff<60;}).length},
-    {label:">60d",   count:pendientes.filter(t=>{const d=parseDateMX(t.promesaPago);if(!d)return false;const diff=(new Date()-d)/(86400000);return diff>=60;}).length},
-  ];
+  const now = new Date();
+
+  // All credit ops not cancelled
+  const creditTkts = useMemo(()=>tickets.filter(t=>!t._deleted&&t.payType==="credit"&&t.status!=="cancelado"),[tickets]);
+  // Active CxC (not yet paid, in cartera states)
+  const pendientes = useMemo(()=>creditTkts.filter(t=>!t.cobrado&&CARTERA_SET.has(t.status)),[creditTkts]);
+  const cobradas   = useMemo(()=>creditTkts.filter(t=>t.cobrado||PAID_SET.has(t.status)),[creditTkts]);
+
+  const totalPend = useMemo(()=>pendientes.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[pendientes]);
+  const totalCob  = useMemo(()=>cobradas.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[cobradas]);
+
+  const msDay = 86400000;
+  const ageMs = t => {
+    const d=parseDateMX(t.promesaPago||t.date); return d?(now-d):0;
+  };
+
+  const vencidas   = useMemo(()=>pendientes.filter(t=>{const d=parseDateMX(t.promesaPago);return d&&now>d;}),[pendientes]);
+  const corriente  = useMemo(()=>pendientes.filter(t=>{const d=parseDateMX(t.promesaPago);return !d||(d&&now<=d);}),[pendientes]);
+  const totalVenc  = useMemo(()=>vencidas.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[vencidas]);
+  const totalCorr  = useMemo(()=>corriente.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[corriente]);
+
+  // Aging buckets (based on overdue days)
+  const aging = useMemo(()=>{
+    const b=[{label:"0–30 d",min:0,max:30*msDay,monto:0},{label:"30–60 d",min:30*msDay,max:60*msDay,monto:0},{label:">60 d",min:60*msDay,max:Infinity,monto:0}];
+    vencidas.forEach(t=>{
+      const ms=ageMs(t);
+      const bucket=b.find(bk=>ms>=bk.min&&ms<bk.max);
+      if(bucket) bucket.monto+=safeNumber(t.snap?.precioConIVA);
+    });
+    return b;
+  },[vencidas]);
+  const maxAging = Math.max(...aging.map(b=>b.monto),1);
+
+  const cobrar = t => {
+    dispatch({type:"TKT_COBRADO",id:t.id});
+    toast("Cobrado ✓","success");
+  };
+
+  const daysOver = t => {
+    const d=parseDateMX(t.promesaPago); if(!d) return 0;
+    return Math.floor((now-d)/msDay);
+  };
 
   return (
-    <div style={{padding:"14px"}}>
-      {/* KPI strip */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-        <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:12,padding:"14px 16px"}}>
-          <div style={{fontSize:9,color:C.t4,letterSpacing:"0.14em",marginBottom:6}}>POR COBRAR</div>
-          <div style={{fontSize:20,fontWeight:800,color:C.yellow,fontFamily:"'Courier New',monospace",lineHeight:1}}>{mxn(totalPend)}</div>
-          <div style={{fontSize:10,color:C.t3,marginTop:4}}>{pendientes.length} {pendientes.length===1?"operación":"operaciones"}</div>
+    <div style={{padding:"16px 14px 20px"}}>
+
+      {/* ── Hero card ── */}
+      <div style={{
+        background:"linear-gradient(135deg,rgba(15,20,22,0.92) 0%,rgba(20,27,29,0.88) 100%)",
+        backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",
+        border:`1px solid rgba(245,158,11,0.25)`,borderRadius:20,padding:"22px 18px",
+        marginBottom:12,position:"relative",overflow:"hidden",
+        boxShadow:"0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)"}}>
+        <div style={{position:"absolute",top:-40,right:-40,width:120,height:120,borderRadius:"50%",
+          background:"radial-gradient(circle,rgba(245,158,11,0.12) 0%,transparent 70%)",pointerEvents:"none"}}/>
+        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",marginBottom:8,textTransform:"uppercase"}}>
+          Cuentas por cobrar
         </div>
-        <div style={{background:venc.length>0?C.redDim:C.bg2,border:`1px solid ${venc.length>0?C.red+"55":C.border}`,borderRadius:12,padding:"14px 16px"}}>
-          <div style={{fontSize:9,color:venc.length>0?C.red:C.t4,letterSpacing:"0.14em",marginBottom:6}}>VENCIDAS</div>
-          <div style={{fontSize:20,fontWeight:800,color:venc.length>0?C.red:C.t4,fontFamily:"'Courier New',monospace",lineHeight:1}}>{mxn(totalVenc)}</div>
-          <div style={{fontSize:10,color:C.t3,marginTop:4}}>{venc.length} {venc.length===1?"cuenta":"cuentas"}</div>
+        <div style={{fontSize:40,fontWeight:800,color:totalVenc>0?C.yellow:C.t1,
+          fontFamily:"'Courier New',monospace",lineHeight:1,marginBottom:14}}>
+          {mxn(totalPend)}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <div>
+            <div style={{fontSize:9,color:C.t3,letterSpacing:"0.1em",marginBottom:2,textTransform:"uppercase"}}>Vencido</div>
+            <div style={{fontSize:18,fontWeight:800,color:totalVenc>0?C.red:C.t3,fontFamily:"'Courier New',monospace"}}>
+              {mxn(totalVenc)}
+            </div>
+            <div style={{fontSize:9,color:totalVenc>0?C.red:C.t3,marginTop:2}}>
+              {vencidas.length} factura{vencidas.length!==1?"s":""}
+            </div>
+          </div>
+          <div>
+            <div style={{fontSize:9,color:C.t3,letterSpacing:"0.1em",marginBottom:2,textTransform:"uppercase"}}>Al corriente</div>
+            <div style={{fontSize:18,fontWeight:800,color:C.green,fontFamily:"'Courier New',monospace"}}>
+              {mxn(totalCorr)}
+            </div>
+            <div style={{fontSize:9,color:C.t3,marginTop:2}}>
+              {corriente.length} factura{corriente.length!==1?"s":""}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Próximos vencimientos */}
-      {proximos.length>0&&(
-        <div style={{background:C.bg2,border:`1px solid ${C.yellow}44`,borderRadius:12,padding:"12px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:10}}>
-          <span style={{fontSize:18}}>⏱</span>
-          <div>
-            <div style={{fontSize:11,fontWeight:700,color:C.yellow}}>{proximos.length} venc. en los próximos 7 días</div>
-            <div style={{fontSize:10,color:C.t3}}>{mxn(proximos.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0))} en riesgo</div>
-          </div>
-        </div>
-      )}
-
-      {/* Aging buckets */}
-      {venc.length>0&&(
-        <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
-          <div style={{fontSize:9,color:C.t4,letterSpacing:"0.14em",marginBottom:10}}>ANTIGÜEDAD DE CARTERA VENCIDA</div>
-          <div style={{display:"flex",gap:6}}>
-            {agingBuckets.map(b=>(
-              <div key={b.label} style={{flex:1,textAlign:"center",background:C.bg3,borderRadius:8,padding:"8px 4px"}}>
-                <div style={{fontSize:16,fontWeight:800,color:b.count>0?C.red:C.t4,fontFamily:"'Courier New',monospace"}}>{b.count}</div>
-                <div style={{fontSize:9,color:C.t4,marginTop:2}}>{b.label}</div>
+      {/* ── Aging bars ── */}
+      {vencidas.length>0&&(
+        <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px",marginBottom:12}}>
+          <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",marginBottom:12,textTransform:"uppercase"}}>Antigüedad del vencimiento</div>
+          {aging.map((b,i)=>(
+            <div key={i} style={{marginBottom:i<2?10:0}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                <span style={{fontSize:11,color:b.monto>0?C.t2:C.t3,fontWeight:b.monto>0?600:400}}>{b.label}</span>
+                <span style={{fontSize:11,color:b.monto>0?(i===2?C.red:C.yellow):C.t3,fontFamily:"'Courier New',monospace",fontWeight:700}}>
+                  {b.monto>0?mxn(b.monto):"—"}
+                </span>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {pendientes.length===0&&(
-        <div style={{textAlign:"center",padding:"48px 0",color:C.t4}}>
-          <div style={{fontSize:28,marginBottom:8}}>✓</div>
-          <div style={{fontSize:13,fontWeight:600,color:C.green}}>Cartera al corriente</div>
-          <div style={{fontSize:11,color:C.t4,marginTop:4}}>Sin créditos pendientes</div>
-        </div>
-      )}
-
-      {pendientes.map(t=>{
-        const cl=clients.find(c=>c.id===t.clientId);
-        const dias=daysFromNow(t.promesaPago);
-        const esVenc=dias!=null&&dias>0;
-        const daysLeft=t.promesaPago?(()=>{const d=parseDateMX(t.promesaPago);return d?Math.round((d-new Date())/(86400000)):null;})():null;
-        const pronto=!esVenc&&daysLeft!=null&&daysLeft<=7&&daysLeft>=0;
-        const accentColor = esVenc?C.red:pronto?C.yellow:C.cyan;
-        return (
-          <MCard key={t.id}>
-            <div style={{padding:"14px 16px",borderLeft:`4px solid ${accentColor}`}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-                <div style={{flex:1,minWidth:0,marginRight:8}}>
-                  <div style={{fontSize:9,color:C.t4,fontFamily:"'Courier New',monospace",marginBottom:3}}>{t.id}</div>
-                  <div style={{fontSize:14,fontWeight:700,color:C.t1,lineHeight:1.3,marginBottom:4}}>{t.titulo}</div>
-                  <div style={{fontSize:11,color:C.t3}}>{cl?cl.empresa:"Sin cliente"}</div>
+              {b.monto>0&&(
+                <div style={{height:4,background:C.border,borderRadius:2,overflow:"hidden"}}>
+                  <div style={{height:"100%",width:`${(b.monto/maxAging)*100}%`,
+                    background:i===2?C.red:C.yellow,borderRadius:2}}/>
                 </div>
-                <div style={{textAlign:"right",flexShrink:0}}>
-                  <div style={{fontSize:18,fontWeight:800,color:accentColor,fontFamily:"'Courier New',monospace"}}>{mxn(safeNumber(t.snap?.precioConIVA))}</div>
-                  <StatusBadge sid={t.status} meta={TICKET_META} small/>
-                </div>
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8}}>
-                <div style={{fontSize:11,color:esVenc?C.red:accentColor,fontWeight:600}}>
-                  {t.promesaPago||"Sin fecha"}{esVenc?` · VENCIDA ${dias}d`:pronto?` · vence en ${daysLeft}d`:""}
-                </div>
-                <MBtn label="Cobrado ✓" small bg={C.greenDim} border={C.green+"44"} color={C.green}
-                  onClick={()=>{dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado","success");}}/>
-              </div>
-            </div>
-          </MCard>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── DEBOUNCE HOOK ─────────────────────────────────────────────────────────────
-function useDebounce(value, delay=250) {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(()=>{
-    const t = setTimeout(()=>setDebounced(value), delay);
-    return ()=>clearTimeout(t);
-  }, [value, delay]);
-  return debounced;
-}
-
-// ── OPERATIONAL LOG ───────────────────────────────────────────────────────────
-const opLog = {
-  _logs: [],
-  push(action, detail={}) {
-    const entry = { ts: new Date().toISOString(), action, ...detail };
-    this._logs.push(entry);
-    if (this._logs.length > 200) this._logs.shift();
-    if (detail.error) console.warn("[LogiSolve]", action, detail);
-  },
-  get() { return [...this._logs]; },
-};
-
-// ── SAVING STATE HOOK ─────────────────────────────────────────────────────────
-function useSyncStatus() {
-  const [status, setStatus] = useState("idle"); // idle | saving | saved | offline | error
-  const timerRef = useRef(null);
-  const setSaving  = ()=>setStatus("saving");
-  const setSaved   = ()=>{ setStatus("saved"); clearTimeout(timerRef.current); timerRef.current=setTimeout(()=>setStatus("idle"),2500); };
-  const setOffline = ()=>setStatus("offline");
-  const setError   = ()=>{ setStatus("error"); clearTimeout(timerRef.current); timerRef.current=setTimeout(()=>setStatus("idle"),4000); };
-  return { status, setSaving, setSaved, setOffline, setError };
-}
-
-// ── PENDING CHANGES QUEUE (offline support) ───────────────────────────────────
-const pendingQueue = {
-  _q: [],
-  push(op) { this._q.push({ ...op, ts: Date.now() }); this._persist(); },
-  flush() { const q=[...this._q]; this._q=[]; this._persist(); return q; },
-  peek() { return [...this._q]; },
-  _persist() { try { localStorage.setItem("lgs_pending", JSON.stringify(this._q)); } catch(_e) {} },
-  _restore() { try { const s=localStorage.getItem("lgs_pending"); if(s) this._q=JSON.parse(s)||[]; } catch(_e) {} },
-};
-pendingQueue._restore();
-
-
-function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
-  const {tickets,clients,units,suppliers} = state;
-  const realizados = useMemo(()=>tickets.filter(t=>!t._deleted&&REVENUE_SET.has(t.status)),[tickets]);
-  const totalFact  = useMemo(()=>realizados.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0),[realizados]);
-  const totalNeta  = useMemo(()=>realizados.reduce((s,t)=>s+(t.snap?.uNeta||0),0),[realizados]);
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [expId,     setExpId]     = useState(null);
-  const [editId,    setEditId]    = useState(null);
-  const [ef,        setEf]        = useState({});
-  const [editLineas,setEditLineas]= useState([]);
-  const [pdfPending,setPdfPending]= useState(null);
-  const [pdfPreview,setPdfPreview]= useState(null);
-  const [confirm,   setConfirm]   = useState(null);
-  const sfn = k => v => setEf(p=>({...p,[k]:v}));
-
-  // Body scroll lock when editing on mobile
-  useEffect(()=>{
-    if(!editId){ document.body.style.overflow=""; document.body.style.position=""; document.body.style.width=""; return; }
-    const y=window.scrollY;
-    document.body.style.overflow="hidden"; document.body.style.position="fixed";
-    document.body.style.top=`-${y}px`; document.body.style.width="100%";
-    return()=>{ document.body.style.overflow=""; document.body.style.position=""; document.body.style.top=""; document.body.style.width=""; window.scrollTo(0,y); };
-  },[editId]);
-
-  const updLinea = (idx,patch) => setEditLineas(p=>p.map((l,i)=>i===idx?{...l,...patch}:l));
-  const delLinea = idx => setEditLineas(p=>p.filter((_,i)=>i!==idx));
-  const addLinea = () => setEditLineas(p=>[...p,{titulo:"",partRef:"",costoUnit:0,gasolina:0,otros:0,qty:1,mode:"manual",manualPrice:"0",customMgn:false,customVal:27}]);
-
-  // Snap igual que cotizador — usa safeNumber y qty
-  const liveSnap = useMemo(()=>{
-    if(!editId||!editLineas.length) return null;
-    const iva=safeNumber(ef.iva,16); const isr=safeNumber(ef.isr,20);
-    const opType=ef.opType||"consumable"; const priority=ef.priority||"P3";
-    const activeMods=safeArr(ef.activeMods);
-    const sharedMgn=effectiveMargin(opType,priority,activeMods,false,27);
-    const snaps=editLineas.map(l=>{
-      const mg=l.customMgn?Math.min(safeNumber(l.customVal),99):sharedMgn;
-      const qty=safeNumber(l.qty,1)||1;
-      const costo=safeNumber(l.costoUnit)*qty;
-      return computeSnap({costo,gasolina:safeNumber(l.gasolina),otros:safeNumber(l.otros),iva,isr,
-        compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,
-        mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
-    });
-    const sum=k=>snaps.reduce((s,sn)=>s+safeNumber(sn[k]),0);
-    const precioSinIVA=sum("precioSinIVA"); const uNeta=sum("uNeta");
-    return {
-      precioConIVA:sum("precioConIVA"),precioSinIVA,
-      ivaTraslad:sum("ivaTraslad"),ivaAcred:sum("ivaAcred"),ivaNeto:sum("ivaNeto"),
-      costoTotal:sum("costoTotal"),costoBase:sum("costoBase"),gastos:sum("gastos"),
-      uNeta,uBruta:sum("uBruta"),isr:sum("isr"),
-      markupSobre:sum("costoTotal")>0?((precioSinIVA-sum("costoTotal"))/sum("costoTotal"))*100:0,
-      margenNetoPrecio:precioSinIVA>0?(uNeta/precioSinIVA)*100:0,
-      params:{iva,isr},
-    };
-  },[editId,editLineas,ef]);
-
-  const startEdit = (t) => {
-    setEditId(t.id);
-    setExpId(t.id);
-    const iva = t.snap?.params?.iva||16;
-    const ivaR = iva/100;
-    const toConIVA = (snap) => (snap?.costoBase||0)*(1+ivaR);
-    let lineas;
-    if(t.lineas&&t.lineas.length>0) {
-      lineas=t.lineas.map(l=>({
-        titulo:l.titulo||"",partRef:l.partRef||"",
-        qty:l.qty||1,costoUnit:toConIVA(l.snap),
-        gasolina:l.snap?.gastos||0,otros:0,
-        mode:"manual",manualPrice:(l.snap?.precioConIVA||0).toFixed(2),
-        customMgn:false,customVal:27,
-      }));
-    } else {
-      const parts=(t.titulo||"").split(" / ").filter(Boolean);
-      if(parts.length>1) {
-        const pxLinea=((t.snap?.precioConIVA||0)/parts.length).toFixed(2);
-        const costoXLinea=toConIVA(t.snap)/parts.length;
-        lineas=parts.map(p=>({titulo:p.trim(),partRef:"",qty:1,costoUnit:costoXLinea,gasolina:0,otros:0,mode:"manual",manualPrice:pxLinea,customMgn:false,customVal:27}));
-      } else {
-        lineas=[{titulo:t.titulo||"",partRef:t.partRef||"",qty:1,costoUnit:toConIVA(t.snap),gasolina:t.snap?.gastos||0,otros:0,mode:"manual",manualPrice:(t.snap?.precioConIVA||0).toFixed(2),customMgn:false,customVal:27}];
-      }
-    }
-    setEditLineas(lineas);
-    setEf({
-      date:t.date, clientId:t.clientId||"", supplierId:t.supplierId||"", unitId:t.unitId||"",
-      status:t.status, payType:t.payType, promesaPago:t.promesaPago||"",
-      prob:t.prob||"high", horasOp:t.horasOp||0, notes:t.notes||"",
-      iva, isr:t.snap?.params?.isr||20,
-      cIVA:true, vIVA:true,
-      opType:t.opId||"consumable", activeMods:[...(t.mods||[])], priority:t.priority||"P3",
-    });
-  };
-
-  const cancelEdit = () => { setEditId(null); setEf({}); setEditLineas([]); };
-
-  const saveEdit = (id) => {
-    if(!liveSnap) return;
-    const opType=ef.opType||"consumable"; const priority=ef.priority||"P3";
-    const activeMods=ef.activeMods||[];
-    const sharedMgn=effectiveMargin(opType,priority,activeMods,false,27);
-    const opMeta=OP_TYPES.find(o=>o.id===opType)||OP_TYPES[0];
-    const titulo=editLineas.map(l=>l.titulo.trim()||"Sin descripcion").join(" / ");
-    const lineasConSnap=editLineas.map(l=>{
-      const mg=l.customMgn?Math.min(l.customVal,99):sharedMgn;
-      const costo=(l.costoUnit||0)*(l.qty||1);
-      const snap=computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,
-        iva:parseFloat(ef.iva)||16,isr:parseFloat(ef.isr)||20,
-        compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,
-        mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
-      return {titulo:l.titulo||"Sin descripcion",partRef:l.partRef||"",snap,qty:l.qty||1};
-    });
-    const patch={
-      titulo, lineas:lineasConSnap,
-      opId:opType, opShort:opMeta.short, priority, mods:[...activeMods],
-      date:ef.date, clientId:ef.clientId, supplierId:ef.supplierId, unitId:ef.unitId||"",
-      status:ef.status, payType:ef.payType,
-      promesaPago:ef.payType==="credit"?ef.promesaPago:null,
-      cobrado:PAID_SET.has(ef.status), prob:ef.prob,
-      horasOp:parseFloat(ef.horasOp)||0, notes:ef.notes,
-      snap:liveSnap, mode:editLineas.length>1?"multilinea":"auto",
-      partRef:editLineas.map(l=>l.partRef).filter(Boolean).join(", "),
-    };
-    dispatch({type:"TKT_UPDATE",id,patch});
-    toast("Ticket actualizado","success");
-    cancelEdit();
-  };
-
-  const MSel2 = ({label,value,onChange,options}) => (
-    <div style={{marginBottom:10}}>
-      {label&&<div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase"}}>{label}</div>}
-      <select value={value} onChange={e=>onChange(e.target.value)}
-        style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t1,fontSize:14,outline:"none",fontFamily:"'Courier New',monospace"}}>
-        {options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-    </div>
-  );
-
-  return (
-    <div style={{padding:"14px"}}>
-      {pdfPending&&<PDFConfirm {...pdfPending} onClose={()=>setPdfPending(null)}/>}
-      {pdfPreview&&<PDFPreviewModal {...pdfPreview} onClose={()=>setPdfPreview(null)}/>}
-      {confirm&&<Confirm msg={"Eliminar: "+confirm.titulo+"?"} onConfirm={()=>{
-        const id=confirm.id;
-        dispatch({type:"TKT_SOFT_DEL",id});
-        scheduleHardDelete(id);
-        toast("Ticket eliminado","info");
-        setConfirm(null);setExpId(null);
-      }} onCancel={()=>setConfirm(null)}/>}
-
-      {/* Papelera — tickets soft-deleted con opción de restaurar */}
-      {tickets.filter(t=>t._deleted).length>0&&(
-        <div style={{background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:12,padding:"10px 14px",marginBottom:12}}>
-          <div style={{fontSize:10,color:C.red,fontWeight:700,marginBottom:6}}>🗑 Papelera ({tickets.filter(t=>t._deleted).length})</div>
-          {tickets.filter(t=>t._deleted).map(t=>(
-            <div key={t.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-              <div style={{fontSize:11,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,marginRight:8}}>{t.titulo}</div>
-              <button onClick={()=>{dispatch({type:"TKT_RESTORE",id:t.id});cancelHardDelete(t.id);toast("Restaurado","success");}}
-                style={{padding:"5px 12px",background:C.greenDim,border:`1px solid ${C.green}44`,borderRadius:8,color:C.green,fontSize:11,cursor:"pointer",fontWeight:700,flexShrink:0}}>
-                Restaurar
-              </button>
+              )}
             </div>
           ))}
         </div>
       )}
 
-      {/* KPI resumen del historial */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
-        {[
-          {l:"Total facturado",v:mxn(totalFact),c:C.cyan,sub:`${realizados.length} ops cerradas`},
-          {l:"Utilidad neta",  v:mxn(totalNeta),c:totalNeta>=0?C.green:C.red,sub:totalFact>0?fpct((totalNeta/totalFact)*100):"—"},
-        ].map(({l,v,c,sub})=>(
-          <div key={l} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px"}}>
-            <div style={{fontSize:9,color:C.t3,letterSpacing:"0.14em",marginBottom:6,textTransform:"uppercase"}}>{l}</div>
-            <div style={{fontSize:18,fontWeight:800,color:c,fontFamily:"'Courier New',monospace",lineHeight:1,marginBottom:4}}>{v}</div>
-            <div style={{fontSize:10,color:C.t3}}>{sub}</div>
+      {/* ── Vencidas ── */}
+      {vencidas.length>0&&(
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:9,color:C.red,letterSpacing:"0.12em",marginBottom:8,textTransform:"uppercase",
+            display:"flex",alignItems:"center",gap:6}}>
+            <div style={{width:6,height:6,borderRadius:"50%",background:C.red}}/>
+            VENCIDAS — {vencidas.length}
           </div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {vencidas.map(t=>{
+              const cl=clients.find(c=>c.id===t.clientId);
+              const over=daysOver(t);
+              return (
+                <div key={t.id} style={{background:C.bg2,border:`1px solid ${C.red}30`,borderRadius:14,
+                  borderLeft:`3px solid ${C.red}`,overflow:"hidden"}}>
+                  <div style={{padding:"12px 14px"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                      <div style={{fontSize:11,color:C.red,fontWeight:700}}>{cl?.empresa||"Sin cliente"}</div>
+                      <div style={{fontSize:10,color:C.red,fontFamily:"'Courier New',monospace"}}>+{over}d</div>
+                    </div>
+                    <div style={{fontSize:13,fontWeight:700,color:C.t1,marginBottom:4,
+                      overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                    <div style={{fontSize:10,color:C.t3}}>Prometido: {t.promesaPago||"—"} · {t.id}</div>
+                  </div>
+                  <div style={{padding:"10px 14px",borderTop:`1px solid ${C.border}`,
+                    display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div style={{fontSize:20,fontWeight:800,color:C.red,fontFamily:"'Courier New',monospace"}}>
+                      {mxn(t.snap?.precioConIVA||0)}
+                    </div>
+                    <button onClick={()=>cobrar(t)}
+                      style={{padding:"10px 18px",borderRadius:10,
+                        background:C.greenDim,border:`1px solid ${C.green}60`,
+                        color:C.green,fontSize:12,fontWeight:800,cursor:"pointer",letterSpacing:"0.04em"}}>
+                      Cobrar ✓
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Al corriente ── */}
+      {corriente.length>0&&(
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:9,color:C.green,letterSpacing:"0.12em",marginBottom:8,textTransform:"uppercase",
+            display:"flex",alignItems:"center",gap:6}}>
+            <div style={{width:6,height:6,borderRadius:"50%",background:C.green}}/>
+            AL CORRIENTE — {corriente.length}
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {corriente.map(t=>{
+              const cl=clients.find(c=>c.id===t.clientId);
+              const d=parseDateMX(t.promesaPago);
+              const daysLeft=d?Math.ceil((d-now)/86400000):null;
+              return (
+                <div key={t.id} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,
+                  borderLeft:`3px solid ${C.green}80`,overflow:"hidden"}}>
+                  <div style={{padding:"12px 14px"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                      <div style={{fontSize:11,color:C.t2,fontWeight:600}}>{cl?.empresa||"Sin cliente"}</div>
+                      {daysLeft!==null&&(
+                        <div style={{fontSize:10,color:daysLeft<=3?C.yellow:C.t3,fontFamily:"'Courier New',monospace"}}>
+                          {daysLeft<=0?"hoy":daysLeft===1?"mañana":`en ${daysLeft}d`}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{fontSize:13,fontWeight:700,color:C.t1,marginBottom:4,
+                      overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                    <div style={{fontSize:10,color:C.t3}}>Vence: {t.promesaPago||"—"}</div>
+                  </div>
+                  <div style={{padding:"10px 14px",borderTop:`1px solid ${C.border}`,
+                    display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div style={{fontSize:20,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>
+                      {mxn(t.snap?.precioConIVA||0)}
+                    </div>
+                    <button onClick={()=>cobrar(t)}
+                      style={{padding:"10px 18px",borderRadius:10,
+                        background:C.greenDim,border:`1px solid ${C.green}60`,
+                        color:C.green,fontSize:12,fontWeight:800,cursor:"pointer",letterSpacing:"0.04em"}}>
+                      Cobrar ✓
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Historial cobrado ── */}
+      {cobradas.length>0&&(
+        <div>
+          <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",marginBottom:8,textTransform:"uppercase"}}>
+            Cobrado — {cobradas.length} ops — {mxn(totalCob)}
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {cobradas.slice(0,5).map(t=>{
+              const cl=clients.find(c=>c.id===t.clientId);
+              return (
+                <div key={t.id} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:12,
+                  padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div style={{minWidth:0,flex:1}}>
+                    <div style={{fontSize:12,fontWeight:600,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                    <div style={{fontSize:10,color:C.t3}}>{cl?.empresa||""} · {t.date}</div>
+                  </div>
+                  <div style={{fontSize:14,fontWeight:800,color:C.green,fontFamily:"'Courier New',monospace",marginLeft:12,flexShrink:0}}>
+                    {mxn(t.snap?.precioConIVA||0)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {pendientes.length===0&&cobradas.length===0&&(
+        <div style={{textAlign:"center",padding:"40px 20px",color:C.t3}}>
+          <div style={{fontSize:32,marginBottom:10}}>💳</div>
+          <div style={{fontSize:13,fontWeight:600,color:C.t2,marginBottom:4}}>Sin operaciones a crédito</div>
+          <div style={{fontSize:11}}>Las ventas a crédito aparecen aquí</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
+  const {tickets,clients,units,suppliers} = state;
+  const [period,setPeriod]   = useState("week");
+  const [search,setSearch]   = useState("");
+  const [expandId,setExpandId] = useState(null);
+  const [editId,setEditId]   = useState(null);
+
+  // ── Period range ──────────────────────────────────────────────────────────
+  const range = useMemo(()=>{
+    const now=new Date(); const from=new Date(now);
+    if(period==="today")       { from.setHours(0,0,0,0); }
+    else if(period==="week")   { from.setDate(now.getDate()-7); }
+    else if(period==="month")  { from.setDate(now.getDate()-30); }
+    else if(period==="3m")     { from.setDate(now.getDate()-90); }
+    else                       { from.setFullYear(2000); } // "all"
+    return {from,to:now};
+  },[period]);
+
+  const inRange = useCallback(t=>{
+    const d=parseDateMX(t.date); return d&&d>=range.from&&d<=range.to;
+  },[range]);
+
+  // ── All non-deleted ───────────────────────────────────────────────────────
+  const allActive = useMemo(()=>tickets.filter(t=>!t._deleted),[tickets]);
+
+  const filtered = useMemo(()=>{
+    let arr=allActive.filter(inRange);
+    if(search.trim()) {
+      const lq=search.toLowerCase();
+      arr=arr.filter(t=>t.titulo?.toLowerCase().includes(lq)||t.id?.toLowerCase().includes(lq)||
+        clients.find(c=>c.id===t.clientId)?.empresa?.toLowerCase().includes(lq));
+    }
+    return [...arr].sort((a,b)=>b.date.localeCompare(a.date));
+  },[allActive,inRange,search,clients]);
+
+  // ── Group by date ─────────────────────────────────────────────────────────
+  const grouped = useMemo(()=>{
+    const groups={};
+    filtered.forEach(t=>{
+      const d=t.date||"Sin fecha";
+      if(!groups[d]) groups[d]=[];
+      groups[d].push(t);
+    });
+    // Sort dates desc
+    return Object.entries(groups).sort((a,b)=>b[0].localeCompare(a[0]));
+  },[filtered]);
+
+  // ── Period summary ────────────────────────────────────────────────────────
+  const periodFact = useMemo(()=>filtered.filter(t=>OPERADO_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[filtered]);
+  const periodNeta = useMemo(()=>filtered.filter(t=>OPERADO_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0),[filtered]);
+
+  const todayStr = todayMX();
+  const yesterdayStr = (()=>{const d=new Date();d.setDate(d.getDate()-1);const dd=String(d.getDate()).padStart(2,"0");const mm=String(d.getMonth()+1).padStart(2,"0");return `${dd}/${mm}/${d.getFullYear()}`;})();
+
+  const dayLabel = d => {
+    if(d===todayStr)     return "Hoy";
+    if(d===yesterdayStr) return "Ayer";
+    return d;
+  };
+
+  // ── Edit form state (lightweight) ────────────────────────────────────────
+  const [ef,setEf]     = useState({});
+  const sfn = k => v => setEf(p=>({...p,[k]:v}));
+
+  const openEdit = t => {
+    setEf({status:t.status,clientId:t.clientId||"",supplierId:t.supplierId||"",
+           unitId:t.unitId||"",payType:t.payType||"contado",promesaPago:t.promesaPago||"",
+           notes:t.notes||""});
+    setEditId(t.id);
+    setExpandId(null);
+  };
+
+  const saveEdit = t => {
+    dispatch({type:"TKT_UPDATE",id:t.id,patch:{...ef}});
+    toast("Actualizado","success");
+    setEditId(null);
+  };
+
+  return (
+    <div style={{padding:"16px 14px 20px"}}>
+
+      {/* ── Period selector + search ── */}
+      <div style={{display:"flex",gap:6,marginBottom:10,overflowX:"auto",paddingBottom:2,scrollbarWidth:"none"}}>
+        {[["today","Hoy"],["week","Semana"],["month","Mes"],["3m","3M"],["all","Todo"]].map(([v,l])=>(
+          <button key={v} onClick={()=>setPeriod(v)}
+            style={{padding:"6px 13px",borderRadius:20,fontSize:11,fontWeight:700,flexShrink:0,
+              border:`1px solid ${period===v?C.cyan:C.border}`,
+              background:period===v?C.cyanDim:"transparent",
+              color:period===v?C.cyan:C.t3,cursor:"pointer",letterSpacing:"0.06em"}}>
+            {l}
+          </button>
         ))}
       </div>
 
-      {/* Filtros de estado */}
-      <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4,marginBottom:12}}>
-        {[["all","Todos"],["cerrado","Cerrado"],["cobrado","Cobrado"],["cancelado","Cancelado"]].map(([v,l])=>{
-          const cnt=v==="all"?tickets.filter(t=>!t._deleted).length:tickets.filter(t=>!t._deleted&&t.status===v).length;
-          return (
-          <button key={v} onClick={()=>setFilterStatus(v)}
-            style={{padding:"7px 14px",borderRadius:20,flexShrink:0,
-              border:`1px solid ${filterStatus===v?C.cyan:C.border}`,
-              background:filterStatus===v?C.blueDim:"transparent",
-              color:filterStatus===v?C.cyan:C.t3,
-              fontSize:12,cursor:"pointer",fontWeight:filterStatus===v?700:400,whiteSpace:"nowrap",minHeight:34}}>
-            {l}{cnt>0&&<span style={{marginLeft:5,fontSize:10,opacity:0.7}}>{cnt}</span>}
-          </button>
-        );
-        })}
-      </div>
+      <input value={search} onChange={e=>setSearch(e.target.value)}
+        placeholder="Buscar por título, ID, cliente..."
+        style={{width:"100%",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,
+          padding:"11px 14px",color:C.t1,fontSize:16,outline:"none",marginBottom:14,
+          boxSizing:"border-box"}}/>
 
-      {(()=>{const filtered2=tickets.filter(t=>!t._deleted&&(filterStatus==="all"||t.status===filterStatus));if(filtered2.length===0)return(<div style={{textAlign:"center",padding:"48px 0",color:C.t4}}><div style={{fontSize:28,marginBottom:8}}>📋</div><div style={{fontSize:13,fontWeight:600,color:C.t3}}>{filterStatus==="all"?"Sin registros":"Sin tickets "+filterStatus+"s"}</div></div>);})()}
-      {tickets.filter(t=>!t._deleted&&(filterStatus==="all"||t.status===filterStatus)).map(t=>{
-        const cl=clients.find(c=>c.id===t.clientId);
-        const un=units.find(u=>u.id===t.unitId);
-        const exp=expId===t.id;
-        const editing=editId===t.id;
-        const pr=PRIORITY[t.priority]||PRIORITY.P4;
-        const meta=TICKET_META[t.status]||TICKET_META.recibido;
+      {/* ── Period summary pill ── */}
+      {filtered.length>0&&(
+        <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:12,
+          padding:"10px 14px",marginBottom:16,display:"flex",gap:16,flexWrap:"wrap"}}>
+          <div>
+            <div style={{fontSize:9,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:2}}>Facturado</div>
+            <div style={{fontSize:16,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(periodFact)}</div>
+          </div>
+          <div>
+            <div style={{fontSize:9,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:2}}>Util. neta</div>
+            <div style={{fontSize:16,fontWeight:800,color:C.green,fontFamily:"'Courier New',monospace"}}>{mxn(periodNeta)}</div>
+          </div>
+          <div>
+            <div style={{fontSize:9,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:2}}>Ops</div>
+            <div style={{fontSize:16,fontWeight:800,color:C.t2,fontFamily:"'Courier New',monospace"}}>{filtered.length}</div>
+          </div>
+        </div>
+      )}
+
+      {filtered.length===0&&(
+        <EmptyState icon="📋" title="Sin resultados" sub="Ajusta el período o la búsqueda"/>
+      )}
+
+      {/* ── Grouped by day ── */}
+      {grouped.map(([date,dayTickets])=>{
+        const dayFact=dayTickets.filter(t=>OPERADO_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
+        const dayNeta=dayTickets.filter(t=>OPERADO_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0);
         return (
-          <MCard key={t.id}>
-            {/* Header feed card */}
-            <div onClick={()=>{if(!editing)setExpId(exp?null:t.id);}} style={{padding:"14px 16px",cursor:"pointer",borderLeft:`3px solid ${pr.dot}`}}>
-              {/* Row 1: status dot + ID + date + status badge */}
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                <div style={{width:7,height:7,borderRadius:"50%",background:meta.dot,flexShrink:0}}/>
-                <span style={{fontSize:9,color:C.t3,fontFamily:"'Courier New',monospace",flex:1}}>{t.id} · {t.date}</span>
-                <StatusBadge sid={t.status} meta={TICKET_META} small/>
+          <div key={date} style={{marginBottom:18}}>
+            {/* Day header */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <div style={{fontSize:11,fontWeight:700,color:date===todayStr?C.cyan:C.t2,letterSpacing:"0.06em"}}>
+                {dayLabel(date)}
               </div>
-              {/* Row 2: titulo */}
-              {t.lineas&&t.lineas.length>1 ? (
-                <div style={{marginBottom:10}}>
-                  {t.lineas.map((l,j)=>(
-                    <div key={j} style={{fontSize:13,color:C.t1,lineHeight:1.5,opacity:j===0?1:0.7}}>
-                      {j===0?"":"· "}{l.titulo}
-                    </div>
-                  ))}
+              {dayFact>0&&(
+                <div style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace"}}>
+                  {mxn(dayFact)} · util {mxn(dayNeta)}
                 </div>
-              ) : (
-                <div style={{fontSize:14,fontWeight:700,color:C.t1,marginBottom:10,lineHeight:1.4}}>{t.titulo}</div>
               )}
-              {/* Row 3: client/unit left — price right */}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
-                <div style={{minWidth:0,flex:1,marginRight:12}}>
-                  <div style={{fontSize:12,color:C.t2,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl?cl.empresa:"Sin cliente"}</div>
-                  {un&&<div style={{fontSize:10,color:C.t3,marginTop:2,fontFamily:"'Courier New',monospace"}}>{un.economico?"Eco."+un.economico+" · ":""}{un.marca} {un.modelo}</div>}
-                </div>
-                <div style={{textAlign:"right",flexShrink:0}}>
-                  <div style={{fontSize:18,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",lineHeight:1}}>{mxn(t.snap?.precioConIVA||0)}</div>
-                  <div style={{fontSize:11,color:(t.snap?.uNeta||0)>=0?C.green:C.red,fontFamily:"'Courier New',monospace",marginTop:3}}>{mxn(t.snap?.uNeta||0)} neto</div>
-                </div>
-              </div>
             </div>
 
-            {/* Expandido */}
-            {exp&&(
-              <div style={{borderTop:`1px solid ${C.border}`}}>
-                {editing ? (
-                  <>
-                    {/* Backdrop overlay */}
-                    <div onClick={cancelEdit} className="fade-enter" style={{position:"fixed",inset:0,zIndex:299,background:"rgba(0,0,0,.65)"}}/>
-                    {/* Bottom sheet */}
-                    <div className="sheet-enter" style={{position:"fixed",bottom:0,left:0,right:0,zIndex:300,
-                      background:C.bg1,borderRadius:"18px 18px 0 0",
-                      borderTop:`1px solid ${C.borderHi}`,
-                      maxHeight:"92vh",overflowY:"auto",
-                      WebkitOverflowScrolling:"touch",
-                      boxShadow:"0 -16px 60px rgba(0,0,0,.65)"}}>
-                      {/* Drag handle */}
-                      <div style={{display:"flex",justifyContent:"center",padding:"12px 0 4px",position:"sticky",top:0,background:C.bg1,zIndex:1}}>
-                        <div style={{width:40,height:4,borderRadius:2,background:C.border}}/>
-                      </div>
-                    <div style={{padding:`0 16px calc(24px + env(safe-area-inset-bottom,0px))`}}>
-                    {/* Sticky header con acciones — Save/Cancel siempre visibles */}
-                    <div style={{position:"sticky",top:28,zIndex:10,background:C.bg1,
-                      paddingBottom:10,marginBottom:12,
-                      borderBottom:`1px solid ${C.border}`}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                        <div style={{fontSize:10,color:C.cyan,letterSpacing:"0.14em",fontWeight:700,fontFamily:"'Courier New',monospace"}}>{t.id} · EDITANDO</div>
-                        <div style={{display:"flex",gap:6}}>
-                          <button onClick={cancelEdit}
-                            style={{padding:"8px 14px",background:"transparent",border:`1px solid ${C.border}`,
-                              borderRadius:8,color:C.t2,fontSize:12,cursor:"pointer",fontWeight:600}}>
-                            Cancelar
-                          </button>
-                          <button onClick={()=>saveEdit(t.id)}
-                            style={{padding:"8px 18px",background:C.blue,border:`1px solid ${C.blueHi}`,
-                              borderRadius:8,color:C.t1,fontSize:12,cursor:"pointer",fontWeight:700}}>
-                            Guardar ✓
-                          </button>
+            {/* Day cards */}
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {dayTickets.map(t=>{
+                const meta=TICKET_META[t.status]||{};
+                const pr=PRIORITY[t.priority]||PRIORITY.P4;
+                const cl=clients.find(c=>c.id===t.clientId);
+                const un=units.find(u=>u.id===t.unitId);
+                const isExp=expandId===t.id;
+                const isEdit=editId===t.id;
+                const isOp=OPERADO_SET.has(t.status);
+                const isCancelled=t.status==="cancelado";
+
+                return (
+                  <div key={t.id} style={{background:C.bg2,borderRadius:14,overflow:"hidden",
+                    border:`1px solid ${isCancelled?`${C.red}20`:C.border}`,
+                    borderLeft:`3px solid ${isCancelled?C.red:isOp?C.green:pr.dot}`,
+                    opacity:isCancelled?0.65:1}}>
+
+                    {/* Card body — tap to expand */}
+                    <div onClick={()=>{if(!isEdit){setExpandId(isExp?null:t.id);}}} style={{padding:"12px 14px",cursor:"pointer"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:5}}>
+                        <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+                          <span style={{fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:8,
+                            background:`${meta.dot||C.border}22`,color:meta.dot||C.t3,letterSpacing:"0.06em"}}>
+                            {meta.label||t.status}
+                          </span>
+                          <span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:6,
+                            background:pr.dim,color:pr.dot}}>{t.priority}</span>
+                        </div>
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <span style={{fontSize:16,fontWeight:800,color:isOp?C.cyan:C.t3,
+                            fontFamily:"'Courier New',monospace"}}>{mxn(t.snap?.precioConIVA||0)}</span>
+                          <span style={{fontSize:10,color:C.t3,transform:isExp?"rotate(90deg)":"rotate(0deg)",
+                            transition:"transform 200ms",display:"inline-block"}}>›</span>
                         </div>
                       </div>
-                    </div>
-
-                    {/* Datos generales */}
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
-                      <div>
-                        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>FECHA</div>
-                        <input value={ef.date} onChange={e=>sfn("date")(e.target.value)} placeholder="DD/MM/AAAA"
-                          style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t1,fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace"}}/>
+                      <div style={{fontSize:13,fontWeight:700,color:C.t1,lineHeight:1.3,marginBottom:3}}>
+                        {t.titulo}
                       </div>
-                      <MSel2 label="Estado" value={ef.status} onChange={sfn("status")} options={TICKET_ALL.map(id=>({value:id,label:TICKET_META[id].label}))}/>
+                      {(cl||un)&&(
+                        <div style={{fontSize:10,color:C.t3}}>
+                          {cl&&<span>{cl.empresa}</span>}
+                          {cl&&un&&<span> · </span>}
+                          {un&&<span style={{fontFamily:"'Courier New',monospace",fontSize:9}}>
+                            {un.economico?"Eco."+un.economico:un.marca+" "+un.modelo}
+                          </span>}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Prioridad */}
-                    <div style={{marginBottom:10}}>
-                      <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:6}}>PRIORIDAD</div>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-                        {Object.values(PRIORITY).map(p=>(
-                          <div key={p.id} onClick={()=>sfn("priority")(p.id)}
-                            style={{padding:"10px 12px",borderRadius:6,cursor:"pointer",background:(ef.priority||t.priority)===p.id?p.dim:C.bg2,border:`2px solid ${(ef.priority||t.priority)===p.id?p.dot:C.border}`,display:"flex",alignItems:"center",gap:8}}>
-                            <div style={{width:8,height:8,borderRadius:"50%",background:(ef.priority||t.priority)===p.id?p.dot:C.t3,flexShrink:0}}/>
-                            <div>
-                              <div style={{fontSize:10,fontWeight:700,color:(ef.priority||t.priority)===p.id?p.dot:C.t2}}>{p.id}</div>
-                              <div style={{fontSize:9,color:C.t3}}>{p.label}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <ClientPicker  clients={clients}     value={ef.clientId||""}   onChange={sfn("clientId")}   mobile/>
-                    <SupplierPicker suppliers={suppliers} value={ef.supplierId||""} onChange={sfn("supplierId")} mobile/>
-                    <UnitPicker units={units} value={ef.unitId||""} onChange={sfn("unitId")} mobile/>
-
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                      <MSel2 label="Pago" value={ef.payType} onChange={sfn("payType")} options={[{value:"contado",label:"Contado"},{value:"credit",label:"Credito"}]}/>
-                      <MSel2 label="Prob." value={ef.prob} onChange={sfn("prob")} options={PROB.map(p=>({value:p.id,label:p.label+" ("+p.pct+"%)"}))}/> 
-                    </div>
-                    {ef.payType==="credit"&&(
-                      <div style={{marginBottom:10}}>
-                        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>PROMESA DE PAGO</div>
-                        <input value={ef.promesaPago} onChange={e=>sfn("promesaPago")(e.target.value)} placeholder="DD/MM/AAAA"
-                          style={{width:"100%",background:C.bg0,border:`1px solid ${C.yellow}55`,borderRadius:6,padding:"12px 14px",color:C.yellow,fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace"}}/>
-                      </div>
-                    )}
-
-                    <MSel2 label="Tipo de operación" value={ef.opType||"consumable"} onChange={sfn("opType")} options={OP_TYPES.map(o=>({value:o.id,label:o.label+" ("+o.baseMin+"-"+o.baseMax+"%)"}))}/>
-
-                    {/* Fiscales */}
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-                      <div>
-                        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>IVA %</div>
-                        <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                          <input type="text" inputMode="decimal" value={ef.iva} onChange={e=>sfn("iva")(e.target.value)}
-                            style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:15,padding:"10px 14px",fontFamily:"'Courier New',monospace"}}/>
-                          <span style={{padding:"0 12px",color:C.t3,fontSize:13}}>%</span>
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>ISR %</div>
-                        <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                          <input type="text" inputMode="decimal" value={ef.isr} onChange={e=>sfn("isr")(e.target.value)}
-                            style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:15,padding:"10px 14px",fontFamily:"'Courier New',monospace"}}/>
-                          <span style={{padding:"0 12px",color:C.t3,fontSize:13}}>%</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{display:"flex",gap:12,marginBottom:10}}>
-                      <Toggle label="Compra c/IVA" value={ef.cIVA!==false} onChange={v=>sfn("cIVA")(v)}/>
-                      <Toggle label="Venta c/IVA"  value={ef.vIVA!==false} onChange={v=>sfn("vIVA")(v)}/>
-                    </div>
-
-                    {/* ── LÍNEAS ── */}
-                    <div style={{height:1,background:C.border,margin:"4px 0 12px"}}/>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                      <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em"}}>PRODUCTOS / SERVICIOS ({editLineas.length})</div>
-                      <button onClick={addLinea}
-                        style={{padding:"7px 14px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:6,color:C.cyan,fontSize:12,cursor:"pointer",fontWeight:700}}>
-                        + Agregar
-                      </button>
-                    </div>
-
-                    {editLineas.map((l,idx)=>{
-                      const mg=l.customMgn?Math.min(l.customVal,99):effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
-                      const costo=(l.costoUnit||0)*(l.qty||1);
-                      const lsnap=computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,iva:parseFloat(ef.iva)||16,isr:parseFloat(ef.isr)||20,compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
-                      return (
-                      <div key={idx} style={{background:C.bg1,border:`1px solid ${C.borderHi}`,borderRadius:8,padding:"12px 14px",marginBottom:10}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                          <div>
-                            <span style={{fontSize:10,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>Línea {String(idx+1).padStart(2,"0")}</span>
-                            <span style={{fontSize:10,color:margenColor(lsnap.margenNetoPrecio),fontFamily:"'Courier New',monospace",marginLeft:8}}>{mxn(lsnap.precioConIVA)} · {fpct(lsnap.margenNetoPrecio)}</span>
-                          </div>
-                          {editLineas.length>1&&(
-                            <button onClick={()=>delLinea(idx)}
-                              style={{padding:"6px 12px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:6,color:C.red,fontSize:12,cursor:"pointer",fontWeight:700}}>
-                              × Eliminar
-                            </button>
-                          )}
-                        </div>
-                        {/* Descripción */}
-                        <div style={{marginBottom:10}}>
-                          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>DESCRIPCIÓN</div>
-                          <input value={l.titulo} onChange={e=>updLinea(idx,{titulo:e.target.value})} placeholder="Producto o servicio..."
-                            style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t1,fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
-                        </div>
-                        {/* Descripción PDF */}
-                        <div style={{marginBottom:10}}>
-                          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>DESCRIPCIÓN EN COTIZACIÓN PDF</div>
-                          <textarea value={l.descripcionPDF||""} onChange={e=>updLinea(idx,{descripcionPDF:e.target.value})} rows={3}
-                            placeholder="Dejar vacío para texto por defecto..."
-                            style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t2,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
-                        </div>
-                        {/* Ref */}
-                        <div style={{marginBottom:10}}>
-                          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>REF. / OEM</div>
-                          <input value={l.partRef||""} onChange={e=>updLinea(idx,{partRef:e.target.value})} placeholder="Número de parte..."
-                            style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t2,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace"}}/>
-                        </div>
-                        {/* Cant + Costo en 2 col */}
-                        <div style={{display:"grid",gridTemplateColumns:"90px 1fr",gap:8,marginBottom:8}}>
-                          <div>
-                            <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>CANT.</div>
-                            <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                              <input type="text" inputMode="numeric"
-                                value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)}
-                                onChange={e=>updLinea(idx,{_qtyRaw:e.target.value})}
-                                onBlur={()=>{const n=parseInt(l._qtyRaw);updLinea(idx,{qty:isFinite(n)&&n>=1?n:1,_qtyRaw:undefined});}}
-                                style={{flex:1,minWidth:0,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:16,fontWeight:700,padding:"10px 10px",fontFamily:"'Courier New',monospace"}}/>
-                              <span style={{padding:"0 8px",color:C.t3,fontSize:11,flexShrink:0}}>pz</span>
-                            </div>
-                          </div>
-                          <div>
-                            <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>COSTO UNIT. C/IVA</div>
-                            <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                              <span style={{padding:"0 8px",color:C.t3,fontSize:13,fontFamily:"'Courier New',monospace",flexShrink:0}}>$</span>
-                              <input type="text" inputMode="decimal"
-                                value={l._costoRaw!==undefined?l._costoRaw:String(l.costoUnit||0)}
-                                onChange={e=>updLinea(idx,{_costoRaw:e.target.value})}
-                                onBlur={()=>updLinea(idx,{costoUnit:safeNumber(l._costoRaw),_costoRaw:undefined})}
-                                style={{flex:1,minWidth:0,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:14,padding:"10px 8px 10px 0",fontFamily:"'Courier New',monospace"}}/>
-                            </div>
-                          </div>
-                        </div>
-                        {/* Gasolina + Otros en 2 col */}
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-                          {[["GASOLINA","gasolina"],["OTROS","otros"]].map(([lbl,k])=>(
-                            <div key={k}>
-                              <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>{lbl}</div>
-                              <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                                <span style={{padding:"0 8px",color:C.t3,fontSize:13,fontFamily:"'Courier New',monospace",flexShrink:0}}>$</span>
-                                <input type="text" inputMode="decimal"
-                                  value={l[`_${k}Raw`]!==undefined?l[`_${k}Raw`]:String(l[k]||0)}
-                                  onChange={e=>updLinea(idx,{[`_${k}Raw`]:e.target.value})}
-                                  onBlur={()=>updLinea(idx,{[k]:safeNumber(l[`_${k}Raw`]),[`_${k}Raw`]:undefined})}
-                                  style={{flex:1,minWidth:0,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:14,padding:"10px 8px 10px 0",fontFamily:"'Courier New',monospace"}}/>
-                              </div>
+                    {/* Expanded detail */}
+                    {isExp&&!isEdit&&(
+                      <div style={{borderTop:`1px solid ${C.border}`,background:"#0a1012",padding:"12px 14px"}}>
+                        {/* Financial grid */}
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+                          {[["Precio",C.cyan,mxn(t.snap?.precioConIVA||0)],
+                            ["Util. neta",safeNumber(t.snap?.uNeta)>=0?C.green:C.red,mxn(t.snap?.uNeta||0)],
+                            ["Costo",C.t3,mxn(t.snap?.costoTotal||0)],
+                            ["Margen",margenColor(t.snap?.margenNetoPrecio||0),fpct(t.snap?.margenNetoPrecio||0)],
+                          ].map(([l,c,v])=>(
+                            <div key={l}>
+                              <div style={{fontSize:9,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:2}}>{l}</div>
+                              <div style={{fontSize:15,fontWeight:700,color:c,fontFamily:"'Courier New',monospace"}}>{v}</div>
                             </div>
                           ))}
                         </div>
-                        {(safeNumber(l.qty,1))>1&&<div style={{fontSize:11,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:8}}>{l.qty} × {mxn(safeNumber(l.costoUnit))} = {mxn(safeNumber(l.costoUnit)*safeNumber(l.qty,1))}</div>}
-                        {/* Modo */}
-                        <div style={{marginBottom:8}}>
-                          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:6}}>MODO PRECIO</div>
-                          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                            <div style={{display:"flex",borderRadius:6,overflow:"hidden",border:`1px solid ${C.border}`}}>
-                              {[["auto","Auto"],["manual","Manual"]].map(([id,lbl])=>(
-                                <button key={id} onClick={()=>updLinea(idx,{mode:id})}
-                                  style={{padding:"10px 18px",border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:l.mode===id?C.blue:C.bg2,color:l.mode===id?C.t1:C.t2}}>{lbl}</button>
-                              ))}
-                            </div>
-                            {l.mode==="auto"&&(
-                              <div style={{flex:1,textAlign:"right"}}>
-                                <span style={{fontSize:13,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>Margen: {fpct(mg)}</span>
+                        {/* Timeline snippet */}
+                        {t.timeline&&t.timeline.length>0&&(
+                          <div style={{marginBottom:12}}>
+                            <div style={{fontSize:9,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:6}}>Últimos eventos</div>
+                            {[...t.timeline].reverse().slice(0,3).map((ev,i)=>(
+                              <div key={i} style={{display:"flex",gap:8,alignItems:"flex-start",marginBottom:4}}>
+                                <div style={{width:5,height:5,borderRadius:"50%",background:C.border,marginTop:4,flexShrink:0}}/>
+                                <div style={{fontSize:10,color:C.t3,flex:1}}>
+                                  <span style={{color:C.t2}}>{ev.evento}</span>
+                                  {ev.ts&&<span style={{marginLeft:6,fontSize:9}}>{fmtTS(ev.ts)}</span>}
+                                </div>
                               </div>
-                            )}
-                          </div>
-                        </div>
-                        {/* Precio manual */}
-                        {l.mode==="manual"&&(
-                          <div>
-                            <div style={{fontSize:10,color:C.cyan,letterSpacing:"0.12em",marginBottom:5}}>PRECIO VENTA C/IVA</div>
-                            <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:6,overflow:"hidden",minHeight:50}}>
-                              <span style={{padding:"0 10px",color:C.cyan,fontSize:16,fontFamily:"'Courier New',monospace",flexShrink:0}}>$</span>
-                              <input type="text" inputMode="decimal" value={l.manualPrice} onChange={e=>updLinea(idx,{manualPrice:e.target.value})}
-                                style={{flex:1,minWidth:0,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:18,fontWeight:800,padding:"10px 8px 10px 0",fontFamily:"'Courier New',monospace"}}/>
-                            </div>
+                            ))}
                           </div>
                         )}
-                      </div>
-                      );
-                    })}
-
-                    {/* Preview total */}
-                    {liveSnap&&(
-                      <div style={{background:C.bg3,border:`1px solid ${C.borderHi}`,borderRadius:8,padding:"12px 14px",marginBottom:12}}>
-                        <div style={{fontSize:9,color:C.t3,marginBottom:6}}>TOTAL ({editLineas.length} línea{editLineas.length>1?"s":""})</div>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <div>
-                            <div style={{fontSize:17,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(liveSnap.precioConIVA)}</div>
-                            <div style={{fontSize:11,color:C.t3,marginTop:2}}>c/IVA incluido</div>
-                          </div>
-                          <div style={{textAlign:"right"}}>
-                            <div style={{fontSize:15,fontWeight:700,color:liveSnap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(liveSnap.uNeta)}</div>
-                            <div style={{fontSize:11,color:C.t3,marginTop:2}}>util. neta</div>
-                          </div>
+                        {/* Action buttons */}
+                        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                          <button onClick={()=>openEdit(t)}
+                            style={{flex:1,padding:"9px 14px",borderRadius:10,background:"transparent",
+                              border:`1px solid ${C.border}`,color:C.t2,fontSize:11,fontWeight:600,cursor:"pointer"}}>
+                            ✏ Editar
+                          </button>
+                          <button onClick={()=>{
+                            const cl=clients.find(c=>c.id===t.clientId);
+                            const un=units.find(u=>u.id===t.unitId);
+                            generarCotizacionPDF(t,cl,un,null).catch(()=>toast("Error PDF","error"));}}
+                            style={{flex:1,padding:"9px 14px",borderRadius:10,background:"transparent",
+                              border:`1px solid ${C.border}`,color:C.t2,fontSize:11,fontWeight:600,cursor:"pointer"}}>
+                            PDF ↗
+                          </button>
+                          {CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t.cobrado&&(
+                            <button onClick={()=>{dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado ✓","success");setExpandId(null);}}
+                              style={{flex:1,padding:"9px 14px",borderRadius:10,background:C.greenDim,
+                                border:`1px solid ${C.green}60`,color:C.green,fontSize:11,fontWeight:800,cursor:"pointer"}}>
+                              Cobrar ✓
+                            </button>
+                          )}
+                          {!CLOSED_SET.has(t.status)&&(
+                            <button onClick={()=>{dispatch({type:"TKT_SOFT_DEL",id:t.id});toast("Eliminado","info");setExpandId(null);}}
+                              style={{padding:"9px 12px",borderRadius:10,background:"transparent",
+                                border:`1px solid ${C.red}40`,color:C.red,fontSize:11,cursor:"pointer"}}>
+                              🗑
+                            </button>
+                          )}
                         </div>
                       </div>
                     )}
 
-                    {/* Notas */}
-                    <div style={{marginBottom:14}}>
-                      <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>NOTAS</div>
-                      <textarea rows={3} value={ef.notes} onChange={e=>sfn("notes")(e.target.value)} placeholder="Diagnostico, observaciones..."
-                        style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t2,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
-                    </div>
-
-                    {/* Acciones — también disponibles en el header sticky arriba */}
-                    <div style={{display:"flex",gap:8,paddingTop:8}}>
-                      <MBtn label="Guardar ✓" full onClick={()=>saveEdit(t.id)}/>
-                      <MBtn label="Cancelar" bg="transparent" border={C.border} color={C.t2} small onClick={cancelEdit}/>
-                    </div>
-                    </div>{/* /padding inner */}
-                    </div>{/* /sheet */}
-                  </>
-                ) : (
-                  /* ── VISTA DETALLE ── */
-                  <div style={{padding:"12px 14px"}}>
-
-                    {/* Líneas individuales si existen */}
-                    {t.lineas&&t.lineas.length>0&&(
-                      <div style={{marginBottom:12}}>
-                        <div style={{fontSize:9,color:C.t3,letterSpacing:"0.14em",marginBottom:6}}>PRODUCTOS / SERVICIOS</div>
-                        {t.lineas.map((l,j)=>(
-                          <div key={j} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
-                            <div style={{flex:1,minWidth:0,marginRight:12}}>
-                              <div style={{fontSize:13,fontWeight:600,color:C.t1}}>{l.titulo}</div>
-                              {l.partRef&&<div style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",marginTop:2}}>{l.partRef}</div>}
-                            </div>
-                            <div style={{textAlign:"right",flexShrink:0}}>
-                              <div style={{fontSize:14,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(l.snap?.precioConIVA||0)}</div>
-                              <div style={{fontSize:10,color:C.t3}}>c/IVA</div>
-                            </div>
-                          </div>
-                        ))}
-                        <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0"}}>
-                          <span style={{fontSize:13,fontWeight:700,color:C.t1}}>TOTAL</span>
-                          <span style={{fontSize:15,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn((t.snap?.precioConIVA||0))}</span>
+                    {/* Quick edit form */}
+                    {isEdit&&(
+                      <div style={{borderTop:`1px solid ${C.border}`,background:"#0a1012",padding:"14px"}}>
+                        <div style={{fontSize:10,color:C.cyan,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12,fontWeight:700}}>
+                          Editando: {t.titulo?.slice(0,30)}
                         </div>
-                        <div style={{height:1,background:C.border,marginBottom:12}}/>
+                        <MSel label="Estado" value={ef.status} onChange={sfn("status")}
+                          options={TICKET_ALL.map(s=>({value:s,label:(TICKET_META[s]?.label||s)}))}/>
+                        <ClientPicker clients={clients} value={ef.clientId||""} onChange={sfn("clientId")} mobile/>
+                        <UnitPicker units={units} value={ef.unitId||""} onChange={sfn("unitId")} mobile/>
+                        <MSel label="Pago" value={ef.payType} onChange={sfn("payType")}
+                          options={[{value:"contado",label:"Contado"},{value:"credit",label:"Crédito"}]}/>
+                        {ef.payType==="credit"&&(
+                          <MField label="Promesa de pago" value={ef.promesaPago} onChange={sfn("promesaPago")} placeholder="DD/MM/AAAA" color={C.yellow}/>
+                        )}
+                        <div style={{fontSize:10,color:C.t3,marginBottom:5,letterSpacing:"0.1em",textTransform:"uppercase"}}>Notas</div>
+                        <textarea rows={2} value={ef.notes} onChange={e=>sfn("notes")(e.target.value)}
+                          placeholder="Notas..."
+                          style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:8,
+                            padding:"10px 12px",color:C.t2,fontSize:13,outline:"none",
+                            boxSizing:"border-box",fontFamily:"inherit",resize:"none",marginBottom:12}}/>
+                        <div style={{display:"flex",gap:8}}>
+                          <button onClick={()=>saveEdit(t)}
+                            style={{flex:1,padding:"12px",borderRadius:10,background:C.blue,border:`1px solid ${C.blueHi}`,
+                              color:C.t1,fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                            Guardar
+                          </button>
+                          <button onClick={()=>setEditId(null)}
+                            style={{padding:"12px 16px",borderRadius:10,background:"transparent",
+                              border:`1px solid ${C.border}`,color:C.t3,fontSize:13,cursor:"pointer"}}>
+                            Cancelar
+                          </button>
+                        </div>
                       </div>
                     )}
-
-                    {/* Desglose financiero completo */}
-                    <div style={{fontSize:9,color:C.cyan,letterSpacing:"0.14em",marginBottom:8,fontWeight:700}}>DESGLOSE COMPLETO</div>
-                    {(()=>{
-                      const s=t.snap||{};
-                      const carga=safeNumber(s.cargaFiscal,safeNumber(s.ivaNeto)+safeNumber(s.isr));
-                      const efic=safeNumber(s.eficienciaFiscal,safeNumber(s.uBruta)>0?(safeNumber(s.uNeta)/safeNumber(s.uBruta))*100:0);
-                      return [
-                        ["Costo producto (c/IVA)", mxn(safeNumber(s.costoBase)*(1+safeNumber(s.params?.iva,16)/100)), C.t2,   false],
-                        ["IVA acreditable",          mxn(s.ivaAcred),               C.blueHi,false],
-                        ["Gastos operativos",        mxn(s.gastos),                 C.t2,    false],
-                        ["Costo operativo total",    mxn(s.costoTotal),             C.t1,    true ],
-                        ["Markup s/costo",           fpct(calcMarkup(s.precioSinIVA,s.costoTotal)),           C.blueHi,false],
-                        ["Precio sin IVA",           mxn(s.precioSinIVA),           C.cyan,  false],
-                        ["IVA trasladado",           mxn(s.ivaTraslad),             C.cyan,  false],
-                        ["Precio con IVA",           mxn(s.precioConIVA),           C.cyan,  true ],
-                        ["IVA neto SAT",             mxn(s.ivaNeto),                C.yellow,false],
-                        ["Utilidad bruta",           mxn(s.uBruta),                 C.t2,    false],
-                        ["ISR estimado SAT",         mxn(s.isr),                    C.yellow,false],
-                        ["Carga fiscal total",       mxn(carga),                    C.red,   false],
-                        ["Utilidad neta",            mxn(s.uNeta),                  safeNumber(s.uNeta)>=0?C.green:C.red, true],
-                        ["Rentabilidad neta",        fpct(s.margenNetoPrecio),      margenColor(safeNumber(s.margenNetoPrecio)),false],
-                        ["Eficiencia fiscal",        fpct(efic),                    efic>=75?C.green:efic>=60?C.yellow:C.red,false],
-                      ];
-                    })().map(([lbl,val,col,bold],j)=>(
-                      <div key={j} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${C.border}`,background:bold?C.bg3:"transparent"}}>
-                        <span style={{fontSize:13,color:bold?C.t1:C.t2,fontWeight:bold?700:400,paddingLeft:bold?4:0}}>{lbl}</span>
-                        <span style={{fontSize:bold?15:13,fontWeight:bold?800:600,color:col,fontFamily:"'Courier New',monospace"}}>{val}</span>
-                      </div>
-                    ))}
-
-                    {/* Datos adicionales */}
-                    <div style={{marginTop:12,paddingTop:4}}>
-                      {un&&<MRow label="Unidad" value={(un.economico?"Eco."+un.economico+" · ":"")+un.marca+" "+un.modelo} color={C.cyan}/>}
-                      {t.payType==="credit"&&<MRow label="Promesa pago" value={t.promesaPago||"---"} color={C.yellow}/>}
-                      {t.notes&&<div style={{padding:"8px 0",fontSize:11,color:C.t3,fontStyle:"italic",borderBottom:`1px solid ${C.border}`}}>"{t.notes}"</div>}
-                    </div>
-
-                    {/* Timeline */}
-                    {t.timeline&&t.timeline.length>0&&(
-                      <div style={{marginTop:10,paddingTop:8,borderTop:`1px solid ${C.border}`}}>
-                        <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",marginBottom:6}}>ÚLTIMOS EVENTOS</div>
-                        {t.timeline.slice(-3).map((ev,j)=>(
-                          <div key={j} style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:4}}>{fmtTS(ev.ts)} — {ev.evento}</div>
-                        ))}
-                      </div>
-                    )}
-
-                    <div style={{display:"flex",gap:8,marginTop:14,flexWrap:"wrap"}}>
-                      <MBtn label="Editar" small bg={C.blueDim} border={C.blueHi} color={C.cyan} onClick={()=>startEdit(t)}/>
-                      <MBtn label="PDF" small bg={C.bg2} border={C.border} color={C.t2}
-                        onClick={()=>{const cl=state.clients.find(c=>c.id===t.clientId);const un=state.units?.find(u=>u.id===t.unitId);const su=state.suppliers?.find(s=>s.id===t.supplierId);setPdfPreview({tkt:t,cl,un,supp:su});}}/>
-                      <MBtn label="Eliminar" small bg={C.redDim} border={C.red+"44"} color={C.red} onClick={()=>setConfirm(t)}/>
-                    </div>
                   </div>
-                )}
-              </div>
-            )}
-          </MCard>
+                );
+              })}
+            </div>
+          </div>
         );
       })}
     </div>
   );
 }
+
 // ── MClientes — Clientes móvil ────────────────────────────────────────────────
 function MClientes({state,dispatch,toast}) {
   const {clients,tickets,units} = state;
