@@ -1725,10 +1725,13 @@ function Cotizador({state,dispatch,toast}) {
 
   // Each line uses sharedMargin unless it has its own customMgn
   const lineSnaps = useMemo(()=>lineas.map(l=>{
-    const mg   = l.customMgn ? Math.min(safeNumber(l.customVal), opMeta.cap) : sharedMargin;
-    const qty  = safeNumber(l.qty,1)||1;
-    const costo = safeNumber(l.costoUnit) * qty;
-    return computeSnap({costo,gasolina:safeNumber(l.gasolina),otros:safeNumber(l.otros),iva,isr,
+    const mg      = l.customMgn ? Math.min(safeNumber(l.customVal), opMeta.cap) : sharedMargin;
+    const qty     = l._qtyRaw!==undefined ? (parseInt(l._qtyRaw)||1) : (safeNumber(l.qty,1)||1);
+    const costoU  = l._costoUnitRaw!==undefined ? safeNumber(l._costoUnitRaw) : safeNumber(l.costoUnit);
+    const gasol   = l._gasolinaRaw!==undefined  ? safeNumber(l._gasolinaRaw)  : safeNumber(l.gasolina);
+    const otros_  = l._otrosRaw!==undefined      ? safeNumber(l._otrosRaw)     : safeNumber(l.otros);
+    const costo   = costoU * qty;
+    return computeSnap({costo,gasolina:gasol,otros:otros_,iva,isr,
       compraConIVA:cIVA,ventaConIVA:vIVA,mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
   }),[lineas,sharedMargin,opMeta,iva,isr,cIVA,vIVA]);
 
@@ -2018,10 +2021,7 @@ function Cotizador({state,dispatch,toast}) {
                             <input type="text" inputMode="numeric"
                               value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)}
                               onChange={e=>updateLinea(i,{_qtyRaw:e.target.value})}
-                              onBlur={()=>{
-                                const n=parseInt(l._qtyRaw);
-                                updateLinea(i,{qty:isFinite(n)&&n>=1?n:1, _qtyRaw:undefined});
-                              }}
+                              onBlur={()=>setLineas(p=>p.map((line,idx)=>{if(idx!==i)return line;const n=parseInt(line._qtyRaw);return {...line,qty:isFinite(n)&&n>=1?n:1,_qtyRaw:undefined};}))}
                               style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:12,fontWeight:700,padding:"5px 0 5px 7px",fontFamily:"'Courier New',monospace"}}/>
                             <span style={{padding:"0 5px",color:C.t3,fontSize:9}}>pz</span>
                           </div>
@@ -2034,7 +2034,7 @@ function Cotizador({state,dispatch,toast}) {
                               <input type="text" inputMode="decimal"
                                 value={l[`_${k}Raw`]!==undefined?l[`_${k}Raw`]:String(l[k]||0)}
                                 onChange={e=>updateLinea(i,{[`_${k}Raw`]:e.target.value})}
-                                onBlur={()=>updateLinea(i,{[k]:safeNumber(l[`_${k}Raw`]),[`_${k}Raw`]:undefined})}
+                                onBlur={()=>setLineas(p=>p.map((line,idx)=>idx!==i?line:{...line,[k]:safeNumber(line[`_${k}Raw`]),[`_${k}Raw`]:undefined}))}
                                 style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:10,padding:"5px 0",fontFamily:"'Courier New',monospace"}}/>
                             </div>
                           </div>
@@ -2062,7 +2062,7 @@ function Cotizador({state,dispatch,toast}) {
                             {l.customMgn?(
                               <input type="number" min={0} step={0.5} value={l._customValRaw!==undefined?l._customValRaw:String(l.customVal||27)}
                               onChange={e=>updateLinea(i,{_customValRaw:e.target.value})}
-                              onBlur={()=>updateLinea(i,{customVal:safeNumber(l._customValRaw,27),_customValRaw:undefined})}
+                              onBlur={()=>setLineas(p=>p.map((line,idx)=>idx!==i?line:{...line,customVal:safeNumber(line._customValRaw,27),_customValRaw:undefined}))}
                                 style={{width:55,background:C.bg1,border:`1px solid ${C.blueHi}`,borderRadius:3,padding:"3px 5px",color:C.cyan,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace",textAlign:"right"}}/>
                             ):(
                               <span style={{fontSize:11,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{fpct(mg)}</span>
@@ -2295,9 +2295,10 @@ function CotizadorRefacciones({state,dispatch,toast}) {
   const [isSaving,     setIsSaving]     = useState(false);
 
   const lineSnaps = useMemo(()=>lineas.map(l=>{
-    const mg  = useGlobal ? globalMargen : l.margen;
-    const qty = safeNumber(l.qty,1)||1;
-    const costo = safeNumber(l.costoUnit)*qty;
+    const mg    = useGlobal ? globalMargen : (l._mgnRaw!==undefined ? safeNumber(l._mgnRaw,30) : l.margen);
+    const qty   = l._qtyRaw!==undefined ? (parseInt(l._qtyRaw)||1) : (safeNumber(l.qty,1)||1);
+    const costoU= l._costoRaw!==undefined ? safeNumber(l._costoRaw) : safeNumber(l.costoUnit);
+    const costo = costoU*qty;
     return computeSnap({costo,gasolina:0,otros:0,iva,isr:0,compraConIVA:cIVA,ventaConIVA:vIVA,mode:l.modo,margin:mg,manualPrice:l.precioManual||"0"});
   }),[lineas,globalMargen,useGlobal,iva,cIVA,vIVA]);
 
@@ -2693,7 +2694,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
                             <input type="text" inputMode="numeric"
                               value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)}
                               onChange={e=>updateLinea(i,{_qtyRaw:e.target.value})}
-                              onBlur={()=>{const n=parseInt(l._qtyRaw);updateLinea(i,{qty:isFinite(n)&&n>=1?n:1,_qtyRaw:undefined});}}
+                              onBlur={()=>setLineas(p=>p.map((line,idx)=>{if(idx!==i)return line;const n=parseInt(line._qtyRaw);return {...line,qty:isFinite(n)&&n>=1?n:1,_qtyRaw:undefined};}))}
                               style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:12,fontWeight:700,padding:"5px 0 5px 7px",fontFamily:"'Courier New',monospace"}}/>
                             <span style={{padding:"0 5px",color:C.t3,fontSize:9}}>pz</span>
                           </div>
@@ -2705,7 +2706,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
                             <input type="text" inputMode="decimal"
                               value={l._costoRaw!==undefined?l._costoRaw:String(l.costoUnit||0)}
                               onChange={e=>updateLinea(i,{_costoRaw:e.target.value})}
-                              onBlur={()=>updateLinea(i,{costoUnit:safeNumber(l._costoRaw),_costoRaw:undefined})}
+                              onBlur={()=>setLineas(p=>p.map((line,idx)=>idx!==i?line:{...line,costoUnit:safeNumber(line._costoRaw),_costoRaw:undefined}))}
                               style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:10,padding:"5px 0",fontFamily:"'Courier New',monospace"}}/>
                           </div>
                         </div>
@@ -2728,7 +2729,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
                                 <input type="number" min={0} step={0.5}
                                   value={l._mgnRaw!==undefined?l._mgnRaw:String(l.margen||30)}
                                   onChange={e=>updateLinea(i,{_mgnRaw:e.target.value})}
-                                  onBlur={()=>updateLinea(i,{margen:safeNumber(l._mgnRaw,30),_mgnRaw:undefined})}
+                                  onBlur={()=>setLineas(p=>p.map((line,idx)=>idx!==i?line:{...line,margen:safeNumber(line._mgnRaw,30),_mgnRaw:undefined}))}
                                   style={{width:52,background:C.bg1,border:`1px solid ${C.blueHi}`,borderRadius:3,padding:"3px 5px",color:C.cyan,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace",textAlign:"right"}}/>
                               )}
                               <span style={{fontSize:8,color:C.t3}}>→</span>
@@ -5715,14 +5716,26 @@ export default function App() {
   // Load from Supabase on mount
   useEffect(()=>{
     (async()=>{
+      const bumpSeq = (tickets=[]) => {
+        const maxSeq = tickets.reduce((m,t)=>{
+          const n=parseInt((t.id||'').split('-').pop())||0; return Math.max(m,n);
+        }, 7);
+        if(maxSeq >= _seq) _seq = maxSeq + 1;
+      };
       try {
         await seedIfEmpty();
         const data = await loadAllFromSupabase();
-        if(data) dispatch({type:"IMPORT",data});
+        if(data) { dispatch({type:"IMPORT",data}); bumpSeq(data.tickets); }
+        else {
+          const stored = loadFromStorage();
+          if(stored) { dispatch({type:"IMPORT", data:stored}); bumpSeq(stored.tickets); }
+        }
         opLog.push("LOAD_OK");
       } catch(e){
         opLog.push("LOAD_ERROR", {error: e?.message});
         console.warn("Supabase load error:",e);
+        const stored = loadFromStorage();
+        if(stored) { dispatch({type:"IMPORT", data:stored}); bumpSeq(stored.tickets); }
       }
       finally { setLoading(false); }
     })();
