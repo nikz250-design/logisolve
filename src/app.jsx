@@ -631,7 +631,20 @@ function PDFPreviewModal({tkt,cl,un,supp,onClose}) {
     return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=794px"><style>body{margin:0;background:#f0f0f0;display:flex;justify-content:center;min-height:100vh;}@media print{body{background:white;margin:0;}}</style></head><body>${result.body}</body></html>`;
   },[result]);
 
-  const handlePrint=()=>frameRef.current?.contentWindow?.print();
+  const handlePrint=()=>{
+    if(!htmlDoc) return;
+    try{
+      const blob=new Blob([htmlDoc],{type:"text/html;charset=utf-8"});
+      const url=URL.createObjectURL(blob);
+      const w=window.open(url,"_blank");
+      if(w){
+        w.addEventListener("load",()=>{w.focus();w.print();setTimeout(()=>URL.revokeObjectURL(url),60000);});
+      } else {
+        URL.revokeObjectURL(url);
+        frameRef.current?.contentWindow?.print();
+      }
+    }catch(e){frameRef.current?.contentWindow?.print();}
+  };
   const handleShare=()=>{
     if(navigator.share){
       navigator.share({title:`Cotización ${tkt.id}`,text:`${tkt.titulo||""}\nTotal: ${mxn(tkt.snap?.precioConIVA||0)}\n${tkt.id}`}).catch(()=>{});
@@ -4416,6 +4429,7 @@ function MSel({label,value,onChange,options}) {
 // ── MOps — Dashboard móvil ───────────────────────────────────────────────────
 function MOps({state,setTab}) {
   const {tickets,clients,suppliers,units} = state;
+  const [showDeep,setShowDeep]=useState(false);
   const active   = useMemo(()=>tickets.filter(t=>!t._deleted&&t.status!=="cancelado"),[tickets]);
   const p1       = useMemo(()=>active.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status)),[active]);
   const p2       = useMemo(()=>active.filter(t=>t.priority==="P2"&&!CLOSED_SET.has(t.status)),[active]);
@@ -4571,6 +4585,121 @@ function MOps({state,setTab}) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Toggle análisis financiero */}
+      {tickets.length>0&&(
+        <button onClick={()=>setShowDeep(v=>!v)}
+          style={{width:"100%",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:12,
+            padding:"12px 16px",cursor:"pointer",display:"flex",justifyContent:"space-between",
+            alignItems:"center",marginBottom:showDeep?0:12}}>
+          <span style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",textTransform:"uppercase",fontWeight:700}}>Análisis financiero</span>
+          <span style={{fontSize:13,color:C.cyan,fontWeight:700}}>{showDeep?"▲ Ocultar":"▼ Ver detalle"}</span>
+        </button>
+      )}
+
+      {showDeep&&tickets.length>0&&(
+        <div style={{marginBottom:12}}>
+
+          {/* Métricas financieras secundarias */}
+          <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:10}}>
+            <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",marginBottom:10,textTransform:"uppercase"}}>Rentabilidad operativa</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+              {[
+                {l:"Markup prom",  v:fpct(markupProm),          c:margenColor(markupProm)},
+                {l:"Ef. fiscal",   v:fpct(eficienciaFiscalGlobal),c:margenColor(eficienciaFiscalGlobal)},
+                {l:"ROI",          v:fpct(roi),                  c:margenColor(roi)},
+              ].map(({l,v,c})=>(
+                <div key={l} style={{background:C.bg0,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
+                  <div style={{fontSize:9,color:C.t3,letterSpacing:"0.10em",marginBottom:5,textTransform:"uppercase"}}>{l}</div>
+                  <div style={{fontSize:15,fontWeight:800,color:c,fontFamily:"'Courier New',monospace",lineHeight:1}}>{v}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:8}}>
+              {[
+                {l:"Carga fiscal", v:mxn(cargaFiscalTotal), c:C.red},
+                {l:"Flujo neto",   v:mxn(flujoOp),          c:flujoOp>=0?C.green:C.red},
+              ].map(({l,v,c})=>(
+                <div key={l} style={{background:C.bg0,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px"}}>
+                  <div style={{fontSize:9,color:C.t3,letterSpacing:"0.10em",marginBottom:4,textTransform:"uppercase"}}>{l}</div>
+                  <div style={{fontSize:14,fontWeight:800,color:c,fontFamily:"'Courier New',monospace",lineHeight:1}}>{v}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Aging cartera */}
+          {(aging.a30>0||aging.a60>0||aging.mas60>0)&&(
+            <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:10}}>
+              <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",marginBottom:10,textTransform:"uppercase"}}>Aging cartera crédito</div>
+              {[["0-30 días",aging.a30,C.green],["30-60 días",aging.a60,C.yellow],["> 60 días",aging.mas60,C.red]].map(([lbl,val,col])=>(
+                <div key={lbl} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                  <div style={{fontSize:11,color:C.t2}}>{lbl}</div>
+                  <div style={{display:"flex",alignItems:"center",gap:8,flex:1,marginLeft:12}}>
+                    <div style={{flex:1,height:4,background:C.bg0,borderRadius:2,overflow:"hidden"}}>
+                      <div style={{height:"100%",background:col,borderRadius:2,width:`${Math.min(100,(val/(aging.a30+aging.a60+aging.mas60||1))*100)}%`}}/>
+                    </div>
+                    <div style={{fontSize:12,fontWeight:700,color:col,fontFamily:"'Courier New',monospace",minWidth:70,textAlign:"right"}}>{mxn(val)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Top clientes */}
+          {topClients.length>0&&(
+            <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:10}}>
+              <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",marginBottom:10,textTransform:"uppercase"}}>Top clientes</div>
+              {topClients.map((c,i)=>(
+                <div key={c.label} style={{marginBottom:8}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                    <div style={{fontSize:11,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"60%"}}>{c.label}</div>
+                    <div style={{fontSize:11,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(c.neta)}</div>
+                  </div>
+                  <div style={{height:4,background:C.bg0,borderRadius:2,overflow:"hidden"}}>
+                    <div style={{height:"100%",background:C.cyan,borderRadius:2,width:`${(c.neta/maxClient)*100}%`}}/>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Top proveedores */}
+          {topSupp.length>0&&(
+            <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:10}}>
+              <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",marginBottom:10,textTransform:"uppercase"}}>Top proveedores</div>
+              {topSupp.map((s,i)=>(
+                <div key={s.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,padding:"8px 12px",background:C.bg0,borderRadius:8}}>
+                  <div style={{fontSize:11,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{s.label}</div>
+                  <div style={{display:"flex",gap:12,flexShrink:0,marginLeft:8}}>
+                    <div style={{fontSize:10,color:C.t3}}>{s.count} ops</div>
+                    <div style={{fontSize:12,fontWeight:700,color:C.green,fontFamily:"'Courier New',monospace"}}>{mxn(s.neta)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Utilidad por categoría */}
+          {byOp.length>0&&(
+            <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:10}}>
+              <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",marginBottom:10,textTransform:"uppercase"}}>Utilidad por categoría</div>
+              {byOp.map(o=>(
+                <div key={o.label} style={{marginBottom:8}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                    <div style={{fontSize:11,color:C.t2}}>{o.label} <span style={{color:C.t4,fontSize:10}}>({o.count})</span></div>
+                    <div style={{fontSize:11,fontWeight:700,color:o.neta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(o.neta)}</div>
+                  </div>
+                  <div style={{height:4,background:C.bg0,borderRadius:2,overflow:"hidden"}}>
+                    <div style={{height:"100%",background:o.neta>=0?C.green:C.red,borderRadius:2,width:`${(Math.abs(o.neta)/Math.max(maxByOp,1))*100}%`}}/>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
         </div>
       )}
 
@@ -6039,6 +6168,28 @@ export default function App() {
     return()=>window.removeEventListener("resize",h);
   },[]);
 
+  // Body scroll lock when a bottom sheet is open on mobile — prevents scroll into empty space on iPhone
+  useEffect(()=>{
+    if(!mobileView||!quickOpen) {
+      document.body.style.overflow="";
+      document.body.style.position="";
+      document.body.style.width="";
+      return;
+    }
+    const y=window.scrollY;
+    document.body.style.overflow="hidden";
+    document.body.style.position="fixed";
+    document.body.style.top=`-${y}px`;
+    document.body.style.width="100%";
+    return()=>{
+      document.body.style.overflow="";
+      document.body.style.position="";
+      document.body.style.top="";
+      document.body.style.width="";
+      window.scrollTo(0,y);
+    };
+  },[mobileView,quickOpen]);
+
   const p1Active  = useMemo(()=>state.tickets.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status)).length,[state.tickets]);
   const vencidos  = useMemo(()=>state.tickets.filter(t=>{if(!t.promesaPago||t.cobrado||t.status==="cancelado")return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}).length,[state.tickets]);
   const abiertas  = useMemo(()=>state.tickets.filter(t=>!CLOSED_SET.has(t.status)).length,[state.tickets]);
@@ -6209,6 +6360,7 @@ export default function App() {
       <Toasts items={toasts}/>
 
       <style>{`
+        html,body{overscroll-behavior:none;overflow-x:hidden}
         input[type=number]::-webkit-inner-spin-button{opacity:.2}
         input::placeholder,textarea::placeholder{color:${C.t3}}
         select option{background:${C.bg1};color:${C.t1}}
