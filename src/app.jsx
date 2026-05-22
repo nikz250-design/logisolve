@@ -1286,37 +1286,37 @@ function CentroOps({state}) {
 
   // ── LAYER 1: OPERADO — entregado+facturado+cobrado+cerrado ─────────────────
   const operados = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)),[active]);
-  const revenueOp   = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[operados]);
-  const utilidadOp  = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),[operados]);
-  const uBrutaOp    = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.uBruta),0),[operados]);
-  const costoOp        = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.costoTotal),0),[operados]);
-  const costoProducto  = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.costoBase)*(1+safeNumber(t.snap.params?.iva,16)/100),0),[operados]);
-  const gastosOp       = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.gastos),0),[operados]);
+  const revenueOp   = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[operados]);
+  const utilidadOp  = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0),[operados]);
+  const uBrutaOp    = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.uBruta),0),[operados]);
+  const costoOp        = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.costoTotal),0),[operados]);
+  const costoProducto  = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.costoBase)*(1+safeNumber(t.snap?.params?.iva,16)/100),0),[operados]);
+  const gastosOp       = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.gastos),0),[operados]);
   const totalInv       = costoProducto;
-  const ivaNetoOp   = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.ivaNeto),0),[operados]);
-  const isrOp       = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.isr),0),[operados]);
+  const ivaNetoOp   = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.ivaNeto),0),[operados]);
+  const isrOp       = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.isr),0),[operados]);
   const cargaFiscal = ivaNetoOp + isrOp;
   const margenOp    = revenueOp>0?(utilidadOp/revenueOp)*100:0;
   const eficienciaFiscal = uBrutaOp>0?(utilidadOp/uBrutaOp)*100:0;
   const roi         = totalInv>0?(utilidadOp/totalInv)*100:0;
-  const markupProm  = useMemo(()=>{const v=operados.filter(t=>safeNumber(t.snap.costoTotal)>0);return v.length>0?v.reduce((s,t)=>s+calcMarkup(t.snap.precioSinIVA,t.snap.costoTotal),0)/v.length:0;},[operados]);
+  const markupProm  = useMemo(()=>{const v=operados.filter(t=>safeNumber(t.snap?.costoTotal)>0);return v.length>0?v.reduce((s,t)=>s+calcMarkup((t.snap?.precioSinIVA||0),(t.snap?.costoTotal||0)),0)/v.length:0;},[operados]);
 
   // ── LAYER 2: CASH — solo cobrado/cerrado ───────────────────────────────────
   const cobrados    = useMemo(()=>active.filter(t=>CASH_SET.has(t.status)),[active]);
-  const cashTotal   = useMemo(()=>cobrados.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[cobrados]);
-  const cashNeta    = useMemo(()=>cobrados.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),[cobrados]);
+  const cashTotal   = useMemo(()=>cobrados.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[cobrados]);
+  const cashNeta    = useMemo(()=>cobrados.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0),[cobrados]);
 
   // ── LAYER 3: CARTERA — entregado+facturado no cobrado ──────────────────────
   const cartera     = useMemo(()=>active.filter(t=>CARTERA_SET.has(t.status)&&!t.cobrado),[active]);
-  const carteraMonto= useMemo(()=>cartera.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[cartera]);
-  const cxp         = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)&&!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap.costoTotal),0),[active]);
+  const carteraMonto= useMemo(()=>cartera.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[cartera]);
+  const cxp         = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)&&!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap?.costoTotal),0),[active]);
   const flujoOp     = carteraMonto - cargaFiscal - cxp;
   const vencidos    = useMemo(()=>cartera.filter(t=>{if(!t.promesaPago)return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}),[cartera]);
 
   // ── LAYER 4: FORECAST — cotizado+autorizado ────────────────────────────────
   const forecastTkts= useMemo(()=>active.filter(t=>FORECAST_SET.has(t.status)),[active]);
-  const forecastMonto=useMemo(()=>forecastTkts.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[forecastTkts]);
-  const forecastUtil= useMemo(()=>forecastTkts.reduce((s,t)=>s+utilidadPonderada(safeNumber(t.snap.uNeta),t.prob),0),[forecastTkts]);
+  const forecastMonto=useMemo(()=>forecastTkts.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[forecastTkts]);
+  const forecastUtil= useMemo(()=>forecastTkts.reduce((s,t)=>s+utilidadPonderada(safeNumber(t.snap?.uNeta),t.prob),0),[forecastTkts]);
   const cotizados   = useMemo(()=>forecastTkts.filter(t=>t.status==="cotizado"),[forecastTkts]);
   const autorizados = useMemo(()=>forecastTkts.filter(t=>t.status==="autorizado"),[forecastTkts]);
 
@@ -1329,14 +1329,14 @@ function CentroOps({state}) {
   // By category — only operados
   const byOp = useMemo(()=>OP_TYPES.map(op=>{
     const sub=operados.filter(t=>t.opId===op.id);
-    return{label:op.label,short:op.short,count:sub.length,neta:sub.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),fact:sub.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0)};
+    return{label:op.label,short:op.short,count:sub.length,neta:sub.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0),fact:sub.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0)};
   }).sort((a,b)=>b.neta-a.neta),[operados]);
   const maxByOp = Math.max(...byOp.map(o=>o.neta),1);
 
   // Top clientes — only operados
   const topClients = useMemo(()=>clients.map(c=>{
     const co=operados.filter(t=>t.clientId===c.id);
-    return{label:c.empresa,neta:co.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),fact:co.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),count:co.length};
+    return{label:c.empresa,neta:co.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0),fact:co.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),count:co.length};
   }).filter(c=>c.count>0).sort((a,b)=>b.neta-a.neta).slice(0,5),[operados,clients]);
   const maxClient = Math.max(...topClients.map(c=>c.neta),1);
 
@@ -1388,7 +1388,7 @@ function CentroOps({state}) {
           )}
           {vencidos.length>0&&(
             <div style={{background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:3,padding:"5px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{fontSize:9,color:"#C04040",fontWeight:700}}>CARTERA VENCIDA — {vencidos.length} op. / {mxn(vencidos.reduce((s,t)=>s+t.snap.precioConIVA,0))}</span>
+              <span style={{fontSize:9,color:"#C04040",fontWeight:700}}>CARTERA VENCIDA — {vencidos.length} op. / {mxn(vencidos.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0))}</span>
               <span style={{fontSize:8,color:"#C04040"}}>{vencidos.map(t=>t.id).join(" / ")}</span>
             </div>
           )}
@@ -1703,8 +1703,8 @@ function Tickets({state,dispatch,toast,scheduleHardDelete}) {
                 <div style={{fontSize:8,color:C.t2,fontFamily:"'Courier New',monospace"}}>{t.opShort}</div>
                 <PriorityBadge pid={t.priority} small/>
                 <StatusBadge sid={t.status} meta={TICKET_META} small/>
-                <div style={{fontSize:9,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{mxn(t.snap.precioConIVA)}</div>
-                <div style={{fontSize:9,fontWeight:700,color:t.snap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{mxn(t.snap.uNeta)}</div>
+                <div style={{fontSize:9,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{mxn(t.snap?.precioConIVA||0)}</div>
+                <div style={{fontSize:9,fontWeight:700,color:(t.snap?.uNeta||0)>=0?C.green:C.red,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{mxn(t.snap?.uNeta||0)}</div>
                 <div>
                   <div style={{fontSize:7,color:t.payType==="credit"?C.yellow:C.t3}}>{t.payType==="credit"?"CRED":"CONT"}</div>
                   {venc&&<div style={{fontSize:7,color:C.red,fontWeight:700}}>VENC</div>}
@@ -1732,7 +1732,7 @@ function Tickets({state,dispatch,toast,scheduleHardDelete}) {
                     <div>
                       <SHdr title="DETALLE FINANCIERO"/>
                       <div style={{padding:"6px 10px"}}>
-                        {[["Costo total",mxn(t.snap.costoTotal),C.t1],["Markup",fpct(calcMarkup(t.snap.precioSinIVA,t.snap.costoTotal)),C.blueHi],["Precio c/IVA",mxn(t.snap.precioConIVA),C.cyan],["IVA neto SAT",mxn(t.snap.ivaNeto),C.yellow],["Util. bruta",mxn(t.snap.uBruta),C.t1],["ISR",mxn(t.snap.isr),C.yellow],["Util. neta",mxn(t.snap.uNeta),t.snap.uNeta>=0?C.green:C.red],["Margen neto",fpct(t.snap.margenNetoPrecio),margenColor(t.snap.margenNetoPrecio)]].map(([lbl,val,col],j)=>(
+                        {[["Costo total",mxn(t.snap?.costoTotal||0),C.t1],["Markup",fpct(calcMarkup(t.snap?.precioSinIVA||0,t.snap?.costoTotal||0)),C.blueHi],["Precio c/IVA",mxn(t.snap?.precioConIVA||0),C.cyan],["IVA neto SAT",mxn(t.snap?.ivaNeto||0),C.yellow],["Util. bruta",mxn(t.snap?.uBruta||0),C.t1],["ISR",mxn(t.snap?.isr||0),C.yellow],["Util. neta",mxn(t.snap?.uNeta||0),(t.snap?.uNeta||0)>=0?C.green:C.red],["Margen neto",fpct(t.snap?.margenNetoPrecio||0),margenColor(t.snap?.margenNetoPrecio||0)]].map(([lbl,val,col],j)=>(
                           <div key={j} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",borderBottom:`1px solid ${C.border}`}}>
                             <span style={{fontSize:8,color:C.t2}}>{lbl}</span>
                             <span style={{fontSize:9,fontWeight:600,color:col,fontFamily:"'Courier New',monospace"}}>{val}</span>
@@ -3535,7 +3535,7 @@ function Clientes({state,dispatch,toast}) {
                         <span style={{color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{t.titulo}</span>
                         <PriorityBadge pid={t.priority} small/>
                         <StatusBadge sid={t.status} meta={TICKET_META} small/>
-                        <span style={{color:t.snap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace",flexShrink:0}}>{mxn(t.snap.uNeta)}</span>
+                        <span style={{color:(t.snap?.uNeta||0)>=0?C.green:C.red,fontFamily:"'Courier New',monospace",flexShrink:0}}>{mxn((t.snap?.uNeta||0))}</span>
                       </div>
                     ))}
                     {tickets.filter(t=>t.clientId===c.id).length===0&&<div style={{fontSize:8,color:C.t3}}>Sin tickets vinculados.</div>}
@@ -4033,14 +4033,14 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
   },[activeTickets,sortBy]);
 
   const realizados = useMemo(()=>activeTickets.filter(t=>REVENUE_SET.has(t.status)),[activeTickets]);
-  const totalFact = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[realizados]);
-  const totalNeta = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),[realizados]);
-  const totalInv  = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.costoBase)*(1+(safeNumber(t.snap.params?.iva,16))/100),0),[realizados]);
+  const totalFact = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[realizados]);
+  const totalNeta = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0),[realizados]);
+  const totalInv  = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap?.costoBase)*(1+(safeNumber(t.snap?.params?.iva,16))/100),0),[realizados]);
   const pctN      = totalFact>0?(totalNeta/totalFact)*100:0;
 
   const days = useMemo(()=>{
     const d={};
-    activeTickets.forEach(t=>{if(!d[t.date])d[t.date]={v:0,n:0,c:0};d[t.date].v+=safeNumber(t.snap.precioConIVA);d[t.date].n+=safeNumber(t.snap.uNeta);d[t.date].c++;});
+    activeTickets.forEach(t=>{if(!d[t.date])d[t.date]={v:0,n:0,c:0};d[t.date].v+=safeNumber(t.snap?.precioConIVA);d[t.date].n+=safeNumber(t.snap?.uNeta);d[t.date].c++;});
     return d;
   },[activeTickets]);
 
@@ -4053,7 +4053,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
     e.stopPropagation();
     setEditId(t.id);
     setExpId(t.id);
-    const iva = t.snap.params?.iva||16;
+    const iva = t.snap?.params?.iva||16;
     const ivaR = iva/100;
     // costoBase en snap es sin IVA; el cotizador trabaja con costo CON IVA
     const toConIVA = (snap) => (snap?.costoBase||0)*(1+ivaR);
@@ -4070,11 +4070,11 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
     } else {
       const parts=(t.titulo||"").split(" / ").filter(Boolean);
       if(parts.length>1) {
-        const pxLinea=(t.snap.precioConIVA/parts.length).toFixed(2);
+        const pxLinea=((t.snap?.precioConIVA||0)/parts.length).toFixed(2);
         const costoXLinea=toConIVA(t.snap)/parts.length;
         lineas=parts.map(p=>({titulo:p.trim(),partRef:"",qty:1,costoUnit:costoXLinea,gasolina:0,otros:0,mode:"manual",manualPrice:pxLinea,customMgn:false,customVal:27,descripcionPDF:""}));
       } else {
-        lineas=[{titulo:t.titulo||"",partRef:t.partRef||"",qty:1,costoUnit:toConIVA(t.snap),gasolina:t.snap?.gastos||0,otros:0,mode:"manual",manualPrice:(t.snap.precioConIVA||0).toFixed(2),customMgn:false,customVal:27,descripcionPDF:""}];
+        lineas=[{titulo:t.titulo||"",partRef:t.partRef||"",qty:1,costoUnit:toConIVA(t.snap),gasolina:t.snap?.gastos||0,otros:0,mode:"manual",manualPrice:((t.snap?.precioConIVA||0)||0).toFixed(2),customMgn:false,customVal:27,descripcionPDF:""}];
       }
     }
     setEditLineas(lineas);
@@ -4082,7 +4082,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
       date:t.date, clientId:t.clientId||"", supplierId:t.supplierId||"", unitId:t.unitId||"",
       status:t.status, payType:t.payType, promesaPago:t.promesaPago||"",
       prob:t.prob||"high", horasOp:t.horasOp||0, notes:t.notes||"",
-      iva, isr:t.snap.params?.isr||20,
+      iva, isr:t.snap?.params?.isr||20,
       cIVA:true, vIVA:true,
       opType:t.opId||"consumable", activeMods:[...(t.mods||[])], priority:t.priority||"P3",
     });
@@ -4237,9 +4237,9 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                 <div style={{fontSize:8,fontFamily:"'Courier New',monospace",color:C.t2,fontWeight:600}}>{t.opShort}</div>
                 <PriorityBadge pid={t.priority} small/>
                 <StatusBadge sid={t.status} meta={TICKET_META} small/>
-                <div style={{fontSize:9,color:C.blueHi,fontFamily:"'Courier New',monospace"}}>{hide?"---":fpct(calcMarkup(t.snap.precioSinIVA,t.snap.costoTotal))}</div>
-                <div style={{fontSize:9,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{mxn(t.snap.precioConIVA)}</div>
-                <div style={{fontSize:9,fontWeight:700,color:t.snap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{hide?"---":mxn(t.snap.uNeta)}</div>
+                <div style={{fontSize:9,color:C.blueHi,fontFamily:"'Courier New',monospace"}}>{hide?"---":fpct(calcMarkup((t.snap?.precioSinIVA||0),(t.snap?.costoTotal||0)))}</div>
+                <div style={{fontSize:9,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{mxn((t.snap?.precioConIVA||0))}</div>
+                <div style={{fontSize:9,fontWeight:700,color:(t.snap?.uNeta||0)>=0?C.green:C.red,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{hide?"---":mxn((t.snap?.uNeta||0))}</div>
                 <div style={{display:"flex",gap:3}}>
                   {!editing&&<button onClick={e=>startEdit(t,e)} style={{padding:"2px 5px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:8,cursor:"pointer"}}>Editar</button>}
                   {!editing&&<button onClick={e=>{e.stopPropagation();const cl2=clients.find(c=>c.id===t.clientId);const un2=units?.find(u=>u.id===t.unitId);const su2=suppliers?.find(s=>s.id===t.supplierId);generarCotizacionPDF(t,cl2,un2,su2);}} style={{padding:"2px 5px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,fontSize:8,cursor:"pointer"}}>PDF</button>}
@@ -4415,7 +4415,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                           ))}
                           <div style={{display:"flex",justifyContent:"space-between",padding:"5px 11px",background:C.bg3,borderBottom:`1px solid ${C.border}`}}>
                             <span style={{fontSize:9,fontWeight:700,color:C.t1}}>TOTAL</span>
-                            <span style={{fontSize:10,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap.precioConIVA)}</span>
+                            <span style={{fontSize:10,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn((t.snap?.precioConIVA||0))}</span>
                           </div>
                         </div>
                       ) : (
@@ -4427,11 +4427,11 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                         ))
                       )}
                       <div style={{padding:"4px 11px",fontSize:7,color:C.t3,display:"flex",gap:8,flexWrap:"wrap"}}>
-                        <span>IVA {t.snap.params.iva}%</span>
-                        <span>ISR {t.snap.params.isr}%</span>
+                        <span>IVA {t.snap?.params.iva}%</span>
+                        <span>ISR {t.snap?.params.isr}%</span>
                         {cl&&<span>Cliente: {cl.empresa}</span>}
                         {t.mods&&t.mods.length>0&&<span>Mods: {t.mods.join(", ")}</span>}
-                        {t.horasOp>0&&<span>Util/h: {mxn(t.snap.uNeta/t.horasOp)}</span>}
+                        {t.horasOp>0&&<span>Util/h: {mxn((t.snap?.uNeta||0)/t.horasOp)}</span>}
                         {t.payType==="credit"&&<span style={{color:C.yellow}}>Credito · {t.promesaPago||"sin fecha"}</span>}
                         {t.notes&&<span style={{fontStyle:"italic"}}>{t.notes}</span>}
                       </div>
@@ -4567,30 +4567,30 @@ function MOps({state,setTab}) {
   const vencidos = useMemo(()=>active.filter(t=>{if(!t.promesaPago||t.cobrado)return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}),[active]);
   // Layer 1: Operado
   const operados  = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)),[active]);
-  const totalFact = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[operados]);
-  const totalNeta = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),[operados]);
-  const totalInv  = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.costoBase)*(1+safeNumber(t.snap.params?.iva,16)/100),0),[operados]);
+  const totalFact = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[operados]);
+  const totalNeta = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0),[operados]);
+  const totalInv  = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.costoBase)*(1+safeNumber(t.snap?.params?.iva,16)/100),0),[operados]);
   const costoProducto = totalInv;
-  const gastosOp  = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.gastos),0),[operados]);
+  const gastosOp  = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.gastos),0),[operados]);
   const pctNeta   = totalFact>0?(totalNeta/totalFact)*100:0;
-  const ivaNetoTotal = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.ivaNeto),0),[operados]);
-  const isrTotal     = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.isr),0),[operados]);
+  const ivaNetoTotal = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.ivaNeto),0),[operados]);
+  const isrTotal     = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.isr),0),[operados]);
   const cargaFiscalTotal = ivaNetoTotal + isrTotal;
   const rentabilidadProm = totalFact>0?(totalNeta/totalFact)*100:0;
-  const markupProm = useMemo(()=>{const v=operados.filter(t=>safeNumber(t.snap.costoTotal)>0);return v.length>0?v.reduce((s,t)=>s+calcMarkup(t.snap.precioSinIVA,t.snap.costoTotal),0)/v.length:0;},[operados]);
-  const uBrutaTotal = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.uBruta),0),[operados]);
+  const markupProm = useMemo(()=>{const v=operados.filter(t=>safeNumber(t.snap?.costoTotal)>0);return v.length>0?v.reduce((s,t)=>s+calcMarkup((t.snap?.precioSinIVA||0),(t.snap?.costoTotal||0)),0)/v.length:0;},[operados]);
+  const uBrutaTotal = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.uBruta),0),[operados]);
   const eficienciaFiscalGlobal = uBrutaTotal>0?(totalNeta/uBrutaTotal)*100:0;
   const roi = totalInv>0?(totalNeta/totalInv)*100:0;
   // Layer 2: Cash
-  const cashTotal = useMemo(()=>active.filter(t=>CASH_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[active]);
+  const cashTotal = useMemo(()=>active.filter(t=>CASH_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[active]);
   // Layer 3: Cartera
-  const carteraMonto = useMemo(()=>active.filter(t=>CARTERA_SET.has(t.status)&&!t.cobrado).reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[active]);
-  const cxp = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)&&!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap.costoTotal),0),[active]);
+  const carteraMonto = useMemo(()=>active.filter(t=>CARTERA_SET.has(t.status)&&!t.cobrado).reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[active]);
+  const cxp = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)&&!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap?.costoTotal),0),[active]);
   const cartera = carteraMonto; // alias for UI compatibility
   const flujoOp = carteraMonto - cargaFiscalTotal - cxp;
   // Layer 4: Forecast
-  const forecast  = useMemo(()=>active.filter(t=>FORECAST_SET.has(t.status)).reduce((s,t)=>s+utilidadPonderada(safeNumber(t.snap.uNeta),t.prob),0),[active]);
-  const forecastMonto = useMemo(()=>active.filter(t=>FORECAST_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[active]);
+  const forecast  = useMemo(()=>active.filter(t=>FORECAST_SET.has(t.status)).reduce((s,t)=>s+utilidadPonderada(safeNumber(t.snap?.uNeta),t.prob),0),[active]);
+  const forecastMonto = useMemo(()=>active.filter(t=>FORECAST_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[active]);
   const totalHoras= useMemo(()=>active.reduce((s,t)=>s+safeNumber(t.horasOp),0),[active]);
   const uPH       = totalHoras>0?totalNeta/totalHoras:0;
 
@@ -4604,14 +4604,14 @@ function MOps({state,setTab}) {
   // Por categoria
   const byOp = useMemo(()=>OP_TYPES.map(op=>{
     const sub=operados.filter(t=>t.opId===op.id);
-    return{label:op.label,count:sub.length,neta:sub.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0)};
+    return{label:op.label,count:sub.length,neta:sub.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0)};
   }).filter(o=>o.count>0).sort((a,b)=>b.neta-a.neta),[operados]);
   const maxByOp=Math.max(...byOp.map(o=>o.neta),1);
 
   // Top clientes
   const topClients=useMemo(()=>clients.map(c=>{
     const co=tickets.filter(t=>t.clientId===c.id);
-    return{label:c.empresa,neta:co.reduce((s,t)=>s+t.snap.uNeta,0),count:co.length};
+    return{label:c.empresa,neta:co.reduce((s,t)=>s+(t.snap?.uNeta||0),0),count:co.length};
   }).filter(c=>c.count>0).sort((a,b)=>b.neta-a.neta).slice(0,4),[tickets,clients]);
   const maxClient=Math.max(...topClients.map(c=>c.neta),1);
 
@@ -4680,7 +4680,7 @@ function MOps({state,setTab}) {
       {vencidos.length>0&&(
         <div style={{background:C.redDim,border:`1px solid ${C.red}55`,borderRadius:14,padding:"12px 16px",marginBottom:10,display:"flex",alignItems:"center",gap:12}}>
           <div style={{width:8,height:8,borderRadius:4,background:"#C04040",flexShrink:0}}/>
-          <div style={{fontSize:13,fontWeight:800,color:"#C04040"}}>Cartera vencida · {vencidos.length} op. · {mxn(vencidos.reduce((s,t)=>s+t.snap.precioConIVA,0))}</div>
+          <div style={{fontSize:13,fontWeight:800,color:"#C04040"}}>Cartera vencida · {vencidos.length} op. · {mxn(vencidos.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0))}</div>
         </div>
       )}
 
@@ -5832,8 +5832,8 @@ pendingQueue._restore();
 function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
   const {tickets,clients,units,suppliers} = state;
   const realizados = useMemo(()=>tickets.filter(t=>!t._deleted&&REVENUE_SET.has(t.status)),[tickets]);
-  const totalFact  = useMemo(()=>realizados.reduce((s,t)=>s+t.snap.precioConIVA,0),[realizados]);
-  const totalNeta  = useMemo(()=>realizados.reduce((s,t)=>s+t.snap.uNeta,0),[realizados]);
+  const totalFact  = useMemo(()=>realizados.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0),[realizados]);
+  const totalNeta  = useMemo(()=>realizados.reduce((s,t)=>s+(t.snap?.uNeta||0),0),[realizados]);
   const [filterStatus, setFilterStatus] = useState("all");
   const [expId,     setExpId]     = useState(null);
   const [editId,    setEditId]    = useState(null);
@@ -5888,7 +5888,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
   const startEdit = (t) => {
     setEditId(t.id);
     setExpId(t.id);
-    const iva = t.snap.params?.iva||16;
+    const iva = t.snap?.params?.iva||16;
     const ivaR = iva/100;
     const toConIVA = (snap) => (snap?.costoBase||0)*(1+ivaR);
     let lineas;
@@ -5903,11 +5903,11 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
     } else {
       const parts=(t.titulo||"").split(" / ").filter(Boolean);
       if(parts.length>1) {
-        const pxLinea=(t.snap.precioConIVA/parts.length).toFixed(2);
+        const pxLinea=((t.snap?.precioConIVA||0)/parts.length).toFixed(2);
         const costoXLinea=toConIVA(t.snap)/parts.length;
         lineas=parts.map(p=>({titulo:p.trim(),partRef:"",qty:1,costoUnit:costoXLinea,gasolina:0,otros:0,mode:"manual",manualPrice:pxLinea,customMgn:false,customVal:27}));
       } else {
-        lineas=[{titulo:t.titulo||"",partRef:t.partRef||"",qty:1,costoUnit:toConIVA(t.snap),gasolina:t.snap?.gastos||0,otros:0,mode:"manual",manualPrice:(t.snap.precioConIVA||0).toFixed(2),customMgn:false,customVal:27}];
+        lineas=[{titulo:t.titulo||"",partRef:t.partRef||"",qty:1,costoUnit:toConIVA(t.snap),gasolina:t.snap?.gastos||0,otros:0,mode:"manual",manualPrice:((t.snap?.precioConIVA||0)||0).toFixed(2),customMgn:false,customVal:27}];
       }
     }
     setEditLineas(lineas);
@@ -5915,7 +5915,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
       date:t.date, clientId:t.clientId||"", supplierId:t.supplierId||"", unitId:t.unitId||"",
       status:t.status, payType:t.payType, promesaPago:t.promesaPago||"",
       prob:t.prob||"high", horasOp:t.horasOp||0, notes:t.notes||"",
-      iva, isr:t.snap.params?.isr||20,
+      iva, isr:t.snap?.params?.isr||20,
       cIVA:true, vIVA:true,
       opType:t.opId||"consumable", activeMods:[...(t.mods||[])], priority:t.priority||"P3",
     });
@@ -6351,7 +6351,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                         ))}
                         <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0"}}>
                           <span style={{fontSize:13,fontWeight:700,color:C.t1}}>TOTAL</span>
-                          <span style={{fontSize:15,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap.precioConIVA)}</span>
+                          <span style={{fontSize:15,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn((t.snap?.precioConIVA||0))}</span>
                         </div>
                         <div style={{height:1,background:C.border,marginBottom:12}}/>
                       </div>
