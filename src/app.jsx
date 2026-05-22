@@ -2689,7 +2689,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
           <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
             <SHdr title="DATOS DE LA COTIZACIÓN"/>
             <div style={{padding:9}}>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:5,marginBottom:5}}>
+              <div className="ref-hdr-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:5,marginBottom:5}}>
                 <div>
                   <div style={{fontSize:7,color:C.t3,marginBottom:2}}>FECHA</div>
                   <input value={fecha} onChange={e=>setFecha(e.target.value)} placeholder="DD/MM/AAAA"
@@ -2715,7 +2715,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
                     style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 6px",color:C.yellow,fontSize:10,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace"}}/>
                 </div>
               )}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:5}}>
+              <div className="ref-half-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:5}}>
                 <Sel label="Cliente" value={clientId} onChange={setClientId}
                   options={[{value:"",label:"-- Sin cliente --"},...clients.map(c=>({value:c.id,label:c.empresa}))]}/>
                 <Sel label="Proveedor" value={supplierId} onChange={setSupplierId}
@@ -2775,7 +2775,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
 
                     <div style={{padding:"8px 9px"}}>
                       {/* Row 1: Description + OEM + Aftermarket + Catalog button */}
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 120px 120px auto",gap:5,marginBottom:6}}>
+                      <div className="ref-line-row1" style={{display:"grid",gridTemplateColumns:"1fr 120px 120px auto",gap:5,marginBottom:6}}>
                         <div>
                           <div style={{fontSize:7,color:C.t3,marginBottom:2}}>DESCRIPCIÓN</div>
                           <input value={l.descripcion} onChange={e=>updateLinea(i,{descripcion:e.target.value})}
@@ -2801,7 +2801,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
                       </div>
 
                       {/* Row 2: Qty + Cost + Mode + Price */}
-                      <div style={{display:"grid",gridTemplateColumns:"80px 1fr auto",gap:5,alignItems:"end"}}>
+                      <div className="ref-line-row2" style={{display:"grid",gridTemplateColumns:"80px 1fr auto",gap:5,alignItems:"end"}}>
                         <div>
                           <div style={{fontSize:7,color:C.t3,marginBottom:2}}>CANT.</div>
                           <div style={{display:"flex",alignItems:"center",background:C.bg1,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
@@ -3873,6 +3873,132 @@ function Ajustes({state,dispatch,toast}) {
           {sec.content}
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── MAjustes — Ajustes móvil ─────────────────────────────────────────────────
+function MAjustes({state,dispatch,toast}) {
+  const fileRef=useRef();
+  const importUnitsFile=useRef();
+  const [confirmReset,setConfirmReset]=useState(false);
+  const [confirmClearUnits,setConfirmClearUnits]=useState(false);
+  const [exporting,setExporting]=useState(false);
+  const [importMode,setImportMode]=useState("merge");
+
+  const savedAt=(()=>{try{const r=localStorage.getItem(STORAGE_KEY);if(r){const p=JSON.parse(r);return p.savedAt?new Date(p.savedAt).toLocaleString("es-MX"):"---";}}catch(_e){}return "---";})();
+
+  const importUnitsJSON=(file,mode="merge")=>{
+    const r=new FileReader();
+    r.onload=e=>{
+      try{
+        const d=JSON.parse(e.target.result);
+        const arr=Array.isArray(d)?d:(d.units||[]);
+        if(!arr.length){toast("Sin unidades en el JSON","error");return;}
+        if(mode==="replace"){dispatch({type:"UNITS_REPLACE",units:arr.map(u=>({...u,clientId:u.clientId||"CLI-00001"}))});toast(`Flotilla reemplazada: ${arr.length} unidades`,"success");}
+        else{arr.forEach(u=>{if(!u.id)return;dispatch({type:"UNIT_ADD",u:{...u,clientId:u.clientId||"CLI-00001"}});});toast(`${arr.length} unidades agregadas`,"success");}
+      }catch{toast("Archivo inválido","error");}
+    };
+    r.readAsText(file);
+  };
+
+  const exportData=async()=>{
+    if(exporting) return;
+    setExporting(true);
+    try{
+      await new Promise(r=>setTimeout(r,0));
+      const payload={version:STORAGE_VER,exportedAt:nowISO(),...state};
+      const json=JSON.stringify(payload,null,2);
+      try{localStorage.setItem("lgs_backup_"+Date.now(),json);}catch(_e){}
+      const blob=new Blob([json],{type:"application/json"});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");
+      a.href=url;a.download="logisolve-backup-"+Date.now()+".json";a.click();
+      URL.revokeObjectURL(url);
+      toast("Backup exportado","success");
+    }catch{toast("Error al exportar","error");}
+    finally{setExporting(false);}
+  };
+
+  const importData=file=>{
+    const r=new FileReader();
+    r.onload=e=>{
+      try{
+        const d=JSON.parse(e.target.result);
+        if(!d||typeof d!=="object") throw new Error("JSON inválido");
+        dispatch({type:"IMPORT",data:d});
+        toast(`Importado: ${safeArr(d.tickets).length} tickets, ${safeArr(d.units).length} unidades`,"success");
+      }catch(e){toast("Archivo inválido: "+e?.message,"error");}
+    };
+    r.readAsText(file);
+  };
+
+  const Card=({title,children})=>(
+    <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",marginBottom:10}}>
+      <div style={{padding:"11px 16px",borderBottom:`1px solid ${C.border}`,background:C.bg3}}>
+        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.18em",fontWeight:700}}>{title}</div>
+      </div>
+      <div style={{padding:"14px 16px"}}>{children}</div>
+    </div>
+  );
+
+  return (
+    <div style={{padding:"14px 14px 8px"}}>
+      {confirmReset&&<Confirm msg="Restablecer todos los datos al estado inicial?" onConfirm={()=>{dispatch({type:"RESET"});setConfirmReset(false);toast("Sistema restablecido","info");}} onCancel={()=>setConfirmReset(false)}/>}
+      {confirmClearUnits&&<Confirm msg={`Eliminar las ${state.units.length} unidades de la flotilla?`} onConfirm={()=>{dispatch({type:"UNITS_CLEAR"});setConfirmClearUnits(false);toast("Flotilla eliminada","info");}} onCancel={()=>setConfirmClearUnits(false)}/>}
+
+      <div style={{fontSize:11,color:C.t3,letterSpacing:"0.15em",textTransform:"uppercase",fontWeight:700,marginBottom:14}}>Ajustes del sistema</div>
+
+      <Card title="PERSISTENCIA">
+        <div style={{fontSize:13,color:C.t2,marginBottom:4}}>Guardado automático en Supabase + localStorage.</div>
+        <div style={{fontSize:11,color:C.t3,marginBottom:12}}>Último guardado: <span style={{color:C.cyan,fontFamily:"'Courier New',monospace"}}>{savedAt}</span></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          {[["Tickets",state.tickets.filter(t=>!t._deleted).length],["Unidades",state.units.length],["Clientes",state.clients.length],["Partes",state.parts.length]].map(([l,v])=>(
+            <div key={l} style={{background:C.bg0,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px"}}>
+              <div style={{fontSize:22,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{v}</div>
+              <div style={{fontSize:10,color:C.t3,textTransform:"uppercase",letterSpacing:"0.1em"}}>{l}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card title="EXPORTAR BACKUP">
+        <div style={{fontSize:13,color:C.t2,marginBottom:12}}>Exporta todos los datos como JSON y guarda copia en localStorage.</div>
+        <MBtn label={exporting?"Exportando…":"⬇ Exportar JSON"} full color={C.t1} bg={exporting?C.bg2:C.blue} border={exporting?C.border:C.blue} onClick={exportData}/>
+      </Card>
+
+      <Card title="IMPORTAR FLOTILLA (JSON)">
+        <div style={{fontSize:13,color:C.t2,marginBottom:4}}>Importa unidades desde JSON. Flotilla actual: <span style={{color:C.cyan,fontWeight:700}}>{state.units.length}</span></div>
+        <div style={{display:"flex",gap:8,marginBottom:12}}>
+          {[["merge","Agregar"],["replace","Reemplazar"]].map(([m,l])=>(
+            <button key={m} onClick={()=>setImportMode(m)}
+              style={{flex:1,padding:"8px",border:`1px solid ${importMode===m?C.blueHi:C.border}`,borderRadius:8,background:importMode===m?C.blueDim:"transparent",color:importMode===m?C.cyan:C.t2,fontSize:12,cursor:"pointer",fontWeight:importMode===m?700:400}}>
+              {l}
+            </button>
+          ))}
+        </div>
+        {importMode==="replace"&&(
+          <div style={{padding:"10px 12px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:8,marginBottom:12,fontSize:12,color:C.red}}>
+            ⚠ Esto eliminará las {state.units.length} unidades actuales.
+          </div>
+        )}
+        <input ref={importUnitsFile} type="file" accept=".json" onChange={e=>{if(e.target.files[0])importUnitsJSON(e.target.files[0],importMode);e.target.value="";}} style={{display:"none"}}/>
+        <div style={{display:"flex",gap:8}}>
+          <MBtn label={importMode==="replace"?"⬆ Reemplazar flotilla":"⬆ Importar flotilla"} full color={C.cyan} bg={C.blueDim} border={C.blueHi} onClick={()=>importUnitsFile.current&&importUnitsFile.current.click()}/>
+        </div>
+        {state.units.length>0&&<div style={{marginTop:8}}><MBtn label="🗑 Limpiar flotilla" full color={C.red} bg={C.redDim} border={C.red+"44"} onClick={()=>setConfirmClearUnits(true)}/></div>}
+      </Card>
+
+      <Card title="IMPORTAR DATOS COMPLETOS">
+        <div style={{fontSize:13,color:C.t2,marginBottom:12}}>Importa un backup JSON completo. <span style={{color:C.yellow}}>Reemplaza los datos actuales.</span></div>
+        <input ref={fileRef} type="file" accept=".json" onChange={e=>{if(e.target.files[0])importData(e.target.files[0]);}} style={{display:"none"}}/>
+        <MBtn label="⬆ Importar JSON" full color={C.t2} bg="transparent" border={C.border} onClick={()=>fileRef.current&&fileRef.current.click()}/>
+      </Card>
+
+      <Card title="RESTABLECER">
+        <div style={{fontSize:13,color:C.t2,marginBottom:12}}>Elimina todos los datos y vuelve al estado inicial. <span style={{color:C.red}}>No se puede deshacer.</span></div>
+        <MBtn label="Restablecer sistema" full color={C.red} bg={C.redDim} border={C.red+"55"} onClick={()=>setConfirmReset(true)}/>
+      </Card>
     </div>
   );
 }
@@ -7097,7 +7223,7 @@ export default function App() {
         {tab==="catalogo"   &&(mobileView?<MCatalogo   state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Catalogo    state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="proveedores"&&(mobileView?<MProveedores state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Proveedores state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="clientes"   &&(mobileView?<MClientes   state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Clientes    state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
-        {tab==="ajustes"    &&<Ajustes     state={state} dispatch={dispatchWithDelete} toast={toast}/>}
+        {tab==="ajustes"    &&(mobileView?<MAjustes state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Ajustes state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
       </div>
 
       <Toasts items={toasts}/>
@@ -7115,7 +7241,13 @@ export default function App() {
         ::-webkit-scrollbar-thumb{background:${C.border};border-radius:2px}
         textarea{color:${C.t2};resize:vertical;font-family:'Courier New',monospace}
         input,select,textarea{transition:border-color 150ms ease}
-        @media(max-width:640px){.ref-grid{grid-template-columns:1fr!important}}
+        @media(max-width:640px){
+          .ref-grid{grid-template-columns:1fr!important}
+          .ref-hdr-grid{grid-template-columns:1fr 1fr!important}
+          .ref-half-grid{grid-template-columns:1fr!important}
+          .ref-line-row1{grid-template-columns:1fr 1fr!important}
+          .ref-line-row2{grid-template-columns:80px 1fr!important}
+        }
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes slideUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
