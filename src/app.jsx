@@ -4847,25 +4847,25 @@ function MOps({state,setTab}) {
   const {tickets,clients} = state;
   const [period,setPeriod] = useState("week");
 
-  // ── Accent palette — Liquid glass: indigo primary + electric accents
+  // ── Accent palette — White cards + indigo accents (light mode)
   const A = {
-    lime:     "#6366F1",   // electric indigo (primary accent)
-    limeDim:  "rgba(99,102,241,0.12)",
-    limeMid:  "rgba(99,102,241,0.22)",
-    mint:     "#06B6D4",   // bright cyan
-    mintDim:  "rgba(6,182,212,0.12)",
+    lime:     "#6366F1",    // electric indigo
+    limeDim:  "rgba(99,102,241,0.1)",
+    limeMid:  "rgba(99,102,241,0.15)",
+    mint:     "#06B6D4",
+    mintDim:  "rgba(6,182,212,0.1)",
     amber:    "#F59E0B",
-    amberDim: "rgba(245,158,11,0.12)",
+    amberDim: "rgba(245,158,11,0.1)",
     red:      "#EF4444",
-    redDim:   "rgba(239,68,68,0.12)",
-    card:     "#0A0E1A",   // deep dark card (liquid dark glass)
-    cardHi:   "#111829",
-    shadow:   "0 10px 40px rgba(10,14,26,0.45), 0 2px 8px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.07)",
-    shadowSm: "0 4px 20px rgba(10,14,26,0.3), 0 1px 4px rgba(0,0,0,0.1)",
-    t1:       "#F1F5F9",   // near-white text on dark cards
-    t2:       "rgba(241,245,249,0.65)",
-    t3:       "rgba(241,245,249,0.38)",
-    r:        24,
+    redDim:   "rgba(239,68,68,0.1)",
+    card:     "#FFFFFF",    // WHITE card
+    cardHi:   "#F8F9FE",    // very light indigo tint
+    shadow:   "0 4px 24px rgba(99,102,241,0.08), 0 1px 6px rgba(0,0,0,0.05)",
+    shadowSm: "0 2px 12px rgba(99,102,241,0.06), 0 1px 3px rgba(0,0,0,0.04)",
+    t1:       "#0F172A",    // dark text on white cards
+    t2:       "#334155",
+    t3:       "#64748B",
+    r:        20,
   };
 
   // ── Periods ───────────────────────────────────────────────────────────────
@@ -5057,13 +5057,13 @@ function MOps({state,setTab}) {
           ))}
         </div>
 
-        {/* ══ HERO CARD ═════════════════════════════════════════════════════════ */}
+        {/* ══ HERO CARD — indigo gradient ══════════════════════════════════════ */}
         <div style={{
-          background: A.card,
+          background: "linear-gradient(145deg,#4338CA 0%,#6366F1 60%,#818CF8 100%)",
           borderRadius: A.r,
           padding:"28px 24px",
           marginBottom:12,
-          boxShadow: A.shadow,
+          boxShadow: "0 8px 32px rgba(99,102,241,0.35), 0 2px 8px rgba(99,102,241,0.2)",
         }}>
           {/* Operational status line */}
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:22}}>
@@ -5077,13 +5077,13 @@ function MOps({state,setTab}) {
           </div>
 
           {/* Label */}
-          <div style={{fontSize:9,color:A.t3,letterSpacing:"0.18em",textTransform:"uppercase",marginBottom:10}}>
+          <div style={{fontSize:9,color:"rgba(255,255,255,0.6)",letterSpacing:"0.18em",textTransform:"uppercase",marginBottom:10}}>
             Facturado · {pLabel}
           </div>
 
           {/* GIANT number */}
           <div style={{
-            fontSize:58,fontWeight:800,color:A.t1,lineHeight:0.9,
+            fontSize:58,fontWeight:800,color:"#FFFFFF",lineHeight:0.9,
             letterSpacing:"-0.025em",fontVariantNumeric:"tabular-nums",
             marginBottom:16,
           }}>
@@ -5102,7 +5102,7 @@ function MOps({state,setTab}) {
                 <span style={{fontSize:14,fontWeight:800,color:growthUp?A.lime:A.red}}>
                   {growthUp?"+":""}{growth.toFixed(0)}%
                 </span>
-                <span style={{fontSize:10,color:A.t3,letterSpacing:"0.05em"}}>vs anterior</span>
+                <span style={{fontSize:10,color:"rgba(255,255,255,0.6)",letterSpacing:"0.05em"}}>vs anterior</span>
               </span>
             </div>
           )}
@@ -5119,7 +5119,7 @@ function MOps({state,setTab}) {
             ].map(({label,value,color,border})=>(
               <div key={label} style={{paddingLeft:border?14:0,
                 borderLeft:border?"1px solid rgba(255,255,255,0.05)":"none"}}>
-                <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>
+                <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>
                   {label}
                 </div>
                 <div style={{fontSize:22,fontWeight:800,color,letterSpacing:"-0.01em"}}>
@@ -5144,7 +5144,7 @@ function MOps({state,setTab}) {
           </button>
           <button onClick={()=>setTab("tickets")} style={{
             background:A.cardHi,
-            border:"1px solid rgba(255,255,255,0.06)",
+            border:"1px solid rgba(99,102,241,0.12)",
             borderRadius:18,padding:"18px 16px",
             cursor:"pointer",textAlign:"left",
             boxShadow:A.shadowSm,
@@ -5226,7 +5226,7 @@ function MOps({state,setTab}) {
           <svg viewBox="0 0 280 52" style={{width:"100%",height:52,display:"block",overflow:"visible"}}>
             <defs>
               <linearGradient id="mops-sg" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%"   stopColor={A.lime} stopOpacity="0.3"/>
+                <stop offset="0%"   stopColor={A.lime} stopOpacity="0.25"/>
                 <stop offset="100%" stopColor={A.lime} stopOpacity="0.02"/>
               </linearGradient>
             </defs>
@@ -5286,7 +5286,7 @@ function MOps({state,setTab}) {
                   </div>
                 </div>
               </div>
-              <div style={{height:3,background:"rgba(255,255,255,0.06)",borderRadius:2,overflow:"hidden"}}>
+              <div style={{height:3,background:"rgba(99,102,241,0.1)",borderRadius:2,overflow:"hidden"}}>
                 <div style={{height:"100%",width:`${Math.min(pct,100)}%`,
                   background:`linear-gradient(90deg,${A.lime},${A.mint})`,
                   borderRadius:2,transition:"width 600ms ease"}}/>
@@ -5320,11 +5320,11 @@ function MOps({state,setTab}) {
           overflow:"hidden",marginBottom:12,boxShadow:A.shadow,
         }}>
           {/* Header */}
-          <div style={{padding:"20px 22px 16px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
+          <div style={{padding:"20px 22px 16px",borderBottom:"1px solid rgba(99,102,241,0.08)"}}>
             <div style={{fontSize:9,color:A.t3,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:6}}>
               Resumen financiero
             </div>
-            <div style={{fontSize:11,color:A.t2}}>{pLabel} · {operados.length} operaciones</div>
+            <div style={{fontSize:11,color:A.t2}}>{pLabel} · {operados.length} operación{operados.length!==1?"es":""}</div>
           </div>
           {/* Rows */}
           {[
@@ -5350,8 +5350,8 @@ function MOps({state,setTab}) {
             <div key={label} style={{
               display:"flex",justifyContent:"space-between",alignItems:"center",
               padding:"12px 22px",
-              borderBottom:i<arr.length-1?"1px solid rgba(255,255,255,0.05)":"none",
-              background:bold?"rgba(255,255,255,0.02)":"transparent",
+              borderBottom:i<arr.length-1?"1px solid rgba(99,102,241,0.07)":"none",
+              background:bold?"rgba(99,102,241,0.03)":"transparent",
             }}>
               <span style={{fontSize:12,color:A.t2,letterSpacing:"0.01em"}}>{label}</span>
               <span style={{
@@ -5387,7 +5387,7 @@ function StatusFlowSheet({tkt, dispatch, toast, onClose}) {
   const meta  = TICKET_META[tkt.status] || {};
   return (
     <>
-      <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,.6)"}}/>
+      <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:200,background:"rgba(10,14,26,0.4)"}}/>
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:201,
         background:C.bg1,borderRadius:"20px 20px 0 0",borderTop:`1px solid ${C.borderHi}`,
         padding:`16px 16px calc(20px + env(safe-area-inset-bottom,0px))`,
@@ -5453,15 +5453,15 @@ function MPipeline({state,dispatch,toast}) {
   const [statusSheet,setStatusSheet] = useState(null);
   const [expandId,setExpandId]   = useState(null);
 
-  // Accent palette — Liquid glass
+  // Accent palette — White cards + indigo
   const A = {
-    lime:"#6366F1", limeDim:"rgba(99,102,241,0.12)", limeMid:"rgba(99,102,241,0.22)",
-    mint:"#06B6D4", mintDim:"rgba(6,182,212,0.12)",
-    amber:"#F59E0B", amberDim:"rgba(245,158,11,0.12)",
-    red:"#EF4444",   redDim:"rgba(239,68,68,0.12)",
-    card:"#0A0E1A", cardHi:"#111829",
-    shadow:"0 8px 36px rgba(10,14,26,0.4), 0 2px 8px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.06)",
-    t1:"#F1F5F9", t2:"rgba(241,245,249,0.65)", t3:"rgba(241,245,249,0.38)", r:20,
+    lime:"#6366F1", limeDim:"rgba(99,102,241,0.1)", limeMid:"rgba(99,102,241,0.15)",
+    mint:"#06B6D4", mintDim:"rgba(6,182,212,0.1)",
+    amber:"#F59E0B", amberDim:"rgba(245,158,11,0.1)",
+    red:"#EF4444",   redDim:"rgba(239,68,68,0.1)",
+    card:"#FFFFFF", cardHi:"#F8F9FE",
+    shadow:"0 4px 24px rgba(99,102,241,0.08), 0 1px 6px rgba(0,0,0,0.05)",
+    t1:"#0F172A", t2:"#334155", t3:"#64748B", r:20,
   };
 
   const PIPE_STAGES = ["recibido","validando","sourcing","cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado"];
@@ -5777,16 +5777,16 @@ function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
 function MCotizador({state,dispatch,toast}) {
   const {clients,suppliers,units} = state;
 
-  // Accent palette — Liquid glass
+  // Accent palette — White cards + indigo
   const A = {
-    lime:"#6366F1", limeDim:"rgba(99,102,241,0.12)", limeMid:"rgba(99,102,241,0.22)",
-    mint:"#06B6D4", mintDim:"rgba(6,182,212,0.12)",
-    amber:"#F59E0B", amberDim:"rgba(245,158,11,0.12)",
-    red:"#EF4444",   redDim:"rgba(239,68,68,0.12)",
-    card:"#0A0E1A", cardHi:"#111829",
-    shadow:"0 8px 36px rgba(10,14,26,0.4), 0 2px 8px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.06)",
-    shadowSm:"0 4px 20px rgba(10,14,26,0.25), 0 1px 4px rgba(0,0,0,0.08)",
-    t1:"#F1F5F9", t2:"rgba(241,245,249,0.65)", t3:"rgba(241,245,249,0.38)", r:20,
+    lime:"#6366F1", limeDim:"rgba(99,102,241,0.1)", limeMid:"rgba(99,102,241,0.15)",
+    mint:"#06B6D4", mintDim:"rgba(6,182,212,0.1)",
+    amber:"#F59E0B", amberDim:"rgba(245,158,11,0.1)",
+    red:"#EF4444",   redDim:"rgba(239,68,68,0.1)",
+    card:"#FFFFFF", cardHi:"#F8F9FE",
+    shadow:"0 4px 24px rgba(99,102,241,0.08), 0 1px 6px rgba(0,0,0,0.05)",
+    shadowSm:"0 2px 12px rgba(99,102,241,0.06), 0 1px 3px rgba(0,0,0,0.04)",
+    t1:"#0F172A", t2:"#334155", t3:"#64748B", r:20,
   };
 
   // Priority semantic colors
@@ -5910,7 +5910,7 @@ function MCotizador({state,dispatch,toast}) {
           <React.Fragment key={i}>
             {i>0&&(
               <div style={{flex:1,height:2,
-                background:done?"rgba(99,102,241,0.5)":"rgba(255,255,255,0.06)",
+                background:done?"rgba(99,102,241,0.5)":"rgba(99,102,241,0.1)",
                 borderRadius:1,margin:"0 8px",marginTop:-14}}/>
             )}
             <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,
@@ -5918,8 +5918,8 @@ function MCotizador({state,dispatch,toast}) {
               onClick={()=>done&&setStep(i)}>
               <div style={{
                 width:30,height:30,borderRadius:15,
-                background:done?A.lime:curr?"rgba(99,102,241,0.15)":"rgba(255,255,255,0.04)",
-                border:`2px solid ${done?A.lime:curr?"rgba(99,102,241,0.5)":"rgba(255,255,255,0.08)"}`,
+                background:done?A.lime:curr?"rgba(99,102,241,0.15)":"rgba(99,102,241,0.06)",
+                border:`2px solid ${done?A.lime:curr?"rgba(99,102,241,0.5)":"rgba(99,102,241,0.12)"}`,
                 display:"flex",alignItems:"center",justifyContent:"center",
                 fontSize:11,fontWeight:800,
                 color:done?"#0A1800":curr?A.lime:A.t3,
@@ -6087,7 +6087,7 @@ function MCotizador({state,dispatch,toast}) {
                 {[["auto","Auto (margen)"],["manual","Precio fijo"]].map(([m,lbl])=>(
                   <button key={m} onClick={()=>upd(i,{mode:m})}
                     style={{flex:1,padding:"9px",borderRadius:10,fontSize:11,fontWeight:700,
-                      border:`1.5px solid ${l.mode===m?"rgba(99,102,241,0.45)":"rgba(255,255,255,0.08)"}`,
+                      border:`1.5px solid ${l.mode===m?"rgba(99,102,241,0.45)":"rgba(99,102,241,0.1)"}`,
                       background:l.mode===m?A.limeDim:"transparent",
                       color:l.mode===m?A.lime:A.t3,cursor:"pointer",
                       transition:"all 0.15s",WebkitTapHighlightColor:"transparent"}}>
@@ -6102,7 +6102,7 @@ function MCotizador({state,dispatch,toast}) {
                 <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
                   <button onClick={()=>upd(i,{customMgn:!l.customMgn})}
                     style={{padding:"9px 14px",borderRadius:10,fontSize:10,fontWeight:700,flexShrink:0,
-                      border:`1.5px solid ${l.customMgn?"rgba(99,102,241,0.45)":"rgba(255,255,255,0.08)"}`,
+                      border:`1.5px solid ${l.customMgn?"rgba(99,102,241,0.45)":"rgba(99,102,241,0.1)"}`,
                       background:l.customMgn?A.limeDim:"transparent",
                       color:l.customMgn?A.lime:A.t3,cursor:"pointer",WebkitTapHighlightColor:"transparent"}}>
                     Margen personalizado
@@ -6274,14 +6274,14 @@ function MCartera({state,dispatch,toast}) {
   const now = new Date();
 
   const A = {
-    lime:"#6366F1", limeDim:"rgba(99,102,241,0.12)",
-    mint:"#06B6D4", mintDim:"rgba(6,182,212,0.12)",
-    amber:"#F59E0B", amberDim:"rgba(245,158,11,0.12)",
-    red:"#EF4444",   redDim:"rgba(239,68,68,0.12)",
-    card:"#0A0E1A",
-    shadow:"0 8px 36px rgba(10,14,26,0.4), 0 2px 8px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.06)",
-    shadowSm:"0 4px 20px rgba(10,14,26,0.25), 0 1px 4px rgba(0,0,0,0.08)",
-    t1:"#F1F5F9", t2:"rgba(241,245,249,0.65)", t3:"rgba(241,245,249,0.38)", r:20,
+    lime:"#6366F1", limeDim:"rgba(99,102,241,0.1)",
+    mint:"#06B6D4", mintDim:"rgba(6,182,212,0.1)",
+    amber:"#F59E0B", amberDim:"rgba(245,158,11,0.1)",
+    red:"#EF4444",   redDim:"rgba(239,68,68,0.1)",
+    card:"#FFFFFF",
+    shadow:"0 4px 24px rgba(99,102,241,0.08), 0 1px 6px rgba(0,0,0,0.05)",
+    shadowSm:"0 2px 12px rgba(99,102,241,0.06), 0 1px 3px rgba(0,0,0,0.04)",
+    t1:"#0F172A", t2:"#334155", t3:"#64748B", r:20,
   };
 
   const creditTkts = useMemo(()=>tickets.filter(t=>!t._deleted&&t.payType==="credit"&&t.status!=="cancelado"),[tickets]);
@@ -6629,14 +6629,14 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
   };
 
   const A = {
-    lime:"#6366F1", limeDim:"rgba(99,102,241,0.12)", limeMid:"rgba(99,102,241,0.22)",
-    mint:"#06B6D4", mintDim:"rgba(6,182,212,0.12)",
-    amber:"#F59E0B", amberDim:"rgba(245,158,11,0.12)",
-    red:"#EF4444",   redDim:"rgba(239,68,68,0.12)",
-    card:"#0A0E1A",
-    shadow:"0 8px 32px rgba(10,14,26,0.35), 0 2px 6px rgba(0,0,0,0.1)",
-    shadowSm:"0 4px 16px rgba(10,14,26,0.22), 0 1px 4px rgba(0,0,0,0.07)",
-    t1:"#F1F5F9", t2:"rgba(241,245,249,0.65)", t3:"rgba(241,245,249,0.38)", r:18,
+    lime:"#6366F1", limeDim:"rgba(99,102,241,0.1)", limeMid:"rgba(99,102,241,0.15)",
+    mint:"#06B6D4", mintDim:"rgba(6,182,212,0.1)",
+    amber:"#F59E0B", amberDim:"rgba(245,158,11,0.1)",
+    red:"#EF4444",   redDim:"rgba(239,68,68,0.1)",
+    card:"#FFFFFF",
+    shadow:"0 4px 24px rgba(99,102,241,0.08), 0 1px 6px rgba(0,0,0,0.05)",
+    shadowSm:"0 2px 12px rgba(99,102,241,0.06), 0 1px 3px rgba(0,0,0,0.04)",
+    t1:"#0F172A", t2:"#334155", t3:"#64748B", r:18,
   };
   const prC={P1:{dot:"#EF4444",dim:"rgba(239,68,68,0.12)"},P2:{dot:"#F59E0B",dim:"rgba(245,158,11,0.12)"},
              P3:{dot:"#06B6D4",dim:"rgba(6,182,212,0.12)"},P4:{dot:"rgba(241,245,249,0.5)",dim:"rgba(241,245,249,0.07)"}};
