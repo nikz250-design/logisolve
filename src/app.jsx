@@ -186,6 +186,16 @@ async function seedIfEmpty() {
 }
 
 
+// ── HOOKS ────────────────────────────────────────────────────────────────────
+function useDebounce(value, delay) {
+  const [dVal, setDVal] = useState(value);
+  useEffect(()=>{
+    const t = setTimeout(()=>setDVal(value), delay);
+    return ()=>clearTimeout(t);
+  },[value, delay]);
+  return dVal;
+}
+
 // ── SAFE HELPERS ─────────────────────────────────────────────────────────────
 const safeNumber = (v, fallback=0) => {
   const n = typeof v==="string" ? parseFloat(v.replace(/,/g,"")) : Number(v);
@@ -4970,9 +4980,9 @@ function MOps({state,setTab}) {
       {(p1Active.length>0||vencidos.length>0)&&(
         <div style={{
           background: p1Active.length>0
-            ? "linear-gradient(160deg,rgba(28,10,10,0.98) 0%,rgba(14,19,22,0.98) 100%)"
-            : "linear-gradient(160deg,rgba(26,18,6,0.98) 0%,rgba(14,19,22,0.98) 100%)",
-          borderBottom: `1px solid ${p1Active.length>0?"rgba(232,72,72,0.25)":"rgba(240,160,48,0.25)"}`,
+            ? "rgba(254,242,242,1)"
+            : "rgba(255,251,235,1)",
+          borderBottom: `1px solid ${p1Active.length>0?"rgba(239,68,68,0.2)":"rgba(245,158,11,0.2)"}`,
           padding:"20px 20px 16px",
         }}>
           {p1Active.length>0&&(
@@ -5108,7 +5118,7 @@ function MOps({state,setTab}) {
           )}
 
           {/* Divider */}
-          <div style={{height:1,background:"rgba(255,255,255,0.05)",marginBottom:22}}/>
+          <div style={{height:1,background:"rgba(99,102,241,0.08)",marginBottom:22}}/>
 
           {/* Secondary KPIs */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:0}}>
@@ -5118,7 +5128,7 @@ function MOps({state,setTab}) {
               {label:"Ops",       value:operados.length, color:A.t1, border:true},
             ].map(({label,value,color,border})=>(
               <div key={label} style={{paddingLeft:border?14:0,
-                borderLeft:border?"1px solid rgba(255,255,255,0.05)":"none"}}>
+                borderLeft:border?"1px solid rgba(99,102,241,0.08)":"none"}}>
                 <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>
                   {label}
                 </div>
@@ -5167,14 +5177,14 @@ function MOps({state,setTab}) {
         {/* ══ CARTERA WIDGET — interactive, touchable ═══════════════════════════ */}
         <div onClick={()=>setTab("cartera")} style={{
           background: vencidos.length>0
-            ? "linear-gradient(135deg,rgba(26,17,4,0.98),rgba(14,19,22,0.98))"
+            ? "rgba(255,251,235,1)"
             : A.card,
           borderRadius:A.r,
           padding:"22px 24px",
           marginBottom:12,
           boxShadow:A.shadow,
           cursor:"pointer",
-          border:`1px solid ${vencidos.length>0?"rgba(240,160,48,0.18)":"rgba(255,255,255,0.04)"}`,
+          border:`1px solid ${vencidos.length>0?"rgba(240,160,48,0.18)":"rgba(99,102,241,0.08)"}`,
           WebkitTapHighlightColor:"transparent",
         }}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
@@ -5511,13 +5521,13 @@ function MPipeline({state,dispatch,toast}) {
               flexShrink:0,display:"flex",alignItems:"center",gap:6,
               padding:"7px 16px",borderRadius:20,fontSize:11,fontWeight:700,
               background:filter===v?A.limeMid:"transparent",
-              border:`1.5px solid ${filter===v?A.lime:"rgba(255,255,255,0.07)"}`,
+              border:`1.5px solid ${filter===v?A.lime:"rgba(99,102,241,0.12)"}`,
               color:filter===v?A.lime:A.t3,
               cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.15s",whiteSpace:"nowrap",
             }}>
               {l}
               {c>0&&<span style={{fontSize:10,fontWeight:800,
-                background:filter===v?"rgba(99,102,241,0.18)":"rgba(255,255,255,0.06)",
+                background:filter===v?"rgba(99,102,241,0.18)":"rgba(99,102,241,0.05)",
                 color:filter===v?A.lime:A.t3,borderRadius:9,padding:"1px 6px"}}>{c}</span>}
             </button>
           ))}
@@ -5549,10 +5559,10 @@ function MPipeline({state,dispatch,toast}) {
 
             return (
               <div key={t.id} style={{
-                background:isP1?"linear-gradient(160deg,rgba(22,12,12,0.98),rgba(14,19,22,0.98))":A.card,
+                background:isP1?"rgba(254,242,242,1)":A.card,
                 borderRadius:A.r,overflow:"hidden",
                 boxShadow:isP1
-                  ? "0 2px 24px rgba(0,0,0,0.55), 0 0 0 1px rgba(232,72,72,0.2), inset 0 1px 0 rgba(255,255,255,0.04)"
+                  ? "0 4px 20px rgba(239,68,68,0.12), 0 0 0 1.5px rgba(239,68,68,0.25)"
                   : A.shadow,
               }}>
                 {/* Tap area */}
@@ -5594,7 +5604,7 @@ function MPipeline({state,dispatch,toast}) {
                   {/* Progress */}
                   {!isClosed&&(
                     <div>
-                      <div style={{height:2,background:"rgba(255,255,255,0.06)",borderRadius:2,overflow:"hidden",marginBottom:4}}>
+                      <div style={{height:2,background:"rgba(0,0,0,0.05)",borderRadius:2,overflow:"hidden",marginBottom:4}}>
                         <div style={{height:"100%",width:`${prog}%`,background:pCol,borderRadius:2,transition:"width 400ms ease"}}/>
                       </div>
                       <div style={{display:"flex",justifyContent:"space-between"}}>
@@ -5607,7 +5617,7 @@ function MPipeline({state,dispatch,toast}) {
 
                 {/* Expanded */}
                 {isExp&&(
-                  <div style={{borderTop:"1px solid rgba(255,255,255,0.05)",padding:"16px",background:"rgba(10,14,17,0.8)"}}>
+                  <div style={{borderTop:"1px solid rgba(99,102,241,0.08)",padding:"16px",background:C.bg0}}>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
                       {[
                         {l:"Precio c/IVA", v:mxn(price),    c:A.t1},
@@ -5621,8 +5631,8 @@ function MPipeline({state,dispatch,toast}) {
                         </div>
                       ))}
                     </div>
-                    {t.notes&&<div style={{fontSize:11,color:A.t2,padding:"10px 12px",background:"rgba(255,255,255,0.03)",
-                      borderRadius:10,marginBottom:12,border:"1px solid rgba(255,255,255,0.04)"}}>{t.notes}</div>}
+                    {t.notes&&<div style={{fontSize:11,color:A.t2,padding:"10px 12px",background:"rgba(99,102,241,0.04)",
+                      borderRadius:10,marginBottom:12,border:"1px solid rgba(99,102,241,0.08)"}}>{t.notes}</div>}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <div style={{fontSize:8,color:A.t3,letterSpacing:"0.08em",textTransform:"uppercase"}}>{t.id}</div>
                       <button onClick={e=>{e.stopPropagation();
@@ -5630,7 +5640,7 @@ function MPipeline({state,dispatch,toast}) {
                         const u2=units.find(u=>u.id===t.unitId);
                         generarCotizacionPDF(t,c2,u2,null).catch(()=>toast("Error PDF","error"));}}
                         style={{padding:"7px 14px",borderRadius:10,background:"transparent",
-                          border:"1px solid rgba(255,255,255,0.08)",color:A.t2,fontSize:10,
+                          border:"1px solid rgba(99,102,241,0.15)",color:A.t2,fontSize:10,
                           fontWeight:600,cursor:"pointer",letterSpacing:"0.06em"}}>
                         PDF ↗
                       </button>
@@ -5639,7 +5649,7 @@ function MPipeline({state,dispatch,toast}) {
                 )}
 
                 {/* Footer */}
-                <div style={{padding:"12px 16px",borderTop:"1px solid rgba(255,255,255,0.05)",
+                <div style={{padding:"12px 16px",borderTop:"1px solid rgba(99,102,241,0.08)",
                   display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div>
                     <div style={{fontSize:22,fontWeight:800,color:A.t1,lineHeight:1,
@@ -5831,7 +5841,7 @@ function MCotizador({state,dispatch,toast}) {
   const addLine = ()=>setLineas(p=>[...p,emptyLine(opType,priority,[])]);
   const removeLine = i=>setLineas(p=>p.length>1?p.filter((_,j)=>j!==i):p);
   const selectPart = (i,p) => {
-    setPartQ(q=>({...q,[i]:""}));
+    setPartQ(q=>{const nq={...q};delete nq[i];return nq;}); // remove key → falls back to l.titulo
     upd(i,{titulo:p.nombre,partRef:p.oem||"",costoUnit:p.ultimoPrecio||0,manualPrice:String(p.ultimoPrecio||0)});
   };
 
@@ -5957,7 +5967,7 @@ function MCotizador({state,dispatch,toast}) {
               display:"flex",alignItems:"center",gap:14,
               transition:"all 0.15s",WebkitTapHighlightColor:"transparent"}}>
             <div style={{width:10,height:10,borderRadius:"50%",
-              background:sel?pc.dot:"rgba(255,255,255,0.15)",flexShrink:0,
+              background:sel?pc.dot:"rgba(0,0,0,0.12)",flexShrink:0,
               boxShadow:sel?`0 0 8px ${pc.dot}`:"none",transition:"all 0.15s"}}/>
             <div style={{flex:1}}>
               <div style={{fontSize:14,fontWeight:800,color:sel?pc.dot:A.t2,transition:"color 0.15s"}}>
@@ -5973,7 +5983,7 @@ function MCotizador({state,dispatch,toast}) {
         );
       })}
 
-      <div style={{height:1,background:"rgba(255,255,255,0.05)",margin:"20px 0"}}/>
+      <div style={{height:1,background:"rgba(99,102,241,0.08)",margin:"20px 0"}}/>
 
       <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",marginBottom:12,textTransform:"uppercase",fontWeight:700}}>Tipo de operación</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:20}}>
@@ -6005,7 +6015,7 @@ function MCotizador({state,dispatch,toast}) {
                 display:"flex",alignItems:"flex-start",gap:10,
                 WebkitTapHighlightColor:"transparent",transition:"all 0.15s"}}>
               <div style={{width:8,height:8,borderRadius:"50%",marginTop:3,flexShrink:0,
-                background:on?A.lime:"rgba(255,255,255,0.15)",
+                background:on?A.lime:"rgba(0,0,0,0.12)",
                 boxShadow:on?"0 0 8px #4A90D9":"none",transition:"all 0.15s"}}/>
               <div>
                 <div style={{fontSize:12,fontWeight:700,color:on?A.lime:A.t2,marginBottom:2}}>{mod.label}</div>
@@ -6048,7 +6058,7 @@ function MCotizador({state,dispatch,toast}) {
         return (
           <div key={i} style={{background:A.card,borderRadius:A.r,overflow:"hidden",
             marginBottom:12,boxShadow:A.shadow}}>
-            <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,0.05)",
+            <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(99,102,241,0.08)",
               display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div style={{fontSize:9,color:A.t3,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase"}}>
                 Línea {i+1}
@@ -6076,12 +6086,18 @@ function MCotizador({state,dispatch,toast}) {
                   OEM: {l.partRef}
                 </div>
               )}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 80px",gap:8,marginBottom:10}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 80px",gap:8,marginBottom:8}}>
                 <MField label="Costo unitario (c/IVA)" value={String(l.costoUnit||"")}
                   type="number" suffix="$"
                   onChange={v=>upd(i,{costoUnit:safeNumber(v),manualPrice:String(safeNumber(v))})}/>
                 <MField label="Cant." value={String(l.qty||1)} type="number"
                   onChange={v=>upd(i,{qty:Math.max(1,safeNumber(v,1))||1})}/>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+                <MField label="Gasolina / flete" value={String(l.gasolina||"")} type="number" suffix="$"
+                  onChange={v=>upd(i,{gasolina:safeNumber(v)})}/>
+                <MField label="Otros gastos" value={String(l.otros||"")} type="number" suffix="$"
+                  onChange={v=>upd(i,{otros:safeNumber(v)})}/>
               </div>
               <div style={{display:"flex",gap:8,marginBottom:10}}>
                 {[["auto","Auto (margen)"],["manual","Precio fijo"]].map(([m,lbl])=>(
@@ -6113,9 +6129,9 @@ function MCotizador({state,dispatch,toast}) {
                   )}
                 </div>
               )}
-              <div style={{background:"rgba(10,14,17,0.8)",borderRadius:12,padding:"12px 14px",
+              <div style={{background:A.limeDim,borderRadius:12,padding:"12px 14px",
                 display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:10,
-                border:"1px solid rgba(255,255,255,0.04)"}}>
+                border:"1px solid rgba(99,102,241,0.12)"}}>
                 {[
                   {label:"Precio línea",value:mxn(sn.precioConIVA),color:A.t1},
                   {label:"Util. neta",  value:mxn(sn.uNeta),       color:sn.uNeta>=0?A.lime:A.red},
@@ -6135,7 +6151,7 @@ function MCotizador({state,dispatch,toast}) {
 
       <button onClick={addLine} style={{
         width:"100%",padding:"14px",borderRadius:16,
-        background:"transparent",border:"2px dashed rgba(255,255,255,0.08)",
+        background:"transparent",border:"2px dashed rgba(99,102,241,0.2)",
         color:A.t3,fontSize:13,fontWeight:700,cursor:"pointer",
         display:"flex",alignItems:"center",justifyContent:"center",gap:10,
         marginBottom:16,WebkitTapHighlightColor:"transparent",
@@ -6172,7 +6188,7 @@ function MCotizador({state,dispatch,toast}) {
       <div style={{display:"flex",gap:10}}>
         <button onClick={()=>setStep(0)}
           style={{padding:"14px 20px",borderRadius:14,background:"transparent",
-            border:"1px solid rgba(255,255,255,0.08)",color:A.t3,fontSize:12,cursor:"pointer",
+            border:"1px solid rgba(99,102,241,0.15)",color:A.t3,fontSize:12,cursor:"pointer",
             WebkitTapHighlightColor:"transparent"}}>
           ← Atrás
         </button>
@@ -6211,8 +6227,8 @@ function MCotizador({state,dispatch,toast}) {
               textTransform:"uppercase",fontWeight:700}}>Notas</div>
             <textarea rows={3} value={notes} onChange={e=>setNotes(e.target.value)}
               placeholder="Diagnóstico, observaciones..."
-              style={{width:"100%",background:"rgba(255,255,255,0.03)",
-                border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,
+              style={{width:"100%",background:"rgba(99,102,241,0.04)",
+                border:"1px solid rgba(99,102,241,0.12)",borderRadius:12,
                 padding:"12px 14px",color:A.t2,fontSize:13,outline:"none",
                 boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
           </div>
@@ -6237,7 +6253,7 @@ function MCotizador({state,dispatch,toast}) {
             </div>
           </div>
         </div>
-        <div style={{height:1,background:"rgba(255,255,255,0.05)",marginBottom:14}}/>
+        <div style={{height:1,background:"rgba(99,102,241,0.08)",marginBottom:14}}/>
         <div style={{display:"flex",flexDirection:"column",gap:5}}>
           {lineas.length>1&&<div style={{fontSize:10,color:A.t3}}>{lineas.length} líneas</div>}
           {cl&&<div style={{fontSize:11,color:A.t2}}>Cliente: <span style={{fontWeight:700,color:A.t1}}>{cl.empresa}</span></div>}
@@ -6251,7 +6267,7 @@ function MCotizador({state,dispatch,toast}) {
       <div style={{display:"flex",gap:10}}>
         <button onClick={()=>setStep(1)}
           style={{padding:"14px 20px",borderRadius:14,background:"transparent",
-            border:"1px solid rgba(255,255,255,0.08)",color:A.t3,fontSize:12,cursor:"pointer",
+            border:"1px solid rgba(99,102,241,0.15)",color:A.t3,fontSize:12,cursor:"pointer",
             WebkitTapHighlightColor:"transparent"}}>
           ← Atrás
         </button>
@@ -6342,7 +6358,7 @@ function MCartera({state,dispatch,toast}) {
             letterSpacing:"-0.025em",fontVariantNumeric:"tabular-nums",marginBottom:20}}>
             {mxn(totalPend)}
           </div>
-          <div style={{height:1,background:"rgba(255,255,255,0.05)",marginBottom:20}}/>
+          <div style={{height:1,background:"rgba(99,102,241,0.08)",marginBottom:20}}/>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0}}>
             <div>
               <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>Vencido</div>
@@ -6354,7 +6370,7 @@ function MCartera({state,dispatch,toast}) {
                 {vencidas.length} factura{vencidas.length!==1?"s":""}
               </div>
             </div>
-            <div style={{paddingLeft:16,borderLeft:"1px solid rgba(255,255,255,0.05)"}}>
+            <div style={{paddingLeft:16,borderLeft:"1px solid rgba(99,102,241,0.08)"}}>
               <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>Al corriente</div>
               <div style={{fontSize:22,fontWeight:800,color:A.mint,
                 fontVariantNumeric:"tabular-nums",letterSpacing:"-0.01em"}}>
@@ -6385,7 +6401,7 @@ function MCartera({state,dispatch,toast}) {
                   </span>
                 </div>
                 {b.monto>0&&(
-                  <div style={{height:3,background:"rgba(255,255,255,0.06)",borderRadius:2,overflow:"hidden"}}>
+                  <div style={{height:3,background:"rgba(0,0,0,0.05)",borderRadius:2,overflow:"hidden"}}>
                     <div style={{height:"100%",width:`${(b.monto/maxAging)*100}%`,
                       background:i===2?A.red:A.amber,borderRadius:2,transition:"width 500ms ease"}}/>
                   </div>
@@ -6410,9 +6426,9 @@ function MCartera({state,dispatch,toast}) {
                 const over=daysOver(t);
                 return (
                   <div key={t.id} style={{
-                    background:"linear-gradient(160deg,rgba(22,12,12,0.98),rgba(14,19,22,0.98))",
+                    background:"rgba(254,242,242,1)",
                     borderRadius:A.r,overflow:"hidden",
-                    boxShadow:"0 2px 24px rgba(0,0,0,0.55), 0 0 0 1px rgba(232,72,72,0.18), inset 0 1px 0 rgba(255,255,255,0.04)",
+                    boxShadow:"0 4px 20px rgba(239,68,68,0.12), 0 0 0 1.5px rgba(239,68,68,0.25)",
                   }}>
                     <div style={{padding:"16px 16px 14px"}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
@@ -6486,7 +6502,7 @@ function MCartera({state,dispatch,toast}) {
                       </div>
                       <div style={{fontSize:10,color:A.t3}}>Vence: {t.promesaPago||"—"}</div>
                     </div>
-                    <div style={{padding:"12px 16px",borderTop:"1px solid rgba(255,255,255,0.05)",
+                    <div style={{padding:"12px 16px",borderTop:"1px solid rgba(99,102,241,0.08)",
                       display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <div style={{fontSize:22,fontWeight:800,color:A.t1,letterSpacing:"-0.02em",
                         fontVariantNumeric:"tabular-nums"}}>
@@ -6520,7 +6536,7 @@ function MCartera({state,dispatch,toast}) {
                 return (
                   <div key={t.id} style={{background:A.card,borderRadius:14,padding:"12px 16px",
                     display:"flex",justifyContent:"space-between",alignItems:"center",
-                    boxShadow:"0 1px 12px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.03)"}}>
+                    boxShadow:A.shadowSm}}>
                     <div style={{minWidth:0,flex:1}}>
                       <div style={{fontSize:12,fontWeight:600,color:A.t2,overflow:"hidden",
                         textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
@@ -6660,8 +6676,8 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
 
         <input value={search} onChange={e=>setSearch(e.target.value)}
           placeholder="Buscar por título, ID, cliente..."
-          style={{width:"100%",background:"rgba(20,26,30,0.95)",
-            border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,
+          style={{width:"100%",background:C.bg1,
+            border:`1px solid ${C.border}`,borderRadius:12,
             padding:"12px 16px",color:A.t1,fontSize:16,outline:"none",marginBottom:14,
             boxSizing:"border-box",fontFamily:"inherit"}}/>
 
@@ -6675,7 +6691,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
               {label:"Ops",value:filtered.length,color:A.t2,border:true},
             ].map(({label,value,color,border})=>(
               <div key={label} style={{flex:1,paddingLeft:border?14:0,
-                borderLeft:border?"1px solid rgba(255,255,255,0.05)":"none"}}>
+                borderLeft:border?"1px solid rgba(99,102,241,0.08)":"none"}}>
                 <div style={{fontSize:8,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>
                   {label}
                 </div>
@@ -6728,12 +6744,12 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
 
                   return (
                     <div key={t.id} style={{
-                      background:isCan?"rgba(22,12,12,0.85)":A.card,
+                      background:isCan?"rgba(254,242,242,0.8)":A.card,
                       borderRadius:A.r,overflow:"hidden",
                       boxShadow:isCan
-                        ?"0 1px 12px rgba(0,0,0,0.4), 0 0 0 1px rgba(232,72,72,0.12)"
+                        ?"0 2px 12px rgba(239,68,68,0.08), 0 0 0 1px rgba(239,68,68,0.18)"
                         :A.shadow,
-                      opacity:isCan?0.7:1,
+                      opacity:isCan?0.85:1,
                     }}>
                       {/* Tap to expand */}
                       <div onClick={()=>{if(!isEdit) setExpandId(isExp?null:t.id);}}
@@ -6774,8 +6790,8 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
 
                       {/* Expanded detail */}
                       {isExp&&!isEdit&&(
-                        <div style={{borderTop:"1px solid rgba(255,255,255,0.05)",
-                          padding:"16px",background:"rgba(10,14,17,0.8)"}}>
+                        <div style={{borderTop:"1px solid rgba(99,102,241,0.08)",
+                          padding:"16px",background:C.bg0}}>
                           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
                             {[
                               {l:"Precio",    v:mxn(price),  c:A.t1},
@@ -6797,7 +6813,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                               {[...t.timeline].reverse().slice(0,3).map((ev,i)=>(
                                 <div key={i} style={{display:"flex",gap:8,alignItems:"flex-start",marginBottom:5}}>
                                   <div style={{width:4,height:4,borderRadius:"50%",
-                                    background:"rgba(255,255,255,0.15)",marginTop:5,flexShrink:0}}/>
+                                    background:C.border,marginTop:5,flexShrink:0}}/>
                                   <div style={{fontSize:10,color:A.t3,flex:1}}>
                                     <span style={{color:A.t2}}>{ev.evento}</span>
                                     {ev.ts&&<span style={{marginLeft:6,fontSize:9}}>{fmtTS(ev.ts)}</span>}
@@ -6809,7 +6825,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                             <button onClick={()=>openEdit(t)} style={{
                               flex:1,padding:"9px 14px",borderRadius:10,background:"transparent",
-                              border:"1px solid rgba(255,255,255,0.08)",color:A.t2,
+                              border:"1px solid rgba(99,102,241,0.15)",color:A.t2,
                               fontSize:11,fontWeight:600,cursor:"pointer",
                             }}>✏ Editar</button>
                             <button onClick={()=>{
@@ -6818,7 +6834,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                               generarCotizacionPDF(t,c2,u2,null).catch(()=>toast("Error PDF","error"));
                             }} style={{
                               flex:1,padding:"9px 14px",borderRadius:10,background:"transparent",
-                              border:"1px solid rgba(255,255,255,0.08)",color:A.t2,
+                              border:"1px solid rgba(99,102,241,0.15)",color:A.t2,
                               fontSize:11,fontWeight:600,cursor:"pointer",
                             }}>PDF ↗</button>
                             {CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t.cobrado&&(
@@ -6841,8 +6857,8 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
 
                       {/* Quick edit form */}
                       {isEdit&&(
-                        <div style={{borderTop:"1px solid rgba(255,255,255,0.05)",
-                          background:"rgba(10,14,17,0.9)",padding:"16px"}}>
+                        <div style={{borderTop:"1px solid rgba(99,102,241,0.08)",
+                          background:C.bg0,padding:"16px"}}>
                           <div style={{fontSize:9,color:A.lime,letterSpacing:"0.14em",
                             textTransform:"uppercase",marginBottom:14,fontWeight:800}}>
                             Editando: {t.titulo?.slice(0,28)}
@@ -6862,8 +6878,8 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                           </div>
                           <textarea rows={2} value={ef.notes} onChange={e=>sfn("notes")(e.target.value)}
                             placeholder="Notas..."
-                            style={{width:"100%",background:"rgba(255,255,255,0.03)",
-                              border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,
+                            style={{width:"100%",background:"rgba(99,102,241,0.04)",
+                              border:"1px solid rgba(99,102,241,0.15)",borderRadius:10,
                               padding:"10px 12px",color:A.t2,fontSize:13,outline:"none",
                               boxSizing:"border-box",fontFamily:"inherit",resize:"none",marginBottom:14}}/>
                           <div style={{display:"flex",gap:8}}>
@@ -6874,7 +6890,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                             }}>Guardar</button>
                             <button onClick={()=>setEditId(null)} style={{
                               padding:"13px 16px",borderRadius:12,background:"transparent",
-                              border:"1px solid rgba(255,255,255,0.08)",color:A.t3,fontSize:13,cursor:"pointer",
+                              border:"1px solid rgba(99,102,241,0.15)",color:A.t3,fontSize:13,cursor:"pointer",
                             }}>Cancelar</button>
                           </div>
                         </div>
