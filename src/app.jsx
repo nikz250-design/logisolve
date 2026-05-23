@@ -5352,31 +5352,45 @@ function StatusFlowSheet({tkt, dispatch, toast, onClose}) {
 // ── MPipeline — Pipeline móvil ───────────────────────────────────────────────
 function MPipeline({state,dispatch,toast}) {
   const {tickets,clients,units} = state;
-  const [filter,setFilter] = useState("active");
+  const [filter,setFilter]       = useState("active");
   const [statusSheet,setStatusSheet] = useState(null);
-  const [expandId,setExpandId] = useState(null);
+  const [expandId,setExpandId]   = useState(null);
 
-  const PIPE_STAGES = ["recibido","validando","sourcing","cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado"];
-  const stageProgress = s => {
-    if(s==="cancelado") return 0;
-    const i=PIPE_STAGES.indexOf(s); return i>=0?((i+1)/PIPE_STAGES.length)*100:0;
+  // Accent palette — matches MOps
+  const A = {
+    lime:"#BFFF00", limeDim:"rgba(191,255,0,0.08)", limeMid:"rgba(191,255,0,0.18)",
+    mint:"#3CCFAA", mintDim:"rgba(60,207,170,0.1)",
+    amber:"#F0A030", amberDim:"rgba(240,160,48,0.1)",
+    red:"#E84848",   redDim:"rgba(232,72,72,0.1)",
+    card:"rgba(14,19,22,0.98)", cardHi:"rgba(20,26,30,0.98)",
+    shadow:"0 2px 24px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.04)",
+    t1:"#E8EDF0", t2:"#8A9AA4", t3:"#46565F", r:20,
   };
 
-  const active = useMemo(()=>tickets.filter(t=>!t._deleted),[tickets]);
+  const PIPE_STAGES = ["recibido","validando","sourcing","cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado"];
+  const stageProgress = s => { if(s==="cancelado") return 0; const i=PIPE_STAGES.indexOf(s); return i>=0?((i+1)/PIPE_STAGES.length)*100:0; };
+  const progColor = s => { const i=PIPE_STAGES.indexOf(s); return i<=1?A.amber:i<=4?A.mint:A.lime; };
 
+  const prC = {
+    P1:{dot:"#E84848",dim:"rgba(232,72,72,0.12)"},
+    P2:{dot:"#F0A030",dim:"rgba(240,160,48,0.12)"},
+    P3:{dot:"#3CCFAA",dim:"rgba(60,207,170,0.12)"},
+    P4:{dot:"#8A9AA4",dim:"rgba(138,154,164,0.12)"},
+  };
+
+  const active   = useMemo(()=>tickets.filter(t=>!t._deleted),[tickets]);
   const filtered = useMemo(()=>{
     let arr=active;
-    if(filter==="active")  arr=arr.filter(t=>!CLOSED_SET.has(t.status));
+    if(filter==="active") arr=arr.filter(t=>!CLOSED_SET.has(t.status));
     else if(filter==="p1") arr=arr.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status));
     else if(filter==="venc") arr=arr.filter(t=>{
-      if(!t.promesaPago||t.cobrado)return false;
-      const d=parseDateMX(t.promesaPago);return d&&new Date()>d;
+      if(!t.promesaPago||t.cobrado) return false;
+      const d=parseDateMX(t.promesaPago); return d&&new Date()>d;
     });
-    // Sort: P1 first, then by date desc
     const pOrd={P1:0,P2:1,P3:2,P4:3};
     return [...arr].sort((a,b)=>{
       const pd=(pOrd[a.priority]||3)-(pOrd[b.priority]||3);
-      if(pd!==0)return pd;
+      if(pd!==0) return pd;
       return b.date.localeCompare(a.date);
     });
   },[active,filter]);
@@ -5384,177 +5398,195 @@ function MPipeline({state,dispatch,toast}) {
   const counts = useMemo(()=>({
     active: active.filter(t=>!CLOSED_SET.has(t.status)).length,
     p1:     active.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status)).length,
-    venc:   active.filter(t=>{if(!t.promesaPago||t.cobrado)return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}).length,
+    venc:   active.filter(t=>{if(!t.promesaPago||t.cobrado) return false; const d=parseDateMX(t.promesaPago); return d&&new Date()>d;}).length,
     all:    active.length,
   }),[active]);
 
   return (
-    <div style={{padding:"14px"}}>
+    <div style={{minHeight:"100vh",background:C.bg0,paddingBottom:40}}>
       {statusSheet&&<StatusFlowSheet tkt={statusSheet} dispatch={dispatch} toast={toast} onClose={()=>setStatusSheet(null)}/>}
 
-      {/* ── Filter chips ── */}
-      <div style={{display:"flex",gap:6,marginBottom:16,overflowX:"auto",paddingBottom:4,scrollbarWidth:"none"}}>
-        {[["active","Activos",counts.active],["p1","P1 🔴",counts.p1],["venc","Vencidos",counts.venc],["all","Todos",counts.all]].map(([v,l,c])=>(
-          <button key={v} onClick={()=>setFilter(v)}
-            style={{padding:"7px 14px",borderRadius:20,fontSize:11,fontWeight:700,flexShrink:0,
-              border:`1px solid ${filter===v?C.cyan:C.border}`,
-              background:filter===v?C.cyanDim:"transparent",
-              color:filter===v?C.cyan:C.t3,cursor:"pointer",whiteSpace:"nowrap",letterSpacing:"0.05em",
-              display:"flex",alignItems:"center",gap:5}}>
-            {l}
-            {c>0&&<span style={{fontSize:10,background:filter===v?C.cyan:C.border,color:filter===v?C.bg0:C.t2,
-              borderRadius:10,padding:"1px 5px",fontWeight:800}}>{c}</span>}
-          </button>
-        ))}
-      </div>
-
-      {filtered.length===0&&<EmptyState icon="⚡" title="Sin tickets" sub={filter==="active"?"Crea el primero con +":`Sin tickets en "${filter}"`}/>}
-
-      <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        {filtered.map(t=>{
-          const meta  = TICKET_META[t.status]||{};
-          const pr    = PRIORITY[t.priority]||PRIORITY.P4;
-          const cl    = clients.find(c=>c.id===t.clientId);
-          const un    = units.find(u=>u.id===t.unitId);
-          const prog  = stageProgress(t.status);
-          const isClosed = CLOSED_SET.has(t.status);
-          const isVenc = !t.cobrado&&t.promesaPago&&(()=>{const d=parseDateMX(t.promesaPago);return d&&new Date()>d;})();
-          const isExp = expandId===t.id;
-
-          return (
-            <div key={t.id} style={{
-              background:C.bg2,
-              borderRadius:16,
-              overflow:"hidden",
-              border:`1px solid ${t.priority==="P1"?`${C.p1dot}40`:C.border}`,
-              borderLeft:`3px solid ${pr.dot}`,
+      <div style={{padding:"0 14px"}}>
+        {/* Filter chips */}
+        <div style={{display:"flex",gap:6,padding:"18px 0 16px",overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
+          {[["active","Activos",counts.active],["p1","P1",counts.p1],["venc","Vencidos",counts.venc],["all","Todos",counts.all]].map(([v,l,c])=>(
+            <button key={v} onClick={()=>setFilter(v)} style={{
+              flexShrink:0,display:"flex",alignItems:"center",gap:6,
+              padding:"7px 16px",borderRadius:20,fontSize:11,fontWeight:700,
+              background:filter===v?A.limeMid:"transparent",
+              border:`1.5px solid ${filter===v?A.lime:"rgba(255,255,255,0.07)"}`,
+              color:filter===v?A.lime:A.t3,
+              cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.15s",whiteSpace:"nowrap",
             }}>
-              {/* Main tap area */}
-              <div onClick={()=>setExpandId(isExp?null:t.id)} style={{padding:"14px 14px 12px",cursor:"pointer"}}>
-                {/* Row 1: badges + date */}
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:7}}>
-                  <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
-                    <span style={{fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:8,letterSpacing:"0.06em",
-                      background:pr.dim,color:pr.dot}}>{t.priority}</span>
-                    <span style={{fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:8,
-                      background:`${meta.dot||C.border}22`,color:meta.dot||C.t3,letterSpacing:"0.05em"}}>
-                      {meta.label||t.status}
-                    </span>
-                    {isVenc&&<span style={{fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:8,
-                      background:C.redDim,color:C.red,letterSpacing:"0.06em"}}>VENCIDO</span>}
-                  </div>
-                  <div style={{display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace"}}>{t.date}</span>
-                    <span style={{fontSize:10,color:C.t3,transform:isExp?"rotate(90deg)":"rotate(0deg)",
-                      transition:"transform 200ms",display:"inline-block"}}>›</span>
-                  </div>
-                </div>
+              {l}
+              {c>0&&<span style={{fontSize:10,fontWeight:800,
+                background:filter===v?"rgba(191,255,0,0.2)":"rgba(255,255,255,0.06)",
+                color:filter===v?A.lime:A.t3,borderRadius:9,padding:"1px 6px"}}>{c}</span>}
+            </button>
+          ))}
+        </div>
 
-                {/* Row 2: title */}
-                <div style={{fontSize:14,fontWeight:700,color:C.t1,lineHeight:1.35,marginBottom:5}}>{t.titulo}</div>
-
-                {/* Row 3: client + unit */}
-                {(cl||un)&&(
-                  <div style={{fontSize:11,color:C.t3,marginBottom:8}}>
-                    {cl&&<span>{cl.empresa}</span>}
-                    {cl&&un&&<span style={{color:C.border}}> · </span>}
-                    {un&&<span style={{fontFamily:"'Courier New',monospace",fontSize:10}}>
-                      {un.economico?"Eco."+un.economico:un.marca+" "+un.modelo}
-                    </span>}
-                  </div>
-                )}
-
-                {/* Progress bar */}
-                {!isClosed&&(
-                  <div>
-                    <div style={{height:3,background:C.border,borderRadius:2,overflow:"hidden",marginBottom:4}}>
-                      <div style={{height:"100%",width:`${prog}%`,
-                        background:t.priority==="P1"?C.p1dot:C.cyan,borderRadius:2,transition:"width 400ms ease"}}/>
-                    </div>
-                    <div style={{display:"flex",justifyContent:"space-between"}}>
-                      <span style={{fontSize:9,color:C.t3}}>
-                        Etapa {PIPE_STAGES.indexOf(t.status)+1} de {PIPE_STAGES.length}
-                      </span>
-                      <span style={{fontSize:9,color:C.t3}}>{prog.toFixed(0)}% completado</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Expanded detail */}
-              {isExp&&(
-                <div style={{borderTop:`1px solid ${C.border}`,padding:"12px 14px",background:"#0a1012"}}>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-                    {[
-                      ["Precio","cyan",mxn(t.snap?.precioConIVA||0)],
-                      ["Util. neta",t.snap?.uNeta>=0?"green":"red",mxn(t.snap?.uNeta||0)],
-                      ["Costo",null,mxn(t.snap?.costoTotal||0)],
-                      ["Margen",null,fpct(t.snap?.margenNetoPrecio||0)],
-                    ].map(([l,col,v])=>(
-                      <div key={l}>
-                        <div style={{fontSize:9,color:C.t3,letterSpacing:"0.1em",marginBottom:2,textTransform:"uppercase"}}>{l}</div>
-                        <div style={{fontSize:15,fontWeight:700,color:col?C[col]:C.t2,fontFamily:"'Courier New',monospace"}}>{v}</div>
-                      </div>
-                    ))}
-                  </div>
-                  {t.notes&&<div style={{fontSize:11,color:C.t3,marginBottom:12,padding:"8px 10px",background:C.bg2,borderRadius:8}}>{t.notes}</div>}
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                    <div style={{fontSize:9,color:C.t3,letterSpacing:"0.08em",textTransform:"uppercase"}}>ID: {t.id}</div>
-                    <button onClick={e=>{e.stopPropagation();
-                      const cl=clients.find(c=>c.id===t.clientId);
-                      const un=units.find(u=>u.id===t.unitId);
-                      generarCotizacionPDF(t,cl,un,null).catch(()=>toast("Error PDF","error"));}}
-                      style={{padding:"6px 12px",borderRadius:8,background:"transparent",border:`1px solid ${C.border}`,
-                        color:C.t3,fontSize:10,fontWeight:600,cursor:"pointer",letterSpacing:"0.06em"}}>
-                      PDF ↗
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Footer: price + action */}
-              <div style={{padding:"10px 14px",borderTop:`1px solid ${C.border}`,
-                display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div>
-                  <div style={{fontSize:20,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",lineHeight:1}}>
-                    {mxn(t.snap?.precioConIVA||0)}
-                  </div>
-                  <div style={{fontSize:10,color:safeNumber(t.snap?.uNeta)>=0?C.green:C.red,marginTop:2}}>
-                    Util. {mxn(t.snap?.uNeta||0)}
-                  </div>
-                </div>
-
-                <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                  {/* Cobrar button for cartera states on credit tickets */}
-                  {CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t.cobrado&&(
-                    <button onClick={e=>{e.stopPropagation();dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado ✓","success");}}
-                      style={{padding:"10px 14px",borderRadius:10,background:C.greenDim,border:`1px solid ${C.green}50`,
-                        color:C.green,fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:"0.03em"}}>
-                      Cobrar
-                    </button>
-                  )}
-                  {!isClosed&&(
-                    <button onClick={e=>{e.stopPropagation();setStatusSheet(t);}}
-                      style={{padding:"10px 18px",borderRadius:10,background:C.blue,border:`1px solid ${C.blueHi}`,
-                        color:C.t1,fontSize:12,fontWeight:700,cursor:"pointer",letterSpacing:"0.04em"}}>
-                      Estado →
-                    </button>
-                  )}
-                  {isClosed&&(
-                    <div style={{padding:"8px 14px",borderRadius:10,
-                      background:t.status==="cancelado"?C.redDim:C.greenDim,
-                      border:`1px solid ${t.status==="cancelado"?C.red+"40":C.green+"40"}`}}>
-                      <div style={{fontSize:11,fontWeight:700,
-                        color:t.status==="cancelado"?C.red:C.green}}>
-                        {t.status==="cancelado"?"Cancelado":t.cobrado?"Cobrado ✓":"Cerrado"}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+        {filtered.length===0&&(
+          <div style={{textAlign:"center",padding:"48px 20px"}}>
+            <div style={{fontSize:11,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
+              {filter==="active"?"Pipeline vacío":filter==="p1"?"Sin P1 activos":filter==="venc"?"Sin vencidos":"Sin tickets"}
             </div>
-          );
-        })}
+            <div style={{fontSize:13,color:A.t3}}>{filter==="active"?"Crea una cotización para comenzar":"Ajusta el filtro"}</div>
+          </div>
+        )}
+
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {filtered.map(t=>{
+            const meta     = TICKET_META[t.status]||{};
+            const pr       = prC[t.priority]||prC.P4;
+            const cl       = clients.find(c=>c.id===t.clientId);
+            const un       = units.find(u=>u.id===t.unitId);
+            const prog     = stageProgress(t.status);
+            const pCol     = progColor(t.status);
+            const isClosed = CLOSED_SET.has(t.status);
+            const isP1     = t.priority==="P1";
+            const isVenc   = !t.cobrado&&t.promesaPago&&(()=>{const d=parseDateMX(t.promesaPago);return d&&new Date()>d;})();
+            const isExp    = expandId===t.id;
+            const price    = safeNumber(t.snap?.precioConIVA);
+            const uNeta    = safeNumber(t.snap?.uNeta);
+
+            return (
+              <div key={t.id} style={{
+                background:isP1?"linear-gradient(160deg,rgba(22,12,12,0.98),rgba(14,19,22,0.98))":A.card,
+                borderRadius:A.r,overflow:"hidden",
+                boxShadow:isP1
+                  ? "0 2px 24px rgba(0,0,0,0.55), 0 0 0 1px rgba(232,72,72,0.2), inset 0 1px 0 rgba(255,255,255,0.04)"
+                  : A.shadow,
+              }}>
+                {/* Tap area */}
+                <div onClick={()=>setExpandId(isExp?null:t.id)} style={{padding:"16px 16px 14px",cursor:"pointer"}}>
+                  {/* Row 1: badges + date */}
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                    <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"nowrap"}}>
+                      <span style={{display:"inline-flex",alignItems:"center",gap:4,
+                        fontSize:9,fontWeight:800,padding:"3px 8px",borderRadius:10,
+                        background:pr.dim,color:pr.dot,letterSpacing:"0.08em"}}>
+                        <span style={{width:5,height:5,borderRadius:"50%",background:pr.dot,
+                          boxShadow:isP1?`0 0 6px ${pr.dot}`:"none",display:"inline-block",flexShrink:0}}/>
+                        {t.priority}
+                      </span>
+                      <span style={{fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:10,
+                        background:`${meta.dot||"#8A9AA4"}18`,color:meta.dot||A.t3,letterSpacing:"0.05em"}}>
+                        {meta.label||t.status}
+                      </span>
+                      {isVenc&&<span style={{fontSize:9,fontWeight:800,padding:"3px 7px",borderRadius:10,
+                        background:A.redDim,color:A.red,letterSpacing:"0.06em"}}>VENCIDO</span>}
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                      <span style={{fontSize:10,color:A.t3}}>{t.date}</span>
+                      <span style={{fontSize:14,color:A.t3,transform:isExp?"rotate(90deg)":"none",
+                        transition:"transform 200ms",display:"inline-block",lineHeight:1}}>›</span>
+                    </div>
+                  </div>
+                  {/* Title */}
+                  <div style={{fontSize:15,fontWeight:700,color:A.t1,lineHeight:1.3,marginBottom:6}}>{t.titulo}</div>
+                  {/* Client + unit */}
+                  {(cl||un)&&(
+                    <div style={{fontSize:11,color:A.t2,marginBottom:10,
+                      overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                      {cl&&<span>{cl.empresa}</span>}
+                      {cl&&un&&<span style={{color:A.t3,margin:"0 4px"}}>·</span>}
+                      {un&&<span style={{color:A.t3}}>{un.economico?"Eco. "+un.economico:un.marca+" "+un.modelo}</span>}
+                    </div>
+                  )}
+                  {/* Progress */}
+                  {!isClosed&&(
+                    <div>
+                      <div style={{height:2,background:"rgba(255,255,255,0.06)",borderRadius:2,overflow:"hidden",marginBottom:4}}>
+                        <div style={{height:"100%",width:`${prog}%`,background:pCol,borderRadius:2,transition:"width 400ms ease"}}/>
+                      </div>
+                      <div style={{display:"flex",justifyContent:"space-between"}}>
+                        <span style={{fontSize:8,color:A.t3}}>Etapa {PIPE_STAGES.indexOf(t.status)+1}/{PIPE_STAGES.length}</span>
+                        <span style={{fontSize:8,color:pCol,fontWeight:700}}>{prog.toFixed(0)}%</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Expanded */}
+                {isExp&&(
+                  <div style={{borderTop:"1px solid rgba(255,255,255,0.05)",padding:"16px",background:"rgba(10,14,17,0.8)"}}>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+                      {[
+                        {l:"Precio c/IVA", v:mxn(price),    c:A.t1},
+                        {l:"Util. neta",   v:mxn(uNeta),    c:uNeta>=0?A.lime:A.red},
+                        {l:"Costo total",  v:mxn(safeNumber(t.snap?.costoTotal)), c:A.t2},
+                        {l:"Margen",       v:fpct(safeNumber(t.snap?.margenNetoPrecio)), c:A.t2},
+                      ].map(({l,v,c})=>(
+                        <div key={l}>
+                          <div style={{fontSize:8,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>{l}</div>
+                          <div style={{fontSize:16,fontWeight:700,color:c,fontVariantNumeric:"tabular-nums"}}>{v}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {t.notes&&<div style={{fontSize:11,color:A.t2,padding:"10px 12px",background:"rgba(255,255,255,0.03)",
+                      borderRadius:10,marginBottom:12,border:"1px solid rgba(255,255,255,0.04)"}}>{t.notes}</div>}
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div style={{fontSize:8,color:A.t3,letterSpacing:"0.08em",textTransform:"uppercase"}}>{t.id}</div>
+                      <button onClick={e=>{e.stopPropagation();
+                        const c2=clients.find(c=>c.id===t.clientId);
+                        const u2=units.find(u=>u.id===t.unitId);
+                        generarCotizacionPDF(t,c2,u2,null).catch(()=>toast("Error PDF","error"));}}
+                        style={{padding:"7px 14px",borderRadius:10,background:"transparent",
+                          border:"1px solid rgba(255,255,255,0.08)",color:A.t2,fontSize:10,
+                          fontWeight:600,cursor:"pointer",letterSpacing:"0.06em"}}>
+                        PDF ↗
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Footer */}
+                <div style={{padding:"12px 16px",borderTop:"1px solid rgba(255,255,255,0.05)",
+                  display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{fontSize:22,fontWeight:800,color:A.t1,lineHeight:1,
+                      letterSpacing:"-0.02em",fontVariantNumeric:"tabular-nums"}}>{mxn(price)}</div>
+                    <div style={{fontSize:10,color:uNeta>=0?A.lime:A.red,marginTop:3,fontWeight:600}}>
+                      Util. {mxn(uNeta)}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    {CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t.cobrado&&(
+                      <button onClick={e=>{e.stopPropagation();dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado ✓","success");}}
+                        style={{padding:"10px 14px",borderRadius:12,background:A.mintDim,
+                          border:"1px solid rgba(60,207,170,0.3)",color:A.mint,
+                          fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:"0.03em",
+                          WebkitTapHighlightColor:"transparent"}}>
+                        Cobrar ✓
+                      </button>
+                    )}
+                    {!isClosed&&(
+                      <button onClick={e=>{e.stopPropagation();setStatusSheet(t);}}
+                        style={{padding:"10px 18px",borderRadius:12,
+                          background:isP1?"rgba(232,72,72,0.15)":A.limeDim,
+                          border:`1px solid ${isP1?"rgba(232,72,72,0.3)":"rgba(191,255,0,0.25)"}`,
+                          color:isP1?A.red:A.lime,fontSize:12,fontWeight:700,cursor:"pointer",
+                          letterSpacing:"0.04em",WebkitTapHighlightColor:"transparent"}}>
+                        Estado →
+                      </button>
+                    )}
+                    {isClosed&&(
+                      <div style={{padding:"8px 14px",borderRadius:12,
+                        background:t.status==="cancelado"?A.redDim:A.mintDim,
+                        border:`1px solid ${t.status==="cancelado"?"rgba(232,72,72,0.25)":"rgba(60,207,170,0.25)"}`}}>
+                        <div style={{fontSize:11,fontWeight:700,
+                          color:t.status==="cancelado"?A.red:A.mint}}>
+                          {t.status==="cancelado"?"Cancelado":t.cobrado?"Cobrado ✓":"Cerrado"}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -6100,235 +6132,279 @@ function MCartera({state,dispatch,toast}) {
   const {tickets,clients} = state;
   const now = new Date();
 
-  // All credit ops not cancelled
-  const creditTkts = useMemo(()=>tickets.filter(t=>!t._deleted&&t.payType==="credit"&&t.status!=="cancelado"),[tickets]);
-  // Active CxC (not yet paid, in cartera states)
-  const pendientes = useMemo(()=>creditTkts.filter(t=>!t.cobrado&&CARTERA_SET.has(t.status)),[creditTkts]);
-  const cobradas   = useMemo(()=>creditTkts.filter(t=>t.cobrado||PAID_SET.has(t.status)),[creditTkts]);
-
-  const totalPend = useMemo(()=>pendientes.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[pendientes]);
-  const totalCob  = useMemo(()=>cobradas.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[cobradas]);
-
-  const msDay = 86400000;
-  const ageMs = t => {
-    const d=parseDateMX(t.promesaPago||t.date); return d?(now-d):0;
+  const A = {
+    lime:"#BFFF00", limeDim:"rgba(191,255,0,0.08)",
+    mint:"#3CCFAA", mintDim:"rgba(60,207,170,0.1)",
+    amber:"#F0A030", amberDim:"rgba(240,160,48,0.1)",
+    red:"#E84848",   redDim:"rgba(232,72,72,0.1)",
+    card:"rgba(14,19,22,0.98)",
+    shadow:"0 2px 24px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.04)",
+    shadowSm:"0 2px 16px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.03)",
+    t1:"#E8EDF0", t2:"#8A9AA4", t3:"#46565F", r:20,
   };
 
-  const vencidas   = useMemo(()=>pendientes.filter(t=>{const d=parseDateMX(t.promesaPago);return d&&now>d;}),[pendientes]);
-  const corriente  = useMemo(()=>pendientes.filter(t=>{const d=parseDateMX(t.promesaPago);return !d||(d&&now<=d);}),[pendientes]);
-  const totalVenc  = useMemo(()=>vencidas.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[vencidas]);
-  const totalCorr  = useMemo(()=>corriente.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[corriente]);
+  const creditTkts = useMemo(()=>tickets.filter(t=>!t._deleted&&t.payType==="credit"&&t.status!=="cancelado"),[tickets]);
+  const pendientes = useMemo(()=>creditTkts.filter(t=>!t.cobrado&&CARTERA_SET.has(t.status)),[creditTkts]);
+  const cobradas   = useMemo(()=>creditTkts.filter(t=>t.cobrado||PAID_SET.has(t.status)),[creditTkts]);
+  const totalPend  = useMemo(()=>pendientes.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[pendientes]);
+  const totalCob   = useMemo(()=>cobradas.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[cobradas]);
 
-  // Aging buckets (based on overdue days)
+  const msDay    = 86400000;
+  const ageMs    = t => { const d=parseDateMX(t.promesaPago||t.date); return d?(now-d):0; };
+  const daysOver = t => { const d=parseDateMX(t.promesaPago); if(!d) return 0; return Math.floor((now-d)/msDay); };
+
+  const vencidas  = useMemo(()=>pendientes.filter(t=>{const d=parseDateMX(t.promesaPago);return d&&now>d;}),[pendientes]);
+  const corriente = useMemo(()=>pendientes.filter(t=>{const d=parseDateMX(t.promesaPago);return !d||(d&&now<=d);}),[pendientes]);
+  const totalVenc = useMemo(()=>vencidas.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[vencidas]);
+  const totalCorr = useMemo(()=>corriente.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[corriente]);
+
   const aging = useMemo(()=>{
     const b=[{label:"0–30 d",min:0,max:30*msDay,monto:0},{label:"30–60 d",min:30*msDay,max:60*msDay,monto:0},{label:">60 d",min:60*msDay,max:Infinity,monto:0}];
-    vencidas.forEach(t=>{
-      const ms=ageMs(t);
-      const bucket=b.find(bk=>ms>=bk.min&&ms<bk.max);
-      if(bucket) bucket.monto+=safeNumber(t.snap?.precioConIVA);
-    });
+    vencidas.forEach(t=>{const ms=ageMs(t);const bk=b.find(bk=>ms>=bk.min&&ms<bk.max);if(bk) bk.monto+=safeNumber(t.snap?.precioConIVA);});
     return b;
   },[vencidas]);
   const maxAging = Math.max(...aging.map(b=>b.monto),1);
 
-  const cobrar = t => {
-    dispatch({type:"TKT_COBRADO",id:t.id});
-    toast("Cobrado ✓","success");
-  };
-
-  const daysOver = t => {
-    const d=parseDateMX(t.promesaPago); if(!d) return 0;
-    return Math.floor((now-d)/msDay);
-  };
+  const cobrar = t => { dispatch({type:"TKT_COBRADO",id:t.id}); toast("Cobrado ✓","success"); };
 
   return (
-    <div style={{padding:"16px 14px 20px"}}>
+    <div style={{minHeight:"100vh",background:C.bg0,paddingBottom:40}}>
 
-      {/* ── Hero card ── */}
-      <div style={{
-        background:"linear-gradient(135deg,rgba(15,20,22,0.92) 0%,rgba(20,27,29,0.88) 100%)",
-        backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",
-        border:`1px solid rgba(245,158,11,0.25)`,borderRadius:20,padding:"22px 18px",
-        marginBottom:12,position:"relative",overflow:"hidden",
-        boxShadow:"0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)"}}>
-        <div style={{position:"absolute",top:-40,right:-40,width:120,height:120,borderRadius:"50%",
-          background:"radial-gradient(circle,rgba(245,158,11,0.12) 0%,transparent 70%)",pointerEvents:"none"}}/>
-        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",marginBottom:8,textTransform:"uppercase"}}>
-          Cuentas por cobrar
-        </div>
-        <div style={{fontSize:40,fontWeight:800,color:totalVenc>0?C.yellow:C.t1,
-          fontFamily:"'Courier New',monospace",lineHeight:1,marginBottom:14}}>
-          {mxn(totalPend)}
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <div>
-            <div style={{fontSize:9,color:C.t3,letterSpacing:"0.1em",marginBottom:2,textTransform:"uppercase"}}>Vencido</div>
-            <div style={{fontSize:18,fontWeight:800,color:totalVenc>0?C.red:C.t3,fontFamily:"'Courier New',monospace"}}>
-              {mxn(totalVenc)}
-            </div>
-            <div style={{fontSize:9,color:totalVenc>0?C.red:C.t3,marginTop:2}}>
-              {vencidas.length} factura{vencidas.length!==1?"s":""}
-            </div>
-          </div>
-          <div>
-            <div style={{fontSize:9,color:C.t3,letterSpacing:"0.1em",marginBottom:2,textTransform:"uppercase"}}>Al corriente</div>
-            <div style={{fontSize:18,fontWeight:800,color:C.green,fontFamily:"'Courier New',monospace"}}>
-              {mxn(totalCorr)}
-            </div>
-            <div style={{fontSize:9,color:C.t3,marginTop:2}}>
-              {corriente.length} factura{corriente.length!==1?"s":""}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Aging bars ── */}
+      {/* Alert banner when vencidas exist */}
       {vencidas.length>0&&(
-        <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px",marginBottom:12}}>
-          <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",marginBottom:12,textTransform:"uppercase"}}>Antigüedad del vencimiento</div>
-          {aging.map((b,i)=>(
-            <div key={i} style={{marginBottom:i<2?10:0}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                <span style={{fontSize:11,color:b.monto>0?C.t2:C.t3,fontWeight:b.monto>0?600:400}}>{b.label}</span>
-                <span style={{fontSize:11,color:b.monto>0?(i===2?C.red:C.yellow):C.t3,fontFamily:"'Courier New',monospace",fontWeight:700}}>
-                  {b.monto>0?mxn(b.monto):"—"}
-                </span>
+        <div style={{
+          background:"linear-gradient(160deg,rgba(26,18,6,0.98) 0%,rgba(14,19,22,0.98) 100%)",
+          borderBottom:"1px solid rgba(240,160,48,0.25)",
+          padding:"18px 20px 16px",
+        }}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+            <div style={{width:6,height:6,borderRadius:"50%",background:A.amber,flexShrink:0}}/>
+            <span style={{fontSize:10,fontWeight:800,color:A.amber,letterSpacing:"0.16em",textTransform:"uppercase"}}>
+              {vencidas.length} cobro{vencidas.length>1?"s":""} vencido{vencidas.length>1?"s":""}
+            </span>
+          </div>
+          <div style={{fontSize:30,fontWeight:800,color:A.amber,letterSpacing:"-0.02em",
+            fontVariantNumeric:"tabular-nums",marginTop:8,marginBottom:4}}>
+            {mxn(totalVenc)}
+          </div>
+          <div style={{fontSize:11,color:A.t3}}>por cobrar urgente</div>
+        </div>
+      )}
+
+      <div style={{padding:"0 16px"}}>
+        {/* Hero card */}
+        <div style={{background:A.card,borderRadius:A.r,padding:"26px 24px",marginTop:16,marginBottom:12,boxShadow:A.shadow}}>
+          <div style={{fontSize:9,color:A.t3,letterSpacing:"0.18em",textTransform:"uppercase",marginBottom:10}}>
+            Cuentas por cobrar
+          </div>
+          <div style={{fontSize:48,fontWeight:800,color:totalVenc>0?A.amber:A.t1,lineHeight:1,
+            letterSpacing:"-0.025em",fontVariantNumeric:"tabular-nums",marginBottom:20}}>
+            {mxn(totalPend)}
+          </div>
+          <div style={{height:1,background:"rgba(255,255,255,0.05)",marginBottom:20}}/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0}}>
+            <div>
+              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>Vencido</div>
+              <div style={{fontSize:22,fontWeight:800,color:totalVenc>0?A.red:A.t3,
+                fontVariantNumeric:"tabular-nums",letterSpacing:"-0.01em"}}>
+                {mxn(totalVenc)}
               </div>
-              {b.monto>0&&(
-                <div style={{height:4,background:C.border,borderRadius:2,overflow:"hidden"}}>
-                  <div style={{height:"100%",width:`${(b.monto/maxAging)*100}%`,
-                    background:i===2?C.red:C.yellow,borderRadius:2}}/>
-                </div>
-              )}
+              <div style={{fontSize:10,color:totalVenc>0?A.red:A.t3,marginTop:4}}>
+                {vencidas.length} factura{vencidas.length!==1?"s":""}
+              </div>
             </div>
-          ))}
-        </div>
-      )}
-
-      {/* ── Vencidas ── */}
-      {vencidas.length>0&&(
-        <div style={{marginBottom:12}}>
-          <div style={{fontSize:9,color:C.red,letterSpacing:"0.12em",marginBottom:8,textTransform:"uppercase",
-            display:"flex",alignItems:"center",gap:6}}>
-            <div style={{width:6,height:6,borderRadius:"50%",background:C.red}}/>
-            VENCIDAS — {vencidas.length}
+            <div style={{paddingLeft:16,borderLeft:"1px solid rgba(255,255,255,0.05)"}}>
+              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>Al corriente</div>
+              <div style={{fontSize:22,fontWeight:800,color:A.mint,
+                fontVariantNumeric:"tabular-nums",letterSpacing:"-0.01em"}}>
+                {mxn(totalCorr)}
+              </div>
+              <div style={{fontSize:10,color:A.t3,marginTop:4}}>
+                {corriente.length} factura{corriente.length!==1?"s":""}
+              </div>
+            </div>
           </div>
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {vencidas.map(t=>{
-              const cl=clients.find(c=>c.id===t.clientId);
-              const over=daysOver(t);
-              return (
-                <div key={t.id} style={{background:C.bg2,border:`1px solid ${C.red}30`,borderRadius:14,
-                  borderLeft:`3px solid ${C.red}`,overflow:"hidden"}}>
-                  <div style={{padding:"12px 14px"}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                      <div style={{fontSize:11,color:C.red,fontWeight:700}}>{cl?.empresa||"Sin cliente"}</div>
-                      <div style={{fontSize:10,color:C.red,fontFamily:"'Courier New',monospace"}}>+{over}d</div>
-                    </div>
-                    <div style={{fontSize:13,fontWeight:700,color:C.t1,marginBottom:4,
-                      overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
-                    <div style={{fontSize:10,color:C.t3}}>Prometido: {t.promesaPago||"—"} · {t.id}</div>
-                  </div>
-                  <div style={{padding:"10px 14px",borderTop:`1px solid ${C.border}`,
-                    display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div style={{fontSize:20,fontWeight:800,color:C.red,fontFamily:"'Courier New',monospace"}}>
-                      {mxn(t.snap?.precioConIVA||0)}
-                    </div>
-                    <button onClick={()=>cobrar(t)}
-                      style={{padding:"10px 18px",borderRadius:10,
-                        background:C.greenDim,border:`1px solid ${C.green}60`,
-                        color:C.green,fontSize:12,fontWeight:800,cursor:"pointer",letterSpacing:"0.04em"}}>
-                      Cobrar ✓
-                    </button>
-                  </div>
+        </div>
+
+        {/* Aging breakdown */}
+        {vencidas.length>0&&(
+          <div style={{background:A.card,borderRadius:A.r,padding:"20px 22px",marginBottom:12,boxShadow:A.shadowSm}}>
+            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:16}}>
+              Antigüedad
+            </div>
+            {aging.map((b,i)=>(
+              <div key={i} style={{marginBottom:i<2?14:0}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                  <span style={{fontSize:11,color:b.monto>0?A.t2:A.t3,fontWeight:b.monto>0?600:400}}>
+                    {b.label}
+                  </span>
+                  <span style={{fontSize:12,fontWeight:700,fontVariantNumeric:"tabular-nums",
+                    color:b.monto>0?(i===2?A.red:A.amber):A.t3}}>
+                    {b.monto>0?mxn(b.monto):"—"}
+                  </span>
                 </div>
-              );
-            })}
+                {b.monto>0&&(
+                  <div style={{height:3,background:"rgba(255,255,255,0.06)",borderRadius:2,overflow:"hidden"}}>
+                    <div style={{height:"100%",width:`${(b.monto/maxAging)*100}%`,
+                      background:i===2?A.red:A.amber,borderRadius:2,transition:"width 500ms ease"}}/>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ── Al corriente ── */}
-      {corriente.length>0&&(
-        <div style={{marginBottom:12}}>
-          <div style={{fontSize:9,color:C.green,letterSpacing:"0.12em",marginBottom:8,textTransform:"uppercase",
-            display:"flex",alignItems:"center",gap:6}}>
-            <div style={{width:6,height:6,borderRadius:"50%",background:C.green}}/>
-            AL CORRIENTE — {corriente.length}
-          </div>
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {corriente.map(t=>{
-              const cl=clients.find(c=>c.id===t.clientId);
-              const d=parseDateMX(t.promesaPago);
-              const daysLeft=d?Math.ceil((d-now)/86400000):null;
-              return (
-                <div key={t.id} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,
-                  borderLeft:`3px solid ${C.green}80`,overflow:"hidden"}}>
-                  <div style={{padding:"12px 14px"}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                      <div style={{fontSize:11,color:C.t2,fontWeight:600}}>{cl?.empresa||"Sin cliente"}</div>
-                      {daysLeft!==null&&(
-                        <div style={{fontSize:10,color:daysLeft<=3?C.yellow:C.t3,fontFamily:"'Courier New',monospace"}}>
-                          {daysLeft<=0?"hoy":daysLeft===1?"mañana":`en ${daysLeft}d`}
+        {/* Vencidas section */}
+        {vencidas.length>0&&(
+          <div style={{marginBottom:12}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:A.red,flexShrink:0}}/>
+              <span style={{fontSize:10,fontWeight:800,color:A.red,letterSpacing:"0.14em",textTransform:"uppercase"}}>
+                Vencidas · {vencidas.length}
+              </span>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {vencidas.map(t=>{
+                const cl=clients.find(c=>c.id===t.clientId);
+                const over=daysOver(t);
+                return (
+                  <div key={t.id} style={{
+                    background:"linear-gradient(160deg,rgba(22,12,12,0.98),rgba(14,19,22,0.98))",
+                    borderRadius:A.r,overflow:"hidden",
+                    boxShadow:"0 2px 24px rgba(0,0,0,0.55), 0 0 0 1px rgba(232,72,72,0.18), inset 0 1px 0 rgba(255,255,255,0.04)",
+                  }}>
+                    <div style={{padding:"16px 16px 14px"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                        <div style={{fontSize:12,fontWeight:700,color:A.red}}>{cl?.empresa||"Sin cliente"}</div>
+                        <div style={{fontSize:11,fontWeight:700,color:A.red,
+                          background:"rgba(232,72,72,0.12)",padding:"2px 8px",borderRadius:8,
+                          border:"1px solid rgba(232,72,72,0.2)"}}>
+                          +{over}d
                         </div>
-                      )}
+                      </div>
+                      <div style={{fontSize:14,fontWeight:700,color:A.t1,marginBottom:6,
+                        overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                        {t.titulo}
+                      </div>
+                      <div style={{fontSize:10,color:A.t3}}>Prometido: {t.promesaPago||"—"}</div>
                     </div>
-                    <div style={{fontSize:13,fontWeight:700,color:C.t1,marginBottom:4,
-                      overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
-                    <div style={{fontSize:10,color:C.t3}}>Vence: {t.promesaPago||"—"}</div>
+                    <div style={{padding:"12px 16px",borderTop:"1px solid rgba(232,72,72,0.12)",
+                      display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div style={{fontSize:22,fontWeight:800,color:A.red,letterSpacing:"-0.02em",
+                        fontVariantNumeric:"tabular-nums"}}>
+                        {mxn(t.snap?.precioConIVA||0)}
+                      </div>
+                      <button onClick={()=>cobrar(t)} style={{
+                        padding:"10px 18px",borderRadius:12,
+                        background:A.mintDim,border:"1px solid rgba(60,207,170,0.3)",
+                        color:A.mint,fontSize:12,fontWeight:800,cursor:"pointer",
+                        letterSpacing:"0.04em",WebkitTapHighlightColor:"transparent",
+                      }}>
+                        Cobrar ✓
+                      </button>
+                    </div>
                   </div>
-                  <div style={{padding:"10px 14px",borderTop:`1px solid ${C.border}`,
-                    display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div style={{fontSize:20,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Al corriente */}
+        {corriente.length>0&&(
+          <div style={{marginBottom:12}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:A.mint,flexShrink:0}}/>
+              <span style={{fontSize:10,fontWeight:800,color:A.mint,letterSpacing:"0.14em",textTransform:"uppercase"}}>
+                Al corriente · {corriente.length}
+              </span>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {corriente.map(t=>{
+                const cl=clients.find(c=>c.id===t.clientId);
+                const d=parseDateMX(t.promesaPago);
+                const daysLeft=d?Math.ceil((d-now)/86400000):null;
+                const urgent=daysLeft!==null&&daysLeft<=3;
+                return (
+                  <div key={t.id} style={{background:A.card,borderRadius:A.r,overflow:"hidden",boxShadow:A.shadowSm}}>
+                    <div style={{padding:"16px 16px 14px"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                        <div style={{fontSize:12,fontWeight:600,color:A.t2}}>{cl?.empresa||"Sin cliente"}</div>
+                        {daysLeft!==null&&(
+                          <div style={{fontSize:10,fontWeight:600,
+                            color:urgent?A.amber:A.t3,
+                            background:urgent?"rgba(240,160,48,0.12)":"transparent",
+                            padding:"2px 8px",borderRadius:8}}>
+                            {daysLeft<=0?"hoy":daysLeft===1?"mañana":`en ${daysLeft}d`}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{fontSize:14,fontWeight:700,color:A.t1,marginBottom:4,
+                        overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                        {t.titulo}
+                      </div>
+                      <div style={{fontSize:10,color:A.t3}}>Vence: {t.promesaPago||"—"}</div>
+                    </div>
+                    <div style={{padding:"12px 16px",borderTop:"1px solid rgba(255,255,255,0.05)",
+                      display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div style={{fontSize:22,fontWeight:800,color:A.t1,letterSpacing:"-0.02em",
+                        fontVariantNumeric:"tabular-nums"}}>
+                        {mxn(t.snap?.precioConIVA||0)}
+                      </div>
+                      <button onClick={()=>cobrar(t)} style={{
+                        padding:"10px 18px",borderRadius:12,
+                        background:A.mintDim,border:"1px solid rgba(60,207,170,0.3)",
+                        color:A.mint,fontSize:12,fontWeight:800,cursor:"pointer",
+                        letterSpacing:"0.04em",WebkitTapHighlightColor:"transparent",
+                      }}>
+                        Cobrar ✓
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Historial cobrado */}
+        {cobradas.length>0&&(
+          <div>
+            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:10}}>
+              Cobrado · {cobradas.length} ops · {mxn(totalCob)}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {cobradas.slice(0,5).map(t=>{
+                const cl=clients.find(c=>c.id===t.clientId);
+                return (
+                  <div key={t.id} style={{background:A.card,borderRadius:14,padding:"12px 16px",
+                    display:"flex",justifyContent:"space-between",alignItems:"center",
+                    boxShadow:"0 1px 12px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.03)"}}>
+                    <div style={{minWidth:0,flex:1}}>
+                      <div style={{fontSize:12,fontWeight:600,color:A.t2,overflow:"hidden",
+                        textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                      <div style={{fontSize:10,color:A.t3,marginTop:2}}>{cl?.empresa||""} · {t.date}</div>
+                    </div>
+                    <div style={{fontSize:14,fontWeight:800,color:A.mint,fontVariantNumeric:"tabular-nums",
+                      marginLeft:12,flexShrink:0}}>
                       {mxn(t.snap?.precioConIVA||0)}
                     </div>
-                    <button onClick={()=>cobrar(t)}
-                      style={{padding:"10px 18px",borderRadius:10,
-                        background:C.greenDim,border:`1px solid ${C.green}60`,
-                        color:C.green,fontSize:12,fontWeight:800,cursor:"pointer",letterSpacing:"0.04em"}}>
-                      Cobrar ✓
-                    </button>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ── Historial cobrado ── */}
-      {cobradas.length>0&&(
-        <div>
-          <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",marginBottom:8,textTransform:"uppercase"}}>
-            Cobrado — {cobradas.length} ops — {mxn(totalCob)}
+        {pendientes.length===0&&cobradas.length===0&&(
+          <div style={{textAlign:"center",padding:"48px 20px"}}>
+            <div style={{fontSize:11,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
+              Sin operaciones a crédito
+            </div>
+            <div style={{fontSize:13,color:A.t3}}>Las ventas a crédito aparecen aquí</div>
           </div>
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            {cobradas.slice(0,5).map(t=>{
-              const cl=clients.find(c=>c.id===t.clientId);
-              return (
-                <div key={t.id} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:12,
-                  padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div style={{minWidth:0,flex:1}}>
-                    <div style={{fontSize:12,fontWeight:600,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
-                    <div style={{fontSize:10,color:C.t3}}>{cl?.empresa||""} · {t.date}</div>
-                  </div>
-                  <div style={{fontSize:14,fontWeight:800,color:C.green,fontFamily:"'Courier New',monospace",marginLeft:12,flexShrink:0}}>
-                    {mxn(t.snap?.precioConIVA||0)}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {pendientes.length===0&&cobradas.length===0&&(
-        <div style={{textAlign:"center",padding:"40px 20px",color:C.t3}}>
-          <div style={{fontSize:32,marginBottom:10}}>💳</div>
-          <div style={{fontSize:13,fontWeight:600,color:C.t2,marginBottom:4}}>Sin operaciones a crédito</div>
-          <div style={{fontSize:11}}>Las ventas a crédito aparecen aquí</div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -6411,225 +6487,265 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
     setEditId(null);
   };
 
+  const A = {
+    lime:"#BFFF00", limeDim:"rgba(191,255,0,0.08)", limeMid:"rgba(191,255,0,0.18)",
+    mint:"#3CCFAA", mintDim:"rgba(60,207,170,0.1)",
+    amber:"#F0A030", amberDim:"rgba(240,160,48,0.1)",
+    red:"#E84848",   redDim:"rgba(232,72,72,0.1)",
+    card:"rgba(14,19,22,0.98)",
+    shadow:"0 2px 20px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04)",
+    shadowSm:"0 1px 12px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.03)",
+    t1:"#E8EDF0", t2:"#8A9AA4", t3:"#46565F", r:18,
+  };
+  const prC={P1:{dot:"#E84848",dim:"rgba(232,72,72,0.12)"},P2:{dot:"#F0A030",dim:"rgba(240,160,48,0.12)"},
+             P3:{dot:"#3CCFAA",dim:"rgba(60,207,170,0.12)"},P4:{dot:"#8A9AA4",dim:"rgba(138,154,164,0.12)"}};
+
   return (
-    <div style={{padding:"16px 14px 20px"}}>
+    <div style={{minHeight:"100vh",background:C.bg0,paddingBottom:40}}>
+      <div style={{padding:"0 14px"}}>
 
-      {/* ── Period selector + search ── */}
-      <div style={{display:"flex",gap:6,marginBottom:10,overflowX:"auto",paddingBottom:2,scrollbarWidth:"none"}}>
-        {[["today","Hoy"],["week","Semana"],["month","Mes"],["3m","3M"],["all","Todo"]].map(([v,l])=>(
-          <button key={v} onClick={()=>setPeriod(v)}
-            style={{padding:"6px 13px",borderRadius:20,fontSize:11,fontWeight:700,flexShrink:0,
-              border:`1px solid ${period===v?C.cyan:C.border}`,
-              background:period===v?C.cyanDim:"transparent",
-              color:period===v?C.cyan:C.t3,cursor:"pointer",letterSpacing:"0.06em"}}>
-            {l}
-          </button>
-        ))}
-      </div>
-
-      <input value={search} onChange={e=>setSearch(e.target.value)}
-        placeholder="Buscar por título, ID, cliente..."
-        style={{width:"100%",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,
-          padding:"11px 14px",color:C.t1,fontSize:16,outline:"none",marginBottom:14,
-          boxSizing:"border-box"}}/>
-
-      {/* ── Period summary pill ── */}
-      {filtered.length>0&&(
-        <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:12,
-          padding:"10px 14px",marginBottom:16,display:"flex",gap:16,flexWrap:"wrap"}}>
-          <div>
-            <div style={{fontSize:9,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:2}}>Facturado</div>
-            <div style={{fontSize:16,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(periodFact)}</div>
-          </div>
-          <div>
-            <div style={{fontSize:9,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:2}}>Util. neta</div>
-            <div style={{fontSize:16,fontWeight:800,color:C.green,fontFamily:"'Courier New',monospace"}}>{mxn(periodNeta)}</div>
-          </div>
-          <div>
-            <div style={{fontSize:9,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:2}}>Ops</div>
-            <div style={{fontSize:16,fontWeight:800,color:C.t2,fontFamily:"'Courier New',monospace"}}>{filtered.length}</div>
-          </div>
+        {/* Period + search */}
+        <div style={{display:"flex",gap:6,padding:"18px 0 12px",overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
+          {[["today","Hoy"],["week","7d"],["month","30d"],["3m","3M"],["all","Todo"]].map(([v,l])=>(
+            <button key={v} onClick={()=>setPeriod(v)} style={{
+              flexShrink:0,padding:"7px 16px",borderRadius:20,fontSize:11,fontWeight:700,
+              background:period===v?A.limeMid:"transparent",
+              border:`1.5px solid ${period===v?A.lime:"rgba(255,255,255,0.07)"}`,
+              color:period===v?A.lime:A.t3,
+              cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.15s",
+            }}>{l}</button>
+          ))}
         </div>
-      )}
 
-      {filtered.length===0&&(
-        <EmptyState icon="📋" title="Sin resultados" sub="Ajusta el período o la búsqueda"/>
-      )}
+        <input value={search} onChange={e=>setSearch(e.target.value)}
+          placeholder="Buscar por título, ID, cliente..."
+          style={{width:"100%",background:"rgba(20,26,30,0.95)",
+            border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,
+            padding:"12px 16px",color:A.t1,fontSize:16,outline:"none",marginBottom:14,
+            boxSizing:"border-box",fontFamily:"inherit"}}/>
 
-      {/* ── Grouped by day ── */}
-      {grouped.map(([date,dayTickets])=>{
-        const dayFact=dayTickets.filter(t=>OPERADO_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
-        const dayNeta=dayTickets.filter(t=>OPERADO_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0);
-        return (
-          <div key={date} style={{marginBottom:18}}>
-            {/* Day header */}
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-              <div style={{fontSize:11,fontWeight:700,color:date===todayStr?C.cyan:C.t2,letterSpacing:"0.06em"}}>
-                {dayLabel(date)}
-              </div>
-              {dayFact>0&&(
-                <div style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace"}}>
-                  {mxn(dayFact)} · util {mxn(dayNeta)}
+        {/* Period summary */}
+        {filtered.length>0&&(
+          <div style={{background:A.card,borderRadius:A.r,padding:"16px 20px",marginBottom:16,
+            boxShadow:A.shadowSm,display:"flex",gap:0}}>
+            {[
+              {label:"Facturado",value:mxn(periodFact),color:A.t1},
+              {label:"Util. neta",value:mxn(periodNeta),color:A.lime,border:true},
+              {label:"Ops",value:filtered.length,color:A.t2,border:true},
+            ].map(({label,value,color,border})=>(
+              <div key={label} style={{flex:1,paddingLeft:border?14:0,
+                borderLeft:border?"1px solid rgba(255,255,255,0.05)":"none"}}>
+                <div style={{fontSize:8,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>
+                  {label}
                 </div>
-              )}
+                <div style={{fontSize:16,fontWeight:800,color,fontVariantNumeric:"tabular-nums"}}>{value}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {filtered.length===0&&(
+          <div style={{textAlign:"center",padding:"48px 20px"}}>
+            <div style={{fontSize:11,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
+              Sin resultados
             </div>
+            <div style={{fontSize:13,color:A.t3}}>Ajusta el período o la búsqueda</div>
+          </div>
+        )}
 
-            {/* Day cards */}
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {dayTickets.map(t=>{
-                const meta=TICKET_META[t.status]||{};
-                const pr=PRIORITY[t.priority]||PRIORITY.P4;
-                const cl=clients.find(c=>c.id===t.clientId);
-                const un=units.find(u=>u.id===t.unitId);
-                const isExp=expandId===t.id;
-                const isEdit=editId===t.id;
-                const isOp=OPERADO_SET.has(t.status);
-                const isCancelled=t.status==="cancelado";
+        {/* Grouped by day */}
+        {grouped.map(([date,dayTickets])=>{
+          const dayFact=dayTickets.filter(t=>OPERADO_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
+          const dayNeta=dayTickets.filter(t=>OPERADO_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0);
+          return (
+            <div key={date} style={{marginBottom:20}}>
+              {/* Day header */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.08em",
+                  color:date===todayStr?A.lime:A.t2}}>
+                  {dayLabel(date)}
+                </div>
+                {dayFact>0&&(
+                  <div style={{fontSize:10,color:A.t3,fontVariantNumeric:"tabular-nums"}}>
+                    {mxn(dayFact)} · util {mxn(dayNeta)}
+                  </div>
+                )}
+              </div>
 
-                return (
-                  <div key={t.id} style={{background:C.bg2,borderRadius:14,overflow:"hidden",
-                    border:`1px solid ${isCancelled?`${C.red}20`:C.border}`,
-                    borderLeft:`3px solid ${isCancelled?C.red:isOp?C.green:pr.dot}`,
-                    opacity:isCancelled?0.65:1}}>
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {dayTickets.map(t=>{
+                  const meta   = TICKET_META[t.status]||{};
+                  const pr     = prC[t.priority]||prC.P4;
+                  const cl     = clients.find(c=>c.id===t.clientId);
+                  const un     = units.find(u=>u.id===t.unitId);
+                  const isExp  = expandId===t.id;
+                  const isEdit = editId===t.id;
+                  const isOp   = OPERADO_SET.has(t.status);
+                  const isCan  = t.status==="cancelado";
+                  const price  = safeNumber(t.snap?.precioConIVA);
+                  const uNeta  = safeNumber(t.snap?.uNeta);
 
-                    {/* Card body — tap to expand */}
-                    <div onClick={()=>{if(!isEdit){setExpandId(isExp?null:t.id);}}} style={{padding:"12px 14px",cursor:"pointer"}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:5}}>
-                        <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
-                          <span style={{fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:8,
-                            background:`${meta.dot||C.border}22`,color:meta.dot||C.t3,letterSpacing:"0.06em"}}>
-                            {meta.label||t.status}
-                          </span>
-                          <span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:6,
-                            background:pr.dim,color:pr.dot}}>{t.priority}</span>
+                  return (
+                    <div key={t.id} style={{
+                      background:isCan?"rgba(22,12,12,0.85)":A.card,
+                      borderRadius:A.r,overflow:"hidden",
+                      boxShadow:isCan
+                        ?"0 1px 12px rgba(0,0,0,0.4), 0 0 0 1px rgba(232,72,72,0.12)"
+                        :A.shadow,
+                      opacity:isCan?0.7:1,
+                    }}>
+                      {/* Tap to expand */}
+                      <div onClick={()=>{if(!isEdit) setExpandId(isExp?null:t.id);}}
+                        style={{padding:"14px 16px",cursor:"pointer"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                          <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"nowrap"}}>
+                            <span style={{fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:10,
+                              background:`${meta.dot||"#8A9AA4"}18`,color:meta.dot||A.t3,letterSpacing:"0.05em"}}>
+                              {meta.label||t.status}
+                            </span>
+                            <span style={{fontSize:9,fontWeight:800,padding:"3px 7px",borderRadius:10,
+                              background:pr.dim,color:pr.dot,letterSpacing:"0.06em"}}>
+                              {t.priority}
+                            </span>
+                          </div>
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            <span style={{fontSize:16,fontWeight:800,
+                              color:isOp?A.t1:A.t3,fontVariantNumeric:"tabular-nums"}}>
+                              {mxn(price)}
+                            </span>
+                            <span style={{fontSize:14,color:A.t3,
+                              transform:isExp?"rotate(90deg)":"none",
+                              transition:"transform 200ms",display:"inline-block",lineHeight:1}}>›</span>
+                          </div>
                         </div>
-                        <div style={{display:"flex",alignItems:"center",gap:6}}>
-                          <span style={{fontSize:16,fontWeight:800,color:isOp?C.cyan:C.t3,
-                            fontFamily:"'Courier New',monospace"}}>{mxn(t.snap?.precioConIVA||0)}</span>
-                          <span style={{fontSize:10,color:C.t3,transform:isExp?"rotate(90deg)":"rotate(0deg)",
-                            transition:"transform 200ms",display:"inline-block"}}>›</span>
+                        <div style={{fontSize:13,fontWeight:700,color:A.t1,lineHeight:1.3,marginBottom:4}}>
+                          {t.titulo}
                         </div>
+                        {(cl||un)&&(
+                          <div style={{fontSize:10,color:A.t3,
+                            overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                            {cl&&<span style={{color:A.t2}}>{cl.empresa}</span>}
+                            {cl&&un&&<span style={{margin:"0 4px"}}>·</span>}
+                            {un&&<span>{un.economico?"Eco. "+un.economico:un.marca+" "+un.modelo}</span>}
+                          </div>
+                        )}
                       </div>
-                      <div style={{fontSize:13,fontWeight:700,color:C.t1,lineHeight:1.3,marginBottom:3}}>
-                        {t.titulo}
-                      </div>
-                      {(cl||un)&&(
-                        <div style={{fontSize:10,color:C.t3}}>
-                          {cl&&<span>{cl.empresa}</span>}
-                          {cl&&un&&<span> · </span>}
-                          {un&&<span style={{fontFamily:"'Courier New',monospace",fontSize:9}}>
-                            {un.economico?"Eco."+un.economico:un.marca+" "+un.modelo}
-                          </span>}
-                        </div>
-                      )}
-                    </div>
 
-                    {/* Expanded detail */}
-                    {isExp&&!isEdit&&(
-                      <div style={{borderTop:`1px solid ${C.border}`,background:"#0a1012",padding:"12px 14px"}}>
-                        {/* Financial grid */}
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-                          {[["Precio",C.cyan,mxn(t.snap?.precioConIVA||0)],
-                            ["Util. neta",safeNumber(t.snap?.uNeta)>=0?C.green:C.red,mxn(t.snap?.uNeta||0)],
-                            ["Costo",C.t3,mxn(t.snap?.costoTotal||0)],
-                            ["Margen",margenColor(t.snap?.margenNetoPrecio||0),fpct(t.snap?.margenNetoPrecio||0)],
-                          ].map(([l,c,v])=>(
-                            <div key={l}>
-                              <div style={{fontSize:9,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:2}}>{l}</div>
-                              <div style={{fontSize:15,fontWeight:700,color:c,fontFamily:"'Courier New',monospace"}}>{v}</div>
-                            </div>
-                          ))}
-                        </div>
-                        {/* Timeline snippet */}
-                        {t.timeline&&t.timeline.length>0&&(
-                          <div style={{marginBottom:12}}>
-                            <div style={{fontSize:9,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:6}}>Últimos eventos</div>
-                            {[...t.timeline].reverse().slice(0,3).map((ev,i)=>(
-                              <div key={i} style={{display:"flex",gap:8,alignItems:"flex-start",marginBottom:4}}>
-                                <div style={{width:5,height:5,borderRadius:"50%",background:C.border,marginTop:4,flexShrink:0}}/>
-                                <div style={{fontSize:10,color:C.t3,flex:1}}>
-                                  <span style={{color:C.t2}}>{ev.evento}</span>
-                                  {ev.ts&&<span style={{marginLeft:6,fontSize:9}}>{fmtTS(ev.ts)}</span>}
-                                </div>
+                      {/* Expanded detail */}
+                      {isExp&&!isEdit&&(
+                        <div style={{borderTop:"1px solid rgba(255,255,255,0.05)",
+                          padding:"16px",background:"rgba(10,14,17,0.8)"}}>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+                            {[
+                              {l:"Precio",    v:mxn(price),  c:A.t1},
+                              {l:"Util. neta",v:mxn(uNeta),  c:uNeta>=0?A.lime:A.red},
+                              {l:"Costo",     v:mxn(safeNumber(t.snap?.costoTotal)), c:A.t2},
+                              {l:"Margen",    v:fpct(safeNumber(t.snap?.margenNetoPrecio)), c:A.t2},
+                            ].map(({l,v,c})=>(
+                              <div key={l}>
+                                <div style={{fontSize:8,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>{l}</div>
+                                <div style={{fontSize:15,fontWeight:700,color:c,fontVariantNumeric:"tabular-nums"}}>{v}</div>
                               </div>
                             ))}
                           </div>
-                        )}
-                        {/* Action buttons */}
-                        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                          <button onClick={()=>openEdit(t)}
-                            style={{flex:1,padding:"9px 14px",borderRadius:10,background:"transparent",
-                              border:`1px solid ${C.border}`,color:C.t2,fontSize:11,fontWeight:600,cursor:"pointer"}}>
-                            ✏ Editar
-                          </button>
-                          <button onClick={()=>{
-                            const cl=clients.find(c=>c.id===t.clientId);
-                            const un=units.find(u=>u.id===t.unitId);
-                            generarCotizacionPDF(t,cl,un,null).catch(()=>toast("Error PDF","error"));}}
-                            style={{flex:1,padding:"9px 14px",borderRadius:10,background:"transparent",
-                              border:`1px solid ${C.border}`,color:C.t2,fontSize:11,fontWeight:600,cursor:"pointer"}}>
-                            PDF ↗
-                          </button>
-                          {CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t.cobrado&&(
-                            <button onClick={()=>{dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado ✓","success");setExpandId(null);}}
-                              style={{flex:1,padding:"9px 14px",borderRadius:10,background:C.greenDim,
-                                border:`1px solid ${C.green}60`,color:C.green,fontSize:11,fontWeight:800,cursor:"pointer"}}>
-                              Cobrar ✓
-                            </button>
+                          {t.timeline&&t.timeline.length>0&&(
+                            <div style={{marginBottom:14}}>
+                              <div style={{fontSize:8,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
+                                Últimos eventos
+                              </div>
+                              {[...t.timeline].reverse().slice(0,3).map((ev,i)=>(
+                                <div key={i} style={{display:"flex",gap:8,alignItems:"flex-start",marginBottom:5}}>
+                                  <div style={{width:4,height:4,borderRadius:"50%",
+                                    background:"rgba(255,255,255,0.15)",marginTop:5,flexShrink:0}}/>
+                                  <div style={{fontSize:10,color:A.t3,flex:1}}>
+                                    <span style={{color:A.t2}}>{ev.evento}</span>
+                                    {ev.ts&&<span style={{marginLeft:6,fontSize:9}}>{fmtTS(ev.ts)}</span>}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           )}
-                          {!CLOSED_SET.has(t.status)&&(
-                            <button onClick={()=>{dispatch({type:"TKT_SOFT_DEL",id:t.id});toast("Eliminado","info");setExpandId(null);}}
-                              style={{padding:"9px 12px",borderRadius:10,background:"transparent",
-                                border:`1px solid ${C.red}40`,color:C.red,fontSize:11,cursor:"pointer"}}>
-                              🗑
-                            </button>
-                          )}
+                          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                            <button onClick={()=>openEdit(t)} style={{
+                              flex:1,padding:"9px 14px",borderRadius:10,background:"transparent",
+                              border:"1px solid rgba(255,255,255,0.08)",color:A.t2,
+                              fontSize:11,fontWeight:600,cursor:"pointer",
+                            }}>✏ Editar</button>
+                            <button onClick={()=>{
+                              const c2=clients.find(c=>c.id===t.clientId);
+                              const u2=units.find(u=>u.id===t.unitId);
+                              generarCotizacionPDF(t,c2,u2,null).catch(()=>toast("Error PDF","error"));
+                            }} style={{
+                              flex:1,padding:"9px 14px",borderRadius:10,background:"transparent",
+                              border:"1px solid rgba(255,255,255,0.08)",color:A.t2,
+                              fontSize:11,fontWeight:600,cursor:"pointer",
+                            }}>PDF ↗</button>
+                            {CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t.cobrado&&(
+                              <button onClick={()=>{dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado ✓","success");setExpandId(null);}}
+                                style={{flex:1,padding:"9px 14px",borderRadius:10,background:A.mintDim,
+                                  border:"1px solid rgba(60,207,170,0.3)",color:A.mint,fontSize:11,fontWeight:800,cursor:"pointer"}}>
+                                Cobrar ✓
+                              </button>
+                            )}
+                            {!CLOSED_SET.has(t.status)&&(
+                              <button onClick={()=>{dispatch({type:"TKT_SOFT_DEL",id:t.id});toast("Eliminado","info");setExpandId(null);}}
+                                style={{padding:"9px 12px",borderRadius:10,background:"transparent",
+                                  border:"1px solid rgba(232,72,72,0.25)",color:A.red,fontSize:11,cursor:"pointer"}}>
+                                🗑
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    {/* Quick edit form */}
-                    {isEdit&&(
-                      <div style={{borderTop:`1px solid ${C.border}`,background:"#0a1012",padding:"14px"}}>
-                        <div style={{fontSize:10,color:C.cyan,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:12,fontWeight:700}}>
-                          Editando: {t.titulo?.slice(0,30)}
+                      {/* Quick edit form */}
+                      {isEdit&&(
+                        <div style={{borderTop:"1px solid rgba(255,255,255,0.05)",
+                          background:"rgba(10,14,17,0.9)",padding:"16px"}}>
+                          <div style={{fontSize:9,color:A.lime,letterSpacing:"0.14em",
+                            textTransform:"uppercase",marginBottom:14,fontWeight:800}}>
+                            Editando: {t.titulo?.slice(0,28)}
+                          </div>
+                          <MSel label="Estado" value={ef.status} onChange={sfn("status")}
+                            options={TICKET_ALL.map(s=>({value:s,label:(TICKET_META[s]?.label||s)}))}/>
+                          <ClientPicker clients={clients} value={ef.clientId||""} onChange={sfn("clientId")} mobile/>
+                          <UnitPicker units={units} value={ef.unitId||""} onChange={sfn("unitId")} mobile/>
+                          <MSel label="Pago" value={ef.payType} onChange={sfn("payType")}
+                            options={[{value:"contado",label:"Contado"},{value:"credit",label:"Crédito"}]}/>
+                          {ef.payType==="credit"&&(
+                            <MField label="Promesa de pago" value={ef.promesaPago}
+                              onChange={sfn("promesaPago")} placeholder="DD/MM/AAAA" color={A.amber}/>
+                          )}
+                          <div style={{fontSize:9,color:A.t3,marginBottom:6,letterSpacing:"0.12em",textTransform:"uppercase"}}>
+                            Notas
+                          </div>
+                          <textarea rows={2} value={ef.notes} onChange={e=>sfn("notes")(e.target.value)}
+                            placeholder="Notas..."
+                            style={{width:"100%",background:"rgba(255,255,255,0.03)",
+                              border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,
+                              padding:"10px 12px",color:A.t2,fontSize:13,outline:"none",
+                              boxSizing:"border-box",fontFamily:"inherit",resize:"none",marginBottom:14}}/>
+                          <div style={{display:"flex",gap:8}}>
+                            <button onClick={()=>saveEdit(t)} style={{
+                              flex:1,padding:"13px",borderRadius:12,
+                              background:"rgba(191,255,0,0.15)",border:"1px solid rgba(191,255,0,0.3)",
+                              color:A.lime,fontSize:13,fontWeight:700,cursor:"pointer",
+                            }}>Guardar</button>
+                            <button onClick={()=>setEditId(null)} style={{
+                              padding:"13px 16px",borderRadius:12,background:"transparent",
+                              border:"1px solid rgba(255,255,255,0.08)",color:A.t3,fontSize:13,cursor:"pointer",
+                            }}>Cancelar</button>
+                          </div>
                         </div>
-                        <MSel label="Estado" value={ef.status} onChange={sfn("status")}
-                          options={TICKET_ALL.map(s=>({value:s,label:(TICKET_META[s]?.label||s)}))}/>
-                        <ClientPicker clients={clients} value={ef.clientId||""} onChange={sfn("clientId")} mobile/>
-                        <UnitPicker units={units} value={ef.unitId||""} onChange={sfn("unitId")} mobile/>
-                        <MSel label="Pago" value={ef.payType} onChange={sfn("payType")}
-                          options={[{value:"contado",label:"Contado"},{value:"credit",label:"Crédito"}]}/>
-                        {ef.payType==="credit"&&(
-                          <MField label="Promesa de pago" value={ef.promesaPago} onChange={sfn("promesaPago")} placeholder="DD/MM/AAAA" color={C.yellow}/>
-                        )}
-                        <div style={{fontSize:10,color:C.t3,marginBottom:5,letterSpacing:"0.1em",textTransform:"uppercase"}}>Notas</div>
-                        <textarea rows={2} value={ef.notes} onChange={e=>sfn("notes")(e.target.value)}
-                          placeholder="Notas..."
-                          style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:8,
-                            padding:"10px 12px",color:C.t2,fontSize:13,outline:"none",
-                            boxSizing:"border-box",fontFamily:"inherit",resize:"none",marginBottom:12}}/>
-                        <div style={{display:"flex",gap:8}}>
-                          <button onClick={()=>saveEdit(t)}
-                            style={{flex:1,padding:"12px",borderRadius:10,background:C.blue,border:`1px solid ${C.blueHi}`,
-                              color:C.t1,fontSize:13,fontWeight:700,cursor:"pointer"}}>
-                            Guardar
-                          </button>
-                          <button onClick={()=>setEditId(null)}
-                            style={{padding:"12px 16px",borderRadius:10,background:"transparent",
-                              border:`1px solid ${C.border}`,color:C.t3,fontSize:13,cursor:"pointer"}}>
-                            Cancelar
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
