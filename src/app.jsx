@@ -5657,7 +5657,7 @@ function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
                 {p.aplicacion&&<div style={{fontSize:9,color:C.t3,marginTop:1}}>{p.aplicacion}</div>}
               </div>
               {(p.frecuencia||0)>1&&(
-                <div style={{fontSize:9,color:C.cyan,background:C.cyanDim,padding:"2px 7px",
+                <div style={{fontSize:9,color:"#BFFF00",background:"rgba(191,255,0,0.1)",padding:"2px 7px",
                   borderRadius:10,flexShrink:0,fontWeight:700}}>×{p.frecuencia}</div>
               )}
             </div>
@@ -5666,8 +5666,8 @@ function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
             <div onMouseDown={e=>{e.preventDefault();onSelect({nombre:(value||"").trim(),oem:"",ultimoPrecio:0});setOpen(false);}}
               onTouchEnd={e=>{e.preventDefault();onSelect({nombre:(value||"").trim(),oem:"",ultimoPrecio:0});setOpen(false);}}
               style={{padding:"11px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:18,color:C.cyan,lineHeight:1}}>＋</span>
-              <span style={{fontSize:13,color:C.cyan,fontWeight:600}}>Agregar "{(value||"").trim().slice(0,30)}"</span>
+              <span style={{fontSize:18,color:"#BFFF00",lineHeight:1}}>＋</span>
+              <span style={{fontSize:13,color:"#BFFF00",fontWeight:600}}>Agregar "{(value||"").trim().slice(0,30)}"</span>
             </div>
           )}
         </div>
@@ -5680,34 +5680,46 @@ function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
 function MCotizador({state,dispatch,toast}) {
   const {clients,suppliers,units} = state;
 
-  // ── Step navigation: 0=tipo, 1=lineas, 2=datos ────────────────────────────
+  // Accent palette
+  const A = {
+    lime:"#BFFF00", limeDim:"rgba(191,255,0,0.08)", limeMid:"rgba(191,255,0,0.18)",
+    mint:"#3CCFAA", mintDim:"rgba(60,207,170,0.1)",
+    amber:"#F0A030", amberDim:"rgba(240,160,48,0.1)",
+    red:"#E84848",   redDim:"rgba(232,72,72,0.1)",
+    card:"rgba(14,19,22,0.98)", cardHi:"rgba(20,26,30,0.98)",
+    shadow:"0 2px 24px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.04)",
+    shadowSm:"0 1px 16px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.03)",
+    t1:"#E8EDF0", t2:"#8A9AA4", t3:"#46565F", r:20,
+  };
+
+  // Priority semantic colors
+  const prColors = {
+    P1:{dot:"#E84848",dim:"rgba(232,72,72,0.1)",  label:"Unidad detenida"},
+    P2:{dot:"#F0A030",dim:"rgba(240,160,48,0.1)", label:"Operación comprometida"},
+    P3:{dot:"#3CCFAA",dim:"rgba(60,207,170,0.1)", label:"Preventivo urgente"},
+    P4:{dot:"#8A9AA4",dim:"rgba(138,154,164,0.1)",label:"Solicitud normal"},
+  };
+
   const [step,setStep]          = useState(0);
   const [priority,setPriority]  = useState("P3");
   const [opType,setOpType]      = useState("consumable");
   const [activeMods,setActiveMods] = useState([]);
-  const [iva,setIva]            = useState(16);
-  const [isr,setIsr]            = useState(20);
-
-  // ── Line items ─────────────────────────────────────────────────────────────
-  const [lineas,setLineas] = useState([emptyLine("consumable","P3",[])]);
-
-  // ── Per-line part search state ─────────────────────────────────────────────
-  const [partQ,setPartQ] = useState({}); // {lineIdx: searchText}
-
-  // ── Datos del ticket ───────────────────────────────────────────────────────
-  const [clientId,setClientId]    = useState("");
-  const [unitId,setUnitId]        = useState("");
-  const [supplierId,setSupplierId]= useState("");
-  const [payType,setPayType]      = useState("contado");
-  const [promesa,setPromesa]      = useState("");
-  const [fecha,setFecha]          = useState(todayMX());
-  const [notes,setNotes]          = useState("");
-  const [pdfPending,setPdfPending]= useState(null);
+  const [iva]                   = useState(16);
+  const [isr]                   = useState(20);
+  const [lineas,setLineas]      = useState([emptyLine("consumable","P3",[])]);
+  const [partQ,setPartQ]        = useState({});
+  const [clientId,setClientId]  = useState("");
+  const [unitId,setUnitId]      = useState("");
+  const [supplierId,setSupplierId] = useState("");
+  const [payType,setPayType]    = useState("contado");
+  const [promesa,setPromesa]    = useState("");
+  const [fecha,setFecha]        = useState(todayMX());
+  const [notes,setNotes]        = useState("");
+  const [pdfPending,setPdfPending] = useState(null);
 
   const sharedMargin = useMemo(()=>effectiveMargin(opType,priority,activeMods,false,27),[opType,priority,activeMods]);
-
   const lineSnaps = useMemo(()=>lineas.map(l=>{
-    const mg = l.customMgn?Math.min(l.customVal,100):sharedMargin;
+    const mg=l.customMgn?Math.min(l.customVal,100):sharedMargin;
     const costo=(l.costoUnit||0)*(l.qty||1);
     return computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,iva,isr,
       compraConIVA:true,ventaConIVA:true,mode:l.mode||"auto",margin:mg,manualPrice:l.manualPrice||"0"});
@@ -5721,12 +5733,9 @@ function MCotizador({state,dispatch,toast}) {
   const upd = (i,patch)=>setLineas(p=>p.map((l,j)=>j===i?{...l,...patch}:l));
   const addLine = ()=>setLineas(p=>[...p,emptyLine(opType,priority,[])]);
   const removeLine = i=>setLineas(p=>p.length>1?p.filter((_,j)=>j!==i):p);
-
-  // Select part from PartPicker → fill line
   const selectPart = (i,p) => {
     setPartQ(q=>({...q,[i]:""}));
-    upd(i,{titulo:p.nombre,partRef:p.oem||"",costoUnit:p.ultimoPrecio||0,
-            manualPrice:String(p.ultimoPrecio||0)});
+    upd(i,{titulo:p.nombre,partRef:p.oem||"",costoUnit:p.ultimoPrecio||0,manualPrice:String(p.ultimoPrecio||0)});
   };
 
   const cl   = clients.find(c=>c.id===clientId);
@@ -5737,10 +5746,10 @@ function MCotizador({state,dispatch,toast}) {
     if(!lineas.some(l=>l.titulo?.trim())) { toast("Agrega al menos una descripción","error"); return; }
     const titulo=lineas.map(l=>l.titulo.trim()||"Sin descripción").join(" / ");
     const lineasConSnap=lineas.map((l,i)=>({titulo:l.titulo||"Sin descripción",partRef:l.partRef||"",snap:lineSnaps[i]}));
+    const pSin=lineSnaps.reduce((s,sn)=>s+sn.precioSinIVA,0);
+    const cTot=lineSnaps.reduce((s,sn)=>s+sn.costoTotal,0);
     const totalSnap={
-      precioConIVA:totalPrecio,
-      precioSinIVA:lineSnaps.reduce((s,sn)=>s+sn.precioSinIVA,0),
-      costoTotal:lineSnaps.reduce((s,sn)=>s+sn.costoTotal,0),
+      precioConIVA:totalPrecio,precioSinIVA:pSin,costoTotal:cTot,
       costoBase:lineSnaps.reduce((s,sn)=>s+sn.costoBase,0),
       gastos:lineSnaps.reduce((s,sn)=>s+sn.gastos,0),
       uNeta:totalNeta,uBruta:lineSnaps.reduce((s,sn)=>s+sn.uBruta,0),
@@ -5748,7 +5757,7 @@ function MCotizador({state,dispatch,toast}) {
       ivaTraslad:lineSnaps.reduce((s,sn)=>s+sn.ivaTraslad,0),
       ivaAcred:lineSnaps.reduce((s,sn)=>s+sn.ivaAcred,0),
       ivaNeto:lineSnaps.reduce((s,sn)=>s+sn.ivaNeto,0),
-      markupSobre:lineSnaps.reduce((s,sn)=>s+sn.costoTotal,0)>0?((lineSnaps.reduce((s,sn)=>s+sn.precioSinIVA,0)-lineSnaps.reduce((s,sn)=>s+sn.costoTotal,0))/lineSnaps.reduce((s,sn)=>s+sn.costoTotal,0))*100:0,
+      markupSobre:cTot>0?((pSin-cTot)/cTot)*100:0,
       margenNetoPrecio:aggMargen,params:{iva,isr},
     };
     const tkt={
@@ -5764,10 +5773,8 @@ function MCotizador({state,dispatch,toast}) {
       history:[mkEvent("created",{titulo,status:"recibido",priority})],
     };
     dispatch({type:"TKT_ADD",t:tkt});
-
-    // ── Catálogo auto-sync silencioso ─────────────────────────────────────
     lineas.forEach(l=>{
-      if(!l.titulo||!l.titulo.trim()) return;
+      if(!l.titulo?.trim()) return;
       const nomNorm=(l.titulo||"").trim().toLowerCase();
       const oem=(l.partRef||"").trim();
       const exists=state.parts.find(p=>
@@ -5776,12 +5783,10 @@ function MCotizador({state,dispatch,toast}) {
         (nomNorm.length>6&&p.nombre.toLowerCase().startsWith(nomNorm.slice(0,Math.floor(nomNorm.length*0.75))))
       );
       if(!exists&&(safeNumber(l.costoUnit)>0||oem)){
-        dispatch({type:"PART_ADD",p:{
-          id:mkPartId(),nombre:l.titulo.trim(),oem,aftermarket:"",
+        dispatch({type:"PART_ADD",p:{id:mkPartId(),nombre:l.titulo.trim(),oem,aftermarket:"",
           aplicacion:un?`${un.marca} ${un.modelo} ${un.anio||""}`.trim():"",
           notas:`Auto: ${todayMX()}`,proveedor:supp?.nombre||"",
-          ultimoPrecio:safeNumber(l.costoUnit),ultimaFecha:fecha,frecuencia:1,
-        }});
+          ultimoPrecio:safeNumber(l.costoUnit),ultimaFecha:fecha,frecuencia:1}});
       } else if(exists){
         const patch={frecuencia:(exists.frecuencia||1)+1};
         if(safeNumber(l.costoUnit)>0) patch.ultimoPrecio=safeNumber(l.costoUnit);
@@ -5790,8 +5795,6 @@ function MCotizador({state,dispatch,toast}) {
         dispatch({type:"PART_UPDATE",id:exists.id,patch});
       }
     });
-    // ─────────────────────────────────────────────────────────────────────
-
     toast("Ticket: "+tkt.id,"success");
     setPdfPending({tkt,cl,un,supp});
     setLineas([emptyLine(opType,priority,[])]);
@@ -5800,27 +5803,38 @@ function MCotizador({state,dispatch,toast}) {
     setPayType("contado"); setPromesa(""); setStep(0);
   };
 
-  const pr=PRIORITY[priority]||PRIORITY.P4;
+  // ── Step bar ──────────────────────────────────────────────────────────────
   const stepNames=["Tipo","Líneas","Datos"];
-
   const StepBar=()=>(
-    <div style={{display:"flex",alignItems:"center",padding:"0 0 16px",gap:0}}>
+    <div style={{display:"flex",alignItems:"center",padding:"18px 0 22px",gap:0}}>
       {stepNames.map((name,i)=>{
         const done=i<step; const curr=i===step;
         return (
           <React.Fragment key={i}>
-            {i>0&&<div style={{flex:1,height:2,background:done?C.cyan:C.border,borderRadius:1,margin:"0 6px"}}/>}
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,cursor:done?"pointer":"default"}}
+            {i>0&&(
+              <div style={{flex:1,height:2,
+                background:done?"rgba(191,255,0,0.5)":"rgba(255,255,255,0.06)",
+                borderRadius:1,margin:"0 8px",marginTop:-14}}/>
+            )}
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,
+              cursor:done?"pointer":"default"}}
               onClick={()=>done&&setStep(i)}>
-              <div style={{width:28,height:28,borderRadius:14,
-                background:done?C.green:curr?C.cyan:C.bg2,
-                border:`2px solid ${done?C.green:curr?C.cyan:C.border}`,
+              <div style={{
+                width:30,height:30,borderRadius:15,
+                background:done?A.lime:curr?"rgba(191,255,0,0.15)":"rgba(255,255,255,0.04)",
+                border:`2px solid ${done?A.lime:curr?"rgba(191,255,0,0.5)":"rgba(255,255,255,0.08)"}`,
                 display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:11,fontWeight:800,color:done?"#0a0a0a":curr?C.bg0:C.t4}}>
+                fontSize:11,fontWeight:800,
+                color:done?"#0A1800":curr?A.lime:A.t3,
+                transition:"all 0.2s",
+              }}>
                 {done?"✓":i+1}
               </div>
-              <div style={{fontSize:9,color:curr?C.cyan:done?C.green:C.t4,fontWeight:curr?700:400,
-                letterSpacing:"0.08em",textTransform:"uppercase"}}>{name}</div>
+              <div style={{fontSize:9,fontWeight:curr||done?700:400,
+                color:done?A.lime:curr?A.lime:A.t3,
+                letterSpacing:"0.1em",textTransform:"uppercase"}}>
+                {name}
+              </div>
             </div>
           </React.Fragment>
         );
@@ -5828,167 +5842,172 @@ function MCotizador({state,dispatch,toast}) {
     </div>
   );
 
-  // ════════════════════════════════════════════════════════════════════════
-  // STEP 0 — Tipo / Prioridad / Modificadores
-  // ════════════════════════════════════════════════════════════════════════
+  // ══ STEP 0 — Tipo / Prioridad / Modificadores ════════════════════════════════
   if(step===0) return (
-    <div style={{padding:"16px 14px"}}>
+    <div style={{minHeight:"100vh",background:C.bg0,padding:"0 16px 32px"}}>
       {pdfPending&&<PDFConfirm {...pdfPending} onClose={()=>setPdfPending(null)}/>}
       <StepBar/>
 
-      {/* Priority */}
-      <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",marginBottom:10,textTransform:"uppercase"}}>Prioridad</div>
-      {Object.values(PRIORITY).map(p=>(
-        <div key={p.id} onClick={()=>setPriority(p.id)}
-          style={{padding:"13px 16px",borderRadius:12,marginBottom:8,cursor:"pointer",
-            background:priority===p.id?p.dim:C.bg2,
-            border:`2px solid ${priority===p.id?p.dot:C.border}`,
-            display:"flex",alignItems:"center",gap:12}}>
-          <div style={{width:12,height:12,borderRadius:"50%",background:priority===p.id?p.dot:C.t3,flexShrink:0}}/>
-          <div style={{flex:1}}>
-            <div style={{fontSize:14,fontWeight:800,color:priority===p.id?p.dot:C.t2}}>{p.id} — {p.label}</div>
+      <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",marginBottom:12,textTransform:"uppercase",fontWeight:700}}>Prioridad</div>
+      {Object.entries(prColors).map(([pid,pc])=>{
+        const sel=priority===pid;
+        const pr=PRIORITY[pid]||PRIORITY.P4;
+        return (
+          <div key={pid} onClick={()=>setPriority(pid)}
+            style={{padding:"16px",borderRadius:16,marginBottom:8,cursor:"pointer",
+              background:sel?pc.dim:A.card,
+              boxShadow:sel?`0 2px 20px rgba(0,0,0,0.5), 0 0 0 1.5px ${pc.dot}`:A.shadowSm,
+              display:"flex",alignItems:"center",gap:14,
+              transition:"all 0.15s",WebkitTapHighlightColor:"transparent"}}>
+            <div style={{width:10,height:10,borderRadius:"50%",
+              background:sel?pc.dot:"rgba(255,255,255,0.15)",flexShrink:0,
+              boxShadow:sel?`0 0 8px ${pc.dot}`:"none",transition:"all 0.15s"}}/>
+            <div style={{flex:1}}>
+              <div style={{fontSize:14,fontWeight:800,color:sel?pc.dot:A.t2,transition:"color 0.15s"}}>
+                {pid} — {pc.label}
+              </div>
+            </div>
+            {sel&&pr.marginBonus>0&&(
+              <span style={{fontSize:10,color:pc.dot,fontWeight:700,
+                background:`${pc.dot}18`,padding:"3px 10px",borderRadius:10,
+                border:`1px solid ${pc.dot}30`}}>+{pr.marginBonus}% margen</span>
+            )}
           </div>
-          {priority===p.id&&p.marginBonus>0&&(
-            <span style={{fontSize:11,color:p.dot,fontWeight:700}}>+{p.marginBonus}% margen</span>
-          )}
-        </div>
-      ))}
+        );
+      })}
 
-      <div style={{height:1,background:C.border,margin:"16px 0"}}/>
+      <div style={{height:1,background:"rgba(255,255,255,0.05)",margin:"20px 0"}}/>
 
-      {/* Op type */}
-      <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",marginBottom:10,textTransform:"uppercase"}}>Tipo de operación</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
-        {OP_TYPES.map(op=>(
-          <div key={op.id} onClick={()=>setOpType(op.id)}
-            style={{padding:"12px",borderRadius:10,cursor:"pointer",
-              background:opType===op.id?C.blueDim:C.bg2,
-              border:`2px solid ${opType===op.id?C.blueHi:C.border}`}}>
-            <div style={{fontSize:13,fontWeight:700,color:opType===op.id?C.t1:C.t2}}>{op.label}</div>
-            <div style={{fontSize:10,color:C.t3,marginTop:2}}>{op.baseMin}–{op.baseMax}%</div>
-          </div>
-        ))}
+      <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",marginBottom:12,textTransform:"uppercase",fontWeight:700}}>Tipo de operación</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:20}}>
+        {OP_TYPES.map(op=>{
+          const sel=opType===op.id;
+          return (
+            <div key={op.id} onClick={()=>setOpType(op.id)}
+              style={{padding:"14px",borderRadius:14,cursor:"pointer",
+                background:sel?A.limeDim:A.card,
+                boxShadow:sel?"0 2px 16px rgba(0,0,0,0.5), 0 0 0 1.5px rgba(191,255,0,0.4)":A.shadowSm,
+                WebkitTapHighlightColor:"transparent",transition:"all 0.15s"}}>
+              <div style={{fontSize:13,fontWeight:700,color:sel?A.lime:A.t2,marginBottom:4}}>{op.label}</div>
+              <div style={{fontSize:10,color:A.t3}}>{op.baseMin}–{op.baseMax}%</div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Modifiers */}
-      <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",marginBottom:10,textTransform:"uppercase"}}>Modificadores</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:20}}>
+      <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",marginBottom:12,textTransform:"uppercase",fontWeight:700}}>Modificadores</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:22}}>
         {MODIFIERS.map(mod=>{
           const on=activeMods.includes(mod.id);
           return (
-            <div key={mod.id} onClick={()=>setActiveMods(p=>p.includes(mod.id)?p.filter(x=>x!==mod.id):[...p,mod.id])}
-              style={{padding:"11px 12px",borderRadius:10,cursor:"pointer",
-                background:on?C.blueDim:C.bg2,border:`2px solid ${on?C.blueHi:C.border}`,
-                display:"flex",alignItems:"center",gap:8}}>
-              <div style={{width:10,height:10,borderRadius:"50%",background:on?C.cyan:C.t3,flexShrink:0}}/>
+            <div key={mod.id}
+              onClick={()=>setActiveMods(p=>p.includes(mod.id)?p.filter(x=>x!==mod.id):[...p,mod.id])}
+              style={{padding:"14px",borderRadius:14,cursor:"pointer",
+                background:on?A.limeDim:A.card,
+                boxShadow:on?"0 2px 16px rgba(0,0,0,0.5), 0 0 0 1.5px rgba(191,255,0,0.35)":A.shadowSm,
+                display:"flex",alignItems:"flex-start",gap:10,
+                WebkitTapHighlightColor:"transparent",transition:"all 0.15s"}}>
+              <div style={{width:8,height:8,borderRadius:"50%",marginTop:3,flexShrink:0,
+                background:on?A.lime:"rgba(255,255,255,0.15)",
+                boxShadow:on?"0 0 6px #BFFF00":"none",transition:"all 0.15s"}}/>
               <div>
-                <div style={{fontSize:12,fontWeight:700,color:on?C.t1:C.t2}}>{mod.label}</div>
-                <div style={{fontSize:10,color:on?C.cyan:C.t3}}>+{mod.pct}%</div>
+                <div style={{fontSize:12,fontWeight:700,color:on?A.lime:A.t2,marginBottom:2}}>{mod.label}</div>
+                <div style={{fontSize:10,color:on?A.lime:A.t3,fontWeight:on?700:400}}>+{mod.pct}%</div>
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Margen preview */}
-      <div style={{background:"linear-gradient(135deg,rgba(15,20,22,0.92),rgba(20,27,29,0.88))",
-        backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",
-        border:`1px solid rgba(38,122,144,0.3)`,borderRadius:14,
-        padding:"14px 16px",marginBottom:20,
-        boxShadow:"0 4px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05)"}}>
-        <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",marginBottom:4,textTransform:"uppercase"}}>Margen efectivo</div>
-        <div style={{fontSize:34,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",lineHeight:1}}>
+      <div style={{background:A.card,borderRadius:A.r,padding:"20px 22px",marginBottom:24,boxShadow:A.shadow}}>
+        <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:10}}>Margen efectivo</div>
+        <div style={{fontSize:46,fontWeight:800,color:A.lime,lineHeight:1,letterSpacing:"-0.02em",marginBottom:8}}>
           {fpct(sharedMargin)}
         </div>
-        <div style={{fontSize:10,color:C.t3,marginTop:4}}>
+        <div style={{fontSize:10,color:A.t3}}>
           {opType} · P{priority.slice(1)} · {activeMods.length>0?activeMods.join(", "):"sin modificadores"}
         </div>
       </div>
 
-      <MBtn label="Siguiente: Líneas de cotización →" full onClick={()=>setStep(1)}/>
+      <button onClick={()=>setStep(1)} style={{
+        width:"100%",padding:"16px",borderRadius:16,
+        background:"linear-gradient(135deg,#BFFF00,#9CD400)",
+        border:"none",color:"#0A1800",fontSize:14,fontWeight:800,cursor:"pointer",
+        letterSpacing:"0.02em",WebkitTapHighlightColor:"transparent",
+      }}>
+        Siguiente: Líneas →
+      </button>
     </div>
   );
 
-  // ════════════════════════════════════════════════════════════════════════
-  // STEP 1 — Líneas con PartPicker
-  // ════════════════════════════════════════════════════════════════════════
+  // ══ STEP 1 — Líneas con PartPicker ══════════════════════════════════════════
   if(step===1) return (
-    <div style={{padding:"16px 14px"}}>
+    <div style={{minHeight:"100vh",background:C.bg0,padding:"0 16px 32px"}}>
       <StepBar/>
 
       {lineas.map((l,i)=>{
         const sn=lineSnaps[i];
         const isManual=l.mode==="manual";
         return (
-          <div key={i} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,
-            overflow:"hidden",marginBottom:12}}>
-            {/* Line header */}
-            <div style={{padding:"10px 12px",background:"#0a1012",display:"flex",alignItems:"center",
-              justifyContent:"space-between"}}>
-              <div style={{fontSize:10,color:C.t3,fontWeight:700,letterSpacing:"0.1em"}}>LÍNEA {i+1}</div>
+          <div key={i} style={{background:A.card,borderRadius:A.r,overflow:"hidden",
+            marginBottom:12,boxShadow:A.shadow}}>
+            <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,0.05)",
+              display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div style={{fontSize:9,color:A.t3,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase"}}>
+                Línea {i+1}
+              </div>
               {lineas.length>1&&(
                 <button onClick={()=>removeLine(i)}
-                  style={{background:"transparent",border:"none",color:C.red,fontSize:16,cursor:"pointer",padding:"0 4px",lineHeight:1}}>×</button>
+                  style={{background:"transparent",border:"none",color:A.red,
+                    fontSize:18,cursor:"pointer",padding:"0 4px",lineHeight:1,
+                    WebkitTapHighlightColor:"transparent"}}>×</button>
               )}
             </div>
-
-            <div style={{padding:"12px"}}>
-              {/* PartPicker */}
-              <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase"}}>
+            <div style={{padding:"16px"}}>
+              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.14em",marginBottom:8,textTransform:"uppercase",fontWeight:700}}>
                 Descripción / Pieza
               </div>
               <PartPicker
                 parts={state.parts}
-                value={partQ[i]!==undefined ? partQ[i] : (l.titulo||"")}
-                onChange={v=>{
-                  setPartQ(q=>({...q,[i]:v}));
-                  upd(i,{titulo:v});
-                }}
-                onSelect={p=>{
-                  selectPart(i,p);
-                }}
+                value={partQ[i]!==undefined?partQ[i]:(l.titulo||"")}
+                onChange={v=>{setPartQ(q=>({...q,[i]:v}));upd(i,{titulo:v});}}
+                onSelect={p=>selectPart(i,p)}
                 mobile
               />
-              {/* OEM ref */}
               {l.partRef&&(
-                <div style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",marginTop:4,marginBottom:8}}>
+                <div style={{fontSize:10,color:A.t3,marginTop:6,marginBottom:10,letterSpacing:"0.04em"}}>
                   OEM: {l.partRef}
                 </div>
               )}
-
-              {/* Costo + Qty row */}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 80px",gap:8,marginBottom:8}}>
-                <MField label="Costo unitario (c/IVA)"
-                  value={String(l.costoUnit||"")} type="number" suffix="$"
+              <div style={{display:"grid",gridTemplateColumns:"1fr 80px",gap:8,marginBottom:10}}>
+                <MField label="Costo unitario (c/IVA)" value={String(l.costoUnit||"")}
+                  type="number" suffix="$"
                   onChange={v=>upd(i,{costoUnit:safeNumber(v),manualPrice:String(safeNumber(v))})}/>
                 <MField label="Cant." value={String(l.qty||1)} type="number"
                   onChange={v=>upd(i,{qty:Math.max(1,safeNumber(v,1))||1})}/>
               </div>
-
-              {/* Mode toggle */}
-              <div style={{display:"flex",gap:8,marginBottom:8}}>
+              <div style={{display:"flex",gap:8,marginBottom:10}}>
                 {[["auto","Auto (margen)"],["manual","Precio fijo"]].map(([m,lbl])=>(
                   <button key={m} onClick={()=>upd(i,{mode:m})}
-                    style={{flex:1,padding:"8px",borderRadius:8,fontSize:11,fontWeight:700,
-                      border:`1px solid ${l.mode===m?C.cyan:C.border}`,
-                      background:l.mode===m?C.cyanDim:"transparent",
-                      color:l.mode===m?C.cyan:C.t3,cursor:"pointer"}}>
+                    style={{flex:1,padding:"9px",borderRadius:10,fontSize:11,fontWeight:700,
+                      border:`1.5px solid ${l.mode===m?"rgba(191,255,0,0.45)":"rgba(255,255,255,0.07)"}`,
+                      background:l.mode===m?A.limeDim:"transparent",
+                      color:l.mode===m?A.lime:A.t3,cursor:"pointer",
+                      transition:"all 0.15s",WebkitTapHighlightColor:"transparent"}}>
                     {lbl}
                   </button>
                 ))}
               </div>
-
-              {/* Manual price or custom margin */}
-              {isManual ? (
+              {isManual?(
                 <MField label="Precio al cliente (c/IVA)" value={l.manualPrice||""} type="number" suffix="$"
-                  onChange={v=>upd(i,{manualPrice:v})} color={C.yellow}/>
-              ) : (
-                <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
+                  onChange={v=>upd(i,{manualPrice:v})} color={A.amber}/>
+              ):(
+                <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
                   <button onClick={()=>upd(i,{customMgn:!l.customMgn})}
-                    style={{padding:"8px 12px",borderRadius:8,fontSize:10,fontWeight:700,flexShrink:0,
-                      border:`1px solid ${l.customMgn?C.cyan:C.border}`,
-                      background:l.customMgn?C.cyanDim:"transparent",
-                      color:l.customMgn?C.cyan:C.t3,cursor:"pointer"}}>
+                    style={{padding:"9px 14px",borderRadius:10,fontSize:10,fontWeight:700,flexShrink:0,
+                      border:`1.5px solid ${l.customMgn?"rgba(191,255,0,0.45)":"rgba(255,255,255,0.07)"}`,
+                      background:l.customMgn?A.limeDim:"transparent",
+                      color:l.customMgn?A.lime:A.t3,cursor:"pointer",WebkitTapHighlightColor:"transparent"}}>
                     Margen personalizado
                   </button>
                   {l.customMgn&&(
@@ -5997,132 +6016,157 @@ function MCotizador({state,dispatch,toast}) {
                   )}
                 </div>
               )}
-
-              {/* Line result preview */}
-              <div style={{background:"#0a1012",borderRadius:10,padding:"10px 12px",
-                display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
-                <div>
-                  <div style={{fontSize:9,color:C.t3,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:2}}>Precio línea</div>
-                  <div style={{fontSize:18,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(sn.precioConIVA)}</div>
-                </div>
-                <div>
-                  <div style={{fontSize:9,color:C.t3,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:2}}>Util. línea</div>
-                  <div style={{fontSize:18,fontWeight:800,color:sn.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(sn.uNeta)}</div>
-                </div>
-                <div>
-                  <div style={{fontSize:9,color:C.t3,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:2}}>Margen</div>
-                  <div style={{fontSize:18,fontWeight:800,color:margenColor(sn.margenNetoPrecio||0),fontFamily:"'Courier New',monospace"}}>{fpct(sn.margenNetoPrecio||0)}</div>
-                </div>
+              <div style={{background:"rgba(10,14,17,0.8)",borderRadius:12,padding:"12px 14px",
+                display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:10,
+                border:"1px solid rgba(255,255,255,0.04)"}}>
+                {[
+                  {label:"Precio línea",value:mxn(sn.precioConIVA),color:A.t1},
+                  {label:"Util. neta",  value:mxn(sn.uNeta),       color:sn.uNeta>=0?A.lime:A.red},
+                  {label:"Margen",      value:fpct(sn.margenNetoPrecio||0),
+                    color:sn.margenNetoPrecio>=25?A.lime:sn.margenNetoPrecio>=15?A.mint:A.amber},
+                ].map(({label,value,color})=>(
+                  <div key={label}>
+                    <div style={{fontSize:8,color:A.t3,textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:4}}>{label}</div>
+                    <div style={{fontSize:18,fontWeight:800,color,fontVariantNumeric:"tabular-nums"}}>{value}</div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
         );
       })}
 
-      {/* Add line */}
-      <button onClick={addLine}
-        style={{width:"100%",padding:"13px",borderRadius:12,
-          background:"transparent",border:`2px dashed ${C.border}`,
-          color:C.t3,fontSize:13,fontWeight:700,cursor:"pointer",
-          display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:16}}>
-        <span style={{fontSize:20,color:C.cyan,lineHeight:1}}>+</span>
+      <button onClick={addLine} style={{
+        width:"100%",padding:"14px",borderRadius:16,
+        background:"transparent",border:"2px dashed rgba(255,255,255,0.08)",
+        color:A.t3,fontSize:13,fontWeight:700,cursor:"pointer",
+        display:"flex",alignItems:"center",justifyContent:"center",gap:10,
+        marginBottom:16,WebkitTapHighlightColor:"transparent",
+      }}>
+        <span style={{fontSize:22,color:A.lime,lineHeight:1,fontWeight:300}}>+</span>
         Agregar línea
       </button>
 
-      {/* Totals hero */}
-      <div style={{background:"linear-gradient(135deg,rgba(15,20,22,0.92),rgba(20,27,29,0.88))",
-        backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",
-        border:`1px solid rgba(38,122,144,0.25)`,borderRadius:16,padding:"16px",marginBottom:16,
-        boxShadow:"0 4px 16px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.05)"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:4}}>
+      <div style={{background:A.card,borderRadius:A.r,padding:"20px 22px",marginBottom:16,boxShadow:A.shadow}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
           <div>
-            <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",marginBottom:3,textTransform:"uppercase"}}>
-              Total {lineas.length} línea{lineas.length>1?"s":""}
+            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.14em",marginBottom:8,textTransform:"uppercase"}}>
+              Total · {lineas.length} línea{lineas.length>1?"s":""}
             </div>
-            <div style={{fontSize:36,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",lineHeight:1}}>
+            <div style={{fontSize:40,fontWeight:800,color:A.t1,lineHeight:1,
+              letterSpacing:"-0.025em",fontVariantNumeric:"tabular-nums"}}>
               {mxn(totalPrecio)}
             </div>
           </div>
           <div style={{textAlign:"right"}}>
-            <div style={{fontSize:9,color:C.t3,marginBottom:2,textTransform:"uppercase",letterSpacing:"0.1em"}}>Util. neta</div>
-            <div style={{fontSize:24,fontWeight:800,color:totalNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(totalNeta)}</div>
-            <div style={{fontSize:11,color:margenColor(aggMargen),fontFamily:"'Courier New',monospace"}}>{fpct(aggMargen)}</div>
+            <div style={{fontSize:9,color:A.t3,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.12em"}}>Util. neta</div>
+            <div style={{fontSize:26,fontWeight:800,
+              color:totalNeta>=0?A.lime:A.red,letterSpacing:"-0.02em",fontVariantNumeric:"tabular-nums"}}>
+              {mxn(totalNeta)}
+            </div>
+            <div style={{fontSize:12,fontWeight:700,marginTop:4,
+              color:aggMargen>=25?A.lime:aggMargen>=15?A.mint:A.amber}}>
+              {fpct(aggMargen)}
+            </div>
           </div>
         </div>
       </div>
 
-      <div style={{display:"flex",gap:8}}>
+      <div style={{display:"flex",gap:10}}>
         <button onClick={()=>setStep(0)}
-          style={{padding:"13px 18px",borderRadius:12,background:"transparent",
-            border:`1px solid ${C.border}`,color:C.t3,fontSize:12,cursor:"pointer"}}>
+          style={{padding:"14px 20px",borderRadius:14,background:"transparent",
+            border:"1px solid rgba(255,255,255,0.08)",color:A.t3,fontSize:12,cursor:"pointer",
+            WebkitTapHighlightColor:"transparent"}}>
           ← Atrás
         </button>
-        <MBtn label="Siguiente: Datos →" full onClick={()=>setStep(2)}/>
+        <button onClick={()=>setStep(2)} style={{
+          flex:1,padding:"14px",borderRadius:14,
+          background:"linear-gradient(135deg,#BFFF00,#9CD400)",
+          border:"none",color:"#0A1800",fontSize:14,fontWeight:800,cursor:"pointer",
+          WebkitTapHighlightColor:"transparent",
+        }}>
+          Siguiente: Datos →
+        </button>
       </div>
     </div>
   );
 
-  // ════════════════════════════════════════════════════════════════════════
-  // STEP 2 — Datos del ticket
-  // ════════════════════════════════════════════════════════════════════════
+  // ══ STEP 2 — Datos del ticket ════════════════════════════════════════════════
   return (
-    <div style={{padding:"16px 14px"}}>
+    <div style={{minHeight:"100vh",background:C.bg0,padding:"0 16px 32px"}}>
       <StepBar/>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-        <div style={{fontSize:11,color:C.t3,letterSpacing:"0.14em",textTransform:"uppercase"}}>Datos del ticket</div>
-        <button onClick={()=>setStep(1)}
-          style={{fontSize:11,color:C.t3,background:"transparent",border:`1px solid ${C.border}`,
-            borderRadius:8,padding:"6px 12px",cursor:"pointer"}}>← Atrás</button>
-      </div>
 
-      <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",marginBottom:12}}>
-        <div style={{padding:"12px 14px"}}>
+      <div style={{background:A.card,borderRadius:A.r,overflow:"hidden",
+        marginBottom:14,boxShadow:A.shadow}}>
+        <div style={{padding:"18px 18px 6px"}}>
           <MField label="Fecha" value={fecha} onChange={setFecha} placeholder="DD/MM/AAAA"/>
-          <ClientPicker  clients={clients}   value={clientId}   onChange={setClientId}   mobile/>
-          <UnitPicker    units={units}        value={unitId}     onChange={setUnitId}     mobile/>
-          <SupplierPicker suppliers={suppliers} value={supplierId} onChange={setSupplierId} mobile/>
+          <ClientPicker   clients={clients}     value={clientId}    onChange={setClientId}   mobile/>
+          <UnitPicker     units={units}          value={unitId}      onChange={setUnitId}     mobile/>
+          <SupplierPicker suppliers={suppliers}  value={supplierId}  onChange={setSupplierId} mobile/>
           <MSel label="Pago" value={payType} onChange={setPayType}
             options={[{value:"contado",label:"Contado — sin seguimiento"},{value:"credit",label:"Crédito — genera cartera"}]}/>
           {payType==="credit"&&(
             <MField label="Promesa de pago" value={promesa} onChange={setPromesa}
-              placeholder="DD/MM/AAAA" color={C.yellow}/>
+              placeholder="DD/MM/AAAA" color={A.amber}/>
           )}
-          <div>
-            <div style={{fontSize:10,color:C.t3,marginBottom:5,letterSpacing:"0.12em",textTransform:"uppercase"}}>Notas</div>
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:9,color:A.t3,marginBottom:8,letterSpacing:"0.14em",
+              textTransform:"uppercase",fontWeight:700}}>Notas</div>
             <textarea rows={3} value={notes} onChange={e=>setNotes(e.target.value)}
               placeholder="Diagnóstico, observaciones..."
-              style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:8,
-                padding:"12px 14px",color:C.t2,fontSize:13,outline:"none",boxSizing:"border-box",
-                fontFamily:"inherit",resize:"vertical",marginBottom:6}}/>
+              style={{width:"100%",background:"rgba(255,255,255,0.03)",
+                border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,
+                padding:"12px 14px",color:A.t2,fontSize:13,outline:"none",
+                boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
           </div>
         </div>
       </div>
 
-      {/* Final summary */}
-      <div style={{background:"linear-gradient(135deg,rgba(15,20,22,0.92),rgba(20,27,29,0.88))",
-        backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",
-        border:`1px solid rgba(38,122,144,0.25)`,borderRadius:16,padding:"16px",marginBottom:16,
-        boxShadow:"0 4px 16px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.05)"}}>
-        <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",marginBottom:10,textTransform:"uppercase"}}>Resumen</div>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:10}}>
+      <div style={{background:A.card,borderRadius:A.r,padding:"20px 22px",marginBottom:18,boxShadow:A.shadow}}>
+        <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:14}}>Resumen</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:14}}>
           <div>
-            <div style={{fontSize:9,color:C.t3,marginBottom:2,textTransform:"uppercase",letterSpacing:"0.1em"}}>Total c/IVA</div>
-            <div style={{fontSize:32,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",lineHeight:1}}>{mxn(totalPrecio)}</div>
+            <div style={{fontSize:9,color:A.t3,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.12em"}}>Total c/IVA</div>
+            <div style={{fontSize:36,fontWeight:800,color:A.t1,lineHeight:1,
+              letterSpacing:"-0.025em",fontVariantNumeric:"tabular-nums"}}>
+              {mxn(totalPrecio)}
+            </div>
           </div>
           <div style={{textAlign:"right"}}>
-            <div style={{fontSize:9,color:C.t3,marginBottom:2,textTransform:"uppercase",letterSpacing:"0.1em"}}>Util. neta</div>
-            <div style={{fontSize:22,fontWeight:800,color:totalNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(totalNeta)}</div>
+            <div style={{fontSize:9,color:A.t3,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.12em"}}>Util. neta</div>
+            <div style={{fontSize:24,fontWeight:800,
+              color:totalNeta>=0?A.lime:A.red,fontVariantNumeric:"tabular-nums"}}>
+              {mxn(totalNeta)}
+            </div>
           </div>
         </div>
-        <div style={{borderTop:`1px solid rgba(255,255,255,0.06)`,paddingTop:10,display:"flex",flexDirection:"column",gap:4}}>
-          {lineas.length>1&&<div style={{fontSize:10,color:C.t3}}>{lineas.length} líneas</div>}
-          {cl&&<div style={{fontSize:11,color:C.t2}}>Cliente: <span style={{fontWeight:700}}>{cl.empresa}</span></div>}
-          {un&&<div style={{fontSize:11,color:C.t2}}>Unidad: <span style={{fontFamily:"'Courier New',monospace",color:C.cyan}}>{un.economico?"Eco."+un.economico+" ":""}{un.marca} {un.modelo}</span></div>}
-          <div style={{fontSize:10,color:C.t3}}>Pago: {payType==="credit"?`Crédito${promesa?" · "+promesa:""}` : "Contado"}</div>
+        <div style={{height:1,background:"rgba(255,255,255,0.05)",marginBottom:14}}/>
+        <div style={{display:"flex",flexDirection:"column",gap:5}}>
+          {lineas.length>1&&<div style={{fontSize:10,color:A.t3}}>{lineas.length} líneas</div>}
+          {cl&&<div style={{fontSize:11,color:A.t2}}>Cliente: <span style={{fontWeight:700,color:A.t1}}>{cl.empresa}</span></div>}
+          {un&&<div style={{fontSize:11,color:A.t2}}>Unidad: <span style={{color:A.t1}}>{un.economico?"Eco. "+un.economico+" ":""}{un.marca} {un.modelo}</span></div>}
+          <div style={{fontSize:10,color:A.t3}}>
+            Pago: {payType==="credit"?`Crédito${promesa?" · "+promesa:""}` : "Contado"}
+          </div>
         </div>
       </div>
 
-      <MBtn label="Registrar ticket + PDF →" full onClick={save}/>
+      <div style={{display:"flex",gap:10}}>
+        <button onClick={()=>setStep(1)}
+          style={{padding:"14px 20px",borderRadius:14,background:"transparent",
+            border:"1px solid rgba(255,255,255,0.08)",color:A.t3,fontSize:12,cursor:"pointer",
+            WebkitTapHighlightColor:"transparent"}}>
+          ← Atrás
+        </button>
+        <button onClick={save} style={{
+          flex:1,padding:"16px",borderRadius:14,
+          background:"linear-gradient(135deg,#BFFF00,#9CD400)",
+          border:"none",color:"#0A1800",fontSize:14,fontWeight:800,cursor:"pointer",
+          letterSpacing:"0.02em",WebkitTapHighlightColor:"transparent",
+        }}>
+          Registrar ticket + PDF →
+        </button>
+      </div>
     </div>
   );
 }
