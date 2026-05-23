@@ -201,6 +201,30 @@ const genId = (prefix) => {
   return `${prefix}-${uuid}`;
 };
 
+// ── OPERATIONAL LOG — lightweight in-memory ring buffer ──────────────────────
+const opLog = (() => {
+  const buf = [];
+  return {
+    push: (type, data={}) => {
+      buf.push({type, data, ts: Date.now()});
+      if (buf.length > 200) buf.shift();
+      if (process.env.NODE_ENV !== "production") console.debug("[opLog]", type, data);
+    },
+    all: () => [...buf],
+  };
+})();
+
+// ── PENDING QUEUE — offline sync deferred operations ─────────────────────────
+const pendingQueue = (() => {
+  let q = [];
+  return {
+    push:  (item) => { q.push(item); },
+    peek:  ()     => [...q],
+    flush: ()     => { const out=[...q]; q=[]; return out; },
+    clear: ()     => { q=[]; },
+  };
+})();
+
 // ═══════════════════════════════════════════════════════════════════════════════
 function computeSnap(p) {
   const { costo=0, gasolina=0, otros=0, iva=16, isr=20,
@@ -334,8 +358,7 @@ function calculateTicketTotals(ticket) {
     const qty = safeNumber(ml.qty, 1) || 1;
     const lsnap = ml.snap || snap || {};
 
-    // Defensive validation
-    if (qty <= 0) opLog.push("WARN_QTY_INVALID", {id: ticket.id, qty});
+    // Defensive validation (qty is always ≥1 via safeNumber guard above)
 
     const fin = resolveLineFinancials(ml, snap, qty);
 
@@ -542,7 +565,6 @@ function reducer(state,action) {
         seen.add(key);
         return true;
       });
-      opLog.push("UNITS_REPLACE", {count: deduped.length, raw: incoming.length});
       return {...state, units: deduped};
     }
     // PARTS
@@ -1532,18 +1554,18 @@ function CentroOps({state}) {
   const cobradas   = useMemo(()=>active.filter(t=>PAID_SET.has(t.status)),[active]);
   const conversion = active.length > 0 ? (cobradas.length / active.length) * 100 : 0;
 
-  // Aging cartera
+  // Aging cartera — only entregado/facturado credit tickets with past promesaPago
   const aging = useMemo(()=>{
-    const pend=tickets.filter(t=>t.payType==="credit"&&!t.cobrado&&t.status!=="cancelado"&&t.promesaPago);
+    const pend=tickets.filter(t=>CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t.cobrado&&!t._deleted&&t.promesaPago);
     const bucket=(mn,mx)=>pend.filter(t=>{const d=parseDateMX(t.promesaPago);if(!d)return false;const ms=Date.now()-d.getTime();return ms>=mn*86400000&&(mx==null||ms<mx*86400000);}).reduce((s,t)=>s+(t.snap?.precioConIVA||0),0);
     return{a30:bucket(0,30),a60:bucket(30,60),mas60:bucket(60,null)};
   },[tickets]);
 
-  // Top proveedores
+  // Top proveedores — only operados (exclude cancelled, _deleted)
   const topSupp = useMemo(()=>suppliers.map(s=>{
-    const so=tickets.filter(t=>t.supplierId===s.id);
-    return{label:s.nombre,neta:so.reduce((s,t)=>s+(t.snap?.uNeta||0),0),count:so.length};
-  }).filter(s=>s.count>0).sort((a,b)=>b.neta-a.neta).slice(0,4),[tickets,suppliers]);
+    const so=operados.filter(t=>t.supplierId===s.id);
+    return{label:s.nombre,neta:so.reduce((acc,t)=>acc+(t.snap?.uNeta||0),0),count:so.length};
+  }).filter(s=>s.count>0).sort((a,b)=>b.neta-a.neta).slice(0,4),[operados,suppliers]);
 
   // Eficiencia
   const eficientes = useMemo(()=>tickets.filter(t=>t.horasOp>0).map(t=>({titulo:t.titulo,uPH:(t.snap?.uNeta||0)/t.horasOp,uNeta:t.snap?.uNeta||0,horas:t.horasOp})).sort((a,b)=>b.uPH-a.uPH).slice(0,4),[tickets]);
@@ -2106,12 +2128,12 @@ function Cotizador({state,dispatch,toast}) {
           notas:`Auto: ${todayMX()}`,proveedor:supp?.nombre||"",
           ultimoPrecio:safeNumber(l.costoUnit),ultimaFecha:fecha,frecuencia:1,
         }});
-      } else if(exists&&safeNumber(l.costoUnit)>0&&oem&&oem===exists.oem){
-        dispatch({type:"PART_UPDATE",id:exists.id,patch:{
-          ultimoPrecio:safeNumber(l.costoUnit),ultimaFecha:fecha,
-          frecuencia:(exists.frecuencia||1)+1,
-          proveedor:supp?.nombre||exists.proveedor||"",
-        }});
+      } else if(exists){
+        const patch={frecuencia:(exists.frecuencia||1)+1};
+        if(safeNumber(l.costoUnit)>0) patch.ultimoPrecio=safeNumber(l.costoUnit);
+        if(fecha) patch.ultimaFecha=fecha;
+        if(supp?.nombre) patch.proveedor=supp.nombre;
+        dispatch({type:"PART_UPDATE",id:exists.id,patch});
       }
     });
     // ───────────────────────────────────────────────────────────────────
@@ -4995,6 +5017,72 @@ function MOps({state,setTab}) {
   );
 }
 
+// ── StatusFlowSheet — bottom sheet para cambiar estado de ticket en mobile ────
+function StatusFlowSheet({tkt, dispatch, toast, onClose}) {
+  if(!tkt) return null;
+  const nexts = TICKET_TRANSITIONS[tkt.status] || [];
+  const meta  = TICKET_META[tkt.status] || {};
+  return (
+    <>
+      <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,.6)"}}/>
+      <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:201,
+        background:C.bg1,borderRadius:"20px 20px 0 0",borderTop:`1px solid ${C.borderHi}`,
+        padding:`16px 16px calc(20px + env(safe-area-inset-bottom,0px))`,
+        boxShadow:"0 -16px 60px rgba(0,0,0,.6)"}}>
+        {/* Handle */}
+        <div style={{display:"flex",justifyContent:"center",marginBottom:14}}>
+          <div style={{width:40,height:4,borderRadius:2,background:C.border}}/>
+        </div>
+        {/* Current state */}
+        <div style={{marginBottom:4}}>
+          <div style={{fontSize:9,color:C.t3,letterSpacing:"0.15em",textTransform:"uppercase",marginBottom:4}}>Estado actual</div>
+          <div style={{fontSize:13,fontWeight:700,color:meta.dot||C.t2}}>{meta.label||tkt.status}</div>
+          <div style={{fontSize:11,color:C.t3,marginTop:2,marginBottom:16}}>{tkt.titulo}</div>
+        </div>
+        {/* Transitions */}
+        {nexts.length===0?(
+          <div style={{textAlign:"center",padding:"16px 0",color:C.t3,fontSize:13}}>
+            Ticket en estado final — sin transiciones disponibles
+          </div>
+        ):(
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>
+              Mover a:
+            </div>
+            {nexts.map(to=>{
+              const m=TICKET_META[to]||{};
+              const isCancel=to==="cancelado";
+              return (
+                <button key={to} onClick={()=>{
+                  dispatch({type:"TKT_STATUS",id:tkt.id,to});
+                  toast(`${meta.label||tkt.status} → ${m.label||to}`,"success");
+                  onClose();
+                }}
+                  style={{padding:"14px 18px",borderRadius:14,cursor:"pointer",
+                    background:isCancel?C.redDim:C.bg2,
+                    border:`1px solid ${isCancel?C.red+"50":m.dot||C.border}`,
+                    display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
+                  <div style={{width:10,height:10,borderRadius:5,background:m.dot||C.border,flexShrink:0}}/>
+                  <div>
+                    <div style={{fontSize:14,fontWeight:700,color:isCancel?C.red:C.t1}}>{m.label||to}</div>
+                    {to==="cancelado"&&<div style={{fontSize:10,color:C.red,marginTop:1}}>Esta acción no se puede deshacer</div>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <button onClick={onClose}
+          style={{marginTop:16,width:"100%",padding:"12px",borderRadius:12,
+            background:"transparent",border:`1px solid ${C.border}`,
+            color:C.t3,fontSize:13,cursor:"pointer",fontWeight:600}}>
+          Cancelar
+        </button>
+      </div>
+    </>
+  );
+}
+
 // ── MPipeline — Pipeline móvil ───────────────────────────────────────────────
 function MPipeline({state,dispatch,toast}) {
   const {tickets,clients,units} = state;
@@ -5362,7 +5450,8 @@ function MCotizador({state,dispatch,toast}) {
       ivaTraslad:lineSnaps.reduce((s,sn)=>s+sn.ivaTraslad,0),
       ivaAcred:lineSnaps.reduce((s,sn)=>s+sn.ivaAcred,0),
       ivaNeto:lineSnaps.reduce((s,sn)=>s+sn.ivaNeto,0),
-      markupSobre:0,margenNetoPrecio:aggMargen,params:{iva,isr},
+      markupSobre:lineSnaps.reduce((s,sn)=>s+sn.costoTotal,0)>0?((lineSnaps.reduce((s,sn)=>s+sn.precioSinIVA,0)-lineSnaps.reduce((s,sn)=>s+sn.costoTotal,0))/lineSnaps.reduce((s,sn)=>s+sn.costoTotal,0))*100:0,
+      margenNetoPrecio:aggMargen,params:{iva,isr},
     };
     const tkt={
       id:mkTicketId(fecha),titulo,
@@ -5395,12 +5484,12 @@ function MCotizador({state,dispatch,toast}) {
           notas:`Auto: ${todayMX()}`,proveedor:supp?.nombre||"",
           ultimoPrecio:safeNumber(l.costoUnit),ultimaFecha:fecha,frecuencia:1,
         }});
-      } else if(exists&&safeNumber(l.costoUnit)>0&&oem&&oem===exists.oem){
-        dispatch({type:"PART_UPDATE",id:exists.id,patch:{
-          ultimoPrecio:safeNumber(l.costoUnit),ultimaFecha:fecha,
-          frecuencia:(exists.frecuencia||1)+1,
-          proveedor:supp?.nombre||exists.proveedor||"",
-        }});
+      } else if(exists){
+        const patch={frecuencia:(exists.frecuencia||1)+1};
+        if(safeNumber(l.costoUnit)>0) patch.ultimoPrecio=safeNumber(l.costoUnit);
+        if(fecha) patch.ultimaFecha=fecha;
+        if(supp?.nombre) patch.proveedor=supp.nombre;
+        dispatch({type:"PART_UPDATE",id:exists.id,patch});
       }
     });
     // ─────────────────────────────────────────────────────────────────────
