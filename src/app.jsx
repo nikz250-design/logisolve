@@ -6858,6 +6858,22 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// ── useSyncStatus — estado del sync Supabase ─────────────────────────────────
+function useSyncStatus() {
+  const [status, setStatus] = useState("idle"); // "idle"|"saving"|"saved"|"offline"|"error"
+  const timerRef = useRef(null);
+  const resetToIdle = useCallback((delay=3000) => {
+    if(timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(()=>setStatus("idle"), delay);
+  }, []);
+  const setSaving  = useCallback(()=>{ setStatus("saving");  if(timerRef.current) clearTimeout(timerRef.current); }, []);
+  const setSaved   = useCallback(()=>{ setStatus("saved");   resetToIdle(3000); }, [resetToIdle]);
+  const setOffline = useCallback(()=>{ setStatus("offline"); resetToIdle(8000); }, [resetToIdle]);
+  const setError   = useCallback(()=>{ setStatus("error");   resetToIdle(6000); }, [resetToIdle]);
+  useEffect(()=>()=>{ if(timerRef.current) clearTimeout(timerRef.current); },[]);
+  return { status, setSaving, setSaved, setOffline, setError };
+}
+
 export default function AppRoot(){
   return <ErrorBoundary><App/></ErrorBoundary>;
 }
