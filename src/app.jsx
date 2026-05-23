@@ -4,20 +4,20 @@ import React, { useState, useReducer, useEffect, useRef, useCallback, useMemo } 
 // L1 — DESIGN TOKENS
 // ═══════════════════════════════════════════════════════════════════════════════
 const C = {
-  bg0:"#070909", bg1:"#0C0F11", bg2:"#101415", bg3:"#151A1C", bg4:"#1A2022",
-  border:"#222A2E", borderHi:"#2E3C42",
-  blue:"#1A4D72", blueHi:"#215E8C", blueDim:"#0A2438",
-  cyan:"#267A90", cyanDim:"#16505E",
-  green:"#246845", greenDim:"#122E1E",
-  red:"#7A2828", redDim:"#321010",
-  yellow:"#866018", yellowDim:"#322408",
-  orange:"#7A4E14",
-  amber:"#8A5A10",
-  t1:"#BEC5CA", t2:"#4E5C65", t3:"#283238", t4:"#181E22",
-  p1:"#8A2020", p1dim:"#2E0A0A", p1dot:"#C84040",   // P1 CRITICO
-  p2:"#7A5010", p2dim:"#2E1C04", p2dot:"#C08020",   // P2 URGENTE
-  p3:"#1A5A4A", p3dim:"#082418", p3dot:"#30A080",   // P3 NORMAL
-  p4:"#243A4A", p4dim:"#0C1820", p4dot:"#4A7A9A",   // P4 PREVENTIVO
+  bg0:"#F0F2F5", bg1:"#FFFFFF", bg2:"#F7F9FC", bg3:"#EEF1F5", bg4:"#E8EDF3",
+  border:"rgba(0,0,0,0.08)", borderHi:"rgba(0,0,0,0.14)",
+  blue:"#3D7EBD", blueHi:"#4F92D4", blueDim:"rgba(61,126,189,0.1)",
+  cyan:"#2AAE9A", cyanDim:"rgba(42,174,154,0.1)",
+  green:"#2D8A55", greenDim:"rgba(45,138,85,0.1)",
+  red:"#D44040", redDim:"rgba(212,64,64,0.1)",
+  yellow:"#C48518", yellowDim:"rgba(196,133,24,0.1)",
+  orange:"#C86420",
+  amber:"#C48518",
+  t1:"#1A2332", t2:"#4A5568", t3:"#8896A4", t4:"#B8C6D0",
+  p1:"#C43030", p1dim:"rgba(196,48,48,0.1)", p1dot:"#E04040",   // P1 CRITICO
+  p2:"#AA7418", p2dim:"rgba(170,116,24,0.1)", p2dot:"#D49830",  // P2 URGENTE
+  p3:"#2A7A4E", p3dim:"rgba(42,122,78,0.1)",  p3dot:"#38A868",  // P3 NORMAL
+  p4:"#2C5882", p4dim:"rgba(44,88,130,0.1)",  p4dot:"#4A88C0",  // P4 PREVENTIVO
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -4777,13 +4777,13 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
 
 // ── Helpers móviles ──────────────────────────────────────────────────────────
 function MCard({children,style={}}) {
-  return <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:16,marginBottom:10,overflow:"hidden",...style}}>{children}</div>;
+  return <div style={{background:"#FFFFFF",border:"1px solid rgba(0,0,0,0.07)",borderRadius:18,marginBottom:10,overflow:"hidden",boxShadow:"0 2px 12px rgba(13,24,37,0.06)",...style}}>{children}</div>;
 }
 function MRow({label,value,color,bold}) {
   return (
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 14px",borderBottom:`1px solid ${C.border}`}}>
-      <span style={{fontSize:12,color:C.t2}}>{label}</span>
-      <span style={{fontSize:bold?16:13,fontWeight:bold?800:600,color:color||C.t1,fontFamily:"'Courier New',monospace"}}>{value}</span>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",borderBottom:"1px solid rgba(0,0,0,0.06)"}}>
+      <span style={{fontSize:12,color:"#4A5568"}}>{label}</span>
+      <span style={{fontSize:bold?16:13,fontWeight:bold?800:600,color:color||"#1A2332",fontFamily:"'Courier New',monospace"}}>{value}</span>
     </div>
   );
 }
@@ -4792,25 +4792,25 @@ function MBtn({label,color,bg,border,onClick,full,small}) {
     <button onClick={onClick} style={{
       width:full?"100%":"auto",
       padding:small?"10px 16px":"15px 20px",
-      background:bg||C.blue,
-      border:`1px solid ${border||C.blueHi}`,
-      borderRadius:10,cursor:"pointer",
+      background:bg||"#3D7EBD",
+      border:`1px solid ${border||"#4F92D4"}`,
+      borderRadius:12,cursor:"pointer",
       fontSize:small?12:14,fontWeight:700,
-      color:color||C.t1,letterSpacing:"0.04em",
-      minHeight:small?40:48,
+      color:color||"#FFFFFF",letterSpacing:"0.04em",
+      minHeight:small?40:48,touchAction:"manipulation",WebkitTapHighlightColor:"transparent",
     }}>{label}</button>
   );
 }
 function MField({label,value,onChange,type="text",placeholder,suffix,color}) {
   return (
     <div style={{marginBottom:10}}>
-      {label&&<div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase"}}>{label}</div>}
-      <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
+      {label&&<div style={{fontSize:10,color:"#8896A4",letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase",fontWeight:600}}>{label}</div>}
+      <div style={{display:"flex",alignItems:"center",background:"#F7F9FC",border:"1px solid rgba(0,0,0,0.09)",borderRadius:10,overflow:"hidden",minHeight:48}}>
         <input type={type} value={value} placeholder={placeholder||""} onChange={e=>onChange(e.target.value)}
-          style={{flex:1,background:"transparent",border:"none",outline:"none",color:color||C.t1,
+          style={{flex:1,background:"transparent",border:"none",outline:"none",color:color||"#1A2332",
             fontSize:16,/* 16px prevents iOS auto-zoom on focus */
-            padding:"12px 14px",fontFamily:"'Courier New',monospace"}}/>
-        {suffix&&<span style={{padding:"0 12px",color:C.t3,fontSize:12}}>{suffix}</span>}
+            padding:"12px 14px",fontFamily:"inherit"}}/>
+        {suffix&&<span style={{padding:"0 12px",color:"#8896A4",fontSize:12}}>{suffix}</span>}
       </div>
     </div>
   );
@@ -4818,12 +4818,12 @@ function MField({label,value,onChange,type="text",placeholder,suffix,color}) {
 function MSel({label,value,onChange,options}) {
   return (
     <div style={{marginBottom:10}}>
-      {label&&<div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase"}}>{label}</div>}
+      {label&&<div style={{fontSize:10,color:"#8896A4",letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase",fontWeight:600}}>{label}</div>}
       <select value={value} onChange={e=>onChange(e.target.value)}
-        style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t1,
+        style={{width:"100%",background:"#F7F9FC",border:"1px solid rgba(0,0,0,0.09)",borderRadius:10,padding:"12px 14px",color:"#1A2332",
           fontSize:16,/* 16px prevents iOS auto-zoom on focus */
-          outline:"none",fontFamily:"'Courier New',monospace",minHeight:46}}>
-        {options.map(o=><option key={o.value} value={o.value} style={{background:C.bg1}}>{o.label}</option>)}
+          outline:"none",fontFamily:"inherit",minHeight:48,appearance:"auto"}}>
+        {options.map(o=><option key={o.value} value={o.value} style={{background:"#FFFFFF"}}>{o.label}</option>)}
       </select>
     </div>
   );
@@ -4834,24 +4834,24 @@ function MOps({state,setTab}) {
   const {tickets,clients} = state;
   const [period,setPeriod] = useState("week");
 
-  // ── Accent palette — premium fintech, lime-first, no cyan ────────────────
+  // ── Accent palette — Trantor fintech: light page + dark navy floating cards
   const A = {
-    lime:     "#BFFF00",
-    limeDim:  "rgba(191,255,0,0.08)",
-    limeMid:  "rgba(191,255,0,0.18)",
-    mint:     "#3CCFAA",
-    mintDim:  "rgba(60,207,170,0.1)",
-    amber:    "#F0A030",
-    amberDim: "rgba(240,160,48,0.1)",
-    red:      "#E84848",
-    redDim:   "rgba(232,72,72,0.1)",
-    card:     "rgba(14,19,22,0.98)",
-    cardHi:   "rgba(20,26,30,0.98)",
-    shadow:   "0 2px 40px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.05)",
-    shadowSm: "0 2px 20px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.03)",
-    t1:       "#E8EDF0",
-    t2:       "#8A9AA4",
-    t3:       "#46565F",
+    lime:     "#4A90D9",                          // pastel blue (replaces lime as primary accent)
+    limeDim:  "rgba(74,144,217,0.1)",
+    limeMid:  "rgba(74,144,217,0.18)",
+    mint:     "#2BB5A0",                          // pastel teal (keep)
+    mintDim:  "rgba(43,181,160,0.12)",
+    amber:    "#D4921A",
+    amberDim: "rgba(212,146,26,0.12)",
+    red:      "#D64242",
+    redDim:   "rgba(214,66,66,0.12)",
+    card:     "#0D1825",                          // dark navy card (Trantor style)
+    cardHi:   "#131F2E",
+    shadow:   "0 8px 32px rgba(13,24,37,0.22), 0 2px 8px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.06)",
+    shadowSm: "0 4px 20px rgba(13,24,37,0.14), 0 1px 4px rgba(0,0,0,0.07)",
+    t1:       "#F0F4F8",                          // white text (on dark cards)
+    t2:       "rgba(240,244,248,0.65)",
+    t3:       "rgba(240,244,248,0.38)",
     r:        24,
   };
 
@@ -5013,7 +5013,7 @@ function MOps({state,setTab}) {
             <button key={v} onClick={()=>setPeriod(v)} style={{
               flexShrink:0,padding:"7px 18px",borderRadius:20,fontSize:12,fontWeight:700,
               background:period===v?A.limeMid:"transparent",
-              border:`1.5px solid ${period===v?A.lime:"rgba(255,255,255,0.07)"}`,
+              border:`1.5px solid ${period===v?A.lime:"rgba(0,0,0,0.1)"}`,
               color:period===v?A.lime:A.t3,
               cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.15s",
             }}>
@@ -5062,7 +5062,7 @@ function MOps({state,setTab}) {
                 display:"inline-flex",alignItems:"center",gap:6,
                 padding:"5px 14px",borderRadius:20,
                 background: growthUp?A.limeDim:A.redDim,
-                border:`1px solid ${growthUp?"rgba(191,255,0,0.22)":"rgba(232,72,72,0.22)"}`,
+                border:`1px solid ${growthUp?"rgba(74,144,217,0.25)":"rgba(214,66,66,0.25)"}`,
               }}>
                 <span style={{fontSize:14,fontWeight:800,color:growthUp?A.lime:A.red}}>
                   {growthUp?"+":""}{growth.toFixed(0)}%
@@ -5098,12 +5098,12 @@ function MOps({state,setTab}) {
         {/* ══ QUICK ACTIONS ═════════════════════════════════════════════════════ */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
           <button onClick={()=>setTab("cotizador")} style={{
-            background:`linear-gradient(135deg,${A.lime} 0%,#9CD400 100%)`,
+            background:`linear-gradient(135deg,${A.lime} 0%,#3578C5 100%)`,
             border:"none",borderRadius:18,padding:"18px 16px",
-            cursor:"pointer",textAlign:"left",WebkitTapHighlightColor:"transparent",
+            cursor:"pointer",textAlign:"left",WebkitTapHighlightColor:"transparent",touchAction:"manipulation",
           }}>
-            <div style={{fontSize:22,fontWeight:800,color:"#0A1800",lineHeight:1,marginBottom:6}}>+</div>
-            <div style={{fontSize:13,fontWeight:700,color:"#0A1800",letterSpacing:"-0.01em",lineHeight:1.2}}>
+            <div style={{fontSize:22,fontWeight:800,color:"#FFFFFF",lineHeight:1,marginBottom:6}}>+</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#FFFFFF",letterSpacing:"-0.01em",lineHeight:1.2}}>
               Nueva<br/>cotización
             </div>
           </button>
@@ -5113,7 +5113,7 @@ function MOps({state,setTab}) {
             borderRadius:18,padding:"18px 16px",
             cursor:"pointer",textAlign:"left",
             boxShadow:A.shadowSm,
-            WebkitTapHighlightColor:"transparent",
+            WebkitTapHighlightColor:"transparent",touchAction:"manipulation",
           }}>
             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
               <span style={{fontSize:26,fontWeight:800,color:A.t1,lineHeight:1}}>{pipeline.length}</span>
@@ -5191,7 +5191,7 @@ function MOps({state,setTab}) {
           <svg viewBox="0 0 280 52" style={{width:"100%",height:52,display:"block",overflow:"visible"}}>
             <defs>
               <linearGradient id="mops-sg" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%"   stopColor={A.lime} stopOpacity="0.22"/>
+                <stop offset="0%"   stopColor={A.lime} stopOpacity="0.3"/>
                 <stop offset="100%" stopColor={A.lime} stopOpacity="0.02"/>
               </linearGradient>
             </defs>
@@ -5270,7 +5270,7 @@ function MOps({state,setTab}) {
               Crea una cotización para comenzar
             </div>
             <button onClick={()=>setTab("cotizador")} style={{
-              background:A.limeDim,border:`1px solid rgba(191,255,0,0.25)`,
+              background:A.limeDim,border:`1px solid rgba(74,144,217,0.25)`,
               borderRadius:12,padding:"10px 22px",cursor:"pointer",
               fontSize:13,fontWeight:600,color:A.lime,letterSpacing:"0.04em",
             }}>
@@ -5356,15 +5356,15 @@ function MPipeline({state,dispatch,toast}) {
   const [statusSheet,setStatusSheet] = useState(null);
   const [expandId,setExpandId]   = useState(null);
 
-  // Accent palette — matches MOps
+  // Accent palette — Trantor fintech (matches MOps)
   const A = {
-    lime:"#BFFF00", limeDim:"rgba(191,255,0,0.08)", limeMid:"rgba(191,255,0,0.18)",
-    mint:"#3CCFAA", mintDim:"rgba(60,207,170,0.1)",
-    amber:"#F0A030", amberDim:"rgba(240,160,48,0.1)",
-    red:"#E84848",   redDim:"rgba(232,72,72,0.1)",
-    card:"rgba(14,19,22,0.98)", cardHi:"rgba(20,26,30,0.98)",
-    shadow:"0 2px 24px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.04)",
-    t1:"#E8EDF0", t2:"#8A9AA4", t3:"#46565F", r:20,
+    lime:"#4A90D9", limeDim:"rgba(74,144,217,0.1)", limeMid:"rgba(74,144,217,0.18)",
+    mint:"#2BB5A0", mintDim:"rgba(43,181,160,0.12)",
+    amber:"#D4921A", amberDim:"rgba(212,146,26,0.12)",
+    red:"#D64242",   redDim:"rgba(214,66,66,0.12)",
+    card:"#0D1825", cardHi:"#131F2E",
+    shadow:"0 6px 28px rgba(13,24,37,0.2), 0 1px 4px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.05)",
+    t1:"#F0F4F8", t2:"rgba(240,244,248,0.65)", t3:"rgba(240,244,248,0.38)", r:20,
   };
 
   const PIPE_STAGES = ["recibido","validando","sourcing","cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado"];
@@ -5420,7 +5420,7 @@ function MPipeline({state,dispatch,toast}) {
             }}>
               {l}
               {c>0&&<span style={{fontSize:10,fontWeight:800,
-                background:filter===v?"rgba(191,255,0,0.2)":"rgba(255,255,255,0.06)",
+                background:filter===v?"rgba(74,144,217,0.18)":"rgba(255,255,255,0.06)",
                 color:filter===v?A.lime:A.t3,borderRadius:9,padding:"1px 6px"}}>{c}</span>}
             </button>
           ))}
@@ -5565,7 +5565,7 @@ function MPipeline({state,dispatch,toast}) {
                       <button onClick={e=>{e.stopPropagation();setStatusSheet(t);}}
                         style={{padding:"10px 18px",borderRadius:12,
                           background:isP1?"rgba(232,72,72,0.15)":A.limeDim,
-                          border:`1px solid ${isP1?"rgba(232,72,72,0.3)":"rgba(191,255,0,0.25)"}`,
+                          border:`1px solid ${isP1?"rgba(214,66,66,0.3)":"rgba(74,144,217,0.25)"}`,
                           color:isP1?A.red:A.lime,fontSize:12,fontWeight:700,cursor:"pointer",
                           letterSpacing:"0.04em",WebkitTapHighlightColor:"transparent"}}>
                         Estado →
@@ -5629,25 +5629,25 @@ function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
         onFocus={()=>setOpen(true)}
         placeholder={placeholder||"Buscar o describir pieza..."}
         autoComplete="off"
-        style={{width:"100%",background:C.bg0,border:`1px solid ${open?C.blueHi:C.border}`,
-          borderRadius:10,padding:"13px 14px",color:C.t1,fontSize:16,
+        style={{width:"100%",background:"#F7F9FC",border:`1px solid ${open?"#4F92D4":"rgba(0,0,0,0.09)"}`,
+          borderRadius:10,padding:"13px 14px",color:"#1A2332",fontSize:16,
           outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}
       />
       {showDropdown&&(
         <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,zIndex:400,
-          background:C.bg2,border:`1px solid ${C.blueHi}`,borderRadius:10,
-          boxShadow:"0 8px 32px rgba(0,0,0,0.6)",maxHeight:280,overflowY:"auto",
+          background:"#FFFFFF",border:"1px solid rgba(61,126,189,0.3)",borderRadius:10,
+          boxShadow:"0 8px 32px rgba(13,24,37,0.12)",maxHeight:280,overflowY:"auto",
           WebkitOverflowScrolling:"touch"}}>
           {results.map(p=>(
             <div key={p.id}
               onMouseDown={e=>{e.preventDefault();onSelect(p);setOpen(false);}}
               onTouchEnd={e=>{e.preventDefault();onSelect(p);setOpen(false);}}
-              style={{padding:"11px 14px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",
+              style={{padding:"11px 14px",borderBottom:"1px solid rgba(0,0,0,0.06)",cursor:"pointer",
                 display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:700,color:C.t1,overflow:"hidden",
+                <div style={{fontSize:13,fontWeight:700,color:"#1A2332",overflow:"hidden",
                   textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
-                <div style={{fontSize:10,color:C.t3,marginTop:1,fontFamily:"'Courier New',monospace"}}>
+                <div style={{fontSize:10,color:"#8896A4",marginTop:1,fontFamily:"'Courier New',monospace"}}>
                   {p.oem&&<span>OEM: {p.oem}</span>}
                   {p.oem&&p.ultimoPrecio>0&&<span style={{color:C.border}}> · </span>}
                   {p.ultimoPrecio>0&&<span style={{color:C.yellow}}>{mxn(p.ultimoPrecio)}</span>}
@@ -5657,7 +5657,7 @@ function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
                 {p.aplicacion&&<div style={{fontSize:9,color:C.t3,marginTop:1}}>{p.aplicacion}</div>}
               </div>
               {(p.frecuencia||0)>1&&(
-                <div style={{fontSize:9,color:"#BFFF00",background:"rgba(191,255,0,0.1)",padding:"2px 7px",
+                <div style={{fontSize:9,color:"#4A90D9",background:"rgba(74,144,217,0.1)",padding:"2px 7px",
                   borderRadius:10,flexShrink:0,fontWeight:700}}>×{p.frecuencia}</div>
               )}
             </div>
@@ -5666,8 +5666,8 @@ function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
             <div onMouseDown={e=>{e.preventDefault();onSelect({nombre:(value||"").trim(),oem:"",ultimoPrecio:0});setOpen(false);}}
               onTouchEnd={e=>{e.preventDefault();onSelect({nombre:(value||"").trim(),oem:"",ultimoPrecio:0});setOpen(false);}}
               style={{padding:"11px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:18,color:"#BFFF00",lineHeight:1}}>＋</span>
-              <span style={{fontSize:13,color:"#BFFF00",fontWeight:600}}>Agregar "{(value||"").trim().slice(0,30)}"</span>
+              <span style={{fontSize:18,color:"#4A90D9",lineHeight:1}}>＋</span>
+              <span style={{fontSize:13,color:"#4A90D9",fontWeight:600}}>Agregar "{(value||"").trim().slice(0,30)}"</span>
             </div>
           )}
         </div>
@@ -5680,24 +5680,24 @@ function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
 function MCotizador({state,dispatch,toast}) {
   const {clients,suppliers,units} = state;
 
-  // Accent palette
+  // Accent palette — Trantor fintech
   const A = {
-    lime:"#BFFF00", limeDim:"rgba(191,255,0,0.08)", limeMid:"rgba(191,255,0,0.18)",
-    mint:"#3CCFAA", mintDim:"rgba(60,207,170,0.1)",
-    amber:"#F0A030", amberDim:"rgba(240,160,48,0.1)",
-    red:"#E84848",   redDim:"rgba(232,72,72,0.1)",
-    card:"rgba(14,19,22,0.98)", cardHi:"rgba(20,26,30,0.98)",
-    shadow:"0 2px 24px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.04)",
-    shadowSm:"0 1px 16px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.03)",
-    t1:"#E8EDF0", t2:"#8A9AA4", t3:"#46565F", r:20,
+    lime:"#4A90D9", limeDim:"rgba(74,144,217,0.1)", limeMid:"rgba(74,144,217,0.18)",
+    mint:"#2BB5A0", mintDim:"rgba(43,181,160,0.12)",
+    amber:"#D4921A", amberDim:"rgba(212,146,26,0.12)",
+    red:"#D64242",   redDim:"rgba(214,66,66,0.12)",
+    card:"#0D1825", cardHi:"#131F2E",
+    shadow:"0 6px 28px rgba(13,24,37,0.2), 0 1px 4px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.05)",
+    shadowSm:"0 4px 16px rgba(13,24,37,0.12), 0 1px 4px rgba(0,0,0,0.06)",
+    t1:"#F0F4F8", t2:"rgba(240,244,248,0.65)", t3:"rgba(240,244,248,0.38)", r:20,
   };
 
   // Priority semantic colors
   const prColors = {
-    P1:{dot:"#E84848",dim:"rgba(232,72,72,0.1)",  label:"Unidad detenida"},
-    P2:{dot:"#F0A030",dim:"rgba(240,160,48,0.1)", label:"Operación comprometida"},
-    P3:{dot:"#3CCFAA",dim:"rgba(60,207,170,0.1)", label:"Preventivo urgente"},
-    P4:{dot:"#8A9AA4",dim:"rgba(138,154,164,0.1)",label:"Solicitud normal"},
+    P1:{dot:"#D64242",dim:"rgba(214,66,66,0.12)",  label:"Unidad detenida"},
+    P2:{dot:"#D4921A",dim:"rgba(212,146,26,0.12)", label:"Operación comprometida"},
+    P3:{dot:"#2BB5A0",dim:"rgba(43,181,160,0.12)", label:"Preventivo urgente"},
+    P4:{dot:"rgba(240,244,248,0.45)",dim:"rgba(240,244,248,0.07)",label:"Solicitud normal"},
   };
 
   const [step,setStep]          = useState(0);
@@ -5813,7 +5813,7 @@ function MCotizador({state,dispatch,toast}) {
           <React.Fragment key={i}>
             {i>0&&(
               <div style={{flex:1,height:2,
-                background:done?"rgba(191,255,0,0.5)":"rgba(255,255,255,0.06)",
+                background:done?"rgba(74,144,217,0.5)":"rgba(255,255,255,0.06)",
                 borderRadius:1,margin:"0 8px",marginTop:-14}}/>
             )}
             <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,
@@ -5821,8 +5821,8 @@ function MCotizador({state,dispatch,toast}) {
               onClick={()=>done&&setStep(i)}>
               <div style={{
                 width:30,height:30,borderRadius:15,
-                background:done?A.lime:curr?"rgba(191,255,0,0.15)":"rgba(255,255,255,0.04)",
-                border:`2px solid ${done?A.lime:curr?"rgba(191,255,0,0.5)":"rgba(255,255,255,0.08)"}`,
+                background:done?A.lime:curr?"rgba(74,144,217,0.15)":"rgba(255,255,255,0.04)",
+                border:`2px solid ${done?A.lime:curr?"rgba(74,144,217,0.5)":"rgba(255,255,255,0.08)"}`,
                 display:"flex",alignItems:"center",justifyContent:"center",
                 fontSize:11,fontWeight:800,
                 color:done?"#0A1800":curr?A.lime:A.t3,
@@ -5886,7 +5886,7 @@ function MCotizador({state,dispatch,toast}) {
             <div key={op.id} onClick={()=>setOpType(op.id)}
               style={{padding:"14px",borderRadius:14,cursor:"pointer",
                 background:sel?A.limeDim:A.card,
-                boxShadow:sel?"0 2px 16px rgba(0,0,0,0.5), 0 0 0 1.5px rgba(191,255,0,0.4)":A.shadowSm,
+                boxShadow:sel?"0 4px 20px rgba(74,144,217,0.35), 0 0 0 1.5px rgba(74,144,217,0.5)":A.shadowSm,
                 WebkitTapHighlightColor:"transparent",transition:"all 0.15s"}}>
               <div style={{fontSize:13,fontWeight:700,color:sel?A.lime:A.t2,marginBottom:4}}>{op.label}</div>
               <div style={{fontSize:10,color:A.t3}}>{op.baseMin}–{op.baseMax}%</div>
@@ -5904,12 +5904,12 @@ function MCotizador({state,dispatch,toast}) {
               onClick={()=>setActiveMods(p=>p.includes(mod.id)?p.filter(x=>x!==mod.id):[...p,mod.id])}
               style={{padding:"14px",borderRadius:14,cursor:"pointer",
                 background:on?A.limeDim:A.card,
-                boxShadow:on?"0 2px 16px rgba(0,0,0,0.5), 0 0 0 1.5px rgba(191,255,0,0.35)":A.shadowSm,
+                boxShadow:on?"0 4px 20px rgba(74,144,217,0.3), 0 0 0 1.5px rgba(74,144,217,0.45)":A.shadowSm,
                 display:"flex",alignItems:"flex-start",gap:10,
                 WebkitTapHighlightColor:"transparent",transition:"all 0.15s"}}>
               <div style={{width:8,height:8,borderRadius:"50%",marginTop:3,flexShrink:0,
                 background:on?A.lime:"rgba(255,255,255,0.15)",
-                boxShadow:on?"0 0 6px #BFFF00":"none",transition:"all 0.15s"}}/>
+                boxShadow:on?"0 0 8px #4A90D9":"none",transition:"all 0.15s"}}/>
               <div>
                 <div style={{fontSize:12,fontWeight:700,color:on?A.lime:A.t2,marginBottom:2}}>{mod.label}</div>
                 <div style={{fontSize:10,color:on?A.lime:A.t3,fontWeight:on?700:400}}>+{mod.pct}%</div>
@@ -5931,8 +5931,8 @@ function MCotizador({state,dispatch,toast}) {
 
       <button onClick={()=>setStep(1)} style={{
         width:"100%",padding:"16px",borderRadius:16,
-        background:"linear-gradient(135deg,#BFFF00,#9CD400)",
-        border:"none",color:"#0A1800",fontSize:14,fontWeight:800,cursor:"pointer",
+        background:"linear-gradient(135deg,#4A90D9,#3578C5)",
+        border:"none",color:"#FFFFFF",fontSize:14,fontWeight:800,cursor:"pointer",
         letterSpacing:"0.02em",WebkitTapHighlightColor:"transparent",
       }}>
         Siguiente: Líneas →
@@ -5990,7 +5990,7 @@ function MCotizador({state,dispatch,toast}) {
                 {[["auto","Auto (margen)"],["manual","Precio fijo"]].map(([m,lbl])=>(
                   <button key={m} onClick={()=>upd(i,{mode:m})}
                     style={{flex:1,padding:"9px",borderRadius:10,fontSize:11,fontWeight:700,
-                      border:`1.5px solid ${l.mode===m?"rgba(191,255,0,0.45)":"rgba(255,255,255,0.07)"}`,
+                      border:`1.5px solid ${l.mode===m?"rgba(74,144,217,0.45)":"rgba(255,255,255,0.08)"}`,
                       background:l.mode===m?A.limeDim:"transparent",
                       color:l.mode===m?A.lime:A.t3,cursor:"pointer",
                       transition:"all 0.15s",WebkitTapHighlightColor:"transparent"}}>
@@ -6005,7 +6005,7 @@ function MCotizador({state,dispatch,toast}) {
                 <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
                   <button onClick={()=>upd(i,{customMgn:!l.customMgn})}
                     style={{padding:"9px 14px",borderRadius:10,fontSize:10,fontWeight:700,flexShrink:0,
-                      border:`1.5px solid ${l.customMgn?"rgba(191,255,0,0.45)":"rgba(255,255,255,0.07)"}`,
+                      border:`1.5px solid ${l.customMgn?"rgba(74,144,217,0.45)":"rgba(255,255,255,0.08)"}`,
                       background:l.customMgn?A.limeDim:"transparent",
                       color:l.customMgn?A.lime:A.t3,cursor:"pointer",WebkitTapHighlightColor:"transparent"}}>
                     Margen personalizado
@@ -6081,8 +6081,8 @@ function MCotizador({state,dispatch,toast}) {
         </button>
         <button onClick={()=>setStep(2)} style={{
           flex:1,padding:"14px",borderRadius:14,
-          background:"linear-gradient(135deg,#BFFF00,#9CD400)",
-          border:"none",color:"#0A1800",fontSize:14,fontWeight:800,cursor:"pointer",
+          background:"linear-gradient(135deg,#4A90D9,#3578C5)",
+          border:"none",color:"#FFFFFF",fontSize:14,fontWeight:800,cursor:"pointer",
           WebkitTapHighlightColor:"transparent",
         }}>
           Siguiente: Datos →
@@ -6160,8 +6160,8 @@ function MCotizador({state,dispatch,toast}) {
         </button>
         <button onClick={save} style={{
           flex:1,padding:"16px",borderRadius:14,
-          background:"linear-gradient(135deg,#BFFF00,#9CD400)",
-          border:"none",color:"#0A1800",fontSize:14,fontWeight:800,cursor:"pointer",
+          background:"linear-gradient(135deg,#4A90D9,#3578C5)",
+          border:"none",color:"#FFFFFF",fontSize:14,fontWeight:800,cursor:"pointer",
           letterSpacing:"0.02em",WebkitTapHighlightColor:"transparent",
         }}>
           Registrar ticket + PDF →
@@ -6177,14 +6177,14 @@ function MCartera({state,dispatch,toast}) {
   const now = new Date();
 
   const A = {
-    lime:"#BFFF00", limeDim:"rgba(191,255,0,0.08)",
-    mint:"#3CCFAA", mintDim:"rgba(60,207,170,0.1)",
-    amber:"#F0A030", amberDim:"rgba(240,160,48,0.1)",
-    red:"#E84848",   redDim:"rgba(232,72,72,0.1)",
-    card:"rgba(14,19,22,0.98)",
-    shadow:"0 2px 24px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.04)",
-    shadowSm:"0 2px 16px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.03)",
-    t1:"#E8EDF0", t2:"#8A9AA4", t3:"#46565F", r:20,
+    lime:"#4A90D9", limeDim:"rgba(74,144,217,0.1)",
+    mint:"#2BB5A0", mintDim:"rgba(43,181,160,0.12)",
+    amber:"#D4921A", amberDim:"rgba(212,146,26,0.12)",
+    red:"#D64242",   redDim:"rgba(214,66,66,0.12)",
+    card:"#0D1825",
+    shadow:"0 6px 28px rgba(13,24,37,0.2), 0 1px 4px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.05)",
+    shadowSm:"0 4px 16px rgba(13,24,37,0.12), 0 1px 4px rgba(0,0,0,0.06)",
+    t1:"#F0F4F8", t2:"rgba(240,244,248,0.65)", t3:"rgba(240,244,248,0.38)", r:20,
   };
 
   const creditTkts = useMemo(()=>tickets.filter(t=>!t._deleted&&t.payType==="credit"&&t.status!=="cancelado"),[tickets]);
@@ -6217,8 +6217,8 @@ function MCartera({state,dispatch,toast}) {
       {/* Alert banner when vencidas exist */}
       {vencidas.length>0&&(
         <div style={{
-          background:"linear-gradient(160deg,rgba(26,18,6,0.98) 0%,rgba(14,19,22,0.98) 100%)",
-          borderBottom:"1px solid rgba(240,160,48,0.25)",
+          background:"#0D1825",
+          borderBottom:"1px solid rgba(212,146,26,0.3)",
           padding:"18px 20px 16px",
         }}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
@@ -6532,17 +6532,17 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
   };
 
   const A = {
-    lime:"#BFFF00", limeDim:"rgba(191,255,0,0.08)", limeMid:"rgba(191,255,0,0.18)",
-    mint:"#3CCFAA", mintDim:"rgba(60,207,170,0.1)",
-    amber:"#F0A030", amberDim:"rgba(240,160,48,0.1)",
-    red:"#E84848",   redDim:"rgba(232,72,72,0.1)",
-    card:"rgba(14,19,22,0.98)",
-    shadow:"0 2px 20px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04)",
-    shadowSm:"0 1px 12px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.03)",
-    t1:"#E8EDF0", t2:"#8A9AA4", t3:"#46565F", r:18,
+    lime:"#4A90D9", limeDim:"rgba(74,144,217,0.1)", limeMid:"rgba(74,144,217,0.18)",
+    mint:"#2BB5A0", mintDim:"rgba(43,181,160,0.12)",
+    amber:"#D4921A", amberDim:"rgba(212,146,26,0.12)",
+    red:"#D64242",   redDim:"rgba(214,66,66,0.12)",
+    card:"#0D1825",
+    shadow:"0 6px 24px rgba(13,24,37,0.18), 0 1px 4px rgba(0,0,0,0.08)",
+    shadowSm:"0 3px 12px rgba(13,24,37,0.12), 0 1px 3px rgba(0,0,0,0.06)",
+    t1:"#F0F4F8", t2:"rgba(240,244,248,0.65)", t3:"rgba(240,244,248,0.38)", r:18,
   };
-  const prC={P1:{dot:"#E84848",dim:"rgba(232,72,72,0.12)"},P2:{dot:"#F0A030",dim:"rgba(240,160,48,0.12)"},
-             P3:{dot:"#3CCFAA",dim:"rgba(60,207,170,0.12)"},P4:{dot:"#8A9AA4",dim:"rgba(138,154,164,0.12)"}};
+  const prC={P1:{dot:"#D64242",dim:"rgba(214,66,66,0.12)"},P2:{dot:"#D4921A",dim:"rgba(212,146,26,0.12)"},
+             P3:{dot:"#2BB5A0",dim:"rgba(43,181,160,0.12)"},P4:{dot:"rgba(240,244,248,0.5)",dim:"rgba(240,244,248,0.07)"}};
 
   return (
     <div style={{minHeight:"100vh",background:C.bg0,paddingBottom:40}}>
@@ -6554,8 +6554,8 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
             <button key={v} onClick={()=>setPeriod(v)} style={{
               flexShrink:0,padding:"7px 16px",borderRadius:20,fontSize:11,fontWeight:700,
               background:period===v?A.limeMid:"transparent",
-              border:`1.5px solid ${period===v?A.lime:"rgba(255,255,255,0.07)"}`,
-              color:period===v?A.lime:A.t3,
+              border:`1.5px solid ${period===v?A.lime:"rgba(0,0,0,0.1)"}`,
+              color:period===v?A.lime:"#8896A4",
               cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.15s",
             }}>{l}</button>
           ))}
@@ -6772,7 +6772,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                           <div style={{display:"flex",gap:8}}>
                             <button onClick={()=>saveEdit(t)} style={{
                               flex:1,padding:"13px",borderRadius:12,
-                              background:"rgba(191,255,0,0.15)",border:"1px solid rgba(191,255,0,0.3)",
+                              background:"rgba(43,181,160,0.15)",border:"1px solid rgba(43,181,160,0.3)",
                               color:A.lime,fontSize:13,fontWeight:700,cursor:"pointer",
                             }}>Guardar</button>
                             <button onClick={()=>setEditId(null)} style={{
@@ -7306,29 +7306,30 @@ function MasSheet({open,onClose,tab,setTab}) {
   ];
   return (
     <>
-      <div onClick={onClose} className="fade-enter" style={{position:"fixed",inset:0,zIndex:150,background:"rgba(0,0,0,.55)"}}/>
-      <div className="sheet-enter" style={{position:"fixed",bottom:0,left:0,right:0,zIndex:151,
-        background:C.bg1,borderRadius:"20px 20px 0 0",
-        borderTop:`1px solid ${C.borderHi}`,
-        padding:`0 16px calc(16px + env(safe-area-inset-bottom,0px))`,
-        boxShadow:"0 -16px 60px rgba(0,0,0,.55)"}}>
-        <div style={{display:"flex",justifyContent:"center",padding:"12px 0 6px"}}>
-          <div style={{width:40,height:4,borderRadius:2,background:C.border}}/>
+      <div onClick={onClose} className="fade-enter" style={{position:"fixed",inset:0,zIndex:150,background:"rgba(13,24,37,0.45)"}}/>
+      <div className="sheet-enter" style={{position:"fixed",bottom:0,left:0,right:0,zIndex:155,
+        background:"#FFFFFF",borderRadius:"24px 24px 0 0",
+        borderTop:"1px solid rgba(0,0,0,0.06)",
+        padding:`0 16px calc(20px + env(safe-area-inset-bottom,0px))`,
+        boxShadow:"0 -8px 40px rgba(13,24,37,0.12)"}}>
+        <div style={{display:"flex",justifyContent:"center",padding:"14px 0 8px"}}>
+          <div style={{width:36,height:4,borderRadius:2,background:"rgba(0,0,0,0.12)"}}/>
         </div>
-        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.16em",marginBottom:14,
+        <div style={{fontSize:11,color:"#8896A4",letterSpacing:"0.14em",marginBottom:16,
           textAlign:"center",textTransform:"uppercase",fontWeight:700}}>Más módulos</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:8}}>
           {items.map(item=>(
             <button key={item.id} onClick={()=>{setTab(item.id);onClose();}}
-              style={{padding:"16px 8px",
-                background:tab===item.id?C.blueDim:C.bg2,
-                border:`1px solid ${tab===item.id?C.blueHi:C.border}`,
-                borderRadius:16,cursor:"pointer",
-                display:"flex",flexDirection:"column",alignItems:"center",gap:6,
-                transition:"background 150ms ease"}}>
-              <span style={{fontSize:26,lineHeight:1}}>{item.icon}</span>
-              <span style={{fontSize:12,fontWeight:700,color:tab===item.id?C.cyan:C.t1,lineHeight:1}}>{item.label}</span>
-              <span style={{fontSize:9,color:C.t3,lineHeight:1}}>{item.desc}</span>
+              style={{padding:"18px 10px",
+                background:tab===item.id?"rgba(61,126,189,0.08)":"#F7F9FC",
+                border:`1.5px solid ${tab===item.id?"#3D7EBD":"rgba(0,0,0,0.07)"}`,
+                borderRadius:18,cursor:"pointer",
+                display:"flex",flexDirection:"column",alignItems:"center",gap:8,
+                transition:"all 150ms ease",touchAction:"manipulation",
+                WebkitTapHighlightColor:"transparent"}}>
+              <span style={{fontSize:28,lineHeight:1}}>{item.icon}</span>
+              <span style={{fontSize:12,fontWeight:700,color:tab===item.id?"#3D7EBD":"#1A2332",lineHeight:1}}>{item.label}</span>
+              <span style={{fontSize:10,color:"#8896A4",lineHeight:1}}>{item.desc}</span>
             </button>
           ))}
         </div>
@@ -7360,12 +7361,12 @@ class ErrorBoundary extends React.Component {
     if(!this.state.error) return this.props.children;
     const msg = this.state.error?.message||String(this.state.error);
     return (
-      <div style={{minHeight:"100vh",background:"#070909",color:"#e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:24,fontFamily:"'Trebuchet MS',sans-serif"}}>
-        <div style={{fontSize:28,color:"#267A90"}}>⚠</div>
-        <div style={{fontSize:13,fontWeight:700,color:"#e2e8f0",textAlign:"center"}}>Algo salió mal</div>
-        <div style={{fontSize:10,color:"#94a3b8",fontFamily:"monospace",background:"#0f1515",padding:"8px 14px",borderRadius:4,maxWidth:320,wordBreak:"break-all",textAlign:"center"}}>{msg}</div>
+      <div style={{minHeight:"100vh",background:"#F0F2F5",color:"#1A2332",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:24,fontFamily:"'Trebuchet MS',sans-serif"}}>
+        <div style={{fontSize:28,color:"#3D7EBD"}}>⚠</div>
+        <div style={{fontSize:13,fontWeight:700,color:"#1A2332",textAlign:"center"}}>Algo salió mal</div>
+        <div style={{fontSize:10,color:"#4A5568",fontFamily:"monospace",background:"#EEF1F5",padding:"8px 14px",borderRadius:4,maxWidth:320,wordBreak:"break-all",textAlign:"center"}}>{msg}</div>
         <button onClick={()=>window.location.reload()}
-          style={{marginTop:8,padding:"9px 22px",background:"#267A90",border:"none",borderRadius:4,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",letterSpacing:"0.05em"}}>
+          style={{marginTop:8,padding:"9px 22px",background:"#3D7EBD",border:"none",borderRadius:4,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",letterSpacing:"0.05em"}}>
           REINICIAR APP
         </button>
       </div>
@@ -7400,7 +7401,7 @@ function App() {
   const [search,setSearch]=useState(false);
   const [loading,setLoading]=useState(true);
   const [mobileView,setMobileView]=useState(()=>window.innerWidth<768);
-  const [quickOpen]=useState(false); // kept for scroll-lock compat
+  const [quickOpen,setQuickOpen]=useState(false); // scroll-lock compat
   const [masOpen,setMasOpen]=useState(false);
   const { status: syncStatus, setSaving, setSaved, setOffline, setError: setSyncError } = useSyncStatus();
 
@@ -7608,14 +7609,14 @@ function App() {
             const isP1Tab=t.id==="ops"&&p1Active>0;
             return (
               <button key={t.id} onClick={()=>setTab(t.id)}
-                style={{padding:"3px 9px",borderRadius:3,cursor:"pointer",fontSize:10,fontWeight:600,background:tab===t.id?C.blue:"transparent",border:`1px solid ${tab===t.id?C.blueHi:C.border}`,color:tab===t.id?C.t1:C.t2,position:"relative",letterSpacing:"0.04em"}}>
+                style={{padding:"3px 9px",borderRadius:3,cursor:"pointer",fontSize:10,fontWeight:600,background:tab===t.id?C.blue:"transparent",border:`1px solid ${tab===t.id?C.blueHi:C.border}`,color:tab===t.id?"#FFFFFF":C.t2,position:"relative",letterSpacing:"0.04em"}}>
                 {t.label}
                 {badge>0&&<span style={{position:"absolute",top:-4,right:-4,width:13,height:13,borderRadius:"50%",background:isP1Tab?C.p1dot:t.id==="cartera"?C.red:C.yellow,fontSize:7,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",color:"#000"}}>{badge}</span>}
               </button>
             );
           })}
           <div style={{width:1,height:12,background:C.border,margin:"0 3px"}}/>
-          {!mobileView&&<button onClick={()=>setSearch(true)} style={{padding:"3px 8px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:10,cursor:"pointer"}}>
+          {!mobileView&&<button onClick={()=>setSearch(true)} style={{padding:"3px 8px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:10,cursor:"pointer",touchAction:"manipulation"}}>
             &#9906; <span style={{fontSize:7,color:C.t3}}>Ctrl+K</span>
           </button>}
           {/* Sync status indicator */}
@@ -7628,7 +7629,7 @@ function App() {
           )}
           {/* Mobile/Desktop toggle */}
           <button onClick={()=>setMobileView(v=>!v)}
-            style={{padding:"3px 9px",background:mobileView?C.blueDim:"transparent",border:`1px solid ${mobileView?C.blueHi:C.border}`,borderRadius:3,color:mobileView?C.cyan:C.t3,fontSize:10,cursor:"pointer",letterSpacing:"0.04em"}}>
+            style={{padding:"3px 9px",background:mobileView?C.blueDim:"transparent",border:`1px solid ${mobileView?C.blueHi:C.border}`,borderRadius:3,color:mobileView?C.blue:C.t3,fontSize:10,cursor:"pointer",letterSpacing:"0.04em",touchAction:"manipulation"}}>
             {mobileView?"[ ] Escritorio":"[=] Movil"}
           </button>
         </div>
@@ -7636,15 +7637,16 @@ function App() {
 
       {/* ── Nav móvil nativa — 4 tabs + FAB ── */}
       {mobileView&&(
-        <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,
-          background:C.bg1,borderTop:`1px solid ${C.border}`,
+        <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:150,
+          background:"#FFFFFF",borderTop:"1px solid rgba(0,0,0,0.09)",
           paddingBottom:"env(safe-area-inset-bottom,0px)",
-          display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr"}}>
+          display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",
+          boxShadow:"0 -2px 20px rgba(0,0,0,0.07)"}}>
           {[
-            {id:"ops",      label:"Centro",  icon:"●"},
-            {id:"tickets",  label:"Pipeline",icon:"▷"},
-            {id:"historial",label:"Historial",icon:"≡"},
-            {id:"__mas__",  label:"Más",     icon:"⋯"},
+            {id:"ops",      label:"Centro",  icon:"⊙"},
+            {id:"tickets",  label:"Pipeline",icon:"◈"},
+            {id:"historial",label:"Historial",icon:"☰"},
+            {id:"__mas__",  label:"Más",     icon:"···"},
           ].map(t=>{
             const isMore = t.id==="__mas__";
             const badge = t.id==="tickets"&&abiertas>0?abiertas : t.id==="ops"&&p1Active>0?p1Active : isMore&&vencidos>0?vencidos : 0;
@@ -7652,18 +7654,21 @@ function App() {
             const active = isMore ? (moreActive||masOpen) : tab===t.id;
             return (
               <button key={t.id}
-                onClick={()=>{ setQuickOpen(false); if(isMore){setMasOpen(v=>!v);}else{setTab(t.id);setMasOpen(false);} }}
-                style={{padding:"12px 4px calc(12px + env(safe-area-inset-bottom,0px) * 0)",
-                  border:"none",cursor:"pointer",background:active?C.blueDim:"transparent",
-                  borderTop:`3px solid ${active?C.cyan:"transparent"}`,
-                  position:"relative",display:"flex",flexDirection:"column",alignItems:"center",gap:4,
-                  minHeight:56}}>
-                <span style={{fontSize:18,fontWeight:800,color:active?C.cyan:C.t3,lineHeight:1}}>{t.icon}</span>
-                <span style={{fontSize:10,color:active?C.cyan:C.t3,letterSpacing:"0.04em",fontWeight:active?700:400}}>{t.label}</span>
+                onClick={()=>{ if(isMore){setMasOpen(v=>!v);}else{setTab(t.id);setMasOpen(false);} }}
+                style={{padding:"10px 4px",
+                  border:"none",cursor:"pointer",
+                  background:"transparent",
+                  borderTop:`2.5px solid ${active?"#3D7EBD":"transparent"}`,
+                  position:"relative",display:"flex",flexDirection:"column",alignItems:"center",gap:3,
+                  minHeight:56,touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
+                <span style={{fontSize:20,lineHeight:1,color:active?"#3D7EBD":"#8896A4",
+                  fontWeight:active?700:400}}>{t.icon}</span>
+                <span style={{fontSize:10,color:active?"#3D7EBD":"#8896A4",
+                  letterSpacing:"0.02em",fontWeight:active?700:400}}>{t.label}</span>
                 {badge>0&&<span style={{position:"absolute",top:8,right:"calc(50% - 18px)",
                   minWidth:16,height:16,borderRadius:8,padding:"0 3px",
-                  background:t.id==="ops"?C.p1dot:isMore?C.red:C.yellow,
-                  fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",color:"#000"}}>{badge}</span>}
+                  background:t.id==="ops"?"#E04040":isMore?"#D44040":"#C48518",
+                  fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}>{badge}</span>}
               </button>
             );
           })}
@@ -7674,13 +7679,14 @@ function App() {
       {mobileView&&tab!=="cotizador"&&(
         <button onClick={()=>setTab("cotizador")}
           style={{position:"fixed",
-            right:16,bottom:`calc(64px + env(safe-area-inset-bottom,0px) + 12px)`,
-            zIndex:101,width:56,height:56,borderRadius:28,
-            background:C.blue,
-            border:`1px solid ${C.blueHi}`,
-            boxShadow:"0 4px 20px rgba(0,0,0,.5)",
+            right:16,bottom:`calc(64px + env(safe-area-inset-bottom,0px) + 14px)`,
+            zIndex:160,width:56,height:56,borderRadius:28,
+            background:"linear-gradient(135deg,#4F92D4,#3D7EBD)",
+            border:"none",
+            boxShadow:"0 4px 18px rgba(61,126,189,0.45), 0 2px 8px rgba(0,0,0,0.12)",
             display:"flex",alignItems:"center",justifyContent:"center",
-            cursor:"pointer",fontSize:26,color:C.t1,fontWeight:300}}>
+            cursor:"pointer",fontSize:28,color:"#FFFFFF",fontWeight:300,
+            touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
           +
         </button>
       )}
@@ -7707,18 +7713,18 @@ function App() {
       <Toasts items={toasts}/>
 
       <style>{`
-        html,body{overscroll-behavior:none;overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;touch-action:pan-y}
+        html,body{overscroll-behavior:none;overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;touch-action:pan-y;background:#F0F2F5}
         .scroll-touch{-webkit-overflow-scrolling:touch;overflow-y:auto}
-        input[type=number]::-webkit-inner-spin-button{opacity:.2}
-        input::placeholder,textarea::placeholder{color:${C.t3}}
-        select option{background:${C.bg1};color:${C.t1}}
+        input[type=number]::-webkit-inner-spin-button{opacity:.3}
+        input::placeholder,textarea::placeholder{color:#B8C6D0}
+        select option{background:#FFFFFF;color:#1A2332}
         *{box-sizing:border-box}
-        button{transition:opacity 120ms ease,background 120ms ease,border-color 120ms ease}
-        button:active{opacity:.72;transform:scale(.98)}
+        button{transition:opacity 120ms ease,background 120ms ease,border-color 120ms ease;-webkit-tap-highlight-color:transparent}
+        button:active{opacity:.75;transform:scale(.97)}
         ::-webkit-scrollbar{width:4px;height:4px}
-        ::-webkit-scrollbar-track{background:${C.bg1}}
-        ::-webkit-scrollbar-thumb{background:${C.border};border-radius:2px}
-        textarea{color:${C.t2};resize:vertical;font-family:'Courier New',monospace}
+        ::-webkit-scrollbar-track{background:#F0F2F5}
+        ::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.15);border-radius:2px}
+        textarea{color:#4A5568;resize:vertical;font-family:'Courier New',monospace}
         input,select,textarea{transition:border-color 150ms ease}
         @media(max-width:640px){
           .ref-grid{grid-template-columns:1fr!important}
@@ -7731,8 +7737,8 @@ function App() {
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes slideUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
         @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-        .sheet-enter{animation:slideUp 260ms cubic-bezier(.22,.8,.22,1) both}
-        .fade-enter{animation:fadeIn 180ms ease both}
+        .sheet-enter{animation:slideUp 280ms cubic-bezier(.22,.8,.22,1) both}
+        .fade-enter{animation:fadeIn 200ms ease both}
       `}</style>
     </div>
   );
