@@ -4831,34 +4831,44 @@ function MSel({label,value,onChange,options}) {
 
 // ── MOps — Dashboard móvil ───────────────────────────────────────────────────
 function MOps({state,setTab}) {
-  const {tickets,clients,units} = state;
-  const [period,setPeriod] = useState("week"); // "today"|"week"|"month"|"3m"
+  const {tickets,clients} = state;
+  const [period,setPeriod] = useState("week");
 
-  const PIPELINE_STAGES = ["recibido","validando","sourcing","cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado"];
+  // ── Accent palette — premium fintech, lime-first, no cyan ────────────────
+  const A = {
+    lime:     "#BFFF00",
+    limeDim:  "rgba(191,255,0,0.08)",
+    limeMid:  "rgba(191,255,0,0.18)",
+    mint:     "#3CCFAA",
+    mintDim:  "rgba(60,207,170,0.1)",
+    amber:    "#F0A030",
+    amberDim: "rgba(240,160,48,0.1)",
+    red:      "#E84848",
+    redDim:   "rgba(232,72,72,0.1)",
+    card:     "rgba(14,19,22,0.98)",
+    cardHi:   "rgba(20,26,30,0.98)",
+    shadow:   "0 2px 40px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.05)",
+    shadowSm: "0 2px 20px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.03)",
+    t1:       "#E8EDF0",
+    t2:       "#8A9AA4",
+    t3:       "#46565F",
+    r:        24,
+  };
 
-  // ── Period range ──────────────────────────────────────────────────────────
-  const range = useMemo(()=>{
-    const now=new Date(); const from=new Date(now);
-    if(period==="today") { from.setHours(0,0,0,0); }
-    else if(period==="week")  from.setDate(now.getDate()-7);
-    else if(period==="month") from.setDate(now.getDate()-30);
-    else from.setDate(now.getDate()-90);
-    return {from,to:now};
-  },[period]);
-
+  // ── Periods ───────────────────────────────────────────────────────────────
+  const range     = useMemo(()=>buildRange(period),[period]);
   const prevRange = useMemo(()=>{
     const ms=range.to-range.from;
-    const from=new Date(range.from.getTime()-ms);
-    return {from,to:new Date(range.from)};
+    return {from:new Date(range.from.getTime()-ms),to:new Date(range.from)};
   },[range]);
 
-  const inRange  = useCallback(t=>{const d=parseDateMX(t.date);return d&&d>=range.from&&d<=range.to;},[range]);
-  const inPrev   = useCallback(t=>{const d=parseDateMX(t.date);return d&&d>=prevRange.from&&d<=prevRange.to;},[prevRange]);
-
-  // ── Core data ─────────────────────────────────────────────────────────────
-  const active    = useMemo(()=>tickets.filter(t=>!t._deleted),[tickets]);
-  const operados  = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)&&inRange(t)),[active,inRange]);
-  const prevOps   = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)&&inPrev(t)),[active,inPrev]);
+  // ── Core metrics ──────────────────────────────────────────────────────────
+  const operados = useMemo(()=>
+    sel_operados(tickets).filter(t=>{const d=parseDateMX(t.date);return d&&d>=range.from&&d<=range.to;})
+  ,[tickets,range]);
+  const prevOps = useMemo(()=>
+    sel_operados(tickets).filter(t=>{const d=parseDateMX(t.date);return d&&d>=prevRange.from&&d<=prevRange.to;})
+  ,[tickets,prevRange]);
 
   const totalFact = useMemo(()=>sumSnap(operados,"precioConIVA"),[operados]);
   const totalNeta = useMemo(()=>sumSnap(operados,"uNeta"),[operados]);
@@ -4866,195 +4876,409 @@ function MOps({state,setTab}) {
   const growth    = prevFact>0?((totalFact-prevFact)/prevFact)*100:null;
   const margen    = totalFact>0?(totalNeta/totalFact)*100:0;
 
-  const carteraMonto  = useMemo(()=>sumSnap(sel_cartera(tickets),"precioConIVA"),[tickets]);
-  const pipeline      = useMemo(()=>sel_open(tickets),[tickets]);
-  const p1Active      = useMemo(()=>pipeline.filter(t=>t.priority==="P1"),[pipeline]);
-  const vencidos      = useMemo(()=>sel_vencidos(tickets),[tickets]);
+  const carteraTkts  = useMemo(()=>sel_cartera(tickets),[tickets]);
+  const carteraMonto = useMemo(()=>sumSnap(carteraTkts,"precioConIVA"),[carteraTkts]);
+  const pipeline     = useMemo(()=>sel_open(tickets),[tickets]);
+  const p1Active     = useMemo(()=>pipeline.filter(t=>t.priority==="P1"),[pipeline]);
+  const vencidos     = useMemo(()=>sel_vencidos(tickets),[tickets]);
 
-  // ── 7-day bar chart ───────────────────────────────────────────────────────
-  const chartData = useMemo(()=>{
+  // ── Operational status ────────────────────────────────────────────────────
+  const opsStatus = useMemo(()=>{
+    if(p1Active.length>0) return {msg:`${p1Active.length} unidad${p1Active.length>1?"es":""} detenida${p1Active.length>1?"s":""}`,level:"critical"};
+    if(vencidos.length>0) return {msg:`${vencidos.length} cobro${vencidos.length>1?"s":""} vencido${vencidos.length>1?"s":""}`,level:"warning"};
+    if(operados.length===0) return {msg:"Sin operaciones en este período",level:"idle"};
+    if(margen>=25) return {msg:"Margen saludable · Todo operando",level:"good"};
+    if(margen>=15) return {msg:"Rentabilidad estable",level:"ok"};
+    return {msg:"Margen bajo — revisar precios",level:"warn"};
+  },[p1Active,vencidos,operados,margen]);
+
+  const sc = {
+    critical:{dot:A.red,   text:A.red},
+    warning: {dot:A.amber, text:A.amber},
+    idle:    {dot:A.t3,    text:A.t3},
+    good:    {dot:A.lime,  text:A.lime},
+    ok:      {dot:A.mint,  text:A.mint},
+    warn:    {dot:A.amber, text:A.amber},
+  }[opsStatus.level];
+
+  // ── 7-day sparkline ───────────────────────────────────────────────────────
+  const sparkData = useMemo(()=>{
     const days=[];
     for(let i=6;i>=0;i--){
       const d=new Date(); d.setDate(d.getDate()-i);
       const dd=String(d.getDate()).padStart(2,"0");
       const mm=String(d.getMonth()+1).padStart(2,"0");
-      const dateStr=`${dd}/${mm}/${d.getFullYear()}`;
-      const val=active.filter(t=>t.date===dateStr&&OPERADO_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0);
-      days.push({label:i===0?"Hoy":`${dd}/${mm}`,value:val,today:i===0});
+      const ds=`${dd}/${mm}/${d.getFullYear()}`;
+      const val=sumSnap(sel_operados(tickets).filter(t=>t.date===ds),"uNeta");
+      days.push({val,today:i===0,label:i===0?"Hoy":`${dd}/${mm}`});
     }
     return days;
-  },[active]);
-  const maxChart = Math.max(...chartData.map(d=>d.value),1);
+  },[tickets]);
+  const maxSpark = Math.max(...sparkData.map(d=>d.val),1);
 
-  // ── Top client ────────────────────────────────────────────────────────────
-  const topClient = useMemo(()=>{
-    if(!operados.length) return null;
-    const byClient={};
-    operados.forEach(t=>{ if(t.clientId) byClient[t.clientId]=(byClient[t.clientId]||0)+safeNumber(t.snap?.precioConIVA); });
-    const top=Object.entries(byClient).sort((a,b)=>b[1]-a[1])[0];
-    if(!top) return null;
-    const cl=clients.find(c=>c.id===top[0]);
-    return cl?{empresa:cl.empresa,amount:top[1],pct:totalFact>0?(top[1]/totalFact)*100:0}:null;
-  },[operados,clients,totalFact]);
+  // SVG sparkline path (280×52 viewBox)
+  const sparkPath = useMemo(()=>{
+    const W=280,H=50,pts=sparkData.length;
+    const xs=sparkData.map((_,i)=>(i/(pts-1))*W);
+    const ys=sparkData.map(d=>H-(Math.max(d.val,0)/maxSpark)*(H-6)-3);
+    const line=xs.map((x,i)=>`${i===0?"M":"L"}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(" ");
+    return {line, area:line+` L${W},${H} L0,${H} Z`};
+  },[sparkData,maxSpark]);
 
-  const periodLabel={"today":"Hoy","week":"Esta semana","month":"Este mes","3m":"Últimos 3M"}[period]||"Período";
+  const growthUp = growth!==null&&growth>=0;
+  const pLabel   = {"today":"Hoy","week":"7 días","month":"30 días","3m":"90 días"}[period]||"Período";
 
   return (
-    <div style={{padding:"16px 14px 20px"}}>
+    <div style={{minHeight:"100vh",background:C.bg0,paddingBottom:40}}>
 
-      {/* ── Period selector ── */}
-      <div style={{display:"flex",gap:6,marginBottom:18}}>
-        {[["today","Hoy"],["week","Semana"],["month","Mes"],["3m","3M"]].map(([v,l])=>(
-          <button key={v} onClick={()=>setPeriod(v)}
-            style={{padding:"7px 14px",borderRadius:20,fontSize:11,fontWeight:700,
-              border:`1px solid ${period===v?C.cyan:C.border}`,
-              background:period===v?C.cyanDim:"transparent",
-              color:period===v?C.cyan:C.t3,cursor:"pointer",letterSpacing:"0.06em",flexShrink:0}}>
-            {l}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Hero card ── */}
-      <div style={{
-        background:"linear-gradient(135deg,rgba(15,20,22,0.92) 0%,rgba(20,27,29,0.88) 100%)",
-        backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",
-        border:`1px solid rgba(38,122,144,0.3)`,borderRadius:20,padding:"24px 20px",
-        marginBottom:12,position:"relative",overflow:"hidden",
-        boxShadow:"0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.06)"}}>
-        <div style={{position:"absolute",top:-50,right:-50,width:140,height:140,borderRadius:"50%",
-          background:`radial-gradient(circle,${C.cyan}18 0%,transparent 70%)`,pointerEvents:"none"}}/>
-        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",marginBottom:10,textTransform:"uppercase"}}>
-          {periodLabel} · Facturado
-        </div>
-        <div style={{display:"flex",alignItems:"baseline",gap:10,marginBottom:6,flexWrap:"wrap"}}>
-          <div style={{fontSize:40,fontWeight:800,color:C.t1,fontFamily:"'Courier New',monospace",lineHeight:1}}>
-            {mxn(totalFact)}
-          </div>
-          {growth!==null&&(
-            <div style={{fontSize:12,fontWeight:800,
-              color:growth>=0?C.green:C.red,
-              background:growth>=0?C.greenDim:C.redDim,
-              padding:"3px 10px",borderRadius:20}}>
-              {growth>=0?"+":""}{growth.toFixed(0)}% vs anterior
+      {/* ══ ALERT BANNER — breaks layout, appears FIRST ══════════════════════ */}
+      {(p1Active.length>0||vencidos.length>0)&&(
+        <div style={{
+          background: p1Active.length>0
+            ? "linear-gradient(160deg,rgba(28,10,10,0.98) 0%,rgba(14,19,22,0.98) 100%)"
+            : "linear-gradient(160deg,rgba(26,18,6,0.98) 0%,rgba(14,19,22,0.98) 100%)",
+          borderBottom: `1px solid ${p1Active.length>0?"rgba(232,72,72,0.25)":"rgba(240,160,48,0.25)"}`,
+          padding:"20px 20px 16px",
+        }}>
+          {p1Active.length>0&&(
+            <div style={{marginBottom:vencidos.length>0?18:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                <div style={{width:7,height:7,borderRadius:"50%",background:A.red,
+                  boxShadow:`0 0 10px ${A.red},0 0 22px ${A.red}44`,flexShrink:0}}/>
+                <span style={{fontSize:10,fontWeight:800,color:A.red,letterSpacing:"0.16em",textTransform:"uppercase"}}>
+                  Acción requerida
+                </span>
+              </div>
+              {p1Active.slice(0,2).map((t,i)=>(
+                <div key={t.id} onClick={()=>setTab("tickets")}
+                  style={{display:"flex",alignItems:"center",gap:12,padding:"11px 0",
+                    cursor:"pointer",borderTop:i>0?`1px solid rgba(232,72,72,0.12)`:"none"}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:14,fontWeight:600,color:A.t1,overflow:"hidden",
+                      textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>
+                      {t.titulo}
+                    </div>
+                    <div style={{fontSize:11,color:A.red}}>
+                      Unidad detenida · {TICKET_META[t.status]?.label||t.status}
+                    </div>
+                  </div>
+                  <div style={{fontSize:20,color:A.red,opacity:0.65,flexShrink:0}}>›</div>
+                </div>
+              ))}
+              {p1Active.length>2&&(
+                <div onClick={()=>setTab("tickets")}
+                  style={{fontSize:11,color:A.red,marginTop:8,cursor:"pointer",opacity:0.8}}>
+                  +{p1Active.length-2} más →
+                </div>
+              )}
+            </div>
+          )}
+          {vencidos.length>0&&(
+            <div>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                <div style={{width:7,height:7,borderRadius:"50%",background:A.amber,flexShrink:0}}/>
+                <span style={{fontSize:10,fontWeight:800,color:A.amber,letterSpacing:"0.16em",textTransform:"uppercase"}}>
+                  Cobros vencidos
+                </span>
+              </div>
+              {vencidos.slice(0,1).map(t=>(
+                <div key={t.id} onClick={()=>setTab("cartera")}
+                  style={{display:"flex",alignItems:"center",gap:12,padding:"11px 0",cursor:"pointer"}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:14,fontWeight:600,color:A.t1,overflow:"hidden",
+                      textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>
+                      {t.titulo}
+                    </div>
+                    <div style={{fontSize:11,color:A.amber}}>Prometido {t.promesaPago} · Vencido</div>
+                  </div>
+                  <div style={{fontSize:20,color:A.amber,opacity:0.65,flexShrink:0}}>›</div>
+                </div>
+              ))}
+              {vencidos.length>1&&(
+                <div onClick={()=>setTab("cartera")}
+                  style={{fontSize:11,color:A.amber,marginTop:8,cursor:"pointer",opacity:0.8}}>
+                  +{vencidos.length-1} más →
+                </div>
+              )}
             </div>
           )}
         </div>
-        <div style={{height:1,background:"rgba(255,255,255,0.06)",margin:"14px 0"}}/>
-        <div style={{display:"flex",gap:20,flexWrap:"wrap"}}>
-          <div>
-            <div style={{fontSize:10,color:C.t3,letterSpacing:"0.1em",marginBottom:3,textTransform:"uppercase"}}>Util. neta</div>
-            <div style={{fontSize:22,fontWeight:800,color:C.green,fontFamily:"'Courier New',monospace"}}>{mxn(totalNeta)}</div>
+      )}
+
+      <div style={{padding:"0 16px"}}>
+        {/* ── Period tabs ── */}
+        <div style={{display:"flex",gap:6,padding:"20px 0 20px",overflowX:"auto",
+          scrollbarWidth:"none",msOverflowStyle:"none"}}>
+          {[["today","Hoy"],["week","7d"],["month","30d"],["3m","3M"]].map(([v,l])=>(
+            <button key={v} onClick={()=>setPeriod(v)} style={{
+              flexShrink:0,padding:"7px 18px",borderRadius:20,fontSize:12,fontWeight:700,
+              background:period===v?A.limeMid:"transparent",
+              border:`1.5px solid ${period===v?A.lime:"rgba(255,255,255,0.07)"}`,
+              color:period===v?A.lime:A.t3,
+              cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.15s",
+            }}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        {/* ══ HERO CARD ═════════════════════════════════════════════════════════ */}
+        <div style={{
+          background: A.card,
+          borderRadius: A.r,
+          padding:"28px 24px",
+          marginBottom:12,
+          boxShadow: A.shadow,
+        }}>
+          {/* Operational status line */}
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:22}}>
+            <div style={{
+              width:6,height:6,borderRadius:"50%",background:sc.dot,flexShrink:0,
+              boxShadow:opsStatus.level!=="idle"?`0 0 8px ${sc.dot},0 0 16px ${sc.dot}44`:"none",
+            }}/>
+            <span style={{fontSize:11,fontWeight:700,color:sc.text,letterSpacing:"0.1em",textTransform:"uppercase"}}>
+              {opsStatus.msg}
+            </span>
           </div>
-          <div>
-            <div style={{fontSize:10,color:C.t3,letterSpacing:"0.1em",marginBottom:3,textTransform:"uppercase"}}>Margen</div>
-            <div style={{fontSize:22,fontWeight:800,color:margenColor(margen),fontFamily:"'Courier New',monospace"}}>{fpct(margen)}</div>
+
+          {/* Label */}
+          <div style={{fontSize:9,color:A.t3,letterSpacing:"0.18em",textTransform:"uppercase",marginBottom:10}}>
+            Facturado · {pLabel}
           </div>
-          <div>
-            <div style={{fontSize:10,color:C.t3,letterSpacing:"0.1em",marginBottom:3,textTransform:"uppercase"}}>Ops</div>
-            <div style={{fontSize:22,fontWeight:800,color:C.t2,fontFamily:"'Courier New',monospace"}}>{operados.length}</div>
+
+          {/* GIANT number */}
+          <div style={{
+            fontSize:58,fontWeight:800,color:A.t1,lineHeight:0.9,
+            letterSpacing:"-0.025em",fontVariantNumeric:"tabular-nums",
+            marginBottom:16,
+          }}>
+            {mxn(totalFact)}
+          </div>
+
+          {/* Growth chip */}
+          {growth!==null&&(
+            <div style={{marginBottom:22}}>
+              <span style={{
+                display:"inline-flex",alignItems:"center",gap:6,
+                padding:"5px 14px",borderRadius:20,
+                background: growthUp?A.limeDim:A.redDim,
+                border:`1px solid ${growthUp?"rgba(191,255,0,0.22)":"rgba(232,72,72,0.22)"}`,
+              }}>
+                <span style={{fontSize:14,fontWeight:800,color:growthUp?A.lime:A.red}}>
+                  {growthUp?"+":""}{growth.toFixed(0)}%
+                </span>
+                <span style={{fontSize:10,color:A.t3,letterSpacing:"0.05em"}}>vs anterior</span>
+              </span>
+            </div>
+          )}
+
+          {/* Divider */}
+          <div style={{height:1,background:"rgba(255,255,255,0.05)",marginBottom:22}}/>
+
+          {/* Secondary KPIs */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:0}}>
+            {[
+              {label:"Util. neta", value:mxn(totalNeta), color:A.lime},
+              {label:"Margen",    value:fpct(margen),    color:margen>=25?A.lime:margen>=15?A.mint:A.amber, border:true},
+              {label:"Ops",       value:operados.length, color:A.t1, border:true},
+            ].map(({label,value,color,border})=>(
+              <div key={label} style={{paddingLeft:border?14:0,
+                borderLeft:border?"1px solid rgba(255,255,255,0.05)":"none"}}>
+                <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>
+                  {label}
+                </div>
+                <div style={{fontSize:22,fontWeight:800,color,letterSpacing:"-0.01em"}}>
+                  {value}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-      </div>
 
-      {/* ── Mini KPI row ── */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-        <div onClick={()=>setTab("cartera")} style={{background:C.bg2,border:`1px solid ${C.border}`,
-          borderRadius:16,padding:"16px 14px",cursor:"pointer",
-          borderTop:`3px solid ${vencidos.length>0?C.red:C.yellow}`}}>
-          <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",marginBottom:8,textTransform:"uppercase"}}>Cartera</div>
-          <div style={{fontSize:22,fontWeight:800,color:carteraMonto>0?C.yellow:C.t3,fontFamily:"'Courier New',monospace",lineHeight:1,marginBottom:5}}>
+        {/* ══ QUICK ACTIONS ═════════════════════════════════════════════════════ */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+          <button onClick={()=>setTab("cotizador")} style={{
+            background:`linear-gradient(135deg,${A.lime} 0%,#9CD400 100%)`,
+            border:"none",borderRadius:18,padding:"18px 16px",
+            cursor:"pointer",textAlign:"left",WebkitTapHighlightColor:"transparent",
+          }}>
+            <div style={{fontSize:22,fontWeight:800,color:"#0A1800",lineHeight:1,marginBottom:6}}>+</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#0A1800",letterSpacing:"-0.01em",lineHeight:1.2}}>
+              Nueva<br/>cotización
+            </div>
+          </button>
+          <button onClick={()=>setTab("tickets")} style={{
+            background:A.cardHi,
+            border:"1px solid rgba(255,255,255,0.06)",
+            borderRadius:18,padding:"18px 16px",
+            cursor:"pointer",textAlign:"left",
+            boxShadow:A.shadowSm,
+            WebkitTapHighlightColor:"transparent",
+          }}>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+              <span style={{fontSize:26,fontWeight:800,color:A.t1,lineHeight:1}}>{pipeline.length}</span>
+              {p1Active.length>0&&(
+                <span style={{width:7,height:7,borderRadius:"50%",background:A.red,display:"inline-block",
+                  boxShadow:`0 0 8px ${A.red}`}}/>
+              )}
+            </div>
+            <div style={{fontSize:12,fontWeight:600,color:A.t2}}>
+              en Pipeline
+              {p1Active.length>0&&<div style={{fontSize:10,color:A.red,marginTop:3}}>{p1Active.length} P1 urgente{p1Active.length>1?"s":""}</div>}
+            </div>
+          </button>
+        </div>
+
+        {/* ══ CARTERA WIDGET — interactive, touchable ═══════════════════════════ */}
+        <div onClick={()=>setTab("cartera")} style={{
+          background: vencidos.length>0
+            ? "linear-gradient(135deg,rgba(26,17,4,0.98),rgba(14,19,22,0.98))"
+            : A.card,
+          borderRadius:A.r,
+          padding:"22px 24px",
+          marginBottom:12,
+          boxShadow:A.shadow,
+          cursor:"pointer",
+          border:`1px solid ${vencidos.length>0?"rgba(240,160,48,0.18)":"rgba(255,255,255,0.04)"}`,
+          WebkitTapHighlightColor:"transparent",
+        }}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase"}}>
+              Cartera activa
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              {vencidos.length>0&&(
+                <span style={{
+                  fontSize:10,fontWeight:700,color:A.amber,
+                  background:A.amberDim,
+                  padding:"3px 10px",borderRadius:10,
+                  border:"1px solid rgba(240,160,48,0.28)",
+                }}>
+                  {vencidos.length} vencida{vencidos.length>1?"s":""}
+                </span>
+              )}
+              <span style={{fontSize:20,color:A.t3,opacity:0.5}}>›</span>
+            </div>
+          </div>
+          <div style={{
+            fontSize:42,fontWeight:800,lineHeight:1,letterSpacing:"-0.025em",
+            color:vencidos.length>0?A.amber:carteraMonto>0?A.t1:A.t3,
+            marginBottom:10,fontVariantNumeric:"tabular-nums",
+          }}>
             {mxn(carteraMonto)}
           </div>
-          <div style={{fontSize:10,color:vencidos.length>0?C.red:C.t3}}>
-            {vencidos.length>0?`⚠ ${vencidos.length} vencida${vencidos.length>1?"s":""}` : "Al corriente"}
+          <div style={{fontSize:11,color:A.t3}}>
+            {carteraTkts.length} ticket{carteraTkts.length!==1?"s":""} pendientes · toca para detalle
           </div>
         </div>
 
-        <div onClick={()=>setTab("tickets")} style={{background:C.bg2,border:`1px solid ${C.border}`,
-          borderRadius:16,padding:"16px 14px",cursor:"pointer",
-          borderTop:`3px solid ${p1Active.length>0?C.p1dot:C.cyan}`}}>
-          <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",marginBottom:8,textTransform:"uppercase"}}>Pipeline</div>
-          <div style={{fontSize:22,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",lineHeight:1,marginBottom:5}}>
-            {pipeline.length}
-          </div>
-          <div style={{fontSize:10,color:p1Active.length>0?C.p1dot:C.t3}}>
-            {p1Active.length>0?`🔴 ${p1Active.length} P1 activ${p1Active.length>1?"as":"a"}` : "Sin urgentes"}
-          </div>
-        </div>
-      </div>
-
-      {/* ── 7-day bar chart ── */}
-      <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 14px",marginBottom:12}}>
-        <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",marginBottom:14,textTransform:"uppercase"}}>Utilidad neta — 7 días</div>
-        <div style={{display:"flex",alignItems:"flex-end",gap:5,height:64}}>
-          {chartData.map((d,i)=>(
-            <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
-              <div style={{width:"100%",borderRadius:"3px 3px 0 0",transition:"height 400ms ease",
-                height:d.value>0?`${Math.max((d.value/maxChart)*50,4)}px`:"3px",
-                background:d.today?C.cyan:d.value>0?`${C.cyan}55`:C.border}}/>
-              <div style={{fontSize:8,color:d.today?C.cyan:C.t3,letterSpacing:"0.03em",whiteSpace:"nowrap"}}>{d.label}</div>
+        {/* ══ SPARKLINE — 7-day util trend ══════════════════════════════════════ */}
+        <div style={{
+          background:A.card,borderRadius:A.r,
+          padding:"22px 24px",marginBottom:12,boxShadow:A.shadowSm,
+        }}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase"}}>
+              Utilidad neta · 7 días
             </div>
-          ))}
+            {growth!==null&&(
+              <span style={{fontSize:10,fontWeight:700,color:growthUp?A.lime:A.red}}>
+                {growthUp?"+":""}{growth.toFixed(0)}% sem. anterior
+              </span>
+            )}
+          </div>
+
+          <svg viewBox="0 0 280 52" style={{width:"100%",height:52,display:"block",overflow:"visible"}}>
+            <defs>
+              <linearGradient id="mops-sg" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stopColor={A.lime} stopOpacity="0.22"/>
+                <stop offset="100%" stopColor={A.lime} stopOpacity="0.02"/>
+              </linearGradient>
+            </defs>
+            <path d={sparkPath.area} fill="url(#mops-sg)"/>
+            <path d={sparkPath.line} fill="none" stroke={A.lime} strokeWidth="1.6"
+              strokeLinecap="round" strokeLinejoin="round"/>
+            {sparkData.map((d,i)=>{
+              if(!d.today) return null;
+              const x=(i/(sparkData.length-1))*280;
+              const y=50-(Math.max(d.val,0)/maxSpark)*(50-6)-3;
+              return (
+                <g key="td">
+                  <circle cx={x} cy={y} r={10} fill={A.lime} opacity={0.1}/>
+                  <circle cx={x} cy={y} r={5}  fill={A.lime} opacity={0.85}/>
+                </g>
+              );
+            })}
+          </svg>
+
+          <div style={{display:"flex",justifyContent:"space-between",marginTop:10}}>
+            {sparkData.map((d,i)=>(
+              <div key={i} style={{fontSize:8,color:d.today?A.lime:A.t3,
+                fontWeight:d.today?800:400,textAlign:"center",letterSpacing:"0.02em"}}>
+                {d.label}
+              </div>
+            ))}
+          </div>
         </div>
-        {chartData.every(d=>d.value===0)&&(
-          <div style={{fontSize:11,color:C.t3,textAlign:"center",marginTop:4}}>Sin operaciones en este período</div>
+
+        {/* ══ CLIENTE LÍDER ═════════════════════════════════════════════════════ */}
+        {(()=>{
+          const map={};
+          operados.forEach(t=>{if(t.clientId) map[t.clientId]=(map[t.clientId]||0)+safeNumber(t.snap?.precioConIVA);});
+          const top=Object.entries(map).sort((a,b)=>b[1]-a[1])[0];
+          if(!top) return null;
+          const cl=clients.find(c=>c.id===top[0]);
+          if(!cl) return null;
+          const pct=totalFact>0?(top[1]/totalFact)*100:0;
+          return (
+            <div style={{background:A.card,borderRadius:A.r,padding:"22px 24px",marginBottom:12,boxShadow:A.shadowSm}}>
+              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:18}}>
+                Cliente líder · {pLabel}
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:16}}>
+                <div>
+                  <div style={{fontSize:15,fontWeight:700,color:A.t1,marginBottom:6}}>{cl.empresa}</div>
+                  <div style={{fontSize:30,fontWeight:800,color:A.t1,letterSpacing:"-0.02em",fontVariantNumeric:"tabular-nums"}}>
+                    {mxn(top[1])}
+                  </div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:26,fontWeight:800,color:A.lime,letterSpacing:"-0.02em",lineHeight:1}}>
+                    {pct.toFixed(0)}%
+                  </div>
+                  <div style={{fontSize:9,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginTop:4}}>
+                    del total
+                  </div>
+                </div>
+              </div>
+              <div style={{height:3,background:"rgba(255,255,255,0.06)",borderRadius:2,overflow:"hidden"}}>
+                <div style={{height:"100%",width:`${Math.min(pct,100)}%`,
+                  background:`linear-gradient(90deg,${A.lime},${A.mint})`,
+                  borderRadius:2,transition:"width 600ms ease"}}/>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ── Sin datos empty state ── */}
+        {operados.length===0&&!p1Active.length&&!vencidos.length&&(
+          <div style={{textAlign:"center",padding:"48px 20px"}}>
+            <div style={{fontSize:11,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
+              Sin operaciones en {pLabel.toLowerCase()}
+            </div>
+            <div style={{fontSize:13,color:A.t3,marginBottom:20}}>
+              Crea una cotización para comenzar
+            </div>
+            <button onClick={()=>setTab("cotizador")} style={{
+              background:A.limeDim,border:`1px solid rgba(191,255,0,0.25)`,
+              borderRadius:12,padding:"10px 22px",cursor:"pointer",
+              fontSize:13,fontWeight:600,color:A.lime,letterSpacing:"0.04em",
+            }}>
+              + Nueva cotización
+            </button>
+          </div>
         )}
       </div>
-
-      {/* ── Alertas activas ── */}
-      {(p1Active.length>0||vencidos.length>0)&&(
-        <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:16,overflow:"hidden",marginBottom:12}}>
-          <div style={{padding:"12px 14px 6px",fontSize:9,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase"}}>Alertas activas</div>
-          {p1Active.slice(0,3).map(t=>(
-            <div key={t.id} onClick={()=>setTab("tickets")}
-              style={{padding:"11px 14px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",borderTop:`1px solid ${C.border}`}}>
-              <div style={{width:8,height:8,borderRadius:"50%",background:C.p1dot,flexShrink:0,
-                boxShadow:`0 0 8px ${C.p1dot}`}}/>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:600,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
-                <div style={{fontSize:10,color:C.t3}}>P1 · {TICKET_META[t.status]?.label||t.status}</div>
-              </div>
-              <div style={{fontSize:12,color:C.t3}}>›</div>
-            </div>
-          ))}
-          {vencidos.slice(0,2).map(t=>(
-            <div key={t.id} onClick={()=>setTab("cartera")}
-              style={{padding:"11px 14px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",borderTop:`1px solid ${C.border}`}}>
-              <div style={{width:8,height:8,borderRadius:"50%",background:C.red,flexShrink:0}}/>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:600,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
-                <div style={{fontSize:10,color:C.red}}>Cobro vencido · {t.promesaPago}</div>
-              </div>
-              <div style={{fontSize:12,color:C.t3}}>›</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* ── Top cliente ── */}
-      {topClient&&(
-        <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 14px",marginBottom:12}}>
-          <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",marginBottom:12,textTransform:"uppercase"}}>Cliente líder · {periodLabel}</div>
-          <div style={{fontSize:16,fontWeight:700,color:C.t1,marginBottom:4}}>{topClient.empresa}</div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <div style={{fontSize:24,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(topClient.amount)}</div>
-            <div style={{fontSize:11,color:C.t3}}>{topClient.pct.toFixed(0)}% del total</div>
-          </div>
-          <div style={{height:4,background:C.border,borderRadius:2,overflow:"hidden"}}>
-            <div style={{height:"100%",width:`${Math.min(topClient.pct,100)}%`,background:C.cyan,borderRadius:2}}/>
-          </div>
-        </div>
-      )}
-
-      {/* ── Sin datos ── */}
-      {operados.length===0&&!p1Active.length&&!vencidos.length&&(
-        <div style={{textAlign:"center",padding:"32px 20px",color:C.t3}}>
-          <div style={{fontSize:32,marginBottom:10}}>📊</div>
-          <div style={{fontSize:13,fontWeight:600,color:C.t2,marginBottom:4}}>Sin operaciones en este período</div>
-          <div style={{fontSize:11}}>Crea tu primera cotización con el botón +</div>
-        </div>
-      )}
     </div>
   );
 }
