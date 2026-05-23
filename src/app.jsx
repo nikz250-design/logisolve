@@ -4,20 +4,32 @@ import React, { useState, useReducer, useEffect, useRef, useCallback, useMemo } 
 // L1 — DESIGN TOKENS
 // ═══════════════════════════════════════════════════════════════════════════════
 const C = {
-  bg0:"#F2F2F7", bg1:"#FFFFFF", bg2:"#F5F5F5", bg3:"#EBEBEB", bg4:"#E0E0E0",
-  border:"rgba(0,0,0,0.08)", borderHi:"rgba(0,0,0,0.15)",
-  blue:"#000000", blueHi:"#1A1A1A", blueDim:"rgba(0,0,0,0.06)",
-  cyan:"#000000",   cyanDim:"rgba(0,0,0,0.06)",
-  green:"#30D158",  greenDim:"rgba(48,209,88,0.1)",
-  red:"#FF3B30",    redDim:"rgba(255,59,48,0.08)",
-  yellow:"#FF9500", yellowDim:"rgba(255,149,0,0.08)",
-  orange:"#FF9500",
-  amber:"#FF9500",
-  t1:"#000000", t2:"#3C3C43", t3:"#8E8E93", t4:"#AEAEB2",
-  p1:"#FF3B30", p1dim:"rgba(255,59,48,0.1)",   p1dot:"#FF3B30",  // P1 CRITICO
-  p2:"#FF9500", p2dim:"rgba(255,149,0,0.1)",   p2dot:"#FF9500",  // P2 URGENTE
-  p3:"#30D158", p3dim:"rgba(48,209,88,0.1)",   p3dot:"#30D158",  // P3 NORMAL
-  p4:"#8E8E93", p4dim:"rgba(142,142,147,0.1)", p4dot:"#8E8E93",  // P4 PREVENTIVO
+  // ── Surface system — dark slate, not black
+  bg0:"#0B0D10",   // app background
+  bg1:"#151A21",   // cards
+  bg2:"#11151B",   // secondary surfaces
+  bg3:"#1C2230",   // elevated / active
+  bg4:"#202837",   // highest elevation
+  border:"rgba(255,255,255,0.06)",
+  borderHi:"rgba(255,255,255,0.10)",
+  // ── Semantic colors — only with meaning
+  blue:"#38BDF8",  blueHi:"#7DD3FC", blueDim:"rgba(56,189,248,0.1)",
+  cyan:"#38BDF8",  cyanDim:"rgba(56,189,248,0.08)",
+  green:"#22C55E", greenDim:"rgba(34,197,94,0.1)",
+  red:"#EF4444",   redDim:"rgba(239,68,68,0.1)",
+  yellow:"#F59E0B",yellowDim:"rgba(245,158,11,0.1)",
+  orange:"#F97316",amber:"#F59E0B",
+  purple:"#8B5CF6",purpleDim:"rgba(139,92,246,0.1)",
+  // ── Typography
+  t1:"#F5F7FA",    // primary
+  t2:"#98A2B3",    // secondary
+  t3:"#667085",    // muted
+  t4:"#475569",    // very muted
+  // ── Priority semantic
+  p1:"#EF4444", p1dim:"rgba(239,68,68,0.12)",  p1dot:"#EF4444",
+  p2:"#F59E0B", p2dim:"rgba(245,158,11,0.12)", p2dot:"#F59E0B",
+  p3:"#22C55E", p3dim:"rgba(34,197,94,0.1)",   p3dot:"#22C55E",
+  p4:"#667085", p4dim:"rgba(102,112,133,0.1)", p4dot:"#667085",
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -4800,13 +4812,13 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
 
 // ── Helpers móviles ──────────────────────────────────────────────────────────
 function MCard({children,style={}}) {
-  return <div style={{background:"#FFFFFF",border:"1px solid rgba(0,0,0,0.05)",borderRadius:18,marginBottom:10,overflow:"hidden",boxShadow:"0 2px 16px rgba(0,0,0,0.04)",...style}}>{children}</div>;
+  return <div style={{background:"#151A21",border:"1px solid rgba(255,255,255,0.04)",borderRadius:18,marginBottom:10,overflow:"hidden",boxShadow:"0 2px 16px rgba(255,255,255,0.04)",...style}}>{children}</div>;
 }
 function MRow({label,value,color,bold}) {
   return (
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",borderBottom:"1px solid rgba(0,0,0,0.05)"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
       <span style={{fontSize:12,color:"#4A5568"}}>{label}</span>
-      <span style={{fontSize:bold?16:13,fontWeight:bold?800:600,color:color||"#000000",fontFamily:"'Courier New',monospace"}}>{value}</span>
+      <span style={{fontSize:bold?16:13,fontWeight:bold?800:600,color:color||"#F5F7FA",fontFamily:"'Courier New',monospace"}}>{value}</span>
     </div>
   );
 }
@@ -4815,11 +4827,11 @@ function MBtn({label,color,bg,border,onClick,full,small}) {
     <button onClick={onClick} style={{
       width:full?"100%":"auto",
       padding:small?"10px 16px":"15px 20px",
-      background:bg||"#000000",
-      border:`1px solid ${border||"#1A1A1A"}`,
+      background:bg||"rgba(255,255,255,0.07)",
+      border:`1px solid ${border||"rgba(255,255,255,0.1)"}`,
       borderRadius:12,cursor:"pointer",
       fontSize:small?12:14,fontWeight:700,
-      color:color||"#FFFFFF",letterSpacing:"0.04em",
+      color:color||"#F5F7FA",letterSpacing:"0.04em",
       minHeight:small?40:48,touchAction:"manipulation",WebkitTapHighlightColor:"transparent",
     }}>{label}</button>
   );
@@ -4827,13 +4839,13 @@ function MBtn({label,color,bg,border,onClick,full,small}) {
 function MField({label,value,onChange,type="text",placeholder,suffix,color}) {
   return (
     <div style={{marginBottom:10}}>
-      {label&&<div style={{fontSize:10,color:"#8E8E93",letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase",fontWeight:600}}>{label}</div>}
-      <div style={{display:"flex",alignItems:"center",background:"#F5F5F5",border:"1px solid rgba(0,0,0,0.06)",borderRadius:10,overflow:"hidden",minHeight:48}}>
+      {label&&<div style={{fontSize:10,color:"#667085",letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase",fontWeight:600}}>{label}</div>}
+      <div style={{display:"flex",alignItems:"center",background:"#11151B",border:"1px solid rgba(255,255,255,0.05)",borderRadius:10,overflow:"hidden",minHeight:48}}>
         <input type={type} value={value} placeholder={placeholder||""} onChange={e=>onChange(e.target.value)}
-          style={{flex:1,background:"transparent",border:"none",outline:"none",color:color||"#000000",
+          style={{flex:1,background:"transparent",border:"none",outline:"none",color:color||"#F5F7FA",
             fontSize:16,/* 16px prevents iOS auto-zoom on focus */
             padding:"12px 14px",fontFamily:"inherit"}}/>
-        {suffix&&<span style={{padding:"0 12px",color:"#8E8E93",fontSize:12}}>{suffix}</span>}
+        {suffix&&<span style={{padding:"0 12px",color:"#667085",fontSize:12}}>{suffix}</span>}
       </div>
     </div>
   );
@@ -4841,12 +4853,12 @@ function MField({label,value,onChange,type="text",placeholder,suffix,color}) {
 function MSel({label,value,onChange,options}) {
   return (
     <div style={{marginBottom:10}}>
-      {label&&<div style={{fontSize:10,color:"#8E8E93",letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase",fontWeight:600}}>{label}</div>}
+      {label&&<div style={{fontSize:10,color:"#667085",letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase",fontWeight:600}}>{label}</div>}
       <select value={value} onChange={e=>onChange(e.target.value)}
-        style={{width:"100%",background:"#F5F5F5",border:"1px solid rgba(0,0,0,0.06)",borderRadius:10,padding:"12px 14px",color:"#000000",
+        style={{width:"100%",background:"#11151B",border:"1px solid rgba(255,255,255,0.05)",borderRadius:10,padding:"12px 14px",color:"#F5F7FA",
           fontSize:16,/* 16px prevents iOS auto-zoom on focus */
           outline:"none",fontFamily:"inherit",minHeight:48,appearance:"auto"}}>
-        {options.map(o=><option key={o.value} value={o.value} style={{background:"#FFFFFF"}}>{o.label}</option>)}
+        {options.map(o=><option key={o.value} value={o.value} style={{background:"#151A21"}}>{o.label}</option>)}
       </select>
     </div>
   );
@@ -4859,22 +4871,22 @@ function MOps({state,setTab}) {
 
   // ── Accent palette — Black/white monochrome
   const A = {
-    lime:     "#000000",    // primary black
-    limeDim:  "rgba(0,0,0,0.06)",
-    limeMid:  "rgba(0,0,0,0.09)",
-    mint:     "#000000",
-    mintDim:  "rgba(0,0,0,0.06)",
+    lime:     "#22C55E",    // utility/positive
+    limeDim:  "rgba(34,197,94,0.1)",
+    limeMid:  "rgba(34,197,94,0.15)",
+    mint:     "#38BDF8",
+    mintDim:  "rgba(56,189,248,0.08)",
     amber:    "#F59E0B",
     amberDim: "rgba(245,158,11,0.1)",
     red:      "#EF4444",
     redDim:   "rgba(239,68,68,0.1)",
-    card:     "#FFFFFF",    // WHITE card
-    cardHi:   "#F5F5F5",    // light gray
-    shadow:   "0 4px 24px rgba(0,0,0,0.05), 0 1px 6px rgba(0,0,0,0.05)",
-    shadowSm: "0 2px 12px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.04)",
-    t1:       "#000000",    // dark text on white cards
-    t2:       "#3C3C43",
-    t3:       "#8E8E93",
+    card:     "#151A21",    // WHITE card
+    cardHi:   "#1C2230",
+    shadow:   "0 4px 24px rgba(0,0,0,0.5), 0 1px 6px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04)",
+    shadowSm: "0 2px 12px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3)",
+    t1:       "#F5F7FA",    // dark text on white cards
+    t2:       "#98A2B3",
+    t3:       "#667085",
     r:        20,
   };
 
@@ -4980,8 +4992,8 @@ function MOps({state,setTab}) {
       {(p1Active.length>0||vencidos.length>0)&&(
         <div style={{
           background: p1Active.length>0
-            ? "rgba(254,242,242,1)"
-            : "rgba(255,251,235,1)",
+            ? "rgba(239,68,68,0.08)"
+            : "rgba(245,158,11,0.08)",
           borderBottom: `1px solid ${p1Active.length>0?"rgba(239,68,68,0.2)":"rgba(245,158,11,0.2)"}`,
           padding:"20px 20px 16px",
         }}>
@@ -5058,7 +5070,7 @@ function MOps({state,setTab}) {
             <button key={v} onClick={()=>setPeriod(v)} style={{
               flexShrink:0,padding:"7px 18px",borderRadius:20,fontSize:12,fontWeight:700,
               background:period===v?A.limeMid:"transparent",
-              border:`1.5px solid ${period===v?A.lime:"rgba(0,0,0,0.1)"}`,
+              border:`1.5px solid ${period===v?A.lime:"rgba(255,255,255,0.06)"}`,
               color:period===v?A.lime:A.t3,
               cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.15s",
             }}>
@@ -5073,7 +5085,7 @@ function MOps({state,setTab}) {
           borderRadius: A.r,
           padding:"28px 24px",
           marginBottom:12,
-          boxShadow: "0 8px 32px rgba(0,0,0,0.2), 0 2px 8px rgba(0,0,0,0.12)",
+          boxShadow: "0 8px 32px rgba(255,255,255,0.12), 0 2px 8px rgba(255,255,255,0.08)",
         }}>
           {/* Operational status line */}
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:22}}>
@@ -5093,7 +5105,7 @@ function MOps({state,setTab}) {
 
           {/* GIANT number */}
           <div style={{
-            fontSize:58,fontWeight:800,color:"#FFFFFF",lineHeight:0.9,
+            fontSize:58,fontWeight:800,color:"#151A21",lineHeight:0.9,
             letterSpacing:"-0.025em",fontVariantNumeric:"tabular-nums",
             marginBottom:16,
           }}>
@@ -5107,7 +5119,7 @@ function MOps({state,setTab}) {
                 display:"inline-flex",alignItems:"center",gap:6,
                 padding:"5px 14px",borderRadius:20,
                 background: growthUp?A.limeDim:A.redDim,
-                border:`1px solid ${growthUp?"rgba(0,0,0,0.15)":"rgba(214,66,66,0.25)"}`,
+                border:`1px solid ${growthUp?"rgba(255,255,255,0.09)":"rgba(214,66,66,0.25)"}`,
               }}>
                 <span style={{fontSize:14,fontWeight:800,color:growthUp?A.lime:A.red}}>
                   {growthUp?"+":""}{growth.toFixed(0)}%
@@ -5118,7 +5130,7 @@ function MOps({state,setTab}) {
           )}
 
           {/* Divider */}
-          <div style={{height:1,background:"rgba(0,0,0,0.05)",marginBottom:22}}/>
+          <div style={{height:1,background:"rgba(255,255,255,0.04)",marginBottom:22}}/>
 
           {/* Secondary KPIs */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:0}}>
@@ -5128,7 +5140,7 @@ function MOps({state,setTab}) {
               {label:"Ops",       value:operados.length, color:A.t1, border:true},
             ].map(({label,value,color,border})=>(
               <div key={label} style={{paddingLeft:border?14:0,
-                borderLeft:border?"1px solid rgba(0,0,0,0.05)":"none"}}>
+                borderLeft:border?"1px solid rgba(255,255,255,0.04)":"none"}}>
                 <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>
                   {label}
                 </div>
@@ -5147,14 +5159,14 @@ function MOps({state,setTab}) {
             border:"none",borderRadius:18,padding:"18px 16px",
             cursor:"pointer",textAlign:"left",WebkitTapHighlightColor:"transparent",touchAction:"manipulation",
           }}>
-            <div style={{fontSize:22,fontWeight:800,color:"#FFFFFF",lineHeight:1,marginBottom:6}}>+</div>
-            <div style={{fontSize:13,fontWeight:700,color:"#FFFFFF",letterSpacing:"-0.01em",lineHeight:1.2}}>
+            <div style={{fontSize:22,fontWeight:800,color:"#151A21",lineHeight:1,marginBottom:6}}>+</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#151A21",letterSpacing:"-0.01em",lineHeight:1.2}}>
               Nueva<br/>cotización
             </div>
           </button>
           <button onClick={()=>setTab("tickets")} style={{
             background:A.cardHi,
-            border:"1px solid rgba(0,0,0,0.08)",
+            border:"1px solid rgba(255,255,255,0.06)",
             borderRadius:18,padding:"18px 16px",
             cursor:"pointer",textAlign:"left",
             boxShadow:A.shadowSm,
@@ -5177,14 +5189,14 @@ function MOps({state,setTab}) {
         {/* ══ CARTERA WIDGET — interactive, touchable ═══════════════════════════ */}
         <div onClick={()=>setTab("cartera")} style={{
           background: vencidos.length>0
-            ? "rgba(255,251,235,1)"
+            ? "rgba(245,158,11,0.08)"
             : A.card,
           borderRadius:A.r,
           padding:"22px 24px",
           marginBottom:12,
           boxShadow:A.shadow,
           cursor:"pointer",
-          border:`1px solid ${vencidos.length>0?"rgba(240,160,48,0.18)":"rgba(0,0,0,0.05)"}`,
+          border:`1px solid ${vencidos.length>0?"rgba(240,160,48,0.18)":"rgba(255,255,255,0.04)"}`,
           WebkitTapHighlightColor:"transparent",
         }}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
@@ -5296,7 +5308,7 @@ function MOps({state,setTab}) {
                   </div>
                 </div>
               </div>
-              <div style={{height:3,background:"rgba(0,0,0,0.06)",borderRadius:2,overflow:"hidden"}}>
+              <div style={{height:3,background:"rgba(255,255,255,0.05)",borderRadius:2,overflow:"hidden"}}>
                 <div style={{height:"100%",width:`${Math.min(pct,100)}%`,
                   background:`linear-gradient(90deg,${A.lime},${A.mint})`,
                   borderRadius:2,transition:"width 600ms ease"}}/>
@@ -5315,7 +5327,7 @@ function MOps({state,setTab}) {
               Crea una cotización para comenzar
             </div>
             <button onClick={()=>setTab("cotizador")} style={{
-              background:A.limeDim,border:`1px solid rgba(0,0,0,0.15)`,
+              background:A.limeDim,border:`1px solid rgba(255,255,255,0.09)`,
               borderRadius:12,padding:"10px 22px",cursor:"pointer",
               fontSize:13,fontWeight:600,color:A.lime,letterSpacing:"0.04em",
             }}>
@@ -5330,7 +5342,7 @@ function MOps({state,setTab}) {
           overflow:"hidden",marginBottom:12,boxShadow:A.shadow,
         }}>
           {/* Header */}
-          <div style={{padding:"20px 22px 16px",borderBottom:"1px solid rgba(0,0,0,0.05)"}}>
+          <div style={{padding:"20px 22px 16px",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
             <div style={{fontSize:9,color:A.t3,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:6}}>
               Resumen financiero
             </div>
@@ -5344,7 +5356,7 @@ function MOps({state,setTab}) {
             {label:"Cash cobrado",      val:mxn(cashTotal),          col:"#34D399"},
             {label:"Utilidad operativa",val:mxn(totalNeta),          col:totalNeta>=0?"#34D399":A.red, bold:true},
             {label:"Markup promedio",   val:fpct(markupProm),        col:A.lime},
-            {label:"Rentabilidad neta", val:fpct(margen),            col:margen>=20?"#34D399":margen>=10?"#000000":A.amber},
+            {label:"Rentabilidad neta", val:fpct(margen),            col:margen>=20?"#34D399":margen>=10?"#F5F7FA":A.amber},
             {label:"ROI operativo",     val:fpct(roi),               col:roi>=25?"#34D399":A.amber},
             {label:"IVA neto SAT",      val:mxn(ivaNetoOp),         col:A.amber},
             {label:"ISR estimado",      val:mxn(isrOp),              col:A.amber},
@@ -5360,8 +5372,8 @@ function MOps({state,setTab}) {
             <div key={label} style={{
               display:"flex",justifyContent:"space-between",alignItems:"center",
               padding:"12px 22px",
-              borderBottom:i<arr.length-1?"1px solid rgba(0,0,0,0.05)":"none",
-              background:bold?"rgba(0,0,0,0.02)":"transparent",
+              borderBottom:i<arr.length-1?"1px solid rgba(255,255,255,0.04)":"none",
+              background:bold?"rgba(255,255,255,0.03)":"transparent",
             }}>
               <span style={{fontSize:12,color:A.t2,letterSpacing:"0.01em"}}>{label}</span>
               <span style={{
@@ -5377,7 +5389,7 @@ function MOps({state,setTab}) {
               style={{width:"100%",padding:"14px",
                 background:"linear-gradient(135deg,#000000,#1A1A1A)",
                 border:"none",borderRadius:14,cursor:"pointer",
-                fontSize:14,fontWeight:700,color:"#FFFFFF",
+                fontSize:14,fontWeight:700,color:"#151A21",
                 letterSpacing:"0.02em",touchAction:"manipulation",
                 boxShadow:`0 4px 20px ${A.limeDim}`,
               }}>
@@ -5465,13 +5477,13 @@ function MPipeline({state,dispatch,toast}) {
 
   // Accent palette — Black/white monochrome
   const A = {
-    lime:"#000000", limeDim:"rgba(0,0,0,0.06)", limeMid:"rgba(0,0,0,0.09)",
-    mint:"#000000", mintDim:"rgba(0,0,0,0.06)",
+    lime:"#22C55E", limeDim:"rgba(34,197,94,0.1)", limeMid:"rgba(34,197,94,0.15)",
+    mint:"#38BDF8", mintDim:"rgba(56,189,248,0.08)",
     amber:"#F59E0B", amberDim:"rgba(245,158,11,0.1)",
     red:"#EF4444",   redDim:"rgba(239,68,68,0.1)",
-    card:"#FFFFFF", cardHi:"#F2F2F7",
-    shadow:"0 4px 24px rgba(0,0,0,0.05), 0 1px 6px rgba(0,0,0,0.05)",
-    t1:"#000000", t2:"#3C3C43", t3:"#8E8E93", r:20,
+    card:"#151A21", cardHi:"#1C2230",
+    shadow:"0 4px 24px rgba(0,0,0,0.5), 0 1px 6px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04)",
+    t1:"#F5F7FA", t2:"#98A2B3", t3:"#667085", r:20,
   };
 
   const PIPE_STAGES = ["recibido","validando","sourcing","cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado"];
@@ -5521,13 +5533,13 @@ function MPipeline({state,dispatch,toast}) {
               flexShrink:0,display:"flex",alignItems:"center",gap:6,
               padding:"7px 16px",borderRadius:20,fontSize:11,fontWeight:700,
               background:filter===v?A.limeMid:"transparent",
-              border:`1.5px solid ${filter===v?A.lime:"rgba(0,0,0,0.08)"}`,
+              border:`1.5px solid ${filter===v?A.lime:"rgba(255,255,255,0.06)"}`,
               color:filter===v?A.lime:A.t3,
               cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.15s",whiteSpace:"nowrap",
             }}>
               {l}
               {c>0&&<span style={{fontSize:10,fontWeight:800,
-                background:filter===v?"rgba(0,0,0,0.1)":"rgba(0,0,0,0.04)",
+                background:filter===v?"rgba(255,255,255,0.06)":"rgba(255,255,255,0.04)",
                 color:filter===v?A.lime:A.t3,borderRadius:9,padding:"1px 6px"}}>{c}</span>}
             </button>
           ))}
@@ -5559,7 +5571,7 @@ function MPipeline({state,dispatch,toast}) {
 
             return (
               <div key={t.id} style={{
-                background:isP1?"rgba(254,242,242,1)":A.card,
+                background:isP1?"rgba(239,68,68,0.08)":A.card,
                 borderRadius:A.r,overflow:"hidden",
                 boxShadow:isP1
                   ? "0 4px 20px rgba(239,68,68,0.12), 0 0 0 1.5px rgba(239,68,68,0.25)"
@@ -5604,7 +5616,7 @@ function MPipeline({state,dispatch,toast}) {
                   {/* Progress */}
                   {!isClosed&&(
                     <div>
-                      <div style={{height:2,background:"rgba(0,0,0,0.05)",borderRadius:2,overflow:"hidden",marginBottom:4}}>
+                      <div style={{height:2,background:"rgba(255,255,255,0.04)",borderRadius:2,overflow:"hidden",marginBottom:4}}>
                         <div style={{height:"100%",width:`${prog}%`,background:pCol,borderRadius:2,transition:"width 400ms ease"}}/>
                       </div>
                       <div style={{display:"flex",justifyContent:"space-between"}}>
@@ -5617,7 +5629,7 @@ function MPipeline({state,dispatch,toast}) {
 
                 {/* Expanded */}
                 {isExp&&(
-                  <div style={{borderTop:"1px solid rgba(0,0,0,0.05)",padding:"16px",background:C.bg0}}>
+                  <div style={{borderTop:"1px solid rgba(255,255,255,0.04)",padding:"16px",background:C.bg0}}>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
                       {[
                         {l:"Precio c/IVA", v:mxn(price),    c:A.t1},
@@ -5631,8 +5643,8 @@ function MPipeline({state,dispatch,toast}) {
                         </div>
                       ))}
                     </div>
-                    {t.notes&&<div style={{fontSize:11,color:A.t2,padding:"10px 12px",background:"rgba(0,0,0,0.03)",
-                      borderRadius:10,marginBottom:12,border:"1px solid rgba(0,0,0,0.05)"}}>{t.notes}</div>}
+                    {t.notes&&<div style={{fontSize:11,color:A.t2,padding:"10px 12px",background:"rgba(255,255,255,0.03)",
+                      borderRadius:10,marginBottom:12,border:"1px solid rgba(255,255,255,0.04)"}}>{t.notes}</div>}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <div style={{fontSize:8,color:A.t3,letterSpacing:"0.08em",textTransform:"uppercase"}}>{t.id}</div>
                       <button onClick={e=>{e.stopPropagation();
@@ -5640,7 +5652,7 @@ function MPipeline({state,dispatch,toast}) {
                         const u2=units.find(u=>u.id===t.unitId);
                         generarCotizacionPDF(t,c2,u2,null).catch(()=>toast("Error PDF","error"));}}
                         style={{padding:"7px 14px",borderRadius:10,background:"transparent",
-                          border:"1px solid rgba(0,0,0,0.09)",color:A.t2,fontSize:10,
+                          border:"1px solid rgba(255,255,255,0.06)",color:A.t2,fontSize:10,
                           fontWeight:600,cursor:"pointer",letterSpacing:"0.06em"}}>
                         PDF ↗
                       </button>
@@ -5649,7 +5661,7 @@ function MPipeline({state,dispatch,toast}) {
                 )}
 
                 {/* Footer */}
-                <div style={{padding:"12px 16px",borderTop:"1px solid rgba(0,0,0,0.05)",
+                <div style={{padding:"12px 16px",borderTop:"1px solid rgba(255,255,255,0.04)",
                   display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div>
                     <div style={{fontSize:22,fontWeight:800,color:A.t1,lineHeight:1,
@@ -5662,7 +5674,7 @@ function MPipeline({state,dispatch,toast}) {
                     {CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t.cobrado&&(
                       <button onClick={e=>{e.stopPropagation();dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado ✓","success");}}
                         style={{padding:"10px 14px",borderRadius:12,background:A.mintDim,
-                          border:"1px solid rgba(0,0,0,0.12)",color:A.mint,
+                          border:"1px solid rgba(255,255,255,0.08)",color:A.mint,
                           fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:"0.03em",
                           WebkitTapHighlightColor:"transparent"}}>
                         Cobrar ✓
@@ -5672,7 +5684,7 @@ function MPipeline({state,dispatch,toast}) {
                       <button onClick={e=>{e.stopPropagation();setStatusSheet(t);}}
                         style={{padding:"10px 18px",borderRadius:12,
                           background:isP1?"rgba(232,72,72,0.15)":A.limeDim,
-                          border:`1px solid ${isP1?"rgba(214,66,66,0.3)":"rgba(0,0,0,0.15)"}`,
+                          border:`1px solid ${isP1?"rgba(214,66,66,0.3)":"rgba(255,255,255,0.09)"}`,
                           color:isP1?A.red:A.lime,fontSize:12,fontWeight:700,cursor:"pointer",
                           letterSpacing:"0.04em",WebkitTapHighlightColor:"transparent"}}>
                         Estado →
@@ -5736,25 +5748,25 @@ function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
         onFocus={()=>setOpen(true)}
         placeholder={placeholder||"Buscar o describir pieza..."}
         autoComplete="off"
-        style={{width:"100%",background:"#F5F5F5",border:`1px solid ${open?"#000000":"rgba(0,0,0,0.06)"}`,
-          borderRadius:10,padding:"13px 14px",color:"#000000",fontSize:16,
+        style={{width:"100%",background:"#11151B",border:`1px solid ${open?"#F5F7FA":"rgba(255,255,255,0.05)"}`,
+          borderRadius:10,padding:"13px 14px",color:"#F5F7FA",fontSize:16,
           outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}
       />
       {showDropdown&&(
         <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,zIndex:400,
-          background:"#FFFFFF",border:"1px solid rgba(0,0,0,0.09)",borderRadius:10,
+          background:"#151A21",border:"1px solid rgba(255,255,255,0.06)",borderRadius:10,
           boxShadow:"0 8px 32px rgba(13,24,37,0.12)",maxHeight:280,overflowY:"auto",
           WebkitOverflowScrolling:"touch"}}>
           {results.map(p=>(
             <div key={p.id}
               onMouseDown={e=>{e.preventDefault();onSelect(p);setOpen(false);}}
               onTouchEnd={e=>{e.preventDefault();onSelect(p);setOpen(false);}}
-              style={{padding:"11px 14px",borderBottom:"1px solid rgba(0,0,0,0.06)",cursor:"pointer",
+              style={{padding:"11px 14px",borderBottom:"1px solid rgba(255,255,255,0.05)",cursor:"pointer",
                 display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:700,color:"#000000",overflow:"hidden",
+                <div style={{fontSize:13,fontWeight:700,color:"#F5F7FA",overflow:"hidden",
                   textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
-                <div style={{fontSize:10,color:"#8E8E93",marginTop:1,fontFamily:"'Courier New',monospace"}}>
+                <div style={{fontSize:10,color:"#667085",marginTop:1,fontFamily:"'Courier New',monospace"}}>
                   {p.oem&&<span>OEM: {p.oem}</span>}
                   {p.oem&&p.ultimoPrecio>0&&<span style={{color:C.border}}> · </span>}
                   {p.ultimoPrecio>0&&<span style={{color:C.yellow}}>{mxn(p.ultimoPrecio)}</span>}
@@ -5764,7 +5776,7 @@ function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
                 {p.aplicacion&&<div style={{fontSize:9,color:C.t3,marginTop:1}}>{p.aplicacion}</div>}
               </div>
               {(p.frecuencia||0)>1&&(
-                <div style={{fontSize:9,color:"#000000",background:"rgba(0,0,0,0.06)",padding:"2px 7px",
+                <div style={{fontSize:9,color:"#F5F7FA",background:"rgba(255,255,255,0.05)",padding:"2px 7px",
                   borderRadius:10,flexShrink:0,fontWeight:700}}>×{p.frecuencia}</div>
               )}
             </div>
@@ -5773,8 +5785,8 @@ function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
             <div onMouseDown={e=>{e.preventDefault();onSelect({nombre:(value||"").trim(),oem:"",ultimoPrecio:0});setOpen(false);}}
               onTouchEnd={e=>{e.preventDefault();onSelect({nombre:(value||"").trim(),oem:"",ultimoPrecio:0});setOpen(false);}}
               style={{padding:"11px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:18,color:"#000000",lineHeight:1}}>＋</span>
-              <span style={{fontSize:13,color:"#000000",fontWeight:600}}>Agregar "{(value||"").trim().slice(0,30)}"</span>
+              <span style={{fontSize:18,color:"#F5F7FA",lineHeight:1}}>＋</span>
+              <span style={{fontSize:13,color:"#F5F7FA",fontWeight:600}}>Agregar "{(value||"").trim().slice(0,30)}"</span>
             </div>
           )}
         </div>
@@ -5789,21 +5801,21 @@ function MCotizador({state,dispatch,toast}) {
 
   // Accent palette — Black/white monochrome
   const A = {
-    lime:"#000000", limeDim:"rgba(0,0,0,0.06)", limeMid:"rgba(0,0,0,0.09)",
-    mint:"#000000", mintDim:"rgba(0,0,0,0.06)",
+    lime:"#22C55E", limeDim:"rgba(34,197,94,0.1)", limeMid:"rgba(34,197,94,0.15)",
+    mint:"#38BDF8", mintDim:"rgba(56,189,248,0.08)",
     amber:"#F59E0B", amberDim:"rgba(245,158,11,0.1)",
     red:"#EF4444",   redDim:"rgba(239,68,68,0.1)",
-    card:"#FFFFFF", cardHi:"#F2F2F7",
-    shadow:"0 4px 24px rgba(0,0,0,0.05), 0 1px 6px rgba(0,0,0,0.05)",
-    shadowSm:"0 2px 12px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.04)",
-    t1:"#000000", t2:"#3C3C43", t3:"#8E8E93", r:20,
+    card:"#151A21", cardHi:"#1C2230",
+    shadow:"0 4px 24px rgba(0,0,0,0.5), 0 1px 6px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04)",
+    shadowSm:"0 2px 12px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3)",
+    t1:"#F5F7FA", t2:"#98A2B3", t3:"#667085", r:20,
   };
 
   // Priority semantic colors
   const prColors = {
     P1:{dot:"#EF4444",dim:"rgba(239,68,68,0.12)",   label:"Unidad detenida"},
     P2:{dot:"#F59E0B",dim:"rgba(245,158,11,0.12)",  label:"Operación comprometida"},
-    P3:{dot:"#000000",dim:"rgba(6,182,212,0.12)",   label:"Preventivo urgente"},
+    P3:{dot:"#F5F7FA",dim:"rgba(6,182,212,0.12)",   label:"Preventivo urgente"},
     P4:{dot:"rgba(241,245,249,0.45)",dim:"rgba(241,245,249,0.07)",label:"Solicitud normal"},
   };
 
@@ -5920,7 +5932,7 @@ function MCotizador({state,dispatch,toast}) {
           <React.Fragment key={i}>
             {i>0&&(
               <div style={{flex:1,height:2,
-                background:done?"rgba(0,0,0,0.3)":"rgba(0,0,0,0.06)",
+                background:done?"rgba(255,255,255,0.18)":"rgba(255,255,255,0.05)",
                 borderRadius:1,margin:"0 8px",marginTop:-14}}/>
             )}
             <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,
@@ -5928,8 +5940,8 @@ function MCotizador({state,dispatch,toast}) {
               onClick={()=>done&&setStep(i)}>
               <div style={{
                 width:30,height:30,borderRadius:15,
-                background:done?A.lime:curr?"rgba(0,0,0,0.09)":"rgba(0,0,0,0.04)",
-                border:`2px solid ${done?A.lime:curr?"rgba(0,0,0,0.3)":"rgba(0,0,0,0.08)"}`,
+                background:done?A.lime:curr?"rgba(255,255,255,0.06)":"rgba(255,255,255,0.04)",
+                border:`2px solid ${done?A.lime:curr?"rgba(255,255,255,0.18)":"rgba(255,255,255,0.06)"}`,
                 display:"flex",alignItems:"center",justifyContent:"center",
                 fontSize:11,fontWeight:800,
                 color:done?"#0A1800":curr?A.lime:A.t3,
@@ -5967,7 +5979,7 @@ function MCotizador({state,dispatch,toast}) {
               display:"flex",alignItems:"center",gap:14,
               transition:"all 0.15s",WebkitTapHighlightColor:"transparent"}}>
             <div style={{width:10,height:10,borderRadius:"50%",
-              background:sel?pc.dot:"rgba(0,0,0,0.12)",flexShrink:0,
+              background:sel?pc.dot:"rgba(255,255,255,0.08)",flexShrink:0,
               boxShadow:sel?`0 0 8px ${pc.dot}`:"none",transition:"all 0.15s"}}/>
             <div style={{flex:1}}>
               <div style={{fontSize:14,fontWeight:800,color:sel?pc.dot:A.t2,transition:"color 0.15s"}}>
@@ -5983,7 +5995,7 @@ function MCotizador({state,dispatch,toast}) {
         );
       })}
 
-      <div style={{height:1,background:"rgba(0,0,0,0.05)",margin:"20px 0"}}/>
+      <div style={{height:1,background:"rgba(255,255,255,0.04)",margin:"20px 0"}}/>
 
       <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",marginBottom:12,textTransform:"uppercase",fontWeight:700}}>Tipo de operación</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:20}}>
@@ -5993,7 +6005,7 @@ function MCotizador({state,dispatch,toast}) {
             <div key={op.id} onClick={()=>setOpType(op.id)}
               style={{padding:"14px",borderRadius:14,cursor:"pointer",
                 background:sel?A.limeDim:A.card,
-                boxShadow:sel?"0 4px 20px rgba(0,0,0,0.2), 0 0 0 1.5px rgba(0,0,0,0.3)":A.shadowSm,
+                boxShadow:sel?"0 4px 20px rgba(255,255,255,0.12), 0 0 0 1.5px rgba(255,255,255,0.18)":A.shadowSm,
                 WebkitTapHighlightColor:"transparent",transition:"all 0.15s"}}>
               <div style={{fontSize:13,fontWeight:700,color:sel?A.lime:A.t2,marginBottom:4}}>{op.label}</div>
               <div style={{fontSize:10,color:A.t3}}>{op.baseMin}–{op.baseMax}%</div>
@@ -6011,11 +6023,11 @@ function MCotizador({state,dispatch,toast}) {
               onClick={()=>setActiveMods(p=>p.includes(mod.id)?p.filter(x=>x!==mod.id):[...p,mod.id])}
               style={{padding:"14px",borderRadius:14,cursor:"pointer",
                 background:on?A.limeDim:A.card,
-                boxShadow:on?"0 4px 20px rgba(0,0,0,0.18), 0 0 0 1.5px rgba(0,0,0,0.28)":A.shadowSm,
+                boxShadow:on?"0 4px 20px rgba(255,255,255,0.1), 0 0 0 1.5px rgba(255,255,255,0.15)":A.shadowSm,
                 display:"flex",alignItems:"flex-start",gap:10,
                 WebkitTapHighlightColor:"transparent",transition:"all 0.15s"}}>
               <div style={{width:8,height:8,borderRadius:"50%",marginTop:3,flexShrink:0,
-                background:on?A.lime:"rgba(0,0,0,0.12)",
+                background:on?A.lime:"rgba(255,255,255,0.08)",
                 boxShadow:on?"none":"none",transition:"all 0.15s"}}/>
               <div>
                 <div style={{fontSize:12,fontWeight:700,color:on?A.lime:A.t2,marginBottom:2}}>{mod.label}</div>
@@ -6039,7 +6051,7 @@ function MCotizador({state,dispatch,toast}) {
       <button onClick={()=>setStep(1)} style={{
         width:"100%",padding:"16px",borderRadius:16,
         background:"linear-gradient(135deg,#000000,#1A1A1A)",
-        border:"none",color:"#FFFFFF",fontSize:14,fontWeight:800,cursor:"pointer",
+        border:"none",color:"#151A21",fontSize:14,fontWeight:800,cursor:"pointer",
         letterSpacing:"0.02em",WebkitTapHighlightColor:"transparent",
       }}>
         Siguiente: Líneas →
@@ -6058,7 +6070,7 @@ function MCotizador({state,dispatch,toast}) {
         return (
           <div key={i} style={{background:A.card,borderRadius:A.r,overflow:"hidden",
             marginBottom:12,boxShadow:A.shadow}}>
-            <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(0,0,0,0.05)",
+            <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,0.04)",
               display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div style={{fontSize:9,color:A.t3,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase"}}>
                 Línea {i+1}
@@ -6103,7 +6115,7 @@ function MCotizador({state,dispatch,toast}) {
                 {[["auto","Auto (margen)"],["manual","Precio fijo"]].map(([m,lbl])=>(
                   <button key={m} onClick={()=>upd(i,{mode:m})}
                     style={{flex:1,padding:"9px",borderRadius:10,fontSize:11,fontWeight:700,
-                      border:`1.5px solid ${l.mode===m?"rgba(0,0,0,0.28)":"rgba(0,0,0,0.06)"}`,
+                      border:`1.5px solid ${l.mode===m?"rgba(255,255,255,0.15)":"rgba(255,255,255,0.05)"}`,
                       background:l.mode===m?A.limeDim:"transparent",
                       color:l.mode===m?A.lime:A.t3,cursor:"pointer",
                       transition:"all 0.15s",WebkitTapHighlightColor:"transparent"}}>
@@ -6118,7 +6130,7 @@ function MCotizador({state,dispatch,toast}) {
                 <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
                   <button onClick={()=>upd(i,{customMgn:!l.customMgn})}
                     style={{padding:"9px 14px",borderRadius:10,fontSize:10,fontWeight:700,flexShrink:0,
-                      border:`1.5px solid ${l.customMgn?"rgba(0,0,0,0.28)":"rgba(0,0,0,0.06)"}`,
+                      border:`1.5px solid ${l.customMgn?"rgba(255,255,255,0.15)":"rgba(255,255,255,0.05)"}`,
                       background:l.customMgn?A.limeDim:"transparent",
                       color:l.customMgn?A.lime:A.t3,cursor:"pointer",WebkitTapHighlightColor:"transparent"}}>
                     Margen personalizado
@@ -6131,7 +6143,7 @@ function MCotizador({state,dispatch,toast}) {
               )}
               <div style={{background:A.limeDim,borderRadius:12,padding:"12px 14px",
                 display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:10,
-                border:"1px solid rgba(0,0,0,0.08)"}}>
+                border:"1px solid rgba(255,255,255,0.06)"}}>
                 {[
                   {label:"Precio línea",value:mxn(sn.precioConIVA),color:A.t1},
                   {label:"Util. neta",  value:mxn(sn.uNeta),       color:sn.uNeta>=0?A.lime:A.red},
@@ -6151,7 +6163,7 @@ function MCotizador({state,dispatch,toast}) {
 
       <button onClick={addLine} style={{
         width:"100%",padding:"14px",borderRadius:16,
-        background:"transparent",border:"2px dashed rgba(0,0,0,0.12)",
+        background:"transparent",border:"2px dashed rgba(255,255,255,0.08)",
         color:A.t3,fontSize:13,fontWeight:700,cursor:"pointer",
         display:"flex",alignItems:"center",justifyContent:"center",gap:10,
         marginBottom:16,WebkitTapHighlightColor:"transparent",
@@ -6188,14 +6200,14 @@ function MCotizador({state,dispatch,toast}) {
       <div style={{display:"flex",gap:10}}>
         <button onClick={()=>setStep(0)}
           style={{padding:"14px 20px",borderRadius:14,background:"transparent",
-            border:"1px solid rgba(0,0,0,0.09)",color:A.t3,fontSize:12,cursor:"pointer",
+            border:"1px solid rgba(255,255,255,0.06)",color:A.t3,fontSize:12,cursor:"pointer",
             WebkitTapHighlightColor:"transparent"}}>
           ← Atrás
         </button>
         <button onClick={()=>setStep(2)} style={{
           flex:1,padding:"14px",borderRadius:14,
           background:"linear-gradient(135deg,#000000,#1A1A1A)",
-          border:"none",color:"#FFFFFF",fontSize:14,fontWeight:800,cursor:"pointer",
+          border:"none",color:"#151A21",fontSize:14,fontWeight:800,cursor:"pointer",
           WebkitTapHighlightColor:"transparent",
         }}>
           Siguiente: Datos →
@@ -6227,8 +6239,8 @@ function MCotizador({state,dispatch,toast}) {
               textTransform:"uppercase",fontWeight:700}}>Notas</div>
             <textarea rows={3} value={notes} onChange={e=>setNotes(e.target.value)}
               placeholder="Diagnóstico, observaciones..."
-              style={{width:"100%",background:"rgba(0,0,0,0.03)",
-                border:"1px solid rgba(0,0,0,0.08)",borderRadius:12,
+              style={{width:"100%",background:"rgba(255,255,255,0.03)",
+                border:"1px solid rgba(255,255,255,0.06)",borderRadius:12,
                 padding:"12px 14px",color:A.t2,fontSize:13,outline:"none",
                 boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
           </div>
@@ -6253,7 +6265,7 @@ function MCotizador({state,dispatch,toast}) {
             </div>
           </div>
         </div>
-        <div style={{height:1,background:"rgba(0,0,0,0.05)",marginBottom:14}}/>
+        <div style={{height:1,background:"rgba(255,255,255,0.04)",marginBottom:14}}/>
         <div style={{display:"flex",flexDirection:"column",gap:5}}>
           {lineas.length>1&&<div style={{fontSize:10,color:A.t3}}>{lineas.length} líneas</div>}
           {cl&&<div style={{fontSize:11,color:A.t2}}>Cliente: <span style={{fontWeight:700,color:A.t1}}>{cl.empresa}</span></div>}
@@ -6267,14 +6279,14 @@ function MCotizador({state,dispatch,toast}) {
       <div style={{display:"flex",gap:10}}>
         <button onClick={()=>setStep(1)}
           style={{padding:"14px 20px",borderRadius:14,background:"transparent",
-            border:"1px solid rgba(0,0,0,0.09)",color:A.t3,fontSize:12,cursor:"pointer",
+            border:"1px solid rgba(255,255,255,0.06)",color:A.t3,fontSize:12,cursor:"pointer",
             WebkitTapHighlightColor:"transparent"}}>
           ← Atrás
         </button>
         <button onClick={save} style={{
           flex:1,padding:"16px",borderRadius:14,
           background:"linear-gradient(135deg,#000000,#1A1A1A)",
-          border:"none",color:"#FFFFFF",fontSize:14,fontWeight:800,cursor:"pointer",
+          border:"none",color:"#151A21",fontSize:14,fontWeight:800,cursor:"pointer",
           letterSpacing:"0.02em",WebkitTapHighlightColor:"transparent",
         }}>
           Registrar ticket + PDF →
@@ -6290,14 +6302,14 @@ function MCartera({state,dispatch,toast}) {
   const now = new Date();
 
   const A = {
-    lime:"#000000", limeDim:"rgba(0,0,0,0.06)",
-    mint:"#000000", mintDim:"rgba(0,0,0,0.06)",
+    lime:"#22C55E", limeDim:"rgba(34,197,94,0.1)",
+    mint:"#38BDF8", mintDim:"rgba(56,189,248,0.08)",
     amber:"#F59E0B", amberDim:"rgba(245,158,11,0.1)",
     red:"#EF4444",   redDim:"rgba(239,68,68,0.1)",
-    card:"#FFFFFF",
-    shadow:"0 4px 24px rgba(0,0,0,0.05), 0 1px 6px rgba(0,0,0,0.05)",
-    shadowSm:"0 2px 12px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.04)",
-    t1:"#000000", t2:"#3C3C43", t3:"#8E8E93", r:20,
+    card:"#151A21",
+    shadow:"0 4px 24px rgba(0,0,0,0.5), 0 1px 6px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04)",
+    shadowSm:"0 2px 12px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3)",
+    t1:"#F5F7FA", t2:"#98A2B3", t3:"#667085", r:20,
   };
 
   const creditTkts = useMemo(()=>tickets.filter(t=>!t._deleted&&t.payType==="credit"&&t.status!=="cancelado"),[tickets]);
@@ -6358,7 +6370,7 @@ function MCartera({state,dispatch,toast}) {
             letterSpacing:"-0.025em",fontVariantNumeric:"tabular-nums",marginBottom:20}}>
             {mxn(totalPend)}
           </div>
-          <div style={{height:1,background:"rgba(0,0,0,0.05)",marginBottom:20}}/>
+          <div style={{height:1,background:"rgba(255,255,255,0.04)",marginBottom:20}}/>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0}}>
             <div>
               <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>Vencido</div>
@@ -6370,7 +6382,7 @@ function MCartera({state,dispatch,toast}) {
                 {vencidas.length} factura{vencidas.length!==1?"s":""}
               </div>
             </div>
-            <div style={{paddingLeft:16,borderLeft:"1px solid rgba(0,0,0,0.05)"}}>
+            <div style={{paddingLeft:16,borderLeft:"1px solid rgba(255,255,255,0.04)"}}>
               <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>Al corriente</div>
               <div style={{fontSize:22,fontWeight:800,color:A.mint,
                 fontVariantNumeric:"tabular-nums",letterSpacing:"-0.01em"}}>
@@ -6401,7 +6413,7 @@ function MCartera({state,dispatch,toast}) {
                   </span>
                 </div>
                 {b.monto>0&&(
-                  <div style={{height:3,background:"rgba(0,0,0,0.05)",borderRadius:2,overflow:"hidden"}}>
+                  <div style={{height:3,background:"rgba(255,255,255,0.04)",borderRadius:2,overflow:"hidden"}}>
                     <div style={{height:"100%",width:`${(b.monto/maxAging)*100}%`,
                       background:i===2?A.red:A.amber,borderRadius:2,transition:"width 500ms ease"}}/>
                   </div>
@@ -6426,7 +6438,7 @@ function MCartera({state,dispatch,toast}) {
                 const over=daysOver(t);
                 return (
                   <div key={t.id} style={{
-                    background:"rgba(254,242,242,1)",
+                    background:"rgba(239,68,68,0.08)",
                     borderRadius:A.r,overflow:"hidden",
                     boxShadow:"0 4px 20px rgba(239,68,68,0.12), 0 0 0 1.5px rgba(239,68,68,0.25)",
                   }}>
@@ -6453,7 +6465,7 @@ function MCartera({state,dispatch,toast}) {
                       </div>
                       <button onClick={()=>cobrar(t)} style={{
                         padding:"10px 18px",borderRadius:12,
-                        background:A.mintDim,border:"1px solid rgba(0,0,0,0.12)",
+                        background:A.mintDim,border:"1px solid rgba(255,255,255,0.08)",
                         color:A.mint,fontSize:12,fontWeight:800,cursor:"pointer",
                         letterSpacing:"0.04em",WebkitTapHighlightColor:"transparent",
                       }}>
@@ -6502,7 +6514,7 @@ function MCartera({state,dispatch,toast}) {
                       </div>
                       <div style={{fontSize:10,color:A.t3}}>Vence: {t.promesaPago||"—"}</div>
                     </div>
-                    <div style={{padding:"12px 16px",borderTop:"1px solid rgba(0,0,0,0.05)",
+                    <div style={{padding:"12px 16px",borderTop:"1px solid rgba(255,255,255,0.04)",
                       display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <div style={{fontSize:22,fontWeight:800,color:A.t1,letterSpacing:"-0.02em",
                         fontVariantNumeric:"tabular-nums"}}>
@@ -6510,7 +6522,7 @@ function MCartera({state,dispatch,toast}) {
                       </div>
                       <button onClick={()=>cobrar(t)} style={{
                         padding:"10px 18px",borderRadius:12,
-                        background:A.mintDim,border:"1px solid rgba(0,0,0,0.12)",
+                        background:A.mintDim,border:"1px solid rgba(255,255,255,0.08)",
                         color:A.mint,fontSize:12,fontWeight:800,cursor:"pointer",
                         letterSpacing:"0.04em",WebkitTapHighlightColor:"transparent",
                       }}>
@@ -6645,17 +6657,17 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
   };
 
   const A = {
-    lime:"#000000", limeDim:"rgba(0,0,0,0.06)", limeMid:"rgba(0,0,0,0.09)",
-    mint:"#000000", mintDim:"rgba(0,0,0,0.06)",
+    lime:"#22C55E", limeDim:"rgba(34,197,94,0.1)", limeMid:"rgba(34,197,94,0.15)",
+    mint:"#38BDF8", mintDim:"rgba(56,189,248,0.08)",
     amber:"#F59E0B", amberDim:"rgba(245,158,11,0.1)",
     red:"#EF4444",   redDim:"rgba(239,68,68,0.1)",
-    card:"#FFFFFF",
-    shadow:"0 4px 24px rgba(0,0,0,0.05), 0 1px 6px rgba(0,0,0,0.05)",
-    shadowSm:"0 2px 12px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.04)",
-    t1:"#000000", t2:"#3C3C43", t3:"#8E8E93", r:18,
+    card:"#151A21",
+    shadow:"0 4px 24px rgba(0,0,0,0.5), 0 1px 6px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04)",
+    shadowSm:"0 2px 12px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3)",
+    t1:"#F5F7FA", t2:"#98A2B3", t3:"#667085", r:18,
   };
   const prC={P1:{dot:"#EF4444",dim:"rgba(239,68,68,0.12)"},P2:{dot:"#F59E0B",dim:"rgba(245,158,11,0.12)"},
-             P3:{dot:"#000000",dim:"rgba(6,182,212,0.12)"},P4:{dot:"rgba(241,245,249,0.5)",dim:"rgba(241,245,249,0.07)"}};
+             P3:{dot:"#22C55E",dim:"rgba(34,197,94,0.1)"},P4:{dot:"#667085",dim:"rgba(102,112,133,0.08)"}};
 
   return (
     <div style={{minHeight:"100vh",background:C.bg0,paddingBottom:40}}>
@@ -6667,8 +6679,8 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
             <button key={v} onClick={()=>setPeriod(v)} style={{
               flexShrink:0,padding:"7px 16px",borderRadius:20,fontSize:11,fontWeight:700,
               background:period===v?A.limeMid:"transparent",
-              border:`1.5px solid ${period===v?A.lime:"rgba(0,0,0,0.1)"}`,
-              color:period===v?A.lime:"#8E8E93",
+              border:`1.5px solid ${period===v?A.lime:"rgba(255,255,255,0.06)"}`,
+              color:period===v?A.lime:"#667085",
               cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.15s",
             }}>{l}</button>
           ))}
@@ -6691,7 +6703,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
               {label:"Ops",value:filtered.length,color:A.t2,border:true},
             ].map(({label,value,color,border})=>(
               <div key={label} style={{flex:1,paddingLeft:border?14:0,
-                borderLeft:border?"1px solid rgba(0,0,0,0.05)":"none"}}>
+                borderLeft:border?"1px solid rgba(255,255,255,0.04)":"none"}}>
                 <div style={{fontSize:8,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>
                   {label}
                 </div>
@@ -6744,7 +6756,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
 
                   return (
                     <div key={t.id} style={{
-                      background:isCan?"rgba(254,242,242,0.8)":A.card,
+                      background:isCan?"rgba(239,68,68,0.06)":A.card,
                       borderRadius:A.r,overflow:"hidden",
                       boxShadow:isCan
                         ?"0 2px 12px rgba(239,68,68,0.08), 0 0 0 1px rgba(239,68,68,0.18)"
@@ -6790,7 +6802,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
 
                       {/* Expanded detail */}
                       {isExp&&!isEdit&&(
-                        <div style={{borderTop:"1px solid rgba(0,0,0,0.05)",
+                        <div style={{borderTop:"1px solid rgba(255,255,255,0.04)",
                           padding:"16px",background:C.bg0}}>
                           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
                             {[
@@ -6825,7 +6837,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                             <button onClick={()=>openEdit(t)} style={{
                               flex:1,padding:"9px 14px",borderRadius:10,background:"transparent",
-                              border:"1px solid rgba(0,0,0,0.09)",color:A.t2,
+                              border:"1px solid rgba(255,255,255,0.06)",color:A.t2,
                               fontSize:11,fontWeight:600,cursor:"pointer",
                             }}>✏ Editar</button>
                             <button onClick={()=>{
@@ -6834,13 +6846,13 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                               generarCotizacionPDF(t,c2,u2,null).catch(()=>toast("Error PDF","error"));
                             }} style={{
                               flex:1,padding:"9px 14px",borderRadius:10,background:"transparent",
-                              border:"1px solid rgba(0,0,0,0.09)",color:A.t2,
+                              border:"1px solid rgba(255,255,255,0.06)",color:A.t2,
                               fontSize:11,fontWeight:600,cursor:"pointer",
                             }}>PDF ↗</button>
                             {CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t.cobrado&&(
                               <button onClick={()=>{dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado ✓","success");setExpandId(null);}}
                                 style={{flex:1,padding:"9px 14px",borderRadius:10,background:A.mintDim,
-                                  border:"1px solid rgba(0,0,0,0.12)",color:A.mint,fontSize:11,fontWeight:800,cursor:"pointer"}}>
+                                  border:"1px solid rgba(255,255,255,0.08)",color:A.mint,fontSize:11,fontWeight:800,cursor:"pointer"}}>
                                 Cobrar ✓
                               </button>
                             )}
@@ -6857,7 +6869,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
 
                       {/* Quick edit form */}
                       {isEdit&&(
-                        <div style={{borderTop:"1px solid rgba(0,0,0,0.05)",
+                        <div style={{borderTop:"1px solid rgba(255,255,255,0.04)",
                           background:C.bg0,padding:"16px"}}>
                           <div style={{fontSize:9,color:A.lime,letterSpacing:"0.14em",
                             textTransform:"uppercase",marginBottom:14,fontWeight:800}}>
@@ -6878,8 +6890,8 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                           </div>
                           <textarea rows={2} value={ef.notes} onChange={e=>sfn("notes")(e.target.value)}
                             placeholder="Notas..."
-                            style={{width:"100%",background:"rgba(0,0,0,0.03)",
-                              border:"1px solid rgba(0,0,0,0.09)",borderRadius:10,
+                            style={{width:"100%",background:"rgba(255,255,255,0.03)",
+                              border:"1px solid rgba(255,255,255,0.06)",borderRadius:10,
                               padding:"10px 12px",color:A.t2,fontSize:13,outline:"none",
                               boxSizing:"border-box",fontFamily:"inherit",resize:"none",marginBottom:14}}/>
                           <div style={{display:"flex",gap:8}}>
@@ -6890,7 +6902,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                             }}>Guardar</button>
                             <button onClick={()=>setEditId(null)} style={{
                               padding:"13px 16px",borderRadius:12,background:"transparent",
-                              border:"1px solid rgba(0,0,0,0.09)",color:A.t3,fontSize:13,cursor:"pointer",
+                              border:"1px solid rgba(255,255,255,0.06)",color:A.t3,fontSize:13,cursor:"pointer",
                             }}>Cancelar</button>
                           </div>
                         </div>
@@ -7250,7 +7262,7 @@ function MCatalogo({state,dispatch,toast}) {
             <div key={p.id} style={{background:C.bg1,
               border:`1px solid ${exp?C.cyan:isFrecuente?`rgba(38,122,144,0.2)`:C.border}`,
               borderRadius:14,overflow:"hidden",
-              boxShadow:isFrecuente?"0 2px 8px rgba(0,0,0,0.3)":undefined}}>
+              boxShadow:isFrecuente?"0 2px 8px rgba(255,255,255,0.18)":undefined}}>
               <div onClick={()=>setSel(exp?null:p.id)} style={{padding:"13px 15px",cursor:"pointer"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:3}}>
                   <div style={{fontSize:13,fontWeight:700,color:C.t1,flex:1,marginRight:8,lineHeight:1.3}}>{p.nombre}</div>
@@ -7421,29 +7433,30 @@ function MasSheet({open,onClose,tab,setTab}) {
     <>
       <div onClick={onClose} className="fade-enter" style={{position:"fixed",inset:0,zIndex:150,background:"rgba(10,14,26,0.4)"}}/>
       <div className="sheet-enter" style={{position:"fixed",bottom:0,left:0,right:0,zIndex:155,
-        background:"rgba(255,255,255,0.95)",backdropFilter:"blur(30px) saturate(2)",WebkitBackdropFilter:"blur(30px) saturate(2)",
+        background:"rgba(17,21,27,0.97)",backdropFilter:"blur(24px) saturate(1.4)",WebkitBackdropFilter:"blur(24px) saturate(1.4)",
         borderRadius:"24px 24px 0 0",
-        borderTop:"1px solid rgba(0,0,0,0.08)",
+        borderTop:"1px solid rgba(255,255,255,0.08)",
         padding:`0 16px calc(20px + env(safe-area-inset-bottom,0px))`,
-        boxShadow:"0 -8px 48px rgba(0,0,0,0.08)"}}>
+        boxShadow:"0 -8px 48px rgba(0,0,0,0.5)"}}>
+
         <div style={{display:"flex",justifyContent:"center",padding:"14px 0 8px"}}>
-          <div style={{width:36,height:4,borderRadius:2,background:"rgba(0,0,0,0.12)"}}/>
+          <div style={{width:36,height:4,borderRadius:2,background:"rgba(255,255,255,0.08)"}}/>
         </div>
-        <div style={{fontSize:11,color:"#8E8E93",letterSpacing:"0.14em",marginBottom:16,
+        <div style={{fontSize:11,color:"#667085",letterSpacing:"0.14em",marginBottom:16,
           textAlign:"center",textTransform:"uppercase",fontWeight:700}}>Más módulos</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:8}}>
           {items.map(item=>(
             <button key={item.id} onClick={()=>{setTab(item.id);onClose();}}
               style={{padding:"18px 10px",
-                background:tab===item.id?"rgba(0,0,0,0.05)":"#F5F5F5",
-                border:`1.5px solid ${tab===item.id?"#000000":"rgba(0,0,0,0.05)"}`,
+                background:tab===item.id?"rgba(255,255,255,0.04)":"#11151B",
+                border:`1.5px solid ${tab===item.id?"#F5F7FA":"rgba(255,255,255,0.04)"}`,
                 borderRadius:18,cursor:"pointer",
                 display:"flex",flexDirection:"column",alignItems:"center",gap:8,
                 transition:"all 150ms ease",touchAction:"manipulation",
                 WebkitTapHighlightColor:"transparent"}}>
               <span style={{fontSize:28,lineHeight:1}}>{item.icon}</span>
-              <span style={{fontSize:12,fontWeight:700,color:tab===item.id?"#000000":"#000000",lineHeight:1}}>{item.label}</span>
-              <span style={{fontSize:10,color:"#8E8E93",lineHeight:1}}>{item.desc}</span>
+              <span style={{fontSize:12,fontWeight:700,color:tab===item.id?"#F5F7FA":"#F5F7FA",lineHeight:1}}>{item.label}</span>
+              <span style={{fontSize:10,color:"#667085",lineHeight:1}}>{item.desc}</span>
             </button>
           ))}
         </div>
@@ -7475,12 +7488,12 @@ class ErrorBoundary extends React.Component {
     if(!this.state.error) return this.props.children;
     const msg = this.state.error?.message||String(this.state.error);
     return (
-      <div style={{minHeight:"100vh",background:"#F2F2F7",color:"#000000",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:24,fontFamily:"'Trebuchet MS',sans-serif"}}>
-        <div style={{fontSize:28,color:"#000000"}}>⚠</div>
-        <div style={{fontSize:13,fontWeight:700,color:"#000000",textAlign:"center"}}>Algo salió mal</div>
+      <div style={{minHeight:"100vh",background:"#0B0D10",color:"#F5F7FA",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:24,fontFamily:"'Trebuchet MS',sans-serif"}}>
+        <div style={{fontSize:28,color:"#F5F7FA"}}>⚠</div>
+        <div style={{fontSize:13,fontWeight:700,color:"#F5F7FA",textAlign:"center"}}>Algo salió mal</div>
         <div style={{fontSize:10,color:"#4A5568",fontFamily:"monospace",background:"#EEF1F5",padding:"8px 14px",borderRadius:4,maxWidth:320,wordBreak:"break-all",textAlign:"center"}}>{msg}</div>
         <button onClick={()=>window.location.reload()}
-          style={{marginTop:8,padding:"9px 22px",background:"#000000",border:"none",borderRadius:4,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",letterSpacing:"0.05em"}}>
+          style={{marginTop:8,padding:"9px 22px",background:"#F5F7FA",border:"none",borderRadius:4,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",letterSpacing:"0.05em"}}>
           REINICIAR APP
         </button>
       </div>
@@ -7710,11 +7723,11 @@ function App() {
   );
 
   return (
-    <div style={{minHeight:"100vh",background:"#F2F2F7",color:C.t1,fontFamily:"'Trebuchet MS',sans-serif",fontSize:13}}>
+    <div style={{minHeight:"100vh",background:"#0B0D10",color:C.t1,fontFamily:"'Trebuchet MS',sans-serif",fontSize:13}}>
       {search&&<SearchPalette state={state} onNavigate={t=>{setTab(t);}} onClose={()=>setSearch(false)}/>}
 
       {/* NAV */}
-      <div style={{background:"rgba(255,255,255,0.88)",backdropFilter:"blur(24px) saturate(1.8)",WebkitBackdropFilter:"blur(24px) saturate(1.8)",borderBottom:`1px solid ${C.border}`,padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,flexWrap:"wrap",gap:4}}>
+      <div style={{background:"rgba(11,13,16,0.96)",backdropFilter:"blur(20px) saturate(1.3)",WebkitBackdropFilter:"blur(20px) saturate(1.3)",borderBottom:`1px solid ${C.border}`,padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,flexWrap:"wrap",gap:4}}>
         <Logo/>
         <div style={{display:"flex",gap:2,alignItems:"center",flexWrap:"wrap"}}>
           {/* Desktop tabs — hidden on mobile view */}
@@ -7723,7 +7736,7 @@ function App() {
             const isP1Tab=t.id==="ops"&&p1Active>0;
             return (
               <button key={t.id} onClick={()=>setTab(t.id)}
-                style={{padding:"3px 9px",borderRadius:3,cursor:"pointer",fontSize:10,fontWeight:600,background:tab===t.id?C.blue:"transparent",border:`1px solid ${tab===t.id?C.blueHi:C.border}`,color:tab===t.id?"#FFFFFF":C.t2,position:"relative",letterSpacing:"0.04em"}}>
+                style={{padding:"3px 9px",borderRadius:3,cursor:"pointer",fontSize:10,fontWeight:600,background:tab===t.id?C.blue:"transparent",border:`1px solid ${tab===t.id?C.blueHi:C.border}`,color:tab===t.id?"#151A21":C.t2,position:"relative",letterSpacing:"0.04em"}}>
                 {t.label}
                 {badge>0&&<span style={{position:"absolute",top:-4,right:-4,width:13,height:13,borderRadius:"50%",background:isP1Tab?C.p1dot:t.id==="cartera"?C.red:C.yellow,fontSize:7,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",color:"#000"}}>{badge}</span>}
               </button>
@@ -7752,12 +7765,12 @@ function App() {
       {/* ── Nav móvil nativa — 4 tabs + FAB ── */}
       {mobileView&&(
         <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:150,
-          background:"rgba(255,255,255,0.88)",
-          backdropFilter:"blur(24px) saturate(1.8)",WebkitBackdropFilter:"blur(24px) saturate(1.8)",
-          borderTop:"1px solid rgba(0,0,0,0.06)",
+          background:"rgba(11,13,16,0.96)",
+          backdropFilter:"blur(20px) saturate(1.4)",WebkitBackdropFilter:"blur(20px) saturate(1.4)",
+          borderTop:"1px solid rgba(255,255,255,0.06)",
           paddingBottom:"env(safe-area-inset-bottom,0px)",
           display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",
-          boxShadow:"0 -4px 30px rgba(0,0,0,0.05)"}}>
+          boxShadow:"0 -8px 30px rgba(0,0,0,0.4)"}}>
           {[
             {id:"ops",      label:"Centro",  icon:"⊙"},
             {id:"tickets",  label:"Pipeline",icon:"◈"},
@@ -7774,12 +7787,12 @@ function App() {
                 style={{padding:"10px 4px",
                   border:"none",cursor:"pointer",
                   background:"transparent",
-                  borderTop:`2.5px solid ${active?"#000000":"transparent"}`,
+                  borderTop:`2.5px solid ${active?"#F5F7FA":"transparent"}`,
                   position:"relative",display:"flex",flexDirection:"column",alignItems:"center",gap:3,
                   minHeight:56,touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
-                <span style={{fontSize:20,lineHeight:1,color:active?"#000000":"#8E8E93",
+                <span style={{fontSize:20,lineHeight:1,color:active?"#F5F7FA":"#667085",
                   fontWeight:active?700:400}}>{t.icon}</span>
-                <span style={{fontSize:10,color:active?"#000000":"#8E8E93",
+                <span style={{fontSize:10,color:active?"#F5F7FA":"#667085",
                   letterSpacing:"0.02em",fontWeight:active?700:400}}>{t.label}</span>
                 {badge>0&&<span style={{position:"absolute",top:8,right:"calc(50% - 18px)",
                   minWidth:16,height:16,borderRadius:8,padding:"0 3px",
@@ -7799,9 +7812,9 @@ function App() {
             zIndex:160,width:56,height:56,borderRadius:28,
             background:"linear-gradient(135deg,#000000,#1A1A1A)",
             border:"none",
-            boxShadow:"0 6px 24px rgba(0,0,0,0.3), 0 2px 8px rgba(0,0,0,0.12)",
+            boxShadow:"0 6px 24px rgba(255,255,255,0.18), 0 2px 8px rgba(255,255,255,0.08)",
             display:"flex",alignItems:"center",justifyContent:"center",
-            cursor:"pointer",fontSize:28,color:"#FFFFFF",fontWeight:300,
+            cursor:"pointer",fontSize:28,color:"#151A21",fontWeight:300,
             touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
           +
         </button>
@@ -7829,18 +7842,18 @@ function App() {
       <Toasts items={toasts}/>
 
       <style>{`
-        html,body{overscroll-behavior:none;overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;touch-action:pan-y;background:#F2F2F7}
+        html,body{overscroll-behavior:none;overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;touch-action:pan-y;background:#0B0D10;color:#F5F7FA}
         .scroll-touch{-webkit-overflow-scrolling:touch;overflow-y:auto}
         input[type=number]::-webkit-inner-spin-button{opacity:.3}
-        input::placeholder,textarea::placeholder{color:#B8C6D0}
-        select option{background:#FFFFFF;color:#1A2332}
+        input::placeholder,textarea::placeholder{color:#475569}
+        select option{background:#151A21;color:#F5F7FA}
         *{box-sizing:border-box}
         button{transition:opacity 120ms ease,background 120ms ease,border-color 120ms ease;-webkit-tap-highlight-color:transparent}
         button:active{opacity:.75;transform:scale(.97)}
         ::-webkit-scrollbar{width:4px;height:4px}
-        ::-webkit-scrollbar-track{background:#F2F2F7}
-        ::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.12);border-radius:2px}
-        textarea{color:#4A5568;resize:vertical;font-family:'Courier New',monospace}
+        ::-webkit-scrollbar-track{background:#0B0D10}
+        ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:2px}
+        textarea{color:#98A2B3;resize:vertical;font-family:'Courier New',monospace}
         input,select,textarea{transition:border-color 150ms ease}
         @media(max-width:640px){
           .ref-grid{grid-template-columns:1fr!important}
