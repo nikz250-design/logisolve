@@ -402,8 +402,54 @@ function utilidadPonderada(uNeta, probId) {
   return uNeta*(p.pct/100);
 }
 
-
 // ═══════════════════════════════════════════════════════════════════════════════
+// L3.5 — SHARED SELECTORS (single source of truth for derived ticket data)
+// All components MUST use these instead of inline filter logic.
+// Changing a business rule here updates all views simultaneously.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Active non-deleted tickets
+const sel_active     = (ts) => ts.filter(t=>!t._deleted);
+
+// Operado: work already done (entregado/facturado/cobrado/cerrado)
+const sel_operados   = (ts) => sel_active(ts).filter(t=>OPERADO_SET.has(t.status));
+
+// Cash: money actually received
+const sel_cobrados   = (ts) => sel_active(ts).filter(t=>CASH_SET.has(t.status));
+
+// Cartera: delivered/invoiced but not yet paid — business rule lives here
+const sel_cartera    = (ts) => sel_active(ts).filter(t=>CARTERA_SET.has(t.status)&&!t.cobrado);
+
+// Vencidos: cartera past the promesa de pago date
+const sel_vencidos   = (ts) => sel_cartera(ts).filter(t=>{
+  if(!t.promesaPago) return false;
+  const d=parseDateMX(t.promesaPago); return d&&new Date()>d;
+});
+
+// Forecast: probable but not yet done (cotizado/autorizado)
+const sel_forecast   = (ts) => sel_active(ts).filter(t=>FORECAST_SET.has(t.status));
+
+// Open pipeline (not closed, not cancelled)
+const sel_open       = (ts) => sel_active(ts).filter(t=>!CLOSED_SET.has(t.status));
+
+// Sum a snap field over a ticket array
+const sumSnap        = (ts, key) => ts.reduce((s,t)=>s+safeNumber(t.snap?.[key]),0);
+
+// Period filter — from parseDateMX of t.date
+const sel_inRange    = (ts, from, to) => ts.filter(t=>{
+  const d=parseDateMX(t.date); return d&&d>=from&&d<=to;
+});
+
+// Build period range object
+const buildRange = (period) => {
+  const now=new Date(); const from=new Date(now);
+  if     (period==="today") from.setHours(0,0,0,0);
+  else if(period==="week")  from.setDate(now.getDate()-7);
+  else if(period==="month") from.setDate(now.getDate()-30);
+  else if(period==="3m")    from.setDate(now.getDate()-90);
+  else                      from.setFullYear(2000); // "all"
+  return {from,to:now};
+};
 const mxn   = n => new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2}).format(n||0);
 const fpct  = n => ((n||0).toFixed(1))+"%";
 const clamp = (v,mn,mx) => Math.min(Math.max(v,mn),mx);
@@ -1478,19 +1524,18 @@ const Timeline = React.memo(function Timeline({events}) {
 // ── CENTRO DE OPERACIONES (Dashboard) ────────────────────────────────────────
 function CentroOps({state}) {
   const {tickets,clients,suppliers,units} = state;
-  const active = useMemo(()=>tickets.filter(t=>!t._deleted&&t.status!=="cancelado"),[tickets]);
-
-  // ── LAYER 1: OPERADO — entregado+facturado+cobrado+cerrado ─────────────────
-  const operados = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)),[active]);
-  const revenueOp   = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[operados]);
-  const utilidadOp  = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0),[operados]);
-  const uBrutaOp    = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.uBruta),0),[operados]);
-  const costoOp        = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.costoTotal),0),[operados]);
-  const costoProducto  = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.costoBase)*(1+safeNumber(t.snap?.params?.iva,16)/100),0),[operados]);
-  const gastosOp       = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.gastos),0),[operados]);
-  const totalInv       = costoProducto;
-  const ivaNetoOp   = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.ivaNeto),0),[operados]);
-  const isrOp       = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.isr),0),[operados]);
+  // Use shared selectors — business rules defined once in L3.5
+  const active   = useMemo(()=>sel_active(tickets),[tickets]);
+  const operados = useMemo(()=>sel_operados(tickets),[tickets]);
+  const revenueOp   = useMemo(()=>sumSnap(operados,"precioConIVA"),[operados]);
+  const utilidadOp  = useMemo(()=>sumSnap(operados,"uNeta"),[operados]);
+  const uBrutaOp    = useMemo(()=>sumSnap(operados,"uBruta"),[operados]);
+  const costoOp     = useMemo(()=>sumSnap(operados,"costoTotal"),[operados]);
+  const costoProducto = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.costoBase)*(1+safeNumber(t.snap?.params?.iva,16)/100),0),[operados]);
+  const gastosOp    = useMemo(()=>sumSnap(operados,"gastos"),[operados]);
+  const totalInv    = costoProducto;
+  const ivaNetoOp   = useMemo(()=>sumSnap(operados,"ivaNeto"),[operados]);
+  const isrOp       = useMemo(()=>sumSnap(operados,"isr"),[operados]);
   const cargaFiscal = ivaNetoOp + isrOp;
   const margenOp    = revenueOp>0?(utilidadOp/revenueOp)*100:0;
   const eficienciaFiscal = uBrutaOp>0?(utilidadOp/uBrutaOp)*100:0;
@@ -1498,20 +1543,20 @@ function CentroOps({state}) {
   const markupProm  = useMemo(()=>{const v=operados.filter(t=>safeNumber(t.snap?.costoTotal)>0);return v.length>0?v.reduce((s,t)=>s+calcMarkup((t.snap?.precioSinIVA||0),(t.snap?.costoTotal||0)),0)/v.length:0;},[operados]);
 
   // ── LAYER 2: CASH — solo cobrado/cerrado ───────────────────────────────────
-  const cobrados    = useMemo(()=>active.filter(t=>CASH_SET.has(t.status)),[active]);
-  const cashTotal   = useMemo(()=>cobrados.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[cobrados]);
-  const cashNeta    = useMemo(()=>cobrados.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0),[cobrados]);
+  const cobrados    = useMemo(()=>sel_cobrados(tickets),[tickets]);
+  const cashTotal   = useMemo(()=>sumSnap(cobrados,"precioConIVA"),[cobrados]);
+  const cashNeta    = useMemo(()=>sumSnap(cobrados,"uNeta"),[cobrados]);
 
-  // ── LAYER 3: CARTERA — entregado+facturado no cobrado ──────────────────────
-  const cartera     = useMemo(()=>active.filter(t=>CARTERA_SET.has(t.status)&&!t.cobrado),[active]);
-  const carteraMonto= useMemo(()=>cartera.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[cartera]);
+  // ── LAYER 3: CARTERA — shared selector (business rule defined once) ─────────
+  const cartera     = useMemo(()=>sel_cartera(tickets),[tickets]);
+  const carteraMonto= useMemo(()=>sumSnap(cartera,"precioConIVA"),[cartera]);
   const cxp         = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)&&!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap?.costoTotal),0),[active]);
   const flujoOp     = carteraMonto - cargaFiscal - cxp;
-  const vencidos    = useMemo(()=>cartera.filter(t=>{if(!t.promesaPago)return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}),[cartera]);
+  const vencidos    = useMemo(()=>sel_vencidos(tickets),[tickets]);
 
   // ── LAYER 4: FORECAST — cotizado+autorizado ────────────────────────────────
-  const forecastTkts= useMemo(()=>active.filter(t=>FORECAST_SET.has(t.status)),[active]);
-  const forecastMonto=useMemo(()=>forecastTkts.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[forecastTkts]);
+  const forecastTkts= useMemo(()=>sel_forecast(tickets),[tickets]);
+  const forecastMonto=useMemo(()=>sumSnap(forecastTkts,"precioConIVA"),[forecastTkts]);
   const forecastUtil= useMemo(()=>forecastTkts.reduce((s,t)=>s+utilidadPonderada(safeNumber(t.snap?.uNeta),t.prob),0),[forecastTkts]);
   const cotizados   = useMemo(()=>forecastTkts.filter(t=>t.status==="cotizado"),[forecastTkts]);
   const autorizados = useMemo(()=>forecastTkts.filter(t=>t.status==="autorizado"),[forecastTkts]);
@@ -3778,10 +3823,10 @@ function Clientes({state,dispatch,toast}) {
 function Cartera({state,dispatch,toast}) {
   const {tickets,clients}=state;
   const now=useMemo(()=>new Date(),[]);
-  const creditOps  = useMemo(()=>tickets.filter(t=>t.payType==="credit"&&t.status!=="cancelado"),[tickets]);
-  const pendientes = useMemo(()=>creditOps.filter(t=>!t.cobrado),[creditOps]);
-  const cobrados   = useMemo(()=>creditOps.filter(t=>t.cobrado),[creditOps]);
-  const vencidos   = useMemo(()=>pendientes.filter(t=>{const d=parseDateMX(t.promesaPago);return d&&now>d;}),[pendientes,now]);
+  // Use shared selectors — same criteria as MCartera (CARTERA_SET + !cobrado)
+  const pendientes = useMemo(()=>sel_cartera(tickets),[tickets]);
+  const cobrados   = useMemo(()=>sel_cobrados(tickets),[tickets]);
+  const vencidos   = useMemo(()=>sel_vencidos(tickets),[tickets]);
 
   return (
     <div style={{padding:"10px 13px",maxWidth:950,margin:"0 auto"}}>
@@ -4815,19 +4860,16 @@ function MOps({state,setTab}) {
   const operados  = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)&&inRange(t)),[active,inRange]);
   const prevOps   = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)&&inPrev(t)),[active,inPrev]);
 
-  const totalFact = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[operados]);
-  const totalNeta = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0),[operados]);
-  const prevFact  = useMemo(()=>prevOps.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[prevOps]);
+  const totalFact = useMemo(()=>sumSnap(operados,"precioConIVA"),[operados]);
+  const totalNeta = useMemo(()=>sumSnap(operados,"uNeta"),[operados]);
+  const prevFact  = useMemo(()=>sumSnap(prevOps,"precioConIVA"),[prevOps]);
   const growth    = prevFact>0?((totalFact-prevFact)/prevFact)*100:null;
   const margen    = totalFact>0?(totalNeta/totalFact)*100:0;
 
-  const carteraMonto  = useMemo(()=>active.filter(t=>CARTERA_SET.has(t.status)&&!t.cobrado).reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[active]);
-  const pipeline      = useMemo(()=>active.filter(t=>!CLOSED_SET.has(t.status)),[active]);
+  const carteraMonto  = useMemo(()=>sumSnap(sel_cartera(tickets),"precioConIVA"),[tickets]);
+  const pipeline      = useMemo(()=>sel_open(tickets),[tickets]);
   const p1Active      = useMemo(()=>pipeline.filter(t=>t.priority==="P1"),[pipeline]);
-  const vencidos      = useMemo(()=>active.filter(t=>{
-    if(!t.promesaPago||t.cobrado||t.status==="cancelado")return false;
-    const d=parseDateMX(t.promesaPago);return d&&new Date()>d;
-  }),[active]);
+  const vencidos      = useMemo(()=>sel_vencidos(tickets),[tickets]);
 
   // ── 7-day bar chart ───────────────────────────────────────────────────────
   const chartData = useMemo(()=>{
