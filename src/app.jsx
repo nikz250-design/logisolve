@@ -7793,7 +7793,7 @@ function App() {
 
   if(loading) return (
     <ThemeCtx.Provider value={C}>
-      <div style={{minHeight:"100vh",background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
+      <div style={{minHeight:"100vh",background:darkMode?"#0D0F12":"linear-gradient(180deg,#F7F6F3 0%,#ECE9E4 100%)",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
         <Logo/>
         <div style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",letterSpacing:"0.2em",marginTop:8}}>CARGANDO DATOS...</div>
       </div>
@@ -7802,7 +7802,12 @@ function App() {
 
   return (
     <ThemeCtx.Provider value={C}>
-    <div style={{minHeight:"100vh",background:"transparent",color:C.t1,fontFamily:"'Trebuchet MS',sans-serif",fontSize:13}}>
+    <div style={{minHeight:"100vh",
+      background: darkMode
+        ? "radial-gradient(ellipse 80% 60% at 50% -10%,rgba(143,227,190,0.07) 0%,transparent 60%),radial-gradient(ellipse 50% 40% at 85% 80%,rgba(143,227,190,0.04) 0%,transparent 50%),#0D0F12"
+        : "linear-gradient(180deg,#F7F6F3 0%,#ECE9E4 100%)",
+      color:C.t1,fontFamily:"'Trebuchet MS',sans-serif",fontSize:13,
+      transition:"background 350ms ease"}}>
       {search&&<SearchPalette state={state} onNavigate={t=>{setTab(t);}} onClose={()=>setSearch(false)}/>}
 
       {/* NAV */}
