@@ -30,28 +30,30 @@ const C_DARK = {
 };
 const C_LIGHT = {
   _dark:false,
-  // ── Surface system — glassmorphism light
-  bg0:"#ECEAE5",
-  bg1:"rgba(255,255,255,0.78)",
-  bg2:"rgba(255,255,255,0.96)",
-  bg3:"rgba(255,255,255,0.62)",
-  bg4:"rgba(255,255,255,0.92)",
-  bgSolid:"#F8F7F4",
-  border:"rgba(0,0,0,0.09)",
-  borderHi:"rgba(0,0,0,0.15)",
-  blue:"#17A865",  blueHi:"#0F8750", blueDim:"rgba(23,168,101,0.12)",
-  cyan:"#17A865",  cyanDim:"rgba(23,168,101,0.09)",
-  green:"#17A865", greenDim:"rgba(23,168,101,0.12)",
-  red:"#D94F4F",   redDim:"rgba(217,79,79,0.12)",
-  yellow:"#C47F0A",yellowDim:"rgba(196,127,10,0.12)",
-  orange:"#C06620",amber:"#C47F0A",
-  purple:"#7C5FC4",purpleDim:"rgba(124,95,196,0.1)",
-  t1:"#111111", t2:"#555555", t3:"#888888", t4:"#AAAAAA",
-  p1:"#D94F4F", p1dim:"rgba(217,79,79,0.10)", p1dot:"#D94F4F",
-  p2:"#C47F0A", p2dim:"rgba(196,127,10,0.10)", p2dot:"#C47F0A",
-  p3:"#17A865", p3dim:"rgba(23,168,101,0.10)", p3dot:"#17A865",
-  p4:"#888888", p4dim:"rgba(136,136,136,0.10)", p4dot:"#888888",
-  glass:"blur(28px) saturate(1.8)",
+  // ── Surface system — Apple liquid glass / VisionOS light
+  bg0:"#F7F6F3",
+  bg1:"rgba(255,255,255,0.52)",
+  bg2:"rgba(255,255,255,0.92)",
+  bg3:"rgba(255,255,255,0.35)",
+  bg4:"rgba(255,255,255,0.70)",
+  bgSolid:"#F7F6F3",
+  border:"rgba(0,0,0,0.06)",
+  borderHi:"rgba(0,0,0,0.10)",
+  // Accent — soft mint pastel (glow/tint only, not for text)
+  blue:"#9FE0BE",  blueHi:"#BFE8D3", blueDim:"rgba(159,224,190,0.22)",
+  cyan:"#9FE0BE",  cyanDim:"rgba(159,224,190,0.16)",
+  green:"#9FE0BE", greenDim:"rgba(159,224,190,0.22)",
+  red:"#E05555",   redDim:"rgba(224,85,85,0.12)",
+  yellow:"#C8860A",yellowDim:"rgba(200,134,10,0.12)",
+  orange:"#C06620",amber:"#C8860A",
+  purple:"#9B8DD0",purpleDim:"rgba(155,141,208,0.12)",
+  // Typography — warm dark, never pure black
+  t1:"#161616", t2:"#6E6E73", t3:"#A1A1A6", t4:"#C8C8CC",
+  p1:"#E05555", p1dim:"rgba(224,85,85,0.10)", p1dot:"#E05555",
+  p2:"#C8860A", p2dim:"rgba(200,134,10,0.10)", p2dot:"#C8860A",
+  p3:"#5CBF8A", p3dim:"rgba(92,191,138,0.15)", p3dot:"#5CBF8A",
+  p4:"#A1A1A6", p4dim:"rgba(161,161,166,0.10)", p4dot:"#A1A1A6",
+  glass:"blur(28px) saturate(2.0)",
 };
 // Module-level alias for backwards-compat (PRIORITY, UNIT_STATUS etc.)
 const C = C_DARK;
@@ -62,24 +64,33 @@ const ThemeCtx = React.createContext(C_DARK);
 // Mobile A palette derived from active theme
 function makeA(C) {
   return {
-    lime:     C.green,
-    limeDim:  C.greenDim,
-    limeMid:  C._dark ? "rgba(143,227,190,0.18)" : "rgba(23,168,101,0.15)",
-    mint:     C.blue,
-    mintDim:  C.blueDim,
-    amber:    C.yellow,
-    amberDim: C.yellowDim,
-    red:      C.red,
-    redDim:   C.redDim,
-    card:     C._dark ? "rgba(22,24,28,0.62)" : "rgba(255,255,255,0.80)",
-    cardHi:   C._dark ? "rgba(32,35,42,0.75)" : "rgba(255,255,255,0.95)",
-    blur:     C.glass,
-    shadow:   C._dark
+    // ── Accent greens
+    // lime = readable text accent  |  limeFill = button/card fill
+    lime:       C._dark ? C.green : "#2A9768",          // readable in both modes
+    limeFill:   C._dark ? C.green : "#9FE0BE",          // soft pastel fill
+    limeDim:    C.greenDim,                              // very subtle tint
+    limeMid:    C._dark ? "rgba(143,227,190,0.18)" : "rgba(255,255,255,0.78)", // active pill bg
+    mint:       C._dark ? C.blue : "#2A9768",           // readable teal (cobrar, highlights)
+    mintDim:    C.blueDim,
+    amber:      C.yellow,
+    amberDim:   C.yellowDim,
+    red:        C.red,
+    redDim:     C.redDim,
+    // ── Card surfaces — truly translucent in light
+    card:       C._dark ? "rgba(22,24,28,0.62)" : "rgba(255,255,255,0.42)",
+    cardHi:     C._dark ? "rgba(32,35,42,0.75)" : "rgba(255,255,255,0.68)",
+    blur:       C.glass,
+    shadow:     C._dark
       ? "0 8px 32px rgba(0,0,0,0.44), 0 1px 0 rgba(255,255,255,0.06) inset"
-      : "0 8px 32px rgba(0,0,0,0.08), 0 1px 0 rgba(255,255,255,0.8) inset",
-    shadowSm: C._dark
+      : "0 8px 30px rgba(0,0,0,0.05), 0 1px 0 rgba(255,255,255,0.95) inset",
+    shadowSm:   C._dark
       ? "0 4px 16px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.04) inset"
-      : "0 4px 16px rgba(0,0,0,0.06), 0 1px 0 rgba(255,255,255,0.8) inset",
+      : "0 4px 12px rgba(0,0,0,0.04), 0 1px 0 rgba(255,255,255,0.95) inset",
+    // ── Active pill / filter chip token set
+    pillBg:     C._dark ? "rgba(143,227,190,0.18)" : "rgba(255,255,255,0.78)",
+    pillBorder: C._dark ? C.green : "rgba(0,0,0,0.06)",
+    pillColor:  C._dark ? C.green : C.t1,
+    pillShadow: C._dark ? "none" : "0 4px 12px rgba(0,0,0,0.06)",
     t1: C.t1, t2: C.t2, t3: C.t3, r: 24,
   };
 }
@@ -5138,15 +5149,12 @@ function MOps({state,setTab}) {
           {[["today","Hoy"],["week","7d"],["month","30d"],["3m","3M"]].map(([v,l])=>(
             <button key={v} onClick={()=>setPeriod(v)} style={{
               flexShrink:0,padding:"7px 18px",borderRadius:20,fontSize:12,fontWeight:700,
-              background:period===v
-                ?(C._dark?A.limeMid:C.t1)
-                :"transparent",
-              border:`1.5px solid ${period===v
-                ?(C._dark?A.lime:C.t1)
-                :(C._dark?C.border:C.border)}`,
-              color:period===v
-                ?(C._dark?A.lime:"#FFFFFF")
-                :A.t3,
+              background:period===v ? A.pillBg : "transparent",
+              border:`1.5px solid ${period===v ? A.pillBorder : C.border}`,
+              color:period===v ? A.pillColor : A.t3,
+              boxShadow:period===v ? A.pillShadow : "none",
+              backdropFilter:period===v&&!C._dark?"blur(16px)":"none",
+              WebkitBackdropFilter:period===v&&!C._dark?"blur(16px)":"none",
               cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.15s",
             }}>
               {l}
@@ -5466,9 +5474,9 @@ function MOps({state,setTab}) {
           <div style={{padding:"16px 22px"}}>
             <button onClick={()=>setTab("cotizador")}
               style={{width:"100%",padding:"14px",
-                background:A.lime,
+                background:A.limeFill,
                 border:"none",borderRadius:14,cursor:"pointer",
-                fontSize:14,fontWeight:700,color:C._dark?"#0A1F14":"#FFFFFF",
+                fontSize:14,fontWeight:700,color:C._dark?"#0A1F14":"#161616",
                 letterSpacing:"0.02em",touchAction:"manipulation",
                 boxShadow:`0 4px 20px ${A.limeDim}`,
               }}>
@@ -5606,15 +5614,19 @@ function MPipeline({state,dispatch,toast}) {
             <button key={v} onClick={()=>setFilter(v)} style={{
               flexShrink:0,display:"flex",alignItems:"center",gap:6,
               padding:"7px 16px",borderRadius:20,fontSize:11,fontWeight:700,
-              background:filter===v?A.limeMid:"transparent",
-              border:`1.5px solid ${filter===v?A.lime:C.border}`,
-              color:filter===v?A.lime:A.t3,
+              background:filter===v ? A.pillBg : "transparent",
+              border:`1.5px solid ${filter===v ? A.pillBorder : C.border}`,
+              color:filter===v ? A.pillColor : A.t3,
+              boxShadow:filter===v ? A.pillShadow : "none",
+              backdropFilter:filter===v&&!C._dark?"blur(16px)":"none",
+              WebkitBackdropFilter:filter===v&&!C._dark?"blur(16px)":"none",
               cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.15s",whiteSpace:"nowrap",
             }}>
               {l}
               {c>0&&<span style={{fontSize:10,fontWeight:800,
                 background:filter===v?A.limeDim:C.bg3,
-                color:filter===v?A.lime:A.t3,borderRadius:9,padding:"1px 6px"}}>{c}</span>}
+                color:filter===v?A.lime:A.t3,borderRadius:9,padding:"1px 6px",
+                border:`1px solid ${filter===v?A.pillBorder:C.border}`}}>{c}</span>}
             </button>
           ))}
         </div>
@@ -6117,8 +6129,8 @@ function MCotizador({state,dispatch,toast}) {
 
       <button onClick={()=>setStep(1)} style={{
         width:"100%",padding:"16px",borderRadius:16,
-        background:A.lime,
-        border:"none",color:C._dark?"#0A1F14":"#FFFFFF",fontSize:14,fontWeight:700,cursor:"pointer",
+        background:A.limeFill,
+        border:"none",color:C._dark?"#0A1F14":"#161616",fontSize:14,fontWeight:700,cursor:"pointer",
         letterSpacing:"0.02em",WebkitTapHighlightColor:"transparent",
       }}>
         Siguiente: Líneas →
@@ -6273,8 +6285,8 @@ function MCotizador({state,dispatch,toast}) {
         </button>
         <button onClick={()=>setStep(2)} style={{
           flex:1,padding:"14px",borderRadius:14,
-          background:A.lime,
-          border:"none",color:C._dark?"#0A1F14":"#FFFFFF",fontSize:14,fontWeight:700,cursor:"pointer",
+          background:A.limeFill,
+          border:"none",color:C._dark?"#0A1F14":"#161616",fontSize:14,fontWeight:700,cursor:"pointer",
           WebkitTapHighlightColor:"transparent",
         }}>
           Siguiente: Datos →
@@ -6352,8 +6364,8 @@ function MCotizador({state,dispatch,toast}) {
         </button>
         <button onClick={save} style={{
           flex:1,padding:"16px",borderRadius:14,
-          background:A.lime,
-          border:"none",color:C._dark?"#0A1F14":"#FFFFFF",fontSize:14,fontWeight:700,cursor:"pointer",
+          background:A.limeFill,
+          border:"none",color:C._dark?"#0A1F14":"#161616",fontSize:14,fontWeight:700,cursor:"pointer",
           letterSpacing:"0.02em",WebkitTapHighlightColor:"transparent",
         }}>
           Registrar ticket + PDF →
@@ -6729,9 +6741,12 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
           {[["today","Hoy"],["week","7d"],["month","30d"],["3m","3M"],["all","Todo"]].map(([v,l])=>(
             <button key={v} onClick={()=>setPeriod(v)} style={{
               flexShrink:0,padding:"7px 16px",borderRadius:20,fontSize:11,fontWeight:700,
-              background:period===v?(C._dark?A.limeMid:C.t1):"transparent",
-              border:`1.5px solid ${period===v?(C._dark?A.lime:C.t1):(C._dark?C.border:C.border)}`,
-              color:period===v?(C._dark?A.lime:"#FFFFFF"):A.t3,
+              background:period===v ? A.pillBg : "transparent",
+              border:`1.5px solid ${period===v ? A.pillBorder : C.border}`,
+              color:period===v ? A.pillColor : A.t3,
+              boxShadow:period===v ? A.pillShadow : "none",
+              backdropFilter:period===v&&!C._dark?"blur(16px)":"none",
+              WebkitBackdropFilter:period===v&&!C._dark?"blur(16px)":"none",
               cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.15s",
             }}>{l}</button>
           ))}
@@ -7791,7 +7806,7 @@ function App() {
       {search&&<SearchPalette state={state} onNavigate={t=>{setTab(t);}} onClose={()=>setSearch(false)}/>}
 
       {/* NAV */}
-      <div style={{background:darkMode?"rgba(13,15,18,0.85)":"rgba(248,247,244,0.90)",backdropFilter:"blur(24px) saturate(1.6)",WebkitBackdropFilter:"blur(24px) saturate(1.6)",borderBottom:`1px solid ${C.borderHi}`,padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,flexWrap:"wrap",gap:4}}>
+      <div style={{background:darkMode?"rgba(13,15,18,0.85)":"rgba(255,255,255,0.52)",backdropFilter:"blur(30px) saturate(2.0)",WebkitBackdropFilter:"blur(30px) saturate(2.0)",borderBottom:`1px solid ${darkMode?C.borderHi:"rgba(255,255,255,0.55)"}`,padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,flexWrap:"wrap",gap:4,boxShadow:darkMode?"none":"0 1px 0 rgba(255,255,255,0.9) inset"}}>
         <Logo/>
         <div style={{display:"flex",gap:2,alignItems:"center",flexWrap:"wrap"}}>
           {/* Desktop tabs — hidden on mobile view */}
@@ -7840,14 +7855,14 @@ function App() {
           paddingBottom:"env(safe-area-inset-bottom,0px)"}}>
           <div style={{
             margin:"0 12px 10px",
-            background: darkMode ? "rgba(15,17,22,0.78)" : "rgba(248,247,244,0.88)",
-            backdropFilter:"blur(24px) saturate(1.8)",WebkitBackdropFilter:"blur(24px) saturate(1.8)",
-            border: darkMode ? "1px solid rgba(255,255,255,0.09)" : "1px solid rgba(0,0,0,0.09)",
+            background: darkMode ? "rgba(15,17,22,0.78)" : "rgba(255,255,255,0.48)",
+            backdropFilter:"blur(30px) saturate(2.0)",WebkitBackdropFilter:"blur(30px) saturate(2.0)",
+            border: darkMode ? "1px solid rgba(255,255,255,0.09)" : "1px solid rgba(255,255,255,0.55)",
             borderRadius:28,
             display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",
             boxShadow: darkMode
               ? "0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.06) inset"
-              : "0 8px 32px rgba(0,0,0,0.12), 0 1px 0 rgba(255,255,255,0.9) inset"}}>
+              : "0 -4px 20px rgba(0,0,0,0.04), 0 8px 30px rgba(0,0,0,0.05), 0 1px 0 rgba(255,255,255,0.95) inset"}}>
           {[
             {id:"ops",      label:"Centro",  icon:"⊙"},
             {id:"tickets",  label:"Pipeline",icon:"◈"},
@@ -7888,10 +7903,10 @@ function App() {
           style={{position:"fixed",
             left:20,bottom:`calc(76px + env(safe-area-inset-bottom,0px) + 10px)`,
             zIndex:160,width:42,height:42,borderRadius:21,
-            background:C._dark?"rgba(255,255,255,0.10)":"rgba(0,0,0,0.07)",
-            border:`1px solid ${C.border}`,
-            backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",
-            boxShadow:C._dark?"0 4px 16px rgba(0,0,0,0.4)":"0 4px 16px rgba(0,0,0,0.10)",
+            background:C._dark?"rgba(255,255,255,0.10)":"rgba(255,255,255,0.65)",
+            border:C._dark?`1px solid ${C.border}`:"1px solid rgba(255,255,255,0.70)",
+            backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",
+            boxShadow:C._dark?"0 4px 16px rgba(0,0,0,0.4)":"0 4px 16px rgba(0,0,0,0.06), 0 1px 0 rgba(255,255,255,0.9) inset",
             display:"flex",alignItems:"center",justifyContent:"center",
             cursor:"pointer",fontSize:18,
             touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
@@ -7905,11 +7920,15 @@ function App() {
           style={{position:"fixed",
             right:20,bottom:`calc(76px + env(safe-area-inset-bottom,0px) + 10px)`,
             zIndex:160,width:54,height:54,borderRadius:27,
-            background:C.blue,
-            border:"1px solid rgba(255,255,255,0.25)",
-            boxShadow:C._dark?"0 6px 24px rgba(143,227,190,0.28), 0 2px 8px rgba(0,0,0,0.4)":"0 6px 24px rgba(23,168,101,0.25), 0 2px 8px rgba(0,0,0,0.15)",
+            background:C._dark?C.blue:"rgba(255,255,255,0.72)",
+            backdropFilter:C._dark?"none":"blur(20px)",
+            WebkitBackdropFilter:C._dark?"none":"blur(20px)",
+            border:C._dark?"1px solid rgba(255,255,255,0.25)":"1px solid rgba(255,255,255,0.65)",
+            boxShadow:C._dark
+              ?"0 6px 24px rgba(143,227,190,0.28), 0 2px 8px rgba(0,0,0,0.4)"
+              :"0 8px 24px rgba(0,0,0,0.08), 0 1px 0 rgba(255,255,255,0.9) inset",
             display:"flex",alignItems:"center",justifyContent:"center",
-            cursor:"pointer",fontSize:28,color:"#0D0F12",fontWeight:400,
+            cursor:"pointer",fontSize:28,color:C._dark?"#0D0F12":"#161616",fontWeight:300,
             touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
           +
         </button>
@@ -7938,11 +7957,11 @@ function App() {
 
       <style>{`
         :root{color-scheme:${darkMode?"dark":"light"}}
-        html{background:${darkMode?"#0D0F12":"#ECEAE5"};transition:background 350ms ease}
+        html{background:${darkMode?"#0D0F12":"#ECE9E4"};transition:background 350ms ease}
         html,body{overscroll-behavior:none;overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;touch-action:pan-y;}
         body{background:${darkMode
           ? "radial-gradient(ellipse 80% 60% at 50% -10%,rgba(143,227,190,0.07) 0%,transparent 60%),radial-gradient(ellipse 50% 40% at 85% 80%,rgba(143,227,190,0.04) 0%,transparent 50%),#0D0F12"
-          : "radial-gradient(ellipse 80% 60% at 50% -10%,rgba(23,168,101,0.06) 0%,transparent 50%),#ECEAE5"
+          : "linear-gradient(180deg,#F7F6F3 0%,#ECE9E4 100%)"
         };color:${C.t1};min-height:100vh;transition:background 350ms ease}
         .scroll-touch{-webkit-overflow-scrolling:touch;overflow-y:auto}
         input[type=number]::-webkit-inner-spin-button{opacity:.3}
