@@ -3,38 +3,86 @@ import React, { useState, useReducer, useEffect, useRef, useCallback, useMemo } 
 // ═══════════════════════════════════════════════════════════════════════════════
 // L1 — DESIGN TOKENS
 // ═══════════════════════════════════════════════════════════════════════════════
-const C = {
+const C_DARK = {
+  _dark:true,
   // ── Surface system — glassmorphism dark
-  bg0:"#0D0F12",                        // app background
-  bg1:"rgba(22,24,28,0.62)",            // glass card (main surfaces)
-  bg2:"rgba(16,18,22,0.94)",            // secondary surfaces / dropdowns (near-solid)
-  bg3:"rgba(28,32,40,0.74)",            // elevated / active
-  bg4:"rgba(38,44,54,0.88)",            // highest elevation
-  bgSolid:"#111418",                    // solid fallback
+  bg0:"#0D0F12",
+  bg1:"rgba(22,24,28,0.62)",
+  bg2:"rgba(16,18,22,0.94)",
+  bg3:"rgba(28,32,40,0.74)",
+  bg4:"rgba(38,44,54,0.88)",
+  bgSolid:"#111418",
   border:"rgba(255,255,255,0.07)",
   borderHi:"rgba(255,255,255,0.13)",
-  // ── Accent — mint green (premium fintech)
   blue:"#8FE3BE",  blueHi:"#BFE8D3", blueDim:"rgba(143,227,190,0.12)",
   cyan:"#8FE3BE",  cyanDim:"rgba(143,227,190,0.09)",
   green:"#8FE3BE", greenDim:"rgba(143,227,190,0.12)",
-  // ── Semantic
   red:"#FF7A7A",   redDim:"rgba(255,122,122,0.12)",
   yellow:"#F5C842",yellowDim:"rgba(245,200,66,0.12)",
   orange:"#F97316",amber:"#F5C842",
   purple:"#A78BFA",purpleDim:"rgba(167,139,250,0.1)",
-  // ── Typography
-  t1:"#F5F5F7",    // primary
-  t2:"#B6BBC4",    // secondary
-  t3:"#7E848E",    // muted
-  t4:"#556070",    // very muted
-  // ── Priority semantic
+  t1:"#F5F5F7", t2:"#B6BBC4", t3:"#7E848E", t4:"#556070",
   p1:"#FF7A7A", p1dim:"rgba(255,122,122,0.12)", p1dot:"#FF7A7A",
   p2:"#F5C842", p2dim:"rgba(245,200,66,0.12)",  p2dot:"#F5C842",
   p3:"#8FE3BE", p3dim:"rgba(143,227,190,0.12)", p3dot:"#8FE3BE",
   p4:"#7E848E", p4dim:"rgba(126,132,142,0.10)", p4dot:"#7E848E",
-  // ── Glass helpers
   glass:"blur(28px) saturate(1.6)",
 };
+const C_LIGHT = {
+  _dark:false,
+  // ── Surface system — glassmorphism light
+  bg0:"#ECEAE5",
+  bg1:"rgba(255,255,255,0.78)",
+  bg2:"rgba(255,255,255,0.96)",
+  bg3:"rgba(255,255,255,0.62)",
+  bg4:"rgba(255,255,255,0.92)",
+  bgSolid:"#F8F7F4",
+  border:"rgba(0,0,0,0.09)",
+  borderHi:"rgba(0,0,0,0.15)",
+  blue:"#17A865",  blueHi:"#0F8750", blueDim:"rgba(23,168,101,0.12)",
+  cyan:"#17A865",  cyanDim:"rgba(23,168,101,0.09)",
+  green:"#17A865", greenDim:"rgba(23,168,101,0.12)",
+  red:"#D94F4F",   redDim:"rgba(217,79,79,0.12)",
+  yellow:"#C47F0A",yellowDim:"rgba(196,127,10,0.12)",
+  orange:"#C06620",amber:"#C47F0A",
+  purple:"#7C5FC4",purpleDim:"rgba(124,95,196,0.1)",
+  t1:"#111111", t2:"#555555", t3:"#888888", t4:"#AAAAAA",
+  p1:"#D94F4F", p1dim:"rgba(217,79,79,0.10)", p1dot:"#D94F4F",
+  p2:"#C47F0A", p2dim:"rgba(196,127,10,0.10)", p2dot:"#C47F0A",
+  p3:"#17A865", p3dim:"rgba(23,168,101,0.10)", p3dot:"#17A865",
+  p4:"#888888", p4dim:"rgba(136,136,136,0.10)", p4dot:"#888888",
+  glass:"blur(28px) saturate(1.8)",
+};
+// Module-level alias for backwards-compat (PRIORITY, UNIT_STATUS etc.)
+const C = C_DARK;
+
+// Theme context — provides active palette to all components
+const ThemeCtx = React.createContext(C_DARK);
+
+// Mobile A palette derived from active theme
+function makeA(C) {
+  return {
+    lime:     C.green,
+    limeDim:  C.greenDim,
+    limeMid:  C._dark ? "rgba(143,227,190,0.18)" : "rgba(23,168,101,0.15)",
+    mint:     C.blue,
+    mintDim:  C.blueDim,
+    amber:    C.yellow,
+    amberDim: C.yellowDim,
+    red:      C.red,
+    redDim:   C.redDim,
+    card:     C._dark ? "rgba(22,24,28,0.62)" : "rgba(255,255,255,0.80)",
+    cardHi:   C._dark ? "rgba(32,35,42,0.75)" : "rgba(255,255,255,0.95)",
+    blur:     C.glass,
+    shadow:   C._dark
+      ? "0 8px 32px rgba(0,0,0,0.44), 0 1px 0 rgba(255,255,255,0.06) inset"
+      : "0 8px 32px rgba(0,0,0,0.08), 0 1px 0 rgba(255,255,255,0.8) inset",
+    shadowSm: C._dark
+      ? "0 4px 16px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.04) inset"
+      : "0 4px 16px rgba(0,0,0,0.06), 0 1px 0 rgba(255,255,255,0.8) inset",
+    t1: C.t1, t2: C.t2, t3: C.t3, r: 24,
+  };
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // L2 — DOMAIN CONSTANTS
@@ -717,6 +765,7 @@ function buildCotizacionHTML(tkt, cl, un, supp) {
 
 // ── PDFPreviewModal — preview nativo para iPhone/Safari ──────────────────────
 function PDFPreviewModal({tkt,cl,un,supp,onClose}) {
+  const C = React.useContext(ThemeCtx);
   const frameRef=useRef(null);
   const [ready,setReady]=useState(false);
   const result=useMemo(()=>buildCotizacionHTML(tkt,cl,un,supp),[tkt]);
@@ -1030,6 +1079,7 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
 }
 // Modal de confirmacion PDF
 function PDFConfirm({tkt,cl,un,supp,onClose}) {
+  const C = React.useContext(ThemeCtx);
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{background:C.bg2,border:`1px solid ${C.borderHi}`,borderRadius:6,padding:22,maxWidth:340,width:"90%"}}>
@@ -1060,6 +1110,7 @@ function PDFConfirm({tkt,cl,un,supp,onClose}) {
 // L8 — UI PRIMITIVES
 // ═══════════════════════════════════════════════════════════════════════════════
 const Logo = React.memo(function Logo() {
+  const C = React.useContext(ThemeCtx);
   return (
     <div style={{display:"flex",alignItems:"center",gap:10}}>
       <svg width="22" height="22" viewBox="0 0 28 28">
@@ -1139,6 +1190,7 @@ function Field({label,value,onChange,prefix="$",suffix,hint,hi,min=0,step=1,type
 }
 
 function Sel({label,value,onChange,options}) {
+  const C = React.useContext(ThemeCtx);
   return (
     <div style={{marginBottom:7}}>
       {label&&<div style={{fontSize:7,color:C.t3,letterSpacing:"0.14em",marginBottom:3,textTransform:"uppercase"}}>{label}</div>}
@@ -1162,6 +1214,7 @@ const Toggle = React.memo(function Toggle({label,value,onChange}) {
 })
 
 const SHdr = React.memo(function SHdr({title,right}) {
+  const C = React.useContext(ThemeCtx);
   return (
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 10px",background:C.bg3,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderBottom:`1px solid ${C.border}`}}>
       <div style={{fontSize:7,color:C.t3,letterSpacing:"0.2em",fontWeight:700}}>{title}</div>
@@ -1171,6 +1224,7 @@ const SHdr = React.memo(function SHdr({title,right}) {
 })
 
 const MiniBar = React.memo(function MiniBar({value,max,color}) {
+  const C = React.useContext(ThemeCtx);
   return (
     <div style={{height:3,background:C.bg4,borderRadius:2,overflow:"hidden",marginTop:3}}>
       <div style={{height:"100%",width:`${clamp((value/Math.max(max,1))*100,0,100)}%`,background:color||C.cyan}}/>
@@ -1179,6 +1233,7 @@ const MiniBar = React.memo(function MiniBar({value,max,color}) {
 })
 
 const EmptyState = React.memo(function EmptyState({icon,title,sub}) {
+  const C = React.useContext(ThemeCtx);
   return (
     <div style={{textAlign:"center",padding:"32px 16px",color:C.t3}}>
       <div style={{fontSize:24,marginBottom:6,opacity:.4}}>{icon}</div>
@@ -1189,6 +1244,7 @@ const EmptyState = React.memo(function EmptyState({icon,title,sub}) {
 })
 
 const Confirm = React.memo(function Confirm({msg,onConfirm,onCancel}) {
+  const C = React.useContext(ThemeCtx);
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{background:"rgba(16,18,22,0.92)",backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",border:`1px solid ${C.borderHi}`,borderRadius:20,padding:22,maxWidth:320,width:"90%",boxShadow:"0 16px 60px rgba(0,0,0,0.6)"}}>
@@ -1203,6 +1259,7 @@ const Confirm = React.memo(function Confirm({msg,onConfirm,onCancel}) {
 })
 
 const Toasts = React.memo(function Toasts({items}) {
+  const C = React.useContext(ThemeCtx);
   if(!items.length) return null;
   const s=t=>t==="success"
     ?{border:`1px solid rgba(143,227,190,0.30)`,color:"#8FE3BE",background:"rgba(14,24,20,0.92)"}
@@ -1221,6 +1278,7 @@ const Toasts = React.memo(function Toasts({items}) {
 })
 
 function SearchPalette({state,onNavigate,onClose}) {
+  const C = React.useContext(ThemeCtx);
   const [q,setQ]=useState("");
   const ref=useRef();
   useEffect(()=>{ref.current?.focus();},[]);
@@ -1264,6 +1322,7 @@ function SearchPalette({state,onNavigate,onClose}) {
 
 // ── CLIENT PICKER (búsqueda por empresa, RFC, contacto) ─────────────────────
 function ClientPicker({clients, value, onChange, placeholder="Buscar cliente...", mobile=false}) {
+  const C = React.useContext(ThemeCtx);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const ref = useRef();
@@ -1351,6 +1410,7 @@ function ClientPicker({clients, value, onChange, placeholder="Buscar cliente..."
 
 // ── SUPPLIER PICKER (búsqueda por nombre, especialidad) ──────────────────────
 function SupplierPicker({suppliers, value, onChange, placeholder="Buscar proveedor...", mobile=false}) {
+  const C = React.useContext(ThemeCtx);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const ref = useRef();
@@ -1437,6 +1497,7 @@ function SupplierPicker({suppliers, value, onChange, placeholder="Buscar proveed
 
 // ── UNIT PICKER (búsqueda por económico, placa, marca, modelo) ──────────────
 function UnitPicker({units, value, onChange, placeholder="Buscar por eco, placa, marca...", mobile=false}) {
+  const C = React.useContext(ThemeCtx);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const ref = useRef();
@@ -1566,6 +1627,7 @@ const Timeline = React.memo(function Timeline({events}) {
 
 // ── CENTRO DE OPERACIONES (Dashboard) ────────────────────────────────────────
 function CentroOps({state}) {
+  const C = React.useContext(ThemeCtx);
   const {tickets,clients,suppliers,units} = state;
   // Use shared selectors — business rules defined once in L3.5
   const active   = useMemo(()=>sel_active(tickets),[tickets]);
@@ -1905,6 +1967,7 @@ function CentroOps({state}) {
 
 // ── TICKETS (pipeline operativo) ─────────────────────────────────────────────
 function Tickets({state,dispatch,toast,scheduleHardDelete}) {
+  const C = React.useContext(ThemeCtx);
   const {tickets,clients,suppliers,units} = state;
   const [fStatus, setFStatus] = useState("all");
   const [fPrio,   setFPrio]   = useState("all");
@@ -2082,6 +2145,7 @@ const emptyLine = (opType, priority, activeMods) => {
 };
 
 function Cotizador({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {clients,suppliers,units} = state;
 
   // Ticket-level fields
@@ -2700,6 +2764,7 @@ const emptyRefLine = () => ({
 });
 
 function CotizadorRefacciones({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {clients,units,suppliers,parts} = state;
 
   const [fecha,      setFecha]      = useState(todayMX());
@@ -3340,6 +3405,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
 
 // ── UNIDADES ──────────────────────────────────────────────────────────────────
 function Unidades({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {units,clients,tickets} = state;
   const [search,  setSearch]  = useState("");
   const [fStatus, setFStatus] = useState("all");
@@ -3512,6 +3578,7 @@ function Unidades({state,dispatch,toast}) {
 
 // ── CATALOGO DE PARTES ────────────────────────────────────────────────────────
 function Catalogo({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {parts,suppliers} = state;
   const [search, setSearch]  = useState("");
   const [sel,    setSel]     = useState(null);
@@ -3626,6 +3693,7 @@ function Catalogo({state,dispatch,toast}) {
 
 // ── PROVEEDORES ───────────────────────────────────────────────────────────────
 function Proveedores({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {suppliers,tickets} = state;
   const [sel,    setSel]    = useState(null);
   const [editId, setEditId] = useState(null);
@@ -3738,6 +3806,7 @@ function Proveedores({state,dispatch,toast}) {
 
 // ── CLIENTES ──────────────────────────────────────────────────────────────────
 function Clientes({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {clients,tickets,units} = state;
   const [sel,setSel]=useState(null);
   const [editId,setEditId]=useState(null);
@@ -3864,6 +3933,7 @@ function Clientes({state,dispatch,toast}) {
 
 // ── CARTERA ───────────────────────────────────────────────────────────────────
 function Cartera({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {tickets,clients}=state;
   const now=useMemo(()=>new Date(),[]);
   // Use shared selectors — same criteria as MCartera (CARTERA_SET + !cobrado)
@@ -3920,6 +3990,7 @@ function Cartera({state,dispatch,toast}) {
 
 // ── AJUSTES ───────────────────────────────────────────────────────────────────
 function Ajustes({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const fileRef=useRef();
   const importUnitsFile=useRef();
   const [confirmReset,setConfirmReset]=useState(false);
@@ -4191,6 +4262,7 @@ function Ajustes({state,dispatch,toast}) {
 
 // ── MAjustes — Ajustes móvil ─────────────────────────────────────────────────
 function MAjustes({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const fileRef=useRef();
   const importUnitsFile=useRef();
   const [confirmReset,setConfirmReset]=useState(false);
@@ -4317,6 +4389,7 @@ function MAjustes({state,dispatch,toast}) {
 
 // ── HISTORIAL ─────────────────────────────────────────────────────────────────
 function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
+  const C = React.useContext(ThemeCtx);
   const {tickets,clients,units,suppliers} = state;
   const [hide,    setHide]   = useState(false);
   const [expId,   setExpId]  = useState(null);
@@ -4820,9 +4893,11 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
 
 // ── Helpers móviles ──────────────────────────────────────────────────────────
 function MCard({children,style={}}) {
+  const C = React.useContext(ThemeCtx);
   return <div style={{background:"rgba(22,24,28,0.82)",border:"1px solid rgba(255,255,255,0.04)",borderRadius:18,marginBottom:10,overflow:"hidden",boxShadow:"0 2px 16px rgba(255,255,255,0.04)",...style}}>{children}</div>;
 }
 function MRow({label,value,color,bold}) {
+  const C = React.useContext(ThemeCtx);
   return (
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
       <span style={{fontSize:12,color:"#4A5568"}}>{label}</span>
@@ -4831,6 +4906,7 @@ function MRow({label,value,color,bold}) {
   );
 }
 function MBtn({label,color,bg,border,onClick,full,small}) {
+  const C = React.useContext(ThemeCtx);
   return (
     <button onClick={onClick} style={{
       width:full?"100%":"auto",
@@ -4845,28 +4921,30 @@ function MBtn({label,color,bg,border,onClick,full,small}) {
   );
 }
 function MField({label,value,onChange,type="text",placeholder,suffix,color}) {
+  const C = React.useContext(ThemeCtx);
   return (
     <div style={{marginBottom:10}}>
-      {label&&<div style={{fontSize:10,color:"#7E848E",letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase",fontWeight:600}}>{label}</div>}
-      <div style={{display:"flex",alignItems:"center",background:"rgba(16,18,22,0.90)",border:"1px solid rgba(255,255,255,0.05)",borderRadius:10,overflow:"hidden",minHeight:48}}>
+      {label&&<div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase",fontWeight:600}}>{label}</div>}
+      <div style={{display:"flex",alignItems:"center",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden",minHeight:48}}>
         <input type={type} value={value} placeholder={placeholder||""} onChange={e=>onChange(e.target.value)}
-          style={{flex:1,background:"transparent",border:"none",outline:"none",color:color||"#F3F4F6",
+          style={{flex:1,background:"transparent",border:"none",outline:"none",color:color||C.t1,
             fontSize:16,/* 16px prevents iOS auto-zoom on focus */
             padding:"12px 14px",fontFamily:"inherit"}}/>
-        {suffix&&<span style={{padding:"0 12px",color:"#7E848E",fontSize:12}}>{suffix}</span>}
+        {suffix&&<span style={{padding:"0 12px",color:C.t3,fontSize:12}}>{suffix}</span>}
       </div>
     </div>
   );
 }
 function MSel({label,value,onChange,options}) {
+  const C = React.useContext(ThemeCtx);
   return (
     <div style={{marginBottom:10}}>
-      {label&&<div style={{fontSize:10,color:"#7E848E",letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase",fontWeight:600}}>{label}</div>}
+      {label&&<div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase",fontWeight:600}}>{label}</div>}
       <select value={value} onChange={e=>onChange(e.target.value)}
-        style={{width:"100%",background:"rgba(16,18,22,0.90)",border:"1px solid rgba(255,255,255,0.05)",borderRadius:10,padding:"12px 14px",color:"#F5F5F7",
+        style={{width:"100%",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px",color:C.t1,
           fontSize:16,/* 16px prevents iOS auto-zoom on focus */
           outline:"none",fontFamily:"inherit",minHeight:48,appearance:"auto"}}>
-        {options.map(o=><option key={o.value} value={o.value} style={{background:"rgba(22,24,28,0.82)"}}>{o.label}</option>)}
+        {options.map(o=><option key={o.value} value={o.value} style={{background:C.bgSolid}}>{o.label}</option>)}
       </select>
     </div>
   );
@@ -4874,30 +4952,12 @@ function MSel({label,value,onChange,options}) {
 
 // ── MOps — Dashboard móvil ───────────────────────────────────────────────────
 function MOps({state,setTab}) {
+  const C = React.useContext(ThemeCtx);
   const {tickets,clients} = state;
   const [period,setPeriod] = useState("week");
 
   // ── Accent palette — Black/white monochrome
-  const A = {
-    lime:     "#8FE3BE",
-    limeDim:  "rgba(143,227,190,0.12)",
-    limeMid:  "rgba(143,227,190,0.18)",
-    mint:     "#8FE3BE",
-    mintDim:  "rgba(143,227,190,0.10)",
-    amber:    "#F5C842",
-    amberDim: "rgba(245,200,66,0.12)",
-    red:      "#FF7A7A",
-    redDim:   "rgba(255,122,122,0.12)",
-    card:     "rgba(22,24,28,0.62)",
-    cardHi:   "rgba(32,35,42,0.75)",
-    blur:     "blur(28px) saturate(1.5)",
-    shadow:   "0 8px 32px rgba(0,0,0,0.44), 0 1px 0 rgba(255,255,255,0.06) inset",
-    shadowSm: "0 4px 16px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.04) inset",
-    t1:       "#F5F5F7",
-    t2:       "#B6BBC4",
-    t3:       "#7E848E",
-    r:        24,
-  };
+  const A = makeA(C);
 
   // ── Periods ───────────────────────────────────────────────────────────────
   const range     = useMemo(()=>buildRange(period),[period]);
@@ -5078,9 +5138,15 @@ function MOps({state,setTab}) {
           {[["today","Hoy"],["week","7d"],["month","30d"],["3m","3M"]].map(([v,l])=>(
             <button key={v} onClick={()=>setPeriod(v)} style={{
               flexShrink:0,padding:"7px 18px",borderRadius:20,fontSize:12,fontWeight:700,
-              background:period===v?A.limeMid:"transparent",
-              border:`1.5px solid ${period===v?A.lime:"rgba(255,255,255,0.05)"}`,
-              color:period===v?A.lime:A.t3,
+              background:period===v
+                ?(C._dark?A.limeMid:C.t1)
+                :"transparent",
+              border:`1.5px solid ${period===v
+                ?(C._dark?A.lime:C.t1)
+                :(C._dark?C.border:C.border)}`,
+              color:period===v
+                ?(C._dark?A.lime:"#FFFFFF")
+                :A.t3,
               cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.15s",
             }}>
               {l}
@@ -5177,7 +5243,7 @@ function MOps({state,setTab}) {
           </button>
           <button onClick={()=>setTab("tickets")} style={{
             background:A.cardHi,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,
-            border:"1px solid rgba(255,255,255,0.05)",
+            border:`1px solid ${C.border}`,
             borderRadius:18,padding:"18px 16px",
             cursor:"pointer",textAlign:"left",
             boxShadow:A.shadowSm,
@@ -5319,7 +5385,7 @@ function MOps({state,setTab}) {
                   </div>
                 </div>
               </div>
-              <div style={{height:3,background:"rgba(255,255,255,0.05)",borderRadius:2,overflow:"hidden"}}>
+              <div style={{height:3,background:C.border,borderRadius:2,overflow:"hidden"}}>
                 <div style={{height:"100%",width:`${Math.min(pct,100)}%`,
                   background:`linear-gradient(90deg,${A.lime},${A.mint})`,
                   borderRadius:2,transition:"width 600ms ease"}}/>
@@ -5415,6 +5481,7 @@ function MOps({state,setTab}) {
 
 // ── StatusFlowSheet — bottom sheet para cambiar estado de ticket en mobile ────
 function StatusFlowSheet({tkt, dispatch, toast, onClose}) {
+  const C = React.useContext(ThemeCtx);
   if(!tkt) return null;
   const nexts = TICKET_TRANSITIONS[tkt.status] || [];
   const meta  = TICKET_META[tkt.status] || {};
@@ -5482,32 +5549,24 @@ function StatusFlowSheet({tkt, dispatch, toast, onClose}) {
 
 // ── MPipeline — Pipeline móvil ───────────────────────────────────────────────
 function MPipeline({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {tickets,clients,units} = state;
   const [filter,setFilter]       = useState("active");
   const [statusSheet,setStatusSheet] = useState(null);
   const [expandId,setExpandId]   = useState(null);
 
   // Accent palette — glassmorphism
-  const A = {
-    lime:"#8FE3BE", limeDim:"rgba(143,227,190,0.12)", limeMid:"rgba(143,227,190,0.18)",
-    mint:"#8FE3BE", mintDim:"rgba(143,227,190,0.10)",
-    amber:"#F5C842", amberDim:"rgba(245,200,66,0.12)",
-    red:"#FF7A7A",   redDim:"rgba(255,122,122,0.12)",
-    card:"rgba(22,24,28,0.62)", cardHi:"rgba(32,35,42,0.75)",
-    blur:"blur(28px) saturate(1.5)",
-    shadow:"0 8px 32px rgba(0,0,0,0.44), 0 1px 0 rgba(255,255,255,0.06) inset",
-    t1:"#F5F5F7", t2:"#B6BBC4", t3:"#7E848E", r:24,
-  };
+  const A = makeA(C);
 
   const PIPE_STAGES = ["recibido","validando","sourcing","cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado"];
   const stageProgress = s => { if(s==="cancelado") return 0; const i=PIPE_STAGES.indexOf(s); return i>=0?((i+1)/PIPE_STAGES.length)*100:0; };
   const progColor = s => { const i=PIPE_STAGES.indexOf(s); return i<=1?A.amber:i<=4?A.mint:A.lime; };
 
   const prC = {
-    P1:{dot:"#FF7A7A",dim:"rgba(255,122,122,0.12)"},
-    P2:{dot:"#F5C842",dim:"rgba(245,200,66,0.12)"},
-    P3:{dot:"#8FE3BE",dim:"rgba(143,227,190,0.12)"},
-    P4:{dot:"#7E848E",dim:"rgba(126,132,142,0.10)"},
+    P1:{dot:C.p1, dim:C.p1dim},
+    P2:{dot:C.p2, dim:C.p2dim},
+    P3:{dot:C.p3, dim:C.p3dim},
+    P4:{dot:C.p4, dim:C.p4dim},
   };
 
   const active   = useMemo(()=>tickets.filter(t=>!t._deleted),[tickets]);
@@ -5546,13 +5605,13 @@ function MPipeline({state,dispatch,toast}) {
               flexShrink:0,display:"flex",alignItems:"center",gap:6,
               padding:"7px 16px",borderRadius:20,fontSize:11,fontWeight:700,
               background:filter===v?A.limeMid:"transparent",
-              border:`1.5px solid ${filter===v?A.lime:"rgba(255,255,255,0.05)"}`,
+              border:`1.5px solid ${filter===v?A.lime:C.border}`,
               color:filter===v?A.lime:A.t3,
               cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.15s",whiteSpace:"nowrap",
             }}>
               {l}
               {c>0&&<span style={{fontSize:10,fontWeight:800,
-                background:filter===v?"rgba(255,255,255,0.05)":"rgba(255,255,255,0.04)",
+                background:filter===v?C.border:"rgba(255,255,255,0.04)",
                 color:filter===v?A.lime:A.t3,borderRadius:9,padding:"1px 6px"}}>{c}</span>}
             </button>
           ))}
@@ -5665,7 +5724,7 @@ function MPipeline({state,dispatch,toast}) {
                         const u2=units.find(u=>u.id===t.unitId);
                         generarCotizacionPDF(t,c2,u2,null).catch(()=>toast("Error PDF","error"));}}
                         style={{padding:"7px 14px",borderRadius:10,background:"transparent",
-                          border:"1px solid rgba(255,255,255,0.05)",color:A.t2,fontSize:10,
+                          border:`1px solid ${C.border}`,color:A.t2,fontSize:10,
                           fontWeight:600,cursor:"pointer",letterSpacing:"0.06em"}}>
                         PDF ↗
                       </button>
@@ -5727,6 +5786,7 @@ function MPipeline({state,dispatch,toast}) {
 // ── MCotizador — Flujo unificado mobile ────────────────────────────────────────
 // ── PartPicker — Autocomplete inteligente del catálogo ──────────────────────
 function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
+  const C = React.useContext(ThemeCtx);
   const [open, setOpen] = useState(false);
   const ref  = useRef();
 
@@ -5761,20 +5821,20 @@ function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
         onFocus={()=>setOpen(true)}
         placeholder={placeholder||"Buscar o describir pieza..."}
         autoComplete="off"
-        style={{width:"100%",background:"rgba(16,18,22,0.90)",border:`1px solid ${open?"#F3F4F6":"rgba(255,255,255,0.05)"}`,
+        style={{width:"100%",background:C.bg2,border:`1px solid ${open?C.t1:C.border}`,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,
           borderRadius:10,padding:"13px 14px",color:"#F5F5F7",fontSize:16,
           outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}
       />
       {showDropdown&&(
         <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,zIndex:400,
-          background:"rgba(22,24,28,0.82)",border:"1px solid rgba(255,255,255,0.05)",borderRadius:10,
+          background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:10,
           boxShadow:"0 8px 32px rgba(13,24,37,0.12)",maxHeight:280,overflowY:"auto",
           WebkitOverflowScrolling:"touch"}}>
           {results.map(p=>(
             <div key={p.id}
               onMouseDown={e=>{e.preventDefault();onSelect(p);setOpen(false);}}
               onTouchEnd={e=>{e.preventDefault();onSelect(p);setOpen(false);}}
-              style={{padding:"11px 14px",borderBottom:"1px solid rgba(255,255,255,0.05)",cursor:"pointer",
+              style={{padding:"11px 14px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",
                 display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:13,fontWeight:700,color:"#F5F5F7",overflow:"hidden",
@@ -5789,7 +5849,7 @@ function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
                 {p.aplicacion&&<div style={{fontSize:9,color:C.t3,marginTop:1}}>{p.aplicacion}</div>}
               </div>
               {(p.frecuencia||0)>1&&(
-                <div style={{fontSize:9,color:"#F5F5F7",background:"rgba(255,255,255,0.05)",padding:"2px 7px",
+                <div style={{fontSize:9,color:"#F5F5F7",background:C.border,padding:"2px 7px",
                   borderRadius:10,flexShrink:0,fontWeight:700}}>×{p.frecuencia}</div>
               )}
             </div>
@@ -5810,27 +5870,18 @@ function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
 
 // ── MCotizador — Flujo unificado mobile ──────────────────────────────────────
 function MCotizador({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {clients,suppliers,units} = state;
 
   // Accent palette — Black/white monochrome
-  const A = {
-    lime:"#8FE3BE", limeDim:"rgba(143,227,190,0.12)", limeMid:"rgba(143,227,190,0.18)",
-    mint:"#8FE3BE", mintDim:"rgba(143,227,190,0.10)",
-    amber:"#F5C842", amberDim:"rgba(245,200,66,0.12)",
-    red:"#FF7A7A",   redDim:"rgba(255,122,122,0.12)",
-    card:"rgba(22,24,28,0.62)", cardHi:"rgba(32,35,42,0.75)",
-    blur:"blur(28px) saturate(1.5)",
-    shadow:"0 8px 32px rgba(0,0,0,0.44), 0 1px 0 rgba(255,255,255,0.06) inset",
-    shadowSm:"0 4px 16px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.04) inset",
-    t1:"#F5F5F7", t2:"#B6BBC4", t3:"#7E848E", r:24,
-  };
+  const A = makeA(C);
 
   // Priority semantic colors
   const prColors = {
-    P1:{dot:"#FF7A7A",dim:"rgba(255,122,122,0.12)",  label:"Unidad detenida"},
-    P2:{dot:"#F5C842",dim:"rgba(245,200,66,0.12)",   label:"Operación comprometida"},
-    P3:{dot:"#8FE3BE",dim:"rgba(143,227,190,0.12)",  label:"Preventivo urgente"},
-    P4:{dot:"#7E848E",dim:"rgba(126,132,142,0.10)",  label:"Solicitud normal"},
+    P1:{dot:C.p1, dim:C.p1dim, label:"Unidad detenida"},
+    P2:{dot:C.p2, dim:C.p2dim, label:"Operación comprometida"},
+    P3:{dot:C.p3, dim:C.p3dim, label:"Preventivo urgente"},
+    P4:{dot:C.p4, dim:C.p4dim, label:"Solicitud normal"},
   };
 
   const [step,setStep]          = useState(0);
@@ -5946,7 +5997,7 @@ function MCotizador({state,dispatch,toast}) {
           <React.Fragment key={i}>
             {i>0&&(
               <div style={{flex:1,height:2,
-                background:done?"rgba(255,255,255,0.18)":"rgba(255,255,255,0.05)",
+                background:done?"rgba(255,255,255,0.18)":C.border,
                 borderRadius:1,margin:"0 8px",marginTop:-14}}/>
             )}
             <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,
@@ -5954,8 +6005,8 @@ function MCotizador({state,dispatch,toast}) {
               onClick={()=>done&&setStep(i)}>
               <div style={{
                 width:30,height:30,borderRadius:15,
-                background:done?A.lime:curr?"rgba(255,255,255,0.05)":"rgba(255,255,255,0.04)",
-                border:`2px solid ${done?A.lime:curr?"rgba(255,255,255,0.18)":"rgba(255,255,255,0.05)"}`,
+                background:done?A.lime:curr?C.border:"rgba(255,255,255,0.04)",
+                border:`2px solid ${done?A.lime:curr?"rgba(255,255,255,0.18)":C.border}`,
                 display:"flex",alignItems:"center",justifyContent:"center",
                 fontSize:11,fontWeight:800,
                 color:done?"#0A1800":curr?A.lime:A.t3,
@@ -6129,7 +6180,7 @@ function MCotizador({state,dispatch,toast}) {
                 {[["auto","Auto (margen)"],["manual","Precio fijo"]].map(([m,lbl])=>(
                   <button key={m} onClick={()=>upd(i,{mode:m})}
                     style={{flex:1,padding:"9px",borderRadius:10,fontSize:11,fontWeight:700,
-                      border:`1.5px solid ${l.mode===m?"rgba(255,255,255,0.15)":"rgba(255,255,255,0.05)"}`,
+                      border:`1.5px solid ${l.mode===m?"rgba(255,255,255,0.15)":C.border}`,
                       background:l.mode===m?A.limeDim:"transparent",
                       color:l.mode===m?A.lime:A.t3,cursor:"pointer",
                       transition:"all 0.15s",WebkitTapHighlightColor:"transparent"}}>
@@ -6144,7 +6195,7 @@ function MCotizador({state,dispatch,toast}) {
                 <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
                   <button onClick={()=>upd(i,{customMgn:!l.customMgn})}
                     style={{padding:"9px 14px",borderRadius:10,fontSize:10,fontWeight:700,flexShrink:0,
-                      border:`1.5px solid ${l.customMgn?"rgba(255,255,255,0.15)":"rgba(255,255,255,0.05)"}`,
+                      border:`1.5px solid ${l.customMgn?"rgba(255,255,255,0.15)":C.border}`,
                       background:l.customMgn?A.limeDim:"transparent",
                       color:l.customMgn?A.lime:A.t3,cursor:"pointer",WebkitTapHighlightColor:"transparent"}}>
                     Margen personalizado
@@ -6157,7 +6208,7 @@ function MCotizador({state,dispatch,toast}) {
               )}
               <div style={{background:A.limeDim,borderRadius:12,padding:"12px 14px",
                 display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:10,
-                border:"1px solid rgba(255,255,255,0.05)"}}>
+                border:`1px solid ${C.border}`}}>
                 {[
                   {label:"Precio línea",value:mxn(sn.precioConIVA),color:A.t1},
                   {label:"Util. neta",  value:mxn(sn.uNeta),       color:sn.uNeta>=0?A.lime:A.red},
@@ -6214,7 +6265,7 @@ function MCotizador({state,dispatch,toast}) {
       <div style={{display:"flex",gap:10}}>
         <button onClick={()=>setStep(0)}
           style={{padding:"14px 20px",borderRadius:14,background:"transparent",
-            border:"1px solid rgba(255,255,255,0.05)",color:A.t3,fontSize:12,cursor:"pointer",
+            border:`1px solid ${C.border}`,color:A.t3,fontSize:12,cursor:"pointer",
             WebkitTapHighlightColor:"transparent"}}>
           ← Atrás
         </button>
@@ -6254,7 +6305,7 @@ function MCotizador({state,dispatch,toast}) {
             <textarea rows={3} value={notes} onChange={e=>setNotes(e.target.value)}
               placeholder="Diagnóstico, observaciones..."
               style={{width:"100%",background:"rgba(255,255,255,0.03)",
-                border:"1px solid rgba(255,255,255,0.05)",borderRadius:12,
+                border:`1px solid ${C.border}`,borderRadius:12,
                 padding:"12px 14px",color:A.t2,fontSize:13,outline:"none",
                 boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
           </div>
@@ -6293,7 +6344,7 @@ function MCotizador({state,dispatch,toast}) {
       <div style={{display:"flex",gap:10}}>
         <button onClick={()=>setStep(1)}
           style={{padding:"14px 20px",borderRadius:14,background:"transparent",
-            border:"1px solid rgba(255,255,255,0.05)",color:A.t3,fontSize:12,cursor:"pointer",
+            border:`1px solid ${C.border}`,color:A.t3,fontSize:12,cursor:"pointer",
             WebkitTapHighlightColor:"transparent"}}>
           ← Atrás
         </button>
@@ -6312,20 +6363,11 @@ function MCotizador({state,dispatch,toast}) {
 
 // ── MCartera — Cartera móvil ──────────────────────────────────────────────────
 function MCartera({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {tickets,clients} = state;
   const now = new Date();
 
-  const A = {
-    lime:"#8FE3BE", limeDim:"rgba(143,227,190,0.12)",
-    mint:"#8FE3BE", mintDim:"rgba(143,227,190,0.10)",
-    amber:"#F5C842", amberDim:"rgba(245,200,66,0.12)",
-    red:"#FF7A7A",   redDim:"rgba(255,122,122,0.12)",
-    card:"rgba(22,24,28,0.62)",
-    blur:"blur(28px) saturate(1.5)",
-    shadow:"0 8px 32px rgba(0,0,0,0.44), 0 1px 0 rgba(255,255,255,0.06) inset",
-    shadowSm:"0 4px 16px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.04) inset",
-    t1:"#F5F5F7", t2:"#B6BBC4", t3:"#7E848E", r:24,
-  };
+  const A = makeA(C);
 
   const creditTkts = useMemo(()=>tickets.filter(t=>!t._deleted&&t.payType==="credit"&&t.status!=="cancelado"),[tickets]);
   const pendientes = useMemo(()=>creditTkts.filter(t=>!t.cobrado&&CARTERA_SET.has(t.status)),[creditTkts]);
@@ -6594,6 +6636,7 @@ function MCartera({state,dispatch,toast}) {
 }
 
 function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
+  const C = React.useContext(ThemeCtx);
   const {tickets,clients,units,suppliers} = state;
   const [period,setPeriod]   = useState("week");
   const [search,setSearch]   = useState("");
@@ -6671,19 +6714,9 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
     setEditId(null);
   };
 
-  const A = {
-    lime:"#8FE3BE", limeDim:"rgba(143,227,190,0.12)", limeMid:"rgba(143,227,190,0.18)",
-    mint:"#8FE3BE", mintDim:"rgba(143,227,190,0.10)",
-    amber:"#F5C842", amberDim:"rgba(245,200,66,0.12)",
-    red:"#FF7A7A",   redDim:"rgba(255,122,122,0.12)",
-    card:"rgba(22,24,28,0.62)",
-    blur:"blur(28px) saturate(1.5)",
-    shadow:"0 8px 32px rgba(0,0,0,0.44), 0 1px 0 rgba(255,255,255,0.06) inset",
-    shadowSm:"0 4px 16px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.04) inset",
-    t1:"#F5F5F7", t2:"#B6BBC4", t3:"#7E848E", r:24,
-  };
-  const prC={P1:{dot:"#FF7A7A",dim:"rgba(255,122,122,0.12)"},P2:{dot:"#F5C842",dim:"rgba(245,200,66,0.12)"},
-             P3:{dot:"#8FE3BE",dim:"rgba(143,227,190,0.12)"},P4:{dot:"#7E848E",dim:"rgba(126,132,142,0.10)"}};
+  const A = makeA(C);
+  const prC={P1:{dot:C.p1,dim:C.p1dim},P2:{dot:C.p2,dim:C.p2dim},
+             P3:{dot:C.p3,dim:C.p3dim},P4:{dot:C.p4,dim:C.p4dim}};
 
   return (
     <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
@@ -6694,9 +6727,9 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
           {[["today","Hoy"],["week","7d"],["month","30d"],["3m","3M"],["all","Todo"]].map(([v,l])=>(
             <button key={v} onClick={()=>setPeriod(v)} style={{
               flexShrink:0,padding:"7px 16px",borderRadius:20,fontSize:11,fontWeight:700,
-              background:period===v?A.limeMid:"transparent",
-              border:`1.5px solid ${period===v?A.lime:"rgba(255,255,255,0.05)"}`,
-              color:period===v?A.lime:"#64748B",
+              background:period===v?(C._dark?A.limeMid:C.t1):"transparent",
+              border:`1.5px solid ${period===v?(C._dark?A.lime:C.t1):(C._dark?C.border:C.border)}`,
+              color:period===v?(C._dark?A.lime:"#FFFFFF"):A.t3,
               cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.15s",
             }}>{l}</button>
           ))}
@@ -6853,7 +6886,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                             <button onClick={()=>openEdit(t)} style={{
                               flex:1,padding:"9px 14px",borderRadius:10,background:"transparent",
-                              border:"1px solid rgba(255,255,255,0.05)",color:A.t2,
+                              border:`1px solid ${C.border}`,color:A.t2,
                               fontSize:11,fontWeight:600,cursor:"pointer",
                             }}>✏ Editar</button>
                             <button onClick={()=>{
@@ -6862,7 +6895,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                               generarCotizacionPDF(t,c2,u2,null).catch(()=>toast("Error PDF","error"));
                             }} style={{
                               flex:1,padding:"9px 14px",borderRadius:10,background:"transparent",
-                              border:"1px solid rgba(255,255,255,0.05)",color:A.t2,
+                              border:`1px solid ${C.border}`,color:A.t2,
                               fontSize:11,fontWeight:600,cursor:"pointer",
                             }}>PDF ↗</button>
                             {CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t.cobrado&&(
@@ -6907,7 +6940,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                           <textarea rows={2} value={ef.notes} onChange={e=>sfn("notes")(e.target.value)}
                             placeholder="Notas..."
                             style={{width:"100%",background:"rgba(255,255,255,0.03)",
-                              border:"1px solid rgba(255,255,255,0.05)",borderRadius:10,
+                              border:`1px solid ${C.border}`,borderRadius:10,
                               padding:"10px 12px",color:A.t2,fontSize:13,outline:"none",
                               boxSizing:"border-box",fontFamily:"inherit",resize:"none",marginBottom:14}}/>
                           <div style={{display:"flex",gap:8}}>
@@ -6918,7 +6951,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                             }}>Guardar</button>
                             <button onClick={()=>setEditId(null)} style={{
                               padding:"13px 16px",borderRadius:12,background:"transparent",
-                              border:"1px solid rgba(255,255,255,0.05)",color:A.t3,fontSize:13,cursor:"pointer",
+                              border:`1px solid ${C.border}`,color:A.t3,fontSize:13,cursor:"pointer",
                             }}>Cancelar</button>
                           </div>
                         </div>
@@ -6937,6 +6970,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
 
 // ── MClientes — Clientes móvil ────────────────────────────────────────────────
 function MClientes({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {clients,tickets,units} = state;
   const [search,setSearch]=useState("");
   const [sel,setSel]=useState(null);
@@ -7046,6 +7080,7 @@ function MClientes({state,dispatch,toast}) {
 
 // ── MUnidades — Flotilla móvil ────────────────────────────────────────────────
 function MUnidades({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {units,clients,tickets} = state;
   const [search,setSearch]=useState("");
   const [sel,setSel]=useState(null);
@@ -7169,6 +7204,7 @@ function MUnidades({state,dispatch,toast}) {
 
 // ── MCatalogo — Catálogo móvil ────────────────────────────────────────────────
 function MCatalogo({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {parts} = state;
   const [search,setSearch]=useState("");
   const [sel,setSel]=useState(null);
@@ -7334,6 +7370,7 @@ function MCatalogo({state,dispatch,toast}) {
 
 // ── MProveedores — Proveedores móvil ─────────────────────────────────────────
 function MProveedores({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {suppliers,tickets} = state;
   const [sel,setSel]=useState(null);
   const [editId,setEditId]=useState(null);
@@ -7435,6 +7472,7 @@ function MProveedores({state,dispatch,toast}) {
 
 // ── MasSheet — bottom sheet del menú "Más" ───────────────────────────────────
 function MasSheet({open,onClose,tab,setTab}) {
+  const C = React.useContext(ThemeCtx);
   if(!open) return null;
   const items=[
     {id:"cotizador",  label:"Cotizador",  icon:"🧾", desc:"Nueva cotización"},
@@ -7447,33 +7485,33 @@ function MasSheet({open,onClose,tab,setTab}) {
   ];
   return (
     <>
-      <div onClick={onClose} className="fade-enter" style={{position:"fixed",inset:0,zIndex:150,background:"rgba(10,14,26,0.4)"}}/>
+      <div onClick={onClose} className="fade-enter" style={{position:"fixed",inset:0,zIndex:150,background:C._dark?"rgba(0,0,0,0.55)":"rgba(0,0,0,0.25)"}}/>
       <div className="sheet-enter" style={{position:"fixed",bottom:0,left:0,right:0,zIndex:155,
-        background:"rgba(14,16,20,0.88)",backdropFilter:"blur(32px) saturate(1.8)",WebkitBackdropFilter:"blur(32px) saturate(1.8)",
+        background:C._dark?"rgba(14,16,20,0.90)":"rgba(248,247,244,0.94)",backdropFilter:"blur(32px) saturate(1.8)",WebkitBackdropFilter:"blur(32px) saturate(1.8)",
         borderRadius:"28px 28px 0 0",
-        borderTop:"1px solid rgba(255,255,255,0.10)",
+        borderTop:`1px solid ${C.borderHi}`,
         padding:`0 16px calc(20px + env(safe-area-inset-bottom,0px))`,
-        boxShadow:"0 -12px 60px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.06) inset"}}>
+        boxShadow:C._dark?"0 -12px 60px rgba(0,0,0,0.6)":"0 -12px 60px rgba(0,0,0,0.12)"}}>
 
         <div style={{display:"flex",justifyContent:"center",padding:"14px 0 8px"}}>
-          <div style={{width:36,height:4,borderRadius:2,background:"rgba(255,255,255,0.12)"}}/>
+          <div style={{width:36,height:4,borderRadius:2,background:C.border}}/>
         </div>
-        <div style={{fontSize:10,color:"#7E848E",letterSpacing:"0.16em",marginBottom:16,
+        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.16em",marginBottom:16,
           textAlign:"center",textTransform:"uppercase",fontWeight:600}}>Más módulos</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:8}}>
           {items.map(item=>(
             <button key={item.id} onClick={()=>{setTab(item.id);onClose();}}
               style={{padding:"18px 10px",
-                background:tab===item.id?"rgba(143,227,190,0.10)":"rgba(22,24,28,0.60)",
-                backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",
-                border:`1.5px solid ${tab===item.id?"rgba(143,227,190,0.35)":"rgba(255,255,255,0.07)"}`,
+                background:tab===item.id?C.blueDim:C.bg1,
+                backdropFilter:C.glass,WebkitBackdropFilter:C.glass,
+                border:`1.5px solid ${tab===item.id?C.blueHi:C.border}`,
                 borderRadius:22,cursor:"pointer",
                 display:"flex",flexDirection:"column",alignItems:"center",gap:8,
                 transition:"all 150ms ease",touchAction:"manipulation",
                 WebkitTapHighlightColor:"transparent"}}>
               <span style={{fontSize:28,lineHeight:1}}>{item.icon}</span>
-              <span style={{fontSize:12,fontWeight:700,color:tab===item.id?"#8FE3BE":"#F5F5F7",lineHeight:1}}>{item.label}</span>
-              <span style={{fontSize:10,color:"#7E848E",lineHeight:1}}>{item.desc}</span>
+              <span style={{fontSize:12,fontWeight:700,color:tab===item.id?C.blue:C.t1,lineHeight:1}}>{item.label}</span>
+              <span style={{fontSize:10,color:C.t3,lineHeight:1}}>{item.desc}</span>
             </button>
           ))}
         </div>
@@ -7547,6 +7585,10 @@ function App() {
   const [mobileView,setMobileView]=useState(()=>window.innerWidth<768);
   const [quickOpen,setQuickOpen]=useState(false); // scroll-lock compat
   const [masOpen,setMasOpen]=useState(false);
+  const [darkMode,setDarkMode]=useState(()=>{
+    try { return localStorage.getItem("logisolve_theme")!=="light"; } catch{ return true; }
+  });
+  const C = darkMode ? C_DARK : C_LIGHT; // local C shadows module-level alias
   const { status: syncStatus, setSaving, setSaved, setOffline, setError: setSyncError } = useSyncStatus();
 
   // Double-click / concurrent save protection
@@ -7733,18 +7775,21 @@ function App() {
   const sd = syncDisplay[syncStatus] || syncDisplay.idle;
 
   if(loading) return (
-    <div style={{minHeight:"100vh",background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
-      <Logo/>
-      <div style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",letterSpacing:"0.2em",marginTop:8}}>CARGANDO DATOS...</div>
-    </div>
+    <ThemeCtx.Provider value={C}>
+      <div style={{minHeight:"100vh",background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
+        <Logo/>
+        <div style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",letterSpacing:"0.2em",marginTop:8}}>CARGANDO DATOS...</div>
+      </div>
+    </ThemeCtx.Provider>
   );
 
   return (
+    <ThemeCtx.Provider value={C}>
     <div style={{minHeight:"100vh",background:"transparent",color:C.t1,fontFamily:"'Trebuchet MS',sans-serif",fontSize:13}}>
       {search&&<SearchPalette state={state} onNavigate={t=>{setTab(t);}} onClose={()=>setSearch(false)}/>}
 
       {/* NAV */}
-      <div style={{background:"rgba(13,15,18,0.85)",backdropFilter:"blur(24px) saturate(1.6)",WebkitBackdropFilter:"blur(24px) saturate(1.6)",borderBottom:`1px solid ${C.borderHi}`,padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,flexWrap:"wrap",gap:4}}>
+      <div style={{background:darkMode?"rgba(13,15,18,0.85)":"rgba(248,247,244,0.90)",backdropFilter:"blur(24px) saturate(1.6)",WebkitBackdropFilter:"blur(24px) saturate(1.6)",borderBottom:`1px solid ${C.borderHi}`,padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,flexWrap:"wrap",gap:4}}>
         <Logo/>
         <div style={{display:"flex",gap:2,alignItems:"center",flexWrap:"wrap"}}>
           {/* Desktop tabs — hidden on mobile view */}
@@ -7754,9 +7799,9 @@ function App() {
             return (
               <button key={t.id} onClick={()=>setTab(t.id)}
                 style={{padding:"3px 9px",borderRadius:6,cursor:"pointer",fontSize:10,fontWeight:600,
-                  background:tab===t.id?"rgba(143,227,190,0.12)":"transparent",
-                  border:`1px solid ${tab===t.id?"rgba(143,227,190,0.30)":C.border}`,
-                  color:tab===t.id?"#8FE3BE":C.t2,position:"relative",letterSpacing:"0.04em"}}>
+                  background:tab===t.id?C.blueDim:"transparent",
+                  border:`1px solid ${tab===t.id?C.blueHi:C.border}`,
+                  color:tab===t.id?C.blue:C.t2,position:"relative",letterSpacing:"0.04em"}}>
                 {t.label}
                 {badge>0&&<span style={{position:"absolute",top:-4,right:-4,width:13,height:13,borderRadius:"50%",background:isP1Tab?C.p1dot:t.id==="cartera"?C.red:C.yellow,fontSize:7,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",color:"#0D0F12"}}>{badge}</span>}
               </button>
@@ -7776,8 +7821,13 @@ function App() {
           )}
           {/* Mobile/Desktop toggle */}
           <button onClick={()=>setMobileView(v=>!v)}
-            style={{padding:"3px 9px",background:mobileView?"rgba(143,227,190,0.10)":"transparent",border:`1px solid ${mobileView?"rgba(143,227,190,0.28)":C.border}`,borderRadius:6,color:mobileView?"#8FE3BE":C.t3,fontSize:10,cursor:"pointer",letterSpacing:"0.04em",touchAction:"manipulation"}}>
+            style={{padding:"3px 9px",background:mobileView?C.blueDim:"transparent",border:`1px solid ${mobileView?C.blueHi:C.border}`,borderRadius:6,color:mobileView?C.blue:C.t3,fontSize:10,cursor:"pointer",letterSpacing:"0.04em",touchAction:"manipulation"}}>
             {mobileView?"[ ] Escritorio":"[=] Movil"}
+          </button>
+          {/* Theme toggle */}
+          <button onClick={()=>{ const v=!darkMode; setDarkMode(v); try{localStorage.setItem("logisolve_theme",v?"dark":"light");}catch{} }}
+            style={{padding:"3px 9px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:6,color:C.blue,fontSize:11,cursor:"pointer",letterSpacing:"0.02em",touchAction:"manipulation",minWidth:36}}>
+            {darkMode?"☀":"🌙"}
           </button>
         </div>
       </div>
@@ -7788,12 +7838,14 @@ function App() {
           paddingBottom:"env(safe-area-inset-bottom,0px)"}}>
           <div style={{
             margin:"0 12px 10px",
-            background:"rgba(15,17,22,0.78)",
+            background: darkMode ? "rgba(15,17,22,0.78)" : "rgba(248,247,244,0.88)",
             backdropFilter:"blur(24px) saturate(1.8)",WebkitBackdropFilter:"blur(24px) saturate(1.8)",
-            border:"1px solid rgba(255,255,255,0.09)",
+            border: darkMode ? "1px solid rgba(255,255,255,0.09)" : "1px solid rgba(0,0,0,0.09)",
             borderRadius:28,
             display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",
-            boxShadow:"0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.06) inset"}}>
+            boxShadow: darkMode
+              ? "0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.06) inset"
+              : "0 8px 32px rgba(0,0,0,0.12), 0 1px 0 rgba(255,255,255,0.9) inset"}}>
           {[
             {id:"ops",      label:"Centro",  icon:"⊙"},
             {id:"tickets",  label:"Pipeline",icon:"◈"},
@@ -7810,23 +7862,39 @@ function App() {
                 style={{padding:"10px 4px",
                   border:"none",cursor:"pointer",
                   background:"transparent",
-                  borderTop:`2px solid ${active?"#8FE3BE":"transparent"}`,
-                  borderRadius:active?"0":"0",
+                  borderTop:`2px solid ${active?C.blue:"transparent"}`,
                   position:"relative",display:"flex",flexDirection:"column",alignItems:"center",gap:3,
                   minHeight:52,touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
-                <span style={{fontSize:20,lineHeight:1,color:active?"#8FE3BE":"#7E848E",
+                <span style={{fontSize:20,lineHeight:1,color:active?C.blue:C.t3,
                   fontWeight:active?700:400}}>{t.icon}</span>
-                <span style={{fontSize:10,color:active?"#BFE8D3":"#7E848E",
+                <span style={{fontSize:10,color:active?C.blue:C.t3,
                   letterSpacing:"0.03em",fontWeight:active?600:400}}>{t.label}</span>
                 {badge>0&&<span style={{position:"absolute",top:8,right:"calc(50% - 18px)",
                   minWidth:16,height:16,borderRadius:8,padding:"0 3px",
-                  background:t.id==="ops"?"#FF7A7A":isMore?"#FF7A7A":"#F5C842",
-                  fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",color:"#0D0F12"}}>{badge}</span>}
+                  background:t.id==="ops"?C.p1dot:isMore?C.p1dot:C.p2dot,
+                  fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",color:darkMode?"#0D0F12":"#fff"}}>{badge}</span>}
               </button>
             );
           })}
           </div>
         </div>
+      )}
+
+      {/* Theme toggle — mobile floating button */}
+      {mobileView&&(
+        <button onClick={()=>{ const v=!darkMode; setDarkMode(v); try{localStorage.setItem("logisolve_theme",v?"dark":"light");}catch{} }}
+          style={{position:"fixed",
+            left:20,bottom:`calc(76px + env(safe-area-inset-bottom,0px) + 10px)`,
+            zIndex:160,width:42,height:42,borderRadius:21,
+            background:C._dark?"rgba(255,255,255,0.10)":"rgba(0,0,0,0.07)",
+            border:`1px solid ${C.border}`,
+            backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",
+            boxShadow:C._dark?"0 4px 16px rgba(0,0,0,0.4)":"0 4px 16px rgba(0,0,0,0.10)",
+            display:"flex",alignItems:"center",justifyContent:"center",
+            cursor:"pointer",fontSize:18,
+            touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
+          {darkMode?"☀":"🌙"}
+        </button>
       )}
 
       {/* FAB — Nueva cotización */}
@@ -7835,9 +7903,9 @@ function App() {
           style={{position:"fixed",
             right:20,bottom:`calc(76px + env(safe-area-inset-bottom,0px) + 10px)`,
             zIndex:160,width:54,height:54,borderRadius:27,
-            background:"#8FE3BE",
+            background:C.blue,
             border:"1px solid rgba(255,255,255,0.25)",
-            boxShadow:"0 6px 24px rgba(143,227,190,0.28), 0 2px 8px rgba(0,0,0,0.4)",
+            boxShadow:C._dark?"0 6px 24px rgba(143,227,190,0.28), 0 2px 8px rgba(0,0,0,0.4)":"0 6px 24px rgba(23,168,101,0.25), 0 2px 8px rgba(0,0,0,0.15)",
             display:"flex",alignItems:"center",justifyContent:"center",
             cursor:"pointer",fontSize:28,color:"#0D0F12",fontWeight:400,
             touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
@@ -7867,19 +7935,22 @@ function App() {
       <Toasts items={toasts}/>
 
       <style>{`
-        html,body{overscroll-behavior:none;overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;touch-action:pan-y;background:#0D0F12;color:#F5F5F7}
-        body{background:radial-gradient(ellipse 80% 60% at 50% -10%,rgba(143,227,190,0.07) 0%,transparent 60%),radial-gradient(ellipse 50% 40% at 85% 80%,rgba(143,227,190,0.04) 0%,transparent 50%),#0D0F12;min-height:100vh}
+        html,body{overscroll-behavior:none;overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;touch-action:pan-y;}
+        body{background:${darkMode
+          ? "radial-gradient(ellipse 80% 60% at 50% -10%,rgba(143,227,190,0.07) 0%,transparent 60%),radial-gradient(ellipse 50% 40% at 85% 80%,rgba(143,227,190,0.04) 0%,transparent 50%),#0D0F12"
+          : "radial-gradient(ellipse 80% 60% at 50% -10%,rgba(23,168,101,0.06) 0%,transparent 50%),#ECEAE5"
+        };color:${C.t1};min-height:100vh;transition:background 350ms ease}
         .scroll-touch{-webkit-overflow-scrolling:touch;overflow-y:auto}
         input[type=number]::-webkit-inner-spin-button{opacity:.3}
-        input::placeholder,textarea::placeholder{color:#556070}
-        select option{background:#111418;color:#F5F5F7}
+        input::placeholder,textarea::placeholder{color:${C.t4}}
+        select option{background:${C.bgSolid};color:${C.t1}}
         *{box-sizing:border-box}
         button{transition:opacity 120ms ease,background 120ms ease,border-color 120ms ease;-webkit-tap-highlight-color:transparent}
         button:active{opacity:.75;transform:scale(.97)}
         ::-webkit-scrollbar{width:4px;height:4px}
         ::-webkit-scrollbar-track{background:transparent}
-        ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.10);border-radius:4px}
-        textarea{color:#B6BBC4;resize:vertical;font-family:'Courier New',monospace}
+        ::-webkit-scrollbar-thumb{background:${darkMode?"rgba(255,255,255,0.10)":"rgba(0,0,0,0.12)"};border-radius:4px}
+        textarea{color:${C.t2};resize:vertical;font-family:'Courier New',monospace}
         input,select,textarea{transition:border-color 150ms ease}
         @media(max-width:640px){
           .ref-grid{grid-template-columns:1fr!important}
@@ -7896,5 +7967,6 @@ function App() {
         .fade-enter{animation:fadeIn 200ms ease both}
       `}</style>
     </div>
+    </ThemeCtx.Provider>
   );
 }
