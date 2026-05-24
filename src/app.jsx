@@ -7937,6 +7937,8 @@ function App() {
       <Toasts items={toasts}/>
 
       <style>{`
+        :root{color-scheme:${darkMode?"dark":"light"}}
+        html{background:${darkMode?"#0D0F12":"#ECEAE5"};transition:background 350ms ease}
         html,body{overscroll-behavior:none;overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;touch-action:pan-y;}
         body{background:${darkMode
           ? "radial-gradient(ellipse 80% 60% at 50% -10%,rgba(143,227,190,0.07) 0%,transparent 60%),radial-gradient(ellipse 50% 40% at 85% 80%,rgba(143,227,190,0.04) 0%,transparent 50%),#0D0F12"
