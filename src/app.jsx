@@ -5207,7 +5207,7 @@ function MOps({state,setTab}) {
           )}
 
           {/* Divider */}
-          <div style={{height:1,background:"rgba(255,255,255,0.04)",marginBottom:22}}/>
+          <div style={{height:1,background:C.border,marginBottom:22}}/>
 
           {/* Secondary KPIs */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:0}}>
@@ -5217,8 +5217,8 @@ function MOps({state,setTab}) {
               {label:"Ops",       value:operados.length, color:A.t1, border:true},
             ].map(({label,value,color,border})=>(
               <div key={label} style={{paddingLeft:border?14:0,
-                borderLeft:border?"1px solid rgba(255,255,255,0.04)":"none"}}>
-                <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>
+                borderLeft:border?`1px solid ${C.border}`:"none"}}>
+                <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>
                   {label}
                 </div>
                 <div style={{fontSize:22,fontWeight:800,color,letterSpacing:"-0.01em"}}>
@@ -5232,12 +5232,14 @@ function MOps({state,setTab}) {
         {/* ══ QUICK ACTIONS ═════════════════════════════════════════════════════ */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
           <button onClick={()=>setTab("cotizador")} style={{
-            background:"#3B82F6",
-            border:"none",borderRadius:18,padding:"18px 16px",
+            background:A.limeDim,
+            backdropFilter:A.blur,WebkitBackdropFilter:A.blur,
+            border:`1.5px solid ${C.blue}55`,borderRadius:18,padding:"18px 16px",
             cursor:"pointer",textAlign:"left",WebkitTapHighlightColor:"transparent",touchAction:"manipulation",
+            boxShadow:`0 4px 24px ${A.limeDim}`,
           }}>
-            <div style={{fontSize:22,fontWeight:800,color:"#F5F5F7",lineHeight:1,marginBottom:6}}>+</div>
-            <div style={{fontSize:13,fontWeight:700,color:"#F5F5F7",letterSpacing:"-0.01em",lineHeight:1.2}}>
+            <div style={{fontSize:22,fontWeight:800,color:A.lime,lineHeight:1,marginBottom:6}}>+</div>
+            <div style={{fontSize:13,fontWeight:700,color:A.lime,letterSpacing:"-0.01em",lineHeight:1.2}}>
               Nueva<br/>cotización
             </div>
           </button>
@@ -5273,7 +5275,7 @@ function MOps({state,setTab}) {
           marginBottom:12,
           boxShadow:A.shadow,
           cursor:"pointer",
-          border:`1px solid ${vencidos.length>0?"rgba(240,160,48,0.18)":"rgba(255,255,255,0.04)"}`,
+          border:`1px solid ${vencidos.length>0?"rgba(240,160,48,0.25)":C.border}`,
           WebkitTapHighlightColor:"transparent",
         }}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
@@ -5419,7 +5421,7 @@ function MOps({state,setTab}) {
           overflow:"hidden",marginBottom:12,boxShadow:A.shadow,
         }}>
           {/* Header */}
-          <div style={{padding:"20px 22px 16px",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+          <div style={{padding:"20px 22px 16px",borderBottom:`1px solid ${C.border}`}}>
             <div style={{fontSize:9,color:A.t3,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:6}}>
               Resumen financiero
             </div>
@@ -5449,8 +5451,8 @@ function MOps({state,setTab}) {
             <div key={label} style={{
               display:"flex",justifyContent:"space-between",alignItems:"center",
               padding:"12px 22px",
-              borderBottom:i<arr.length-1?"1px solid rgba(255,255,255,0.04)":"none",
-              background:bold?"rgba(255,255,255,0.03)":"transparent",
+              borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none",
+              background:bold?(C._dark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.02)"):"transparent",
             }}>
               <span style={{fontSize:12,color:A.t2,letterSpacing:"0.01em"}}>{label}</span>
               <span style={{
@@ -5464,9 +5466,9 @@ function MOps({state,setTab}) {
           <div style={{padding:"16px 22px"}}>
             <button onClick={()=>setTab("cotizador")}
               style={{width:"100%",padding:"14px",
-                background:"#3B82F6",
+                background:A.lime,
                 border:"none",borderRadius:14,cursor:"pointer",
-                fontSize:14,fontWeight:700,color:"#ffffff",
+                fontSize:14,fontWeight:700,color:C._dark?"#0A1F14":"#FFFFFF",
                 letterSpacing:"0.02em",touchAction:"manipulation",
                 boxShadow:`0 4px 20px ${A.limeDim}`,
               }}>
@@ -5611,7 +5613,7 @@ function MPipeline({state,dispatch,toast}) {
             }}>
               {l}
               {c>0&&<span style={{fontSize:10,fontWeight:800,
-                background:filter===v?C.border:"rgba(255,255,255,0.04)",
+                background:filter===v?A.limeDim:C.bg3,
                 color:filter===v?A.lime:A.t3,borderRadius:9,padding:"1px 6px"}}>{c}</span>}
             </button>
           ))}
@@ -5688,7 +5690,7 @@ function MPipeline({state,dispatch,toast}) {
                   {/* Progress */}
                   {!isClosed&&(
                     <div>
-                      <div style={{height:2,background:"rgba(255,255,255,0.04)",borderRadius:2,overflow:"hidden",marginBottom:4}}>
+                      <div style={{height:2,background:C.border,borderRadius:2,overflow:"hidden",marginBottom:4}}>
                         <div style={{height:"100%",width:`${prog}%`,background:pCol,borderRadius:2,transition:"width 400ms ease"}}/>
                       </div>
                       <div style={{display:"flex",justifyContent:"space-between"}}>
@@ -5701,7 +5703,7 @@ function MPipeline({state,dispatch,toast}) {
 
                 {/* Expanded */}
                 {isExp&&(
-                  <div style={{borderTop:"1px solid rgba(255,255,255,0.04)",padding:"16px",background:C.bg0}}>
+                  <div style={{borderTop:`1px solid ${C.border}`,padding:"16px",background:C.bg0}}>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
                       {[
                         {l:"Precio c/IVA", v:mxn(price),    c:A.t1},
@@ -5715,8 +5717,8 @@ function MPipeline({state,dispatch,toast}) {
                         </div>
                       ))}
                     </div>
-                    {t.notes&&<div style={{fontSize:11,color:A.t2,padding:"10px 12px",background:"rgba(255,255,255,0.03)",
-                      borderRadius:10,marginBottom:12,border:"1px solid rgba(255,255,255,0.04)"}}>{t.notes}</div>}
+                    {t.notes&&<div style={{fontSize:11,color:A.t2,padding:"10px 12px",background:C._dark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.03)",
+                      borderRadius:10,marginBottom:12,border:`1px solid ${C.border}`}}>{t.notes}</div>}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <div style={{fontSize:8,color:A.t3,letterSpacing:"0.08em",textTransform:"uppercase"}}>{t.id}</div>
                       <button onClick={e=>{e.stopPropagation();
@@ -5733,7 +5735,7 @@ function MPipeline({state,dispatch,toast}) {
                 )}
 
                 {/* Footer */}
-                <div style={{padding:"12px 16px",borderTop:"1px solid rgba(255,255,255,0.04)",
+                <div style={{padding:"12px 16px",borderTop:`1px solid ${C.border}`,
                   display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div>
                     <div style={{fontSize:22,fontWeight:800,color:A.t1,lineHeight:1,
@@ -5746,7 +5748,7 @@ function MPipeline({state,dispatch,toast}) {
                     {CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t.cobrado&&(
                       <button onClick={e=>{e.stopPropagation();dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado ✓","success");}}
                         style={{padding:"10px 14px",borderRadius:12,background:A.mintDim,
-                          border:"1px solid rgba(255,255,255,0.08)",color:A.mint,
+                          border:`1px solid ${C.blue}33`,color:A.mint,
                           fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:"0.03em",
                           WebkitTapHighlightColor:"transparent"}}>
                         Cobrar ✓
@@ -5997,7 +5999,7 @@ function MCotizador({state,dispatch,toast}) {
           <React.Fragment key={i}>
             {i>0&&(
               <div style={{flex:1,height:2,
-                background:done?"rgba(255,255,255,0.18)":C.border,
+                background:done?A.lime:C.border,
                 borderRadius:1,margin:"0 8px",marginTop:-14}}/>
             )}
             <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,
@@ -6005,8 +6007,8 @@ function MCotizador({state,dispatch,toast}) {
               onClick={()=>done&&setStep(i)}>
               <div style={{
                 width:30,height:30,borderRadius:15,
-                background:done?A.lime:curr?C.border:"rgba(255,255,255,0.04)",
-                border:`2px solid ${done?A.lime:curr?"rgba(255,255,255,0.18)":C.border}`,
+                background:done?A.lime:curr?"transparent":"transparent",
+                border:`2px solid ${done?A.lime:curr?A.lime:C.border}`,
                 display:"flex",alignItems:"center",justifyContent:"center",
                 fontSize:11,fontWeight:800,
                 color:done?"#0A1800":curr?A.lime:A.t3,
@@ -6044,7 +6046,7 @@ function MCotizador({state,dispatch,toast}) {
               display:"flex",alignItems:"center",gap:14,
               transition:"all 0.15s",WebkitTapHighlightColor:"transparent"}}>
             <div style={{width:10,height:10,borderRadius:"50%",
-              background:sel?pc.dot:"rgba(255,255,255,0.08)",flexShrink:0,
+              background:sel?pc.dot:C.border,flexShrink:0,
               boxShadow:"none",transition:"all 0.15s"}}/>
             <div style={{flex:1}}>
               <div style={{fontSize:14,fontWeight:800,color:sel?pc.dot:A.t2,transition:"color 0.15s"}}>
@@ -6060,7 +6062,7 @@ function MCotizador({state,dispatch,toast}) {
         );
       })}
 
-      <div style={{height:1,background:"rgba(255,255,255,0.04)",margin:"20px 0"}}/>
+      <div style={{height:1,background:C.border,margin:"20px 0"}}/>
 
       <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",marginBottom:12,textTransform:"uppercase",fontWeight:700}}>Tipo de operación</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:20}}>
@@ -6070,7 +6072,7 @@ function MCotizador({state,dispatch,toast}) {
             <div key={op.id} onClick={()=>setOpType(op.id)}
               style={{padding:"14px",borderRadius:14,cursor:"pointer",
                 background:sel?A.limeDim:A.card,
-                boxShadow:sel?"0 0 0 1px rgba(255,255,255,0.12)":A.shadowSm,
+                boxShadow:sel?`0 0 0 1.5px ${C.blue}`:A.shadowSm,
                 WebkitTapHighlightColor:"transparent",transition:"all 0.15s"}}>
               <div style={{fontSize:13,fontWeight:700,color:sel?A.lime:A.t2,marginBottom:4}}>{op.label}</div>
               <div style={{fontSize:10,color:A.t3}}>{op.baseMin}–{op.baseMax}%</div>
@@ -6088,11 +6090,11 @@ function MCotizador({state,dispatch,toast}) {
               onClick={()=>setActiveMods(p=>p.includes(mod.id)?p.filter(x=>x!==mod.id):[...p,mod.id])}
               style={{padding:"14px",borderRadius:14,cursor:"pointer",
                 background:on?A.limeDim:A.card,
-                boxShadow:on?"0 4px 20px rgba(255,255,255,0.1), 0 0 0 1.5px rgba(255,255,255,0.15)":A.shadowSm,
+                boxShadow:on?`0 0 0 1.5px ${C.blue}`:A.shadowSm,
                 display:"flex",alignItems:"flex-start",gap:10,
                 WebkitTapHighlightColor:"transparent",transition:"all 0.15s"}}>
               <div style={{width:8,height:8,borderRadius:"50%",marginTop:3,flexShrink:0,
-                background:on?A.lime:"rgba(255,255,255,0.08)",
+                background:on?A.lime:C.border,
                 boxShadow:on?"none":"none",transition:"all 0.15s"}}/>
               <div>
                 <div style={{fontSize:12,fontWeight:700,color:on?A.lime:A.t2,marginBottom:2}}>{mod.label}</div>
@@ -6115,8 +6117,8 @@ function MCotizador({state,dispatch,toast}) {
 
       <button onClick={()=>setStep(1)} style={{
         width:"100%",padding:"16px",borderRadius:16,
-        background:"#3B82F6",
-        border:"none",color:"#ffffff",fontSize:14,fontWeight:700,cursor:"pointer",
+        background:A.lime,
+        border:"none",color:C._dark?"#0A1F14":"#FFFFFF",fontSize:14,fontWeight:700,cursor:"pointer",
         letterSpacing:"0.02em",WebkitTapHighlightColor:"transparent",
       }}>
         Siguiente: Líneas →
@@ -6135,7 +6137,7 @@ function MCotizador({state,dispatch,toast}) {
         return (
           <div key={i} style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,overflow:"hidden",
             marginBottom:12,boxShadow:A.shadow}}>
-            <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,0.04)",
+            <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,
               display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div style={{fontSize:9,color:A.t3,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase"}}>
                 Línea {i+1}
@@ -6228,7 +6230,7 @@ function MCotizador({state,dispatch,toast}) {
 
       <button onClick={addLine} style={{
         width:"100%",padding:"14px",borderRadius:16,
-        background:"transparent",border:"2px dashed rgba(255,255,255,0.08)",
+        background:"transparent",border:`2px dashed ${C.border}`,
         color:A.t3,fontSize:13,fontWeight:700,cursor:"pointer",
         display:"flex",alignItems:"center",justifyContent:"center",gap:10,
         marginBottom:16,WebkitTapHighlightColor:"transparent",
@@ -6271,8 +6273,8 @@ function MCotizador({state,dispatch,toast}) {
         </button>
         <button onClick={()=>setStep(2)} style={{
           flex:1,padding:"14px",borderRadius:14,
-          background:"#3B82F6",
-          border:"none",color:"#ffffff",fontSize:14,fontWeight:700,cursor:"pointer",
+          background:A.lime,
+          border:"none",color:C._dark?"#0A1F14":"#FFFFFF",fontSize:14,fontWeight:700,cursor:"pointer",
           WebkitTapHighlightColor:"transparent",
         }}>
           Siguiente: Datos →
@@ -6330,7 +6332,7 @@ function MCotizador({state,dispatch,toast}) {
             </div>
           </div>
         </div>
-        <div style={{height:1,background:"rgba(255,255,255,0.04)",marginBottom:14}}/>
+        <div style={{height:1,background:C.border,marginBottom:14}}/>
         <div style={{display:"flex",flexDirection:"column",gap:5}}>
           {lineas.length>1&&<div style={{fontSize:10,color:A.t3}}>{lineas.length} líneas</div>}
           {cl&&<div style={{fontSize:11,color:A.t2}}>Cliente: <span style={{fontWeight:700,color:A.t1}}>{cl.empresa}</span></div>}
@@ -6350,8 +6352,8 @@ function MCotizador({state,dispatch,toast}) {
         </button>
         <button onClick={save} style={{
           flex:1,padding:"16px",borderRadius:14,
-          background:"#3B82F6",
-          border:"none",color:"#ffffff",fontSize:14,fontWeight:700,cursor:"pointer",
+          background:A.lime,
+          border:"none",color:C._dark?"#0A1F14":"#FFFFFF",fontSize:14,fontWeight:700,cursor:"pointer",
           letterSpacing:"0.02em",WebkitTapHighlightColor:"transparent",
         }}>
           Registrar ticket + PDF →
@@ -6427,7 +6429,7 @@ function MCartera({state,dispatch,toast}) {
             letterSpacing:"-0.025em",fontVariantNumeric:"tabular-nums",marginBottom:20}}>
             {mxn(totalPend)}
           </div>
-          <div style={{height:1,background:"rgba(255,255,255,0.04)",marginBottom:20}}/>
+          <div style={{height:1,background:C.border,marginBottom:20}}/>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0}}>
             <div>
               <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>Vencido</div>
@@ -6439,7 +6441,7 @@ function MCartera({state,dispatch,toast}) {
                 {vencidas.length} factura{vencidas.length!==1?"s":""}
               </div>
             </div>
-            <div style={{paddingLeft:16,borderLeft:"1px solid rgba(255,255,255,0.04)"}}>
+            <div style={{paddingLeft:16,borderLeft:`1px solid ${C.border}`}}>
               <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>Al corriente</div>
               <div style={{fontSize:22,fontWeight:800,color:A.mint,
                 fontVariantNumeric:"tabular-nums",letterSpacing:"-0.01em"}}>
@@ -6470,7 +6472,7 @@ function MCartera({state,dispatch,toast}) {
                   </span>
                 </div>
                 {b.monto>0&&(
-                  <div style={{height:3,background:"rgba(255,255,255,0.04)",borderRadius:2,overflow:"hidden"}}>
+                  <div style={{height:3,background:C.border,borderRadius:2,overflow:"hidden"}}>
                     <div style={{height:"100%",width:`${(b.monto/maxAging)*100}%`,
                       background:i===2?A.red:A.amber,borderRadius:2,transition:"width 500ms ease"}}/>
                   </div>
@@ -6522,7 +6524,7 @@ function MCartera({state,dispatch,toast}) {
                       </div>
                       <button onClick={()=>cobrar(t)} style={{
                         padding:"10px 18px",borderRadius:12,
-                        background:A.mintDim,border:"1px solid rgba(255,255,255,0.08)",
+                        background:A.mintDim,border:`1px solid ${C.blue}33`,
                         color:A.mint,fontSize:12,fontWeight:800,cursor:"pointer",
                         letterSpacing:"0.04em",WebkitTapHighlightColor:"transparent",
                       }}>
@@ -6571,7 +6573,7 @@ function MCartera({state,dispatch,toast}) {
                       </div>
                       <div style={{fontSize:10,color:A.t3}}>Vence: {t.promesaPago||"—"}</div>
                     </div>
-                    <div style={{padding:"12px 16px",borderTop:"1px solid rgba(255,255,255,0.04)",
+                    <div style={{padding:"12px 16px",borderTop:`1px solid ${C.border}`,
                       display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <div style={{fontSize:22,fontWeight:800,color:A.t1,letterSpacing:"-0.02em",
                         fontVariantNumeric:"tabular-nums"}}>
@@ -6579,7 +6581,7 @@ function MCartera({state,dispatch,toast}) {
                       </div>
                       <button onClick={()=>cobrar(t)} style={{
                         padding:"10px 18px",borderRadius:12,
-                        background:A.mintDim,border:"1px solid rgba(255,255,255,0.08)",
+                        background:A.mintDim,border:`1px solid ${C.blue}33`,
                         color:A.mint,fontSize:12,fontWeight:800,cursor:"pointer",
                         letterSpacing:"0.04em",WebkitTapHighlightColor:"transparent",
                       }}>
@@ -6752,7 +6754,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
               {label:"Ops",value:filtered.length,color:A.t2,border:true},
             ].map(({label,value,color,border})=>(
               <div key={label} style={{flex:1,paddingLeft:border?14:0,
-                borderLeft:border?"1px solid rgba(255,255,255,0.04)":"none"}}>
+                borderLeft:border?`1px solid ${C.border}`:"none"}}>
                 <div style={{fontSize:8,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>
                   {label}
                 </div>
@@ -6851,7 +6853,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
 
                       {/* Expanded detail */}
                       {isExp&&!isEdit&&(
-                        <div style={{borderTop:"1px solid rgba(255,255,255,0.04)",
+                        <div style={{borderTop:`1px solid ${C.border}`,
                           padding:"16px",background:C.bg0}}>
                           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
                             {[
@@ -6901,7 +6903,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                             {CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t.cobrado&&(
                               <button onClick={()=>{dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado ✓","success");setExpandId(null);}}
                                 style={{flex:1,padding:"9px 14px",borderRadius:10,background:A.mintDim,
-                                  border:"1px solid rgba(255,255,255,0.08)",color:A.mint,fontSize:11,fontWeight:800,cursor:"pointer"}}>
+                                  border:`1px solid ${C.blue}33`,color:A.mint,fontSize:11,fontWeight:800,cursor:"pointer"}}>
                                 Cobrar ✓
                               </button>
                             )}
@@ -6918,7 +6920,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
 
                       {/* Quick edit form */}
                       {isEdit&&(
-                        <div style={{borderTop:"1px solid rgba(255,255,255,0.04)",
+                        <div style={{borderTop:`1px solid ${C.border}`,
                           background:C.bg0,padding:"16px"}}>
                           <div style={{fontSize:9,color:A.lime,letterSpacing:"0.14em",
                             textTransform:"uppercase",marginBottom:14,fontWeight:800}}>
