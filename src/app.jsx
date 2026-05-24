@@ -4,32 +4,36 @@ import React, { useState, useReducer, useEffect, useRef, useCallback, useMemo } 
 // L1 — DESIGN TOKENS
 // ═══════════════════════════════════════════════════════════════════════════════
 const C = {
-  // ── Surface system — dark slate, not black
-  bg0:"#05070A",   // app background
-  bg1:"#0B1118",   // cards
-  bg2:"#101722",   // secondary surfaces
-  bg3:"#141D2B",   // elevated / active
-  bg4:"#1A2336",   // highest elevation
-  border:"rgba(255,255,255,0.05)",
-  borderHi:"rgba(255,255,255,0.10)",
-  // ── Semantic colors — only with meaning
-  blue:"#3B82F6",  blueHi:"#60A5FA", blueDim:"rgba(59,130,246,0.08)",
-  cyan:"#3B82F6",  cyanDim:"rgba(59,130,246,0.07)",
-  green:"#22C55E", greenDim:"rgba(34,197,94,0.1)",
-  red:"#EF4444",   redDim:"rgba(239,68,68,0.1)",
-  yellow:"#F59E0B",yellowDim:"rgba(245,158,11,0.1)",
-  orange:"#F97316",amber:"#F59E0B",
-  purple:"#8B5CF6",purpleDim:"rgba(139,92,246,0.1)",
+  // ── Surface system — glassmorphism dark
+  bg0:"#0D0F12",                        // app background
+  bg1:"rgba(22,24,28,0.62)",            // glass card (main surfaces)
+  bg2:"rgba(16,18,22,0.94)",            // secondary surfaces / dropdowns (near-solid)
+  bg3:"rgba(28,32,40,0.74)",            // elevated / active
+  bg4:"rgba(38,44,54,0.88)",            // highest elevation
+  bgSolid:"#111418",                    // solid fallback
+  border:"rgba(255,255,255,0.07)",
+  borderHi:"rgba(255,255,255,0.13)",
+  // ── Accent — mint green (premium fintech)
+  blue:"#8FE3BE",  blueHi:"#BFE8D3", blueDim:"rgba(143,227,190,0.12)",
+  cyan:"#8FE3BE",  cyanDim:"rgba(143,227,190,0.09)",
+  green:"#8FE3BE", greenDim:"rgba(143,227,190,0.12)",
+  // ── Semantic
+  red:"#FF7A7A",   redDim:"rgba(255,122,122,0.12)",
+  yellow:"#F5C842",yellowDim:"rgba(245,200,66,0.12)",
+  orange:"#F97316",amber:"#F5C842",
+  purple:"#A78BFA",purpleDim:"rgba(167,139,250,0.1)",
   // ── Typography
-  t1:"#F3F4F6",    // primary
-  t2:"#94A3B8",    // secondary
-  t3:"#64748B",    // muted
-  t4:"#475569",    // very muted
+  t1:"#F5F5F7",    // primary
+  t2:"#B6BBC4",    // secondary
+  t3:"#7E848E",    // muted
+  t4:"#556070",    // very muted
   // ── Priority semantic
-  p1:"#EF4444", p1dim:"rgba(239,68,68,0.12)",  p1dot:"#EF4444",
-  p2:"#F59E0B", p2dim:"rgba(245,158,11,0.12)", p2dot:"#F59E0B",
-  p3:"#22C55E", p3dim:"rgba(34,197,94,0.1)",   p3dot:"#22C55E",
-  p4:"#64748B", p4dim:"rgba(102,112,133,0.1)", p4dot:"#64748B",
+  p1:"#FF7A7A", p1dim:"rgba(255,122,122,0.12)", p1dot:"#FF7A7A",
+  p2:"#F5C842", p2dim:"rgba(245,200,66,0.12)",  p2dot:"#F5C842",
+  p3:"#8FE3BE", p3dim:"rgba(143,227,190,0.12)", p3dot:"#8FE3BE",
+  p4:"#7E848E", p4dim:"rgba(126,132,142,0.10)", p4dot:"#7E848E",
+  // ── Glass helpers
+  glass:"blur(28px) saturate(1.6)",
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -65,18 +69,18 @@ const TICKET_PIPELINE = [
   "comprado","transito","entregado","facturado","cobrado","cerrado",
 ];
 const TICKET_META = {
-  recibido:   { label:"Recibido",        color:"#2A3A4A", dot:"#4A6A8A" },
-  validando:  { label:"Validando",       color:"#3A3A2A", dot:"#8A8A30" },
-  sourcing:   { label:"Sourcing",        color:"#2A3A5A", dot:"#4A70C0" },
-  cotizado:   { label:"Cotizado",        color:"#3A4A2A", dot:"#70A040" },
-  autorizado: { label:"Autorizado",      color:"#1A4A2A", dot:"#30A050" },
-  comprado:   { label:"Comprado",        color:"#1A3A2A", dot:"#30805A" },
-  transito:   { label:"En Transito",     color:"#2A3A1A", dot:"#70A030" },
-  entregado:  { label:"Entregado",       color:"#1A4A3A", dot:"#30C080" },
-  facturado:  { label:"Facturado",       color:"#2A2A5A", dot:"#5050C0" },
-  cobrado:    { label:"Cobrado",         color:"#1A5A1A", dot:"#30C030" },
-  cerrado:    { label:"Cerrado",         color:"#2A3A2A", dot:"#507050" },
-  cancelado:  { label:"Cancelado",       color:"#5A1A1A", dot:"#C03030" },
+  recibido:   { label:"Recibido",        color:"rgba(74,106,138,0.18)",  dot:"#6B9EC8" },
+  validando:  { label:"Validando",       color:"rgba(200,180,50,0.14)",  dot:"#C8C050" },
+  sourcing:   { label:"Sourcing",        color:"rgba(74,112,192,0.18)",  dot:"#7AA0E0" },
+  cotizado:   { label:"Cotizado",        color:"rgba(112,160,64,0.18)",  dot:"#8FC855" },
+  autorizado: { label:"Autorizado",      color:"rgba(48,160,80,0.18)",   dot:"#50C878" },
+  comprado:   { label:"Comprado",        color:"rgba(48,128,90,0.18)",   dot:"#50A888" },
+  transito:   { label:"En Transito",     color:"rgba(112,160,48,0.18)",  dot:"#90C848" },
+  entregado:  { label:"Entregado",       color:"rgba(48,192,128,0.18)",  dot:"#8FE3BE" },
+  facturado:  { label:"Facturado",       color:"rgba(167,139,250,0.14)", dot:"#A78BFA" },
+  cobrado:    { label:"Cobrado",         color:"rgba(48,192,48,0.18)",   dot:"#50D070" },
+  cerrado:    { label:"Cerrado",         color:"rgba(126,132,142,0.14)", dot:"#8A9AA4" },
+  cancelado:  { label:"Cancelado",       color:"rgba(255,122,122,0.14)", dot:"#FF7A7A" },
 };
 const TICKET_ALL = [...TICKET_PIPELINE, "cancelado"];
 
@@ -751,7 +755,7 @@ function PDFPreviewModal({tkt,cl,un,supp,onClose}) {
   return (
     <div style={{position:"fixed",inset:0,zIndex:700,background:C.bg0,display:"flex",flexDirection:"column"}}>
       {/* Header */}
-      <div style={{background:C.bg1,borderBottom:`1px solid ${C.border}`,
+      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderBottom:`1px solid ${C.border}`,
         padding:`calc(env(safe-area-inset-top,44px) + 10px) 16px 12px`,
         display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
         <button onClick={onClose} style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:10,
@@ -1159,7 +1163,7 @@ const Toggle = React.memo(function Toggle({label,value,onChange}) {
 
 const SHdr = React.memo(function SHdr({title,right}) {
   return (
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 10px",background:C.bg3,borderBottom:`1px solid ${C.border}`}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 10px",background:C.bg3,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderBottom:`1px solid ${C.border}`}}>
       <div style={{fontSize:7,color:C.t3,letterSpacing:"0.2em",fontWeight:700}}>{title}</div>
       {right&&<div style={{fontSize:9,color:C.t2}}>{right}</div>}
     </div>
@@ -1186,12 +1190,12 @@ const EmptyState = React.memo(function EmptyState({icon,title,sub}) {
 
 const Confirm = React.memo(function Confirm({msg,onConfirm,onCancel}) {
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:5,padding:18,maxWidth:320,width:"90%"}}>
-        <div style={{fontSize:11,color:C.t1,marginBottom:14,lineHeight:1.5}}>{msg}</div>
-        <div style={{display:"flex",gap:7,justifyContent:"flex-end"}}>
-          <button onClick={onCancel}  style={{padding:"4px 12px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:10,cursor:"pointer"}}>Cancelar</button>
-          <button onClick={onConfirm} style={{padding:"4px 12px",background:C.red,border:"none",borderRadius:3,color:C.t1,fontSize:10,fontWeight:700,cursor:"pointer"}}>Confirmar</button>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{background:"rgba(16,18,22,0.92)",backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",border:`1px solid ${C.borderHi}`,borderRadius:20,padding:22,maxWidth:320,width:"90%",boxShadow:"0 16px 60px rgba(0,0,0,0.6)"}}>
+        <div style={{fontSize:12,color:C.t1,marginBottom:16,lineHeight:1.6}}>{msg}</div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+          <button onClick={onCancel}  style={{padding:"7px 16px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:10,color:C.t2,fontSize:11,cursor:"pointer"}}>Cancelar</button>
+          <button onClick={onConfirm} style={{padding:"7px 16px",background:C.red,border:"none",borderRadius:10,color:"#0D0F12",fontSize:11,fontWeight:700,cursor:"pointer"}}>Confirmar</button>
         </div>
       </div>
     </div>
@@ -1200,11 +1204,15 @@ const Confirm = React.memo(function Confirm({msg,onConfirm,onCancel}) {
 
 const Toasts = React.memo(function Toasts({items}) {
   if(!items.length) return null;
-  const s=t=>t==="success"?{border:`1px solid ${C.green}55`,color:C.green,background:"#0d1a0d"}:t==="error"?{border:`1px solid ${C.red}55`,color:C.red,background:"#1a0d0d"}:{border:`1px solid ${C.border}`,color:C.t2,background:C.bg3};
+  const s=t=>t==="success"
+    ?{border:`1px solid rgba(143,227,190,0.30)`,color:"#8FE3BE",background:"rgba(14,24,20,0.92)"}
+    :t==="error"
+    ?{border:`1px solid rgba(255,122,122,0.30)`,color:"#FF7A7A",background:"rgba(24,12,12,0.92)"}
+    :{border:`1px solid ${C.border}`,color:C.t2,background:"rgba(14,16,20,0.92)"};
   return (
-    <div style={{position:"fixed",bottom:"calc(72px + env(safe-area-inset-bottom,0px) + 8px)",right:12,zIndex:999,display:"flex",flexDirection:"column",gap:5,maxWidth:"calc(100vw - 24px)"}}>
+    <div style={{position:"fixed",bottom:"calc(90px + env(safe-area-inset-bottom,0px) + 8px)",right:12,zIndex:999,display:"flex",flexDirection:"column",gap:6,maxWidth:"calc(100vw - 24px)"}}>
       {items.map(t=>(
-        <div key={t.id} style={{borderRadius:10,padding:"9px 14px",fontSize:11,fontFamily:"'Courier New',monospace",maxWidth:300,...s(t.type),boxShadow:"0 4px 20px rgba(0,0,0,.4)"}}>
+        <div key={t.id} style={{borderRadius:14,padding:"10px 16px",fontSize:11,fontFamily:"'Courier New',monospace",maxWidth:300,...s(t.type),boxShadow:"0 6px 24px rgba(0,0,0,.5)",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
           {t.msg}
         </div>
       ))}
@@ -1229,8 +1237,8 @@ function SearchPalette({state,onNavigate,onClose}) {
   },[q,state]);
   const tl={ticket:"Ticket",client:"Cliente",supplier:"Prov.",unit:"Unidad",part:"Parte"};
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.8)",zIndex:600,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:70}} onClick={onClose}>
-      <div style={{width:"90%",maxWidth:520,background:C.bg2,border:`1px solid ${C.borderHi}`,borderRadius:5,overflow:"hidden"}} onClick={e=>e.stopPropagation()}>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",zIndex:600,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:70}} onClick={onClose}>
+      <div style={{width:"90%",maxWidth:520,background:"rgba(16,18,22,0.92)",backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",border:`1px solid ${C.borderHi}`,borderRadius:16,overflow:"hidden"}} onClick={e=>e.stopPropagation()}>
         <div style={{display:"flex",alignItems:"center",gap:7,padding:"7px 11px",borderBottom:`1px solid ${C.border}`}}>
           <span style={{color:C.t3,fontSize:11}}>&#9906;</span>
           <input ref={ref} value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar ticket, unidad, parte, cliente, proveedor..."
@@ -1691,7 +1699,7 @@ function CentroOps({state}) {
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7,marginBottom:7}}>
 
         {/* Col 1: Por categoria */}
-        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
           <SHdr title="UTILIDAD POR CATEGORIA"/>
           {byOp.filter(o=>o.count>0).length===0
             ?<EmptyState icon="&#128202;" title="Sin datos"/>
@@ -1710,7 +1718,7 @@ function CentroOps({state}) {
 
         {/* Col 2: Top clientes + Aging */}
         <div style={{display:"flex",flexDirection:"column",gap:7}}>
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
             <SHdr title="TOP CLIENTES — UTILIDAD"/>
             {topClients.length===0
               ?<EmptyState icon="&#127970;" title="Vincula clientes a tickets"/>
@@ -1725,7 +1733,7 @@ function CentroOps({state}) {
               ))
             }
           </div>
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
             <SHdr title="AGING CARTERA"/>
             {[["< 30 dias",aging.a30,C.green],["30-60 dias",aging.a60,C.yellow],["> 60 dias",aging.mas60,C.red]].map(([lbl,val,col],i)=>(
               <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 11px",borderBottom:`1px solid ${C.border}`}}>
@@ -1738,7 +1746,7 @@ function CentroOps({state}) {
 
         {/* Col 3: Top proveedores + Eficiencia */}
         <div style={{display:"flex",flexDirection:"column",gap:7}}>
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
             <SHdr title="TOP PROVEEDORES"/>
             {topSupp.length===0
               ?<EmptyState icon="&#127981;" title="Vincula proveedores a tickets"/>
@@ -1753,7 +1761,7 @@ function CentroOps({state}) {
               ))
             }
           </div>
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
             <SHdr title="EFICIENCIA — UTIL/HORA"/>
             {eficientes.length===0
               ?<EmptyState icon="&#9201;" title="Registra horas en tickets"/>
@@ -1772,7 +1780,7 @@ function CentroOps({state}) {
       </div>
 
       {/* Pipeline strip — ancho completo */}
-      <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:7}}>
+      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:7}}>
         <SHdr title="DISTRIBUCION PIPELINE"/>
         <div style={{display:"grid",gridTemplateColumns:`repeat(${TICKET_ALL.length},1fr)`}}>
           {TICKET_ALL.map(sid=>{
@@ -1792,7 +1800,7 @@ function CentroOps({state}) {
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7,marginBottom:7}}>
 
         {/* BLOQUE 1 — OPERACIÓN */}
-        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
           <SHdr title="OPERACIÓN REALIZADA"/>
           <div style={{fontSize:7,color:C.t3,marginBottom:6}}>Entregado · Facturado · Cobrado · {operados.length} tickets</div>
           {[
@@ -1817,7 +1825,7 @@ function CentroOps({state}) {
         </div>
 
         {/* BLOQUE 2 — COBRANZA */}
-        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
           <SHdr title="COBRANZA"/>
           <div style={{fontSize:7,color:C.t3,marginBottom:6}}>Cash recibido vs cartera pendiente</div>
           {[
@@ -1841,7 +1849,7 @@ function CentroOps({state}) {
         </div>
 
         {/* BLOQUE 3 — FORECAST */}
-        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
           <SHdr title="FORECAST / PIPELINE"/>
           <div style={{fontSize:7,color:C.t3,marginBottom:6}}>Cotizado + Autorizado — NO contamina revenue</div>
           {[
@@ -1863,7 +1871,7 @@ function CentroOps({state}) {
 
       {/* Fila inferior: categorías + prioridades */}
       <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:7}}>
-        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
           <SHdr title="RESUMEN RÁPIDO"/>
           <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5,marginTop:8}}>
             {[["Revenue op.",mxn(revenueOp),C.cyan],["Cash cobrado",mxn(cashTotal),C.green],["Cartera",mxn(carteraMonto),C.yellow],["Util. operativa",mxn(utilidadOp),utilidadOp>=0?C.green:C.red],["Forecast",mxn(forecastMonto),C.t2]].map(([lbl,val,col],i)=>(
@@ -1876,7 +1884,7 @@ function CentroOps({state}) {
         </div>
 
         {/* Prioridades */}
-        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",minWidth:220}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",minWidth:220}}>
           <SHdr title="PRIORIDADES"/>
           {Object.values(PRIORITY).map(pr=>{
             const count=tickets.filter(t=>t.priority===pr.id).length;
@@ -1940,19 +1948,19 @@ function Tickets({state,dispatch,toast,scheduleHardDelete}) {
       {/* Filtros */}
       <div style={{display:"flex",gap:5,marginBottom:7,flexWrap:"wrap",alignItems:"center"}}>
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar ticket o ID..."
-          style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 8px",color:C.t1,fontSize:10,outline:"none",width:180,fontFamily:"'Courier New',monospace"}}/>
-        <select value={fPrio} onChange={e=>setFPrio(e.target.value)} style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t1,fontSize:10,outline:"none",cursor:"pointer"}}>
+          style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 8px",color:C.t1,fontSize:10,outline:"none",width:180,fontFamily:"'Courier New',monospace"}}/>
+        <select value={fPrio} onChange={e=>setFPrio(e.target.value)} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t1,fontSize:10,outline:"none",cursor:"pointer"}}>
           <option value="all">Todas las prioridades</option>
           {Object.values(PRIORITY).map(p=><option key={p.id} value={p.id} style={{background:C.bg1}}>{p.id} — {p.label}</option>)}
         </select>
-        <select value={fStatus} onChange={e=>setFStatus(e.target.value)} style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t1,fontSize:10,outline:"none",cursor:"pointer"}}>
+        <select value={fStatus} onChange={e=>setFStatus(e.target.value)} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t1,fontSize:10,outline:"none",cursor:"pointer"}}>
           <option value="all">Todos los estados</option>
           {TICKET_ALL.map(id=><option key={id} value={id} style={{background:C.bg1}}>{TICKET_META[id].label}</option>)}
         </select>
         <span style={{fontSize:8,color:C.t3}}>{filtered.length} resultado{filtered.length!==1?"s":""}</span>
       </div>
 
-      <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
         <div style={{display:"grid",gridTemplateColumns:"24px 1.8fr 0.5fr 0.7fr 0.7fr 0.8fr 0.7fr 0.6fr 22px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:4}}>
           <span/>
           <span>ID / TITULO</span><span>TIPO</span><span>PRIORIDAD</span><span>ESTADO</span>
@@ -1998,9 +2006,9 @@ function Tickets({state,dispatch,toast,scheduleHardDelete}) {
                       {/* Agregar evento */}
                       <div style={{padding:"6px 10px",borderTop:`1px solid ${C.border}`,display:"flex",gap:5}}>
                         <input value={tlInput.evento} onChange={e=>setTlInput(p=>({...p,evento:e.target.value}))} placeholder="Nuevo evento..."
-                          style={{flex:1,background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t1,fontSize:9,outline:"none",fontFamily:"inherit"}}/>
+                          style={{flex:1,background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t1,fontSize:9,outline:"none",fontFamily:"inherit"}}/>
                         <input value={tlInput.actor} onChange={e=>setTlInput(p=>({...p,actor:e.target.value}))} placeholder="Actor"
-                          style={{width:80,background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t2,fontSize:9,outline:"none",fontFamily:"inherit"}}/>
+                          style={{width:80,background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t2,fontSize:9,outline:"none",fontFamily:"inherit"}}/>
                         <button onClick={()=>addTlEvent(t.id)} style={{padding:"4px 9px",background:C.blue,border:"none",borderRadius:3,color:C.t1,fontSize:9,cursor:"pointer",fontWeight:600}}>+</button>
                       </div>
                     </div>
@@ -2260,7 +2268,7 @@ function Cotizador({state,dispatch,toast}) {
       {catalogSearch!==null&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}
           onClick={()=>{setCatalogSearch(null);setCatalogQ("");}}>
-          <div style={{background:C.bg1,border:`1px solid ${C.borderHi}`,borderRadius:5,width:"90%",maxWidth:520,overflow:"hidden"}}
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.borderHi}`,borderRadius:5,width:"90%",maxWidth:520,overflow:"hidden"}}
             onClick={e=>e.stopPropagation()}>
             <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderBottom:`1px solid ${C.border}`,background:C.bg2}}>
               <span style={{fontSize:9,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>CATALOGO — LINEA {String(catalogSearch+1).padStart(2,"0")}</span>
@@ -2341,7 +2349,7 @@ function Cotizador({state,dispatch,toast}) {
         {/* LEFT */}
         <div>
           {/* Datos del ticket */}
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
             <SHdr title="DATOS DEL TICKET"/>
             <div style={{padding:9}}>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
@@ -2388,7 +2396,7 @@ function Cotizador({state,dispatch,toast}) {
           </div>
 
           {/* Lineas de cotizacion */}
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
             <SHdr title={"LINEAS DE COTIZACION ("+lineas.length+")"} right={
               <button onClick={addLinea} style={{fontSize:8,background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,padding:"2px 8px",cursor:"pointer",fontWeight:600}}>
                 + Agregar linea
@@ -2402,7 +2410,7 @@ function Cotizador({state,dispatch,toast}) {
                 return (
                   <div key={l.key} style={{background:C.bg0,border:`1px solid ${C.borderHi}`,borderRadius:3,marginBottom:i<lineas.length-1?7:0,overflow:"hidden"}}>
                     {/* Header linea */}
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 9px",background:C.bg3,borderBottom:`1px solid ${C.border}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 9px",background:C.bg3,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderBottom:`1px solid ${C.border}`}}>
                       <span style={{fontSize:8,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>LINEA {String(i+1).padStart(2,"0")}</span>
                       <div style={{display:"flex",gap:8,alignItems:"center"}}>
                         <span style={{fontSize:10,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(lsnap.precioConIVA)}</span>
@@ -2417,12 +2425,12 @@ function Cotizador({state,dispatch,toast}) {
                           <div style={{fontSize:7,color:C.t3,marginBottom:2}}>DESCRIPCION</div>
                           <input value={l.titulo} onChange={e=>updateLinea(i,{titulo:e.target.value})}
                             placeholder={"Pieza o servicio "+(i+1)}
-                            style={{width:"100%",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.t1,fontSize:10,outline:"none",fontFamily:"inherit"}}/>
+                            style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.t1,fontSize:10,outline:"none",fontFamily:"inherit"}}/>
                         </div>
                         <div>
                           <div style={{fontSize:7,color:C.t3,marginBottom:2}}>NUM. PARTE</div>
                           <input value={l.partRef} onChange={e=>updateLinea(i,{partRef:e.target.value})} placeholder="OEM / ref."
-                            style={{width:"100%",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.t2,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace"}}/>
+                            style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.t2,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace"}}/>
                         </div>
                         <div style={{display:"flex",alignItems:"flex-end"}}>
                           <button onClick={()=>setCatalogSearch(i)}
@@ -2435,7 +2443,7 @@ function Cotizador({state,dispatch,toast}) {
                       <div style={{display:"grid",gridTemplateColumns:"80px 1fr 1fr 1fr",gap:5,marginBottom:6}}>
                         <div>
                           <div style={{fontSize:7,color:C.t3,marginBottom:2}}>CANT.</div>
-                          <div style={{display:"flex",alignItems:"center",background:C.bg1,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
+                          <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
                             <input type="text" inputMode="numeric"
                               value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)}
                               onChange={e=>updateLinea(i,{_qtyRaw:e.target.value})}
@@ -2447,7 +2455,7 @@ function Cotizador({state,dispatch,toast}) {
                         {[["COSTO UNIT. (c/IVA)","costoUnit"],["GASOLINA","gasolina"],["OTROS","otros"]].map(([lbl,k])=>(
                           <div key={k}>
                             <div style={{fontSize:7,color:C.t3,marginBottom:2}}>{lbl}</div>
-                            <div style={{display:"flex",alignItems:"center",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,overflow:"hidden"}}>
+                            <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,overflow:"hidden"}}>
                               <span style={{padding:"0 5px",color:C.t3,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
                               <input type="text" inputMode="decimal"
                                 value={l[`_${k}Raw`]!==undefined?l[`_${k}Raw`]:String(l[k]||0)}
@@ -2481,7 +2489,7 @@ function Cotizador({state,dispatch,toast}) {
                               <input type="number" min={0} step={0.5} value={l._customValRaw!==undefined?l._customValRaw:String(l.customVal||27)}
                               onChange={e=>updateLinea(i,{_customValRaw:e.target.value})}
                               onBlur={()=>setLineas(p=>p.map((line,idx)=>idx!==i?line:{...line,customVal:safeNumber(line._customValRaw,27),_customValRaw:undefined}))}
-                                style={{width:55,background:C.bg1,border:`1px solid ${C.blueHi}`,borderRadius:3,padding:"3px 5px",color:C.cyan,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace",textAlign:"right"}}/>
+                                style={{width:55,background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,padding:"3px 5px",color:C.cyan,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace",textAlign:"right"}}/>
                             ):(
                               <span style={{fontSize:11,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{fpct(mg)}</span>
                             )}
@@ -2493,7 +2501,7 @@ function Cotizador({state,dispatch,toast}) {
                         ):(
                           <div style={{display:"flex",alignItems:"center",gap:5,flex:1}}>
                             <span style={{fontSize:7,color:C.t3,flexShrink:0}}>Precio c/IVA:</span>
-                            <div style={{display:"flex",alignItems:"center",background:C.bg1,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden",flex:1}}>
+                            <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden",flex:1}}>
                               <span style={{padding:"0 4px",color:C.cyan,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
                               <input type="number" min={0} step={0.01} value={l.manualPrice} onChange={e=>updateLinea(i,{manualPrice:e.target.value})}
                                 style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:11,fontWeight:700,padding:"4px 0",fontFamily:"'Courier New',monospace"}}/>
@@ -2510,7 +2518,7 @@ function Cotizador({state,dispatch,toast}) {
           </div>
 
           {/* IVA e ISR globales */}
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
             <SHdr title="PARAMETROS FISCALES"/>
             <div style={{padding:9}}>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:6}}>
@@ -2541,7 +2549,7 @@ function Cotizador({state,dispatch,toast}) {
         {/* RIGHT — margen + resultados */}
         <div>
           {/* Margen efectivo */}
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:6,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:6,overflow:"hidden"}}>
             <SHdr title="MARGEN EFECTIVO" right={
               <div style={{display:"flex",alignItems:"center",gap:4}}>
                 <span style={{fontSize:7,color:C.t3}}>Manual</span>
@@ -2607,7 +2615,7 @@ function Cotizador({state,dispatch,toast}) {
           </div>
 
           {/* IVA */}
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:5,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:5,overflow:"hidden"}}>
             <SHdr title="FISCAL — IVA CONSOLIDADO"/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr"}}>
               {[["IVA Acreditable","Recuperas",mxn(totalSnap.ivaAcred),C.blueHi],["IVA Trasladado","Cobras",mxn(totalSnap.ivaTraslad),C.cyan],["IVA Neto SAT","Pagas al SAT",mxn(totalSnap.ivaNeto),totalSnap.ivaNeto>=0?C.yellow:C.green]].map(([lbl,sub,val,col],i)=>(
@@ -2622,7 +2630,7 @@ function Cotizador({state,dispatch,toast}) {
 
           {/* Desglose por linea cuando hay mas de una */}
           {lineas.length>1&&(
-            <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:5}}>
+            <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:5}}>
               <SHdr title="DESGLOSE POR LINEA"/>
               {lineas.map((l,i)=>{
                 const lsnap=lineSnaps[i]||{precioConIVA:0,uNeta:0,margenNetoPrecio:0};
@@ -2650,7 +2658,7 @@ function Cotizador({state,dispatch,toast}) {
           )}
 
           {/* Barra margen */}
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,padding:8}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:8}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
               <span style={{fontSize:8,color:C.t2}}>Margen neto promedio s/precio</span>
               <span style={{fontSize:9,fontWeight:700,color:mColor,fontFamily:"'Courier New',monospace"}}>{fpct(aggMargen)}</span>
@@ -2951,7 +2959,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
       {catalogSearch!==null&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}
           onClick={()=>{setCatalogSearch(null);setCatalogQ("");}}>
-          <div style={{background:C.bg1,border:`1px solid ${C.borderHi}`,borderRadius:5,width:"90%",maxWidth:520,overflow:"hidden"}}
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.borderHi}`,borderRadius:5,width:"90%",maxWidth:520,overflow:"hidden"}}
             onClick={e=>e.stopPropagation()}>
             <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderBottom:`1px solid ${C.border}`,background:C.bg2}}>
               <span style={{fontSize:9,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>CATÁLOGO — REF {String(catalogSearch+1).padStart(2,"0")}</span>
@@ -2990,7 +2998,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
         <div>
 
           {/* Quote header */}
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
             <SHdr title="DATOS DE LA COTIZACIÓN"/>
             <div style={{padding:9}}>
               <div className="ref-hdr-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:5,marginBottom:5}}>
@@ -3027,7 +3035,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
               </div>
               <UnitPicker units={units} value={unitId} onChange={setUnitId}/>
               {selectedUnit&&(
-                <div style={{background:C.bg3,border:`1px solid ${C.borderHi}`,borderRadius:3,padding:"6px 9px",marginTop:4,marginBottom:4}}>
+                <div style={{background:C.bg3,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.borderHi}`,borderRadius:3,padding:"6px 9px",marginTop:4,marginBottom:4}}>
                   <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
                     <span style={{fontSize:9,color:C.t1,fontWeight:700}}>{selectedUnit.marca} {selectedUnit.modelo} {selectedUnit.anio}</span>
                     {selectedUnit.motor&&<span style={{fontSize:8,color:C.t3}}>{selectedUnit.motor}</span>}
@@ -3047,7 +3055,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
           </div>
 
           {/* Parts table */}
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
             <SHdr title={`REFACCIONES (${lineas.length})`} right={
               <button onClick={addLinea}
                 style={{fontSize:8,background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,padding:"2px 8px",cursor:"pointer",fontWeight:600}}>
@@ -3063,7 +3071,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
                 return (
                   <div key={l.key} style={{background:C.bg0,border:`1px solid ${C.borderHi}`,borderRadius:3,marginBottom:i<lineas.length-1?7:0,overflow:"hidden"}}>
                     {/* Line header */}
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 9px",background:C.bg3,borderBottom:`1px solid ${C.border}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 9px",background:C.bg3,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderBottom:`1px solid ${C.border}`}}>
                       <span style={{fontSize:8,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>
                         REFACCIÓN {String(i+1).padStart(2,"0")}
                       </span>
@@ -3084,17 +3092,17 @@ function CotizadorRefacciones({state,dispatch,toast}) {
                           <div style={{fontSize:7,color:C.t3,marginBottom:2}}>DESCRIPCIÓN</div>
                           <input value={l.descripcion} onChange={e=>updateLinea(i,{descripcion:e.target.value})}
                             placeholder={`Refacción ${i+1}`}
-                            style={{width:"100%",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.t1,fontSize:10,outline:"none",fontFamily:"inherit"}}/>
+                            style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.t1,fontSize:10,outline:"none",fontFamily:"inherit"}}/>
                         </div>
                         <div>
                           <div style={{fontSize:7,color:C.t3,marginBottom:2}}>NUM. OEM</div>
                           <input value={l.oem} onChange={e=>updateLinea(i,{oem:e.target.value})} placeholder="A0012345..."
-                            style={{width:"100%",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.cyan,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace"}}/>
+                            style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.cyan,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace"}}/>
                         </div>
                         <div>
                           <div style={{fontSize:7,color:C.t3,marginBottom:2}}>AFTERMARKET</div>
                           <input value={l.aftermarket} onChange={e=>updateLinea(i,{aftermarket:e.target.value})} placeholder="Alt. compatible"
-                            style={{width:"100%",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.t2,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace"}}/>
+                            style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.t2,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace"}}/>
                         </div>
                         <div style={{display:"flex",alignItems:"flex-end"}}>
                           <button onClick={()=>setCatalogSearch(i)}
@@ -3108,7 +3116,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
                       <div className="ref-line-row2" style={{display:"grid",gridTemplateColumns:"80px 1fr auto",gap:5,alignItems:"end"}}>
                         <div>
                           <div style={{fontSize:7,color:C.t3,marginBottom:2}}>CANT.</div>
-                          <div style={{display:"flex",alignItems:"center",background:C.bg1,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
+                          <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
                             <input type="text" inputMode="numeric"
                               value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)}
                               onChange={e=>updateLinea(i,{_qtyRaw:e.target.value})}
@@ -3119,7 +3127,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
                         </div>
                         <div>
                           <div style={{fontSize:7,color:C.t3,marginBottom:2}}>COSTO UNIT. {cIVA?"(c/IVA)":"(s/IVA)"}</div>
-                          <div style={{display:"flex",alignItems:"center",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,overflow:"hidden"}}>
+                          <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,overflow:"hidden"}}>
                             <span style={{padding:"0 5px",color:C.t3,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
                             <input type="text" inputMode="decimal"
                               value={l._costoRaw!==undefined?l._costoRaw:String(l.costoUnit||0)}
@@ -3148,7 +3156,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
                                   value={l._mgnRaw!==undefined?l._mgnRaw:String(l.margen||30)}
                                   onChange={e=>updateLinea(i,{_mgnRaw:e.target.value})}
                                   onBlur={()=>setLineas(p=>p.map((line,idx)=>idx!==i?line:{...line,margen:safeNumber(line._mgnRaw,30),_mgnRaw:undefined}))}
-                                  style={{width:52,background:C.bg1,border:`1px solid ${C.blueHi}`,borderRadius:3,padding:"3px 5px",color:C.cyan,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace",textAlign:"right"}}/>
+                                  style={{width:52,background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,padding:"3px 5px",color:C.cyan,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace",textAlign:"right"}}/>
                               )}
                               <span style={{fontSize:8,color:C.t3}}>→</span>
                               <span style={{fontSize:9,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{mxn(unitPriceConIVA)}/pz</span>
@@ -3156,7 +3164,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
                           ):(
                             <div style={{display:"flex",alignItems:"center",gap:5}}>
                               <span style={{fontSize:7,color:C.t3,flexShrink:0}}>Precio c/IVA:</span>
-                              <div style={{display:"flex",alignItems:"center",background:C.bg1,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
+                              <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
                                 <span style={{padding:"0 4px",color:C.cyan,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
                                 <input type="number" min={0} step={0.01} value={l.precioManual}
                                   onChange={e=>updateLinea(i,{precioManual:e.target.value})}
@@ -3185,7 +3193,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
           </div>
 
           {/* Tax params */}
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
             <SHdr title="PARÁMETROS FISCALES"/>
             <div style={{padding:9,display:"grid",gridTemplateColumns:"80px 1fr 1fr",gap:8,alignItems:"center"}}>
               <div>
@@ -3219,7 +3227,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
         {/* RIGHT — margin + summary */}
         <div>
           {/* Global margin */}
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:6,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:6,overflow:"hidden"}}>
             <SHdr title="MARGEN GLOBAL" right={
               <div style={{display:"flex",alignItems:"center",gap:4}}>
                 <span style={{fontSize:7,color:C.t3}}>Por línea</span>
@@ -3265,7 +3273,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
           </div>
 
           {/* IVA breakdown */}
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:5,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:5,overflow:"hidden"}}>
             <SHdr title="FISCAL — IVA"/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr"}}>
               {[
@@ -3284,7 +3292,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
 
           {/* Per-line breakdown */}
           {lineas.length>1&&(
-            <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:5}}>
+            <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:5}}>
               <SHdr title="DESGLOSE POR REFACCIÓN"/>
               {lineas.map((l,i)=>{
                 const lsnap=lineSnaps[i]||{precioConIVA:0,uNeta:0};
@@ -3312,7 +3320,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
           )}
 
           {/* Margin bar */}
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,padding:8}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:8}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
               <span style={{fontSize:8,color:C.t2}}>Margen neto s/precio</span>
               <span style={{fontSize:9,fontWeight:700,color:mColor,fontFamily:"'Courier New',monospace"}}>{fpct(aggMargen)}</span>
@@ -3382,7 +3390,7 @@ function Unidades({state,dispatch,toast}) {
       </div>
 
       {showForm&&(
-        <div style={{background:C.bg1,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:4,padding:11,marginBottom:8}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:4,padding:11,marginBottom:8}}>
           <div style={{fontSize:7,color:C.t3,letterSpacing:"0.18em",marginBottom:7}}>{editId?"EDITAR UNIDAD":"NUEVA UNIDAD"}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:7}}>
             <Field label="VIN / Serial"   value={form.vin}          onChange={sf("vin")}          prefix=""/>
@@ -3412,8 +3420,8 @@ function Unidades({state,dispatch,toast}) {
       {units.length>0&&(
         <div style={{display:"flex",gap:5,marginBottom:6,alignItems:"center",flexWrap:"wrap"}}>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar eco., placa, VIN, marca..."
-            style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 8px",color:C.t1,fontSize:10,outline:"none",width:220,fontFamily:"'Courier New',monospace"}}/>
-          <select value={fStatus} onChange={e=>setFStatus(e.target.value)} style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t1,fontSize:10,outline:"none",cursor:"pointer"}}>
+            style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 8px",color:C.t1,fontSize:10,outline:"none",width:220,fontFamily:"'Courier New',monospace"}}/>
+          <select value={fStatus} onChange={e=>setFStatus(e.target.value)} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t1,fontSize:10,outline:"none",cursor:"pointer"}}>
             <option value="all">Todos los estados</option>
             {Object.entries(UNIT_STATUS).map(([k,v])=><option key={k} value={k} style={{background:C.bg1}}>{v.label}</option>)}
           </select>
@@ -3433,7 +3441,7 @@ function Unidades({state,dispatch,toast}) {
       )}
 
       {filtered.length>0&&(
-        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
           <div style={{display:"grid",gridTemplateColumns:"0.6fr 0.5fr 1.4fr 0.7fr 1fr 1fr 0.6fr 0.6fr 0.6fr 60px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:5}}>
             <span>ECO.</span><span>VIN</span><span>UNIDAD</span><span>AÑO</span><span>MOTOR</span><span>TRANSMISION</span><span>KM</span><span>CLIENTE</span><span>ESTADO</span><span/>
           </div>
@@ -3544,7 +3552,7 @@ function Catalogo({state,dispatch,toast}) {
       </div>
 
       {showForm&&(
-        <div style={{background:C.bg1,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:4,padding:11,marginBottom:8}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:4,padding:11,marginBottom:8}}>
           <div style={{fontSize:7,color:C.t3,letterSpacing:"0.18em",marginBottom:7}}>{editId?"EDITAR PARTE":"NUEVA PARTE"}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
             <Field label="Nombre / descripcion" value={form.nombre}       onChange={sf("nombre")}       prefix=""/>
@@ -3565,13 +3573,13 @@ function Catalogo({state,dispatch,toast}) {
 
       <div style={{marginBottom:6}}>
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por nombre, OEM, aftermarket, aplicacion..."
-          style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 9px",color:C.t1,fontSize:10,outline:"none",width:320,fontFamily:"'Courier New',monospace"}}/>
+          style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 9px",color:C.t1,fontSize:10,outline:"none",width:320,fontFamily:"'Courier New',monospace"}}/>
       </div>
 
       {parts.length===0&&!showForm&&<EmptyState icon="&#128295;" title="Sin partes registradas" sub='Agrega la primera con "+ Nueva parte"'/>}
 
       {filtered.length>0&&(
-        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
           <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 2fr 0.8fr 60px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:5}}>
             <span>NOMBRE</span><span>OEM</span><span>AFTERMARKET</span><span>APLICACION</span><span>ULT. PRECIO</span><span/>
           </div>
@@ -3655,7 +3663,7 @@ function Proveedores({state,dispatch,toast}) {
       </div>
 
       {showForm&&(
-        <div style={{background:C.bg1,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:4,padding:11,marginBottom:8}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:4,padding:11,marginBottom:8}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
             <Field label="Nombre"          value={form.nombre}        onChange={sf("nombre")}        prefix=""/>
             <Field label="Especialidad"    value={form.especialidad}  onChange={sf("especialidad")}  prefix=""/>
@@ -3679,7 +3687,7 @@ function Proveedores({state,dispatch,toast}) {
       {suppliers.length===0&&!showForm&&<EmptyState icon="&#127981;" title="Sin proveedores registrados"/>}
 
       {suppliers.length>0&&(
-        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
           <div style={{display:"grid",gridTemplateColumns:"1.8fr 0.8fr 0.6fr 0.6fr 0.7fr 1fr 1fr 60px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:5}}>
             <span>PROVEEDOR</span><span>COBERTURA</span><span>ENTREGA</span><span>CONF.</span><span>SCORE OP.</span><span>INVERTIDO</span><span>UTIL. GEN.</span><span/>
           </div>
@@ -3766,7 +3774,7 @@ function Clientes({state,dispatch,toast}) {
         </button>
       </div>
       {showForm&&(
-        <div style={{background:C.bg1,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:4,padding:11,marginBottom:8}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:4,padding:11,marginBottom:8}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
             <Field label="Empresa / Razón social" value={form.empresa}    onChange={sf("empresa")}    prefix="" hint="Razón social"/>
             <Field label="RFC"                    value={form.rfc||""}    onChange={sf("rfc")}         prefix=""/>
@@ -3788,7 +3796,7 @@ function Clientes({state,dispatch,toast}) {
       )}
       {clients.length===0&&!showForm&&<EmptyState icon="&#127970;" title="Sin clientes registrados"/>}
       {clients.length>0&&(
-        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
           <div style={{display:"grid",gridTemplateColumns:"1.6fr 0.8fr 1fr 1fr 0.8fr 0.6fr 60px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:5}}>
             <span>EMPRESA</span><span>CONTACTO</span><span>FACTURADO</span><span>UTIL. NETA</span><span>PENDIENTE</span><span>SCORE</span><span/>
           </div>
@@ -3879,7 +3887,7 @@ function Cartera({state,dispatch,toast}) {
           );})}
         </div>
       )}
-      <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
         <SHdr title="CUENTAS POR COBRAR" right={pendientes.length+" pendientes"}/>
         <div style={{display:"grid",gridTemplateColumns:"1.5fr 1fr 0.8fr 0.9fr 0.8fr 0.7fr 90px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:4}}>
           <span>TICKET / OP</span><span>CLIENTE</span><span>ESTADO</span><span>MONTO</span><span>PROMESA</span><span>DIAS</span><span/>
@@ -4100,7 +4108,7 @@ function Ajustes({state,dispatch,toast}) {
                       </div>
                     </div>
                     {previewKey===b.key&&previewData&&(
-                      <div style={{marginTop:8,padding:"8px",background:C.bg1,borderRadius:3,border:`1px solid ${C.border}`}}>
+                      <div style={{marginTop:8,padding:"8px",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderRadius:3,border:`1px solid ${C.border}`}}>
                         <div style={{fontSize:8,color:C.t3,marginBottom:6}}>PREVIEW DEL BACKUP</div>
                         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>
                           <KPI label="Tickets"    value={String(safeArr(previewData.tickets).length)}/>
@@ -4172,7 +4180,7 @@ function Ajustes({state,dispatch,toast}) {
           </div>
         )},
       ].map(sec=>(
-        <div key={sec.title} style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+        <div key={sec.title} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
           <SHdr title={sec.title}/>
           {sec.content}
         </div>
@@ -4238,7 +4246,7 @@ function MAjustes({state,dispatch,toast}) {
   };
 
   const Card=({title,children})=>(
-    <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",marginBottom:10}}>
+    <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",marginBottom:10}}>
       <div style={{padding:"11px 16px",borderBottom:`1px solid ${C.border}`,background:C.bg3}}>
         <div style={{fontSize:10,color:C.t3,letterSpacing:"0.18em",fontWeight:700}}>{title}</div>
       </div>
@@ -4510,7 +4518,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
         <KPI label="Operaciones"     value={String(tickets.length)} color={C.t1} sub={Object.keys(days).length+" dias"}/>
       </div>
 
-      <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
         <div style={{display:"grid",gridTemplateColumns:"1.6fr 0.5fr 0.6fr 0.7fr 0.6fr 0.7fr 0.7fr 56px 20px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:4}}>
           <span>ID / TITULO</span><span>TIPO</span><span>PRIO</span><span>ESTADO</span><span>MARKUP</span><span>PRECIO</span><span>UTIL.</span><span/><span/>
         </div>
@@ -4620,7 +4628,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                         const costo=(l.costoUnit||0)*(l.qty||1);
                         const lsnap = computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,iva:parseFloat(ef.iva)||16,isr:parseFloat(ef.isr)||20,compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
                         return (
-                        <div key={idx} style={{background:C.bg1,border:`1px solid ${C.borderHi}`,borderRadius:3,padding:"7px 9px",marginBottom:5}}>
+                        <div key={idx} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.borderHi}`,borderRadius:3,padding:"7px 9px",marginBottom:5}}>
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
                             <span style={{fontSize:8,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>LÍNEA {String(idx+1).padStart(2,"0")} · {mxn(lsnap.precioConIVA)} · {fpct(lsnap.margenNetoPrecio)}</span>
                             {editLineas.length>1&&<button onClick={()=>delLinea(idx)} style={{padding:"1px 6px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:2,color:C.red,fontSize:8,cursor:"pointer",fontWeight:700}}>× Eliminar</button>}
@@ -4681,7 +4689,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
 
                       {/* Preview total */}
                       {liveSnap&&(
-                        <div style={{background:C.bg3,borderRadius:3,border:`1px solid ${C.borderHi}`,padding:"6px 9px",marginBottom:6,display:"flex",gap:16,alignItems:"center"}}>
+                        <div style={{background:C.bg3,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderRadius:3,border:`1px solid ${C.borderHi}`,padding:"6px 9px",marginBottom:6,display:"flex",gap:16,alignItems:"center"}}>
                           <div>
                             <div style={{fontSize:7,color:C.t3,marginBottom:1}}>TOTAL c/IVA</div>
                             <div style={{fontSize:13,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(liveSnap.precioConIVA)}</div>
@@ -4717,7 +4725,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                               </div>
                             </div>
                           ))}
-                          <div style={{display:"flex",justifyContent:"space-between",padding:"5px 11px",background:C.bg3,borderBottom:`1px solid ${C.border}`}}>
+                          <div style={{display:"flex",justifyContent:"space-between",padding:"5px 11px",background:C.bg3,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderBottom:`1px solid ${C.border}`}}>
                             <span style={{fontSize:9,fontWeight:700,color:C.t1}}>TOTAL</span>
                             <span style={{fontSize:10,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn((t.snap?.precioConIVA||0))}</span>
                           </div>
@@ -4787,7 +4795,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
             🗑 Papelera ({trashedTickets.length}) {showTrash?"▲":"▼"}
           </button>
           {showTrash&&trashedTickets.map(t=>(
-            <div key={t.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 9px",background:C.bg1,borderBottom:`1px solid ${C.border}`,opacity:0.6}}>
+            <div key={t.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 9px",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderBottom:`1px solid ${C.border}`,opacity:0.6}}>
               <div>
                 <span style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace"}}>{t.id}</span>
                 <span style={{fontSize:9,color:C.t2,marginLeft:8}}>{t.titulo}</span>
@@ -4812,7 +4820,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
 
 // ── Helpers móviles ──────────────────────────────────────────────────────────
 function MCard({children,style={}}) {
-  return <div style={{background:"#0B1118",border:"1px solid rgba(255,255,255,0.04)",borderRadius:18,marginBottom:10,overflow:"hidden",boxShadow:"0 2px 16px rgba(255,255,255,0.04)",...style}}>{children}</div>;
+  return <div style={{background:"rgba(22,24,28,0.82)",border:"1px solid rgba(255,255,255,0.04)",borderRadius:18,marginBottom:10,overflow:"hidden",boxShadow:"0 2px 16px rgba(255,255,255,0.04)",...style}}>{children}</div>;
 }
 function MRow({label,value,color,bold}) {
   return (
@@ -4839,13 +4847,13 @@ function MBtn({label,color,bg,border,onClick,full,small}) {
 function MField({label,value,onChange,type="text",placeholder,suffix,color}) {
   return (
     <div style={{marginBottom:10}}>
-      {label&&<div style={{fontSize:10,color:"#64748B",letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase",fontWeight:600}}>{label}</div>}
-      <div style={{display:"flex",alignItems:"center",background:"#101722",border:"1px solid rgba(255,255,255,0.05)",borderRadius:10,overflow:"hidden",minHeight:48}}>
+      {label&&<div style={{fontSize:10,color:"#7E848E",letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase",fontWeight:600}}>{label}</div>}
+      <div style={{display:"flex",alignItems:"center",background:"rgba(16,18,22,0.90)",border:"1px solid rgba(255,255,255,0.05)",borderRadius:10,overflow:"hidden",minHeight:48}}>
         <input type={type} value={value} placeholder={placeholder||""} onChange={e=>onChange(e.target.value)}
           style={{flex:1,background:"transparent",border:"none",outline:"none",color:color||"#F3F4F6",
             fontSize:16,/* 16px prevents iOS auto-zoom on focus */
             padding:"12px 14px",fontFamily:"inherit"}}/>
-        {suffix&&<span style={{padding:"0 12px",color:"#64748B",fontSize:12}}>{suffix}</span>}
+        {suffix&&<span style={{padding:"0 12px",color:"#7E848E",fontSize:12}}>{suffix}</span>}
       </div>
     </div>
   );
@@ -4853,12 +4861,12 @@ function MField({label,value,onChange,type="text",placeholder,suffix,color}) {
 function MSel({label,value,onChange,options}) {
   return (
     <div style={{marginBottom:10}}>
-      {label&&<div style={{fontSize:10,color:"#64748B",letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase",fontWeight:600}}>{label}</div>}
+      {label&&<div style={{fontSize:10,color:"#7E848E",letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase",fontWeight:600}}>{label}</div>}
       <select value={value} onChange={e=>onChange(e.target.value)}
-        style={{width:"100%",background:"#101722",border:"1px solid rgba(255,255,255,0.05)",borderRadius:10,padding:"12px 14px",color:"#F3F4F6",
+        style={{width:"100%",background:"rgba(16,18,22,0.90)",border:"1px solid rgba(255,255,255,0.05)",borderRadius:10,padding:"12px 14px",color:"#F5F5F7",
           fontSize:16,/* 16px prevents iOS auto-zoom on focus */
           outline:"none",fontFamily:"inherit",minHeight:48,appearance:"auto"}}>
-        {options.map(o=><option key={o.value} value={o.value} style={{background:"#0B1118"}}>{o.label}</option>)}
+        {options.map(o=><option key={o.value} value={o.value} style={{background:"rgba(22,24,28,0.82)"}}>{o.label}</option>)}
       </select>
     </div>
   );
@@ -4871,23 +4879,24 @@ function MOps({state,setTab}) {
 
   // ── Accent palette — Black/white monochrome
   const A = {
-    lime:     "#22C55E",    // utility/positive
-    limeDim:  "rgba(34,197,94,0.1)",
-    limeMid:  "rgba(34,197,94,0.15)",
-    mint:     "#3B82F6",
-    mintDim:  "rgba(59,130,246,0.07)",
-    amber:    "#F59E0B",
-    amberDim: "rgba(245,158,11,0.1)",
-    red:      "#EF4444",
-    redDim:   "rgba(239,68,68,0.1)",
-    card:     "#0B1118",    // WHITE card
-    cardHi:   "#141D2B",
-    shadow:   "0 1px 3px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.2)",
-    shadowSm: "0 1px 2px rgba(0,0,0,0.2), 0 2px 8px rgba(0,0,0,0.15)",
-    t1:       "#F3F4F6",    // dark text on white cards
-    t2:       "#94A3B8",
-    t3:       "#64748B",
-    r:        20,
+    lime:     "#8FE3BE",
+    limeDim:  "rgba(143,227,190,0.12)",
+    limeMid:  "rgba(143,227,190,0.18)",
+    mint:     "#8FE3BE",
+    mintDim:  "rgba(143,227,190,0.10)",
+    amber:    "#F5C842",
+    amberDim: "rgba(245,200,66,0.12)",
+    red:      "#FF7A7A",
+    redDim:   "rgba(255,122,122,0.12)",
+    card:     "rgba(22,24,28,0.62)",
+    cardHi:   "rgba(32,35,42,0.75)",
+    blur:     "blur(28px) saturate(1.5)",
+    shadow:   "0 8px 32px rgba(0,0,0,0.44), 0 1px 0 rgba(255,255,255,0.06) inset",
+    shadowSm: "0 4px 16px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.04) inset",
+    t1:       "#F5F5F7",
+    t2:       "#B6BBC4",
+    t3:       "#7E848E",
+    r:        24,
   };
 
   // ── Periods ───────────────────────────────────────────────────────────────
@@ -4986,7 +4995,7 @@ function MOps({state,setTab}) {
   const pLabel   = {"today":"Hoy","week":"7 días","month":"30 días","3m":"90 días"}[period]||"Período";
 
   return (
-    <div style={{minHeight:"100vh",background:C.bg0,paddingBottom:40}}>
+    <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
 
       {/* ══ ALERT BANNER — breaks layout, appears FIRST ══════════════════════ */}
       {(p1Active.length>0||vencidos.length>0)&&(
@@ -5081,12 +5090,13 @@ function MOps({state,setTab}) {
 
         {/* ══ HERO CARD ══════════════════════════════════════ */}
         <div style={{
-          background: "#0B1118",
+          background: A.card,
+          backdropFilter: A.blur, WebkitBackdropFilter: A.blur,
           borderRadius: A.r,
           padding:"28px 24px",
           marginBottom:12,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.4), 0 4px 20px rgba(0,0,0,0.3)",
-          border:"1px solid rgba(255,255,255,0.05)",
+          boxShadow: A.shadow,
+          border:"1px solid rgba(255,255,255,0.09)",
         }}>
           {/* Operational status line */}
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:22}}>
@@ -5106,7 +5116,7 @@ function MOps({state,setTab}) {
 
           {/* GIANT number */}
           <div style={{
-            fontSize:58,fontWeight:800,color:"#F3F4F6",lineHeight:0.9,
+            fontSize:58,fontWeight:800,color:"#F5F5F7",lineHeight:0.9,
             letterSpacing:"-0.025em",fontVariantNumeric:"tabular-nums",
             marginBottom:16,
           }}>
@@ -5160,13 +5170,13 @@ function MOps({state,setTab}) {
             border:"none",borderRadius:18,padding:"18px 16px",
             cursor:"pointer",textAlign:"left",WebkitTapHighlightColor:"transparent",touchAction:"manipulation",
           }}>
-            <div style={{fontSize:22,fontWeight:800,color:"#F3F4F6",lineHeight:1,marginBottom:6}}>+</div>
-            <div style={{fontSize:13,fontWeight:700,color:"#F3F4F6",letterSpacing:"-0.01em",lineHeight:1.2}}>
+            <div style={{fontSize:22,fontWeight:800,color:"#F5F5F7",lineHeight:1,marginBottom:6}}>+</div>
+            <div style={{fontSize:13,fontWeight:700,color:"#F5F5F7",letterSpacing:"-0.01em",lineHeight:1.2}}>
               Nueva<br/>cotización
             </div>
           </button>
           <button onClick={()=>setTab("tickets")} style={{
-            background:A.cardHi,
+            background:A.cardHi,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,
             border:"1px solid rgba(255,255,255,0.05)",
             borderRadius:18,padding:"18px 16px",
             cursor:"pointer",textAlign:"left",
@@ -5232,7 +5242,7 @@ function MOps({state,setTab}) {
 
         {/* ══ SPARKLINE — 7-day util trend ══════════════════════════════════════ */}
         <div style={{
-          background:A.card,borderRadius:A.r,
+          background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,
           padding:"22px 24px",marginBottom:12,boxShadow:A.shadowSm,
         }}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
@@ -5289,7 +5299,7 @@ function MOps({state,setTab}) {
           if(!cl) return null;
           const pct=totalFact>0?(top[1]/totalFact)*100:0;
           return (
-            <div style={{background:A.card,borderRadius:A.r,padding:"22px 24px",marginBottom:12,boxShadow:A.shadowSm}}>
+            <div style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,padding:"22px 24px",marginBottom:12,boxShadow:A.shadowSm}}>
               <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:18}}>
                 Cliente líder · {pLabel}
               </div>
@@ -5339,7 +5349,7 @@ function MOps({state,setTab}) {
 
         {/* ══ RESUMEN FINANCIERO — tabla completa ══════════════════════════════ */}
         <div style={{
-          background:A.card,borderRadius:A.r,
+          background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,
           overflow:"hidden",marginBottom:12,boxShadow:A.shadow,
         }}>
           {/* Header */}
@@ -5354,17 +5364,17 @@ function MOps({state,setTab}) {
             {label:"Revenue operado",   val:mxn(totalFact),          col:A.lime,     bold:true},
             {label:"Costo producto",    val:mxn(costoProducto),      col:A.t2},
             {label:"Gastos operativos", val:mxn(gastosOp),           col:A.t2},
-            {label:"Cash cobrado",      val:mxn(cashTotal),          col:"#34D399"},
-            {label:"Utilidad operativa",val:mxn(totalNeta),          col:totalNeta>=0?"#34D399":A.red, bold:true},
+            {label:"Cash cobrado",      val:mxn(cashTotal),          col:"#8FE3BE"},
+            {label:"Utilidad operativa",val:mxn(totalNeta),          col:totalNeta>=0?"#8FE3BE":A.red, bold:true},
             {label:"Markup promedio",   val:fpct(markupProm),        col:A.lime},
-            {label:"Rentabilidad neta", val:fpct(margen),            col:margen>=20?"#34D399":margen>=10?"#F3F4F6":A.amber},
-            {label:"ROI operativo",     val:fpct(roi),               col:roi>=25?"#34D399":A.amber},
+            {label:"Rentabilidad neta", val:fpct(margen),            col:margen>=20?"#8FE3BE":margen>=10?"#F3F4F6":A.amber},
+            {label:"ROI operativo",     val:fpct(roi),               col:roi>=25?"#8FE3BE":A.amber},
             {label:"IVA neto SAT",      val:mxn(ivaNetoOp),         col:A.amber},
             {label:"ISR estimado",      val:mxn(isrOp),              col:A.amber},
             {label:"Carga fiscal",      val:mxn(cargaFiscal),        col:A.red},
-            {label:"Eficiencia fiscal", val:fpct(eficienciaFiscal),  col:eficienciaFiscal>=75?"#34D399":A.amber},
+            {label:"Eficiencia fiscal", val:fpct(eficienciaFiscal),  col:eficienciaFiscal>=75?"#8FE3BE":A.amber},
             {label:"Cartera pendiente", val:mxn(carteraMonto),       col:vencidos.length>0?A.amber:A.t1},
-            {label:"Flujo operativo",   val:mxn(flujoOp),            col:flujoOp>=0?"#34D399":A.red},
+            {label:"Flujo operativo",   val:mxn(flujoOp),            col:flujoOp>=0?"#8FE3BE":A.red},
             {label:"Forecast revenue",  val:mxn(forecastMonto),      col:A.t2},
             {label:"Forecast utilidad", val:mxn(forecastUtil),       col:forecastUtil>0?A.lime:A.t2},
             {label:"P1 activos",        val:String(p1Active.length), col:p1Active.length>0?A.red:A.t3, bold:p1Active.length>0},
@@ -5410,11 +5420,12 @@ function StatusFlowSheet({tkt, dispatch, toast, onClose}) {
   const meta  = TICKET_META[tkt.status] || {};
   return (
     <>
-      <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:200,background:"rgba(10,14,26,0.4)"}}/>
+      <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,0.55)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)"}}/>
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:201,
-        background:C.bg1,borderRadius:"20px 20px 0 0",borderTop:`1px solid ${C.borderHi}`,
+        background:"rgba(14,16,20,0.92)",backdropFilter:"blur(32px) saturate(1.8)",WebkitBackdropFilter:"blur(32px) saturate(1.8)",
+        borderRadius:"28px 28px 0 0",borderTop:`1px solid rgba(255,255,255,0.10)`,
         padding:`16px 16px calc(20px + env(safe-area-inset-bottom,0px))`,
-        boxShadow:"0 -16px 60px rgba(0,0,0,.6)"}}>
+        boxShadow:"0 -12px 60px rgba(0,0,0,0.7), 0 1px 0 rgba(255,255,255,0.06) inset"}}>
         {/* Handle */}
         <div style={{display:"flex",justifyContent:"center",marginBottom:14}}>
           <div style={{width:40,height:4,borderRadius:2,background:C.border}}/>
@@ -5476,15 +5487,16 @@ function MPipeline({state,dispatch,toast}) {
   const [statusSheet,setStatusSheet] = useState(null);
   const [expandId,setExpandId]   = useState(null);
 
-  // Accent palette — Black/white monochrome
+  // Accent palette — glassmorphism
   const A = {
-    lime:"#22C55E", limeDim:"rgba(34,197,94,0.1)", limeMid:"rgba(34,197,94,0.15)",
-    mint:"#3B82F6", mintDim:"rgba(59,130,246,0.07)",
-    amber:"#F59E0B", amberDim:"rgba(245,158,11,0.1)",
-    red:"#EF4444",   redDim:"rgba(239,68,68,0.1)",
-    card:"#0B1118", cardHi:"#141D2B",
-    shadow:"0 1px 3px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.2)",
-    t1:"#F3F4F6", t2:"#94A3B8", t3:"#64748B", r:20,
+    lime:"#8FE3BE", limeDim:"rgba(143,227,190,0.12)", limeMid:"rgba(143,227,190,0.18)",
+    mint:"#8FE3BE", mintDim:"rgba(143,227,190,0.10)",
+    amber:"#F5C842", amberDim:"rgba(245,200,66,0.12)",
+    red:"#FF7A7A",   redDim:"rgba(255,122,122,0.12)",
+    card:"rgba(22,24,28,0.62)", cardHi:"rgba(32,35,42,0.75)",
+    blur:"blur(28px) saturate(1.5)",
+    shadow:"0 8px 32px rgba(0,0,0,0.44), 0 1px 0 rgba(255,255,255,0.06) inset",
+    t1:"#F5F5F7", t2:"#B6BBC4", t3:"#7E848E", r:24,
   };
 
   const PIPE_STAGES = ["recibido","validando","sourcing","cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado"];
@@ -5492,10 +5504,10 @@ function MPipeline({state,dispatch,toast}) {
   const progColor = s => { const i=PIPE_STAGES.indexOf(s); return i<=1?A.amber:i<=4?A.mint:A.lime; };
 
   const prC = {
-    P1:{dot:"#E84848",dim:"rgba(232,72,72,0.12)"},
-    P2:{dot:"#F0A030",dim:"rgba(240,160,48,0.12)"},
-    P3:{dot:"#3CCFAA",dim:"rgba(60,207,170,0.12)"},
-    P4:{dot:"#8A9AA4",dim:"rgba(138,154,164,0.12)"},
+    P1:{dot:"#FF7A7A",dim:"rgba(255,122,122,0.12)"},
+    P2:{dot:"#F5C842",dim:"rgba(245,200,66,0.12)"},
+    P3:{dot:"#8FE3BE",dim:"rgba(143,227,190,0.12)"},
+    P4:{dot:"#7E848E",dim:"rgba(126,132,142,0.10)"},
   };
 
   const active   = useMemo(()=>tickets.filter(t=>!t._deleted),[tickets]);
@@ -5523,7 +5535,7 @@ function MPipeline({state,dispatch,toast}) {
   }),[active]);
 
   return (
-    <div style={{minHeight:"100vh",background:C.bg0,paddingBottom:40}}>
+    <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
       {statusSheet&&<StatusFlowSheet tkt={statusSheet} dispatch={dispatch} toast={toast} onClose={()=>setStatusSheet(null)}/>}
 
       <div style={{padding:"0 14px"}}>
@@ -5749,13 +5761,13 @@ function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
         onFocus={()=>setOpen(true)}
         placeholder={placeholder||"Buscar o describir pieza..."}
         autoComplete="off"
-        style={{width:"100%",background:"#101722",border:`1px solid ${open?"#F3F4F6":"rgba(255,255,255,0.05)"}`,
-          borderRadius:10,padding:"13px 14px",color:"#F3F4F6",fontSize:16,
+        style={{width:"100%",background:"rgba(16,18,22,0.90)",border:`1px solid ${open?"#F3F4F6":"rgba(255,255,255,0.05)"}`,
+          borderRadius:10,padding:"13px 14px",color:"#F5F5F7",fontSize:16,
           outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}
       />
       {showDropdown&&(
         <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,zIndex:400,
-          background:"#0B1118",border:"1px solid rgba(255,255,255,0.05)",borderRadius:10,
+          background:"rgba(22,24,28,0.82)",border:"1px solid rgba(255,255,255,0.05)",borderRadius:10,
           boxShadow:"0 8px 32px rgba(13,24,37,0.12)",maxHeight:280,overflowY:"auto",
           WebkitOverflowScrolling:"touch"}}>
           {results.map(p=>(
@@ -5765,9 +5777,9 @@ function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
               style={{padding:"11px 14px",borderBottom:"1px solid rgba(255,255,255,0.05)",cursor:"pointer",
                 display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:700,color:"#F3F4F6",overflow:"hidden",
+                <div style={{fontSize:13,fontWeight:700,color:"#F5F5F7",overflow:"hidden",
                   textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
-                <div style={{fontSize:10,color:"#64748B",marginTop:1,fontFamily:"'Courier New',monospace"}}>
+                <div style={{fontSize:10,color:"#7E848E",marginTop:1,fontFamily:"'Courier New',monospace"}}>
                   {p.oem&&<span>OEM: {p.oem}</span>}
                   {p.oem&&p.ultimoPrecio>0&&<span style={{color:C.border}}> · </span>}
                   {p.ultimoPrecio>0&&<span style={{color:C.yellow}}>{mxn(p.ultimoPrecio)}</span>}
@@ -5777,7 +5789,7 @@ function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
                 {p.aplicacion&&<div style={{fontSize:9,color:C.t3,marginTop:1}}>{p.aplicacion}</div>}
               </div>
               {(p.frecuencia||0)>1&&(
-                <div style={{fontSize:9,color:"#F3F4F6",background:"rgba(255,255,255,0.05)",padding:"2px 7px",
+                <div style={{fontSize:9,color:"#F5F5F7",background:"rgba(255,255,255,0.05)",padding:"2px 7px",
                   borderRadius:10,flexShrink:0,fontWeight:700}}>×{p.frecuencia}</div>
               )}
             </div>
@@ -5786,8 +5798,8 @@ function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
             <div onMouseDown={e=>{e.preventDefault();onSelect({nombre:(value||"").trim(),oem:"",ultimoPrecio:0});setOpen(false);}}
               onTouchEnd={e=>{e.preventDefault();onSelect({nombre:(value||"").trim(),oem:"",ultimoPrecio:0});setOpen(false);}}
               style={{padding:"11px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:18,color:"#F3F4F6",lineHeight:1}}>＋</span>
-              <span style={{fontSize:13,color:"#F3F4F6",fontWeight:600}}>Agregar "{(value||"").trim().slice(0,30)}"</span>
+              <span style={{fontSize:18,color:"#F5F5F7",lineHeight:1}}>＋</span>
+              <span style={{fontSize:13,color:"#F5F5F7",fontWeight:600}}>Agregar "{(value||"").trim().slice(0,30)}"</span>
             </div>
           )}
         </div>
@@ -5802,22 +5814,23 @@ function MCotizador({state,dispatch,toast}) {
 
   // Accent palette — Black/white monochrome
   const A = {
-    lime:"#22C55E", limeDim:"rgba(34,197,94,0.1)", limeMid:"rgba(34,197,94,0.15)",
-    mint:"#3B82F6", mintDim:"rgba(59,130,246,0.07)",
-    amber:"#F59E0B", amberDim:"rgba(245,158,11,0.1)",
-    red:"#EF4444",   redDim:"rgba(239,68,68,0.1)",
-    card:"#0B1118", cardHi:"#141D2B",
-    shadow:"0 1px 3px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.2)",
-    shadowSm:"0 1px 2px rgba(0,0,0,0.2), 0 2px 8px rgba(0,0,0,0.15)",
-    t1:"#F3F4F6", t2:"#94A3B8", t3:"#64748B", r:20,
+    lime:"#8FE3BE", limeDim:"rgba(143,227,190,0.12)", limeMid:"rgba(143,227,190,0.18)",
+    mint:"#8FE3BE", mintDim:"rgba(143,227,190,0.10)",
+    amber:"#F5C842", amberDim:"rgba(245,200,66,0.12)",
+    red:"#FF7A7A",   redDim:"rgba(255,122,122,0.12)",
+    card:"rgba(22,24,28,0.62)", cardHi:"rgba(32,35,42,0.75)",
+    blur:"blur(28px) saturate(1.5)",
+    shadow:"0 8px 32px rgba(0,0,0,0.44), 0 1px 0 rgba(255,255,255,0.06) inset",
+    shadowSm:"0 4px 16px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.04) inset",
+    t1:"#F5F5F7", t2:"#B6BBC4", t3:"#7E848E", r:24,
   };
 
   // Priority semantic colors
   const prColors = {
-    P1:{dot:"#EF4444",dim:"rgba(239,68,68,0.12)",   label:"Unidad detenida"},
-    P2:{dot:"#F59E0B",dim:"rgba(245,158,11,0.12)",  label:"Operación comprometida"},
-    P3:{dot:"#F3F4F6",dim:"rgba(6,182,212,0.12)",   label:"Preventivo urgente"},
-    P4:{dot:"rgba(241,245,249,0.45)",dim:"rgba(241,245,249,0.07)",label:"Solicitud normal"},
+    P1:{dot:"#FF7A7A",dim:"rgba(255,122,122,0.12)",  label:"Unidad detenida"},
+    P2:{dot:"#F5C842",dim:"rgba(245,200,66,0.12)",   label:"Operación comprometida"},
+    P3:{dot:"#8FE3BE",dim:"rgba(143,227,190,0.12)",  label:"Preventivo urgente"},
+    P4:{dot:"#7E848E",dim:"rgba(126,132,142,0.10)",  label:"Solicitud normal"},
   };
 
   const [step,setStep]          = useState(0);
@@ -5964,7 +5977,7 @@ function MCotizador({state,dispatch,toast}) {
 
   // ══ STEP 0 — Tipo / Prioridad / Modificadores ════════════════════════════════
   if(step===0) return (
-    <div style={{minHeight:"100vh",background:C.bg0,padding:"0 16px 32px"}}>
+    <div style={{minHeight:"100vh",background:"transparent",padding:"0 16px 32px"}}>
       {pdfPending&&<PDFConfirm {...pdfPending} onClose={()=>setPdfPending(null)}/>}
       <StepBar/>
 
@@ -6039,7 +6052,7 @@ function MCotizador({state,dispatch,toast}) {
         })}
       </div>
 
-      <div style={{background:A.card,borderRadius:A.r,padding:"20px 22px",marginBottom:24,boxShadow:A.shadow}}>
+      <div style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,padding:"20px 22px",marginBottom:24,boxShadow:A.shadow}}>
         <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:10}}>Margen efectivo</div>
         <div style={{fontSize:46,fontWeight:800,color:A.lime,lineHeight:1,letterSpacing:"-0.02em",marginBottom:8}}>
           {fpct(sharedMargin)}
@@ -6062,14 +6075,14 @@ function MCotizador({state,dispatch,toast}) {
 
   // ══ STEP 1 — Líneas con PartPicker ══════════════════════════════════════════
   if(step===1) return (
-    <div style={{minHeight:"100vh",background:C.bg0,padding:"0 16px 32px"}}>
+    <div style={{minHeight:"100vh",background:"transparent",padding:"0 16px 32px"}}>
       <StepBar/>
 
       {lineas.map((l,i)=>{
         const sn=lineSnaps[i];
         const isManual=l.mode==="manual";
         return (
-          <div key={i} style={{background:A.card,borderRadius:A.r,overflow:"hidden",
+          <div key={i} style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,overflow:"hidden",
             marginBottom:12,boxShadow:A.shadow}}>
             <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,0.04)",
               display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -6173,7 +6186,7 @@ function MCotizador({state,dispatch,toast}) {
         Agregar línea
       </button>
 
-      <div style={{background:A.card,borderRadius:A.r,padding:"20px 22px",marginBottom:16,boxShadow:A.shadow}}>
+      <div style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,padding:"20px 22px",marginBottom:16,boxShadow:A.shadow}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
           <div>
             <div style={{fontSize:9,color:A.t3,letterSpacing:"0.14em",marginBottom:8,textTransform:"uppercase"}}>
@@ -6219,10 +6232,10 @@ function MCotizador({state,dispatch,toast}) {
 
   // ══ STEP 2 — Datos del ticket ════════════════════════════════════════════════
   return (
-    <div style={{minHeight:"100vh",background:C.bg0,padding:"0 16px 32px"}}>
+    <div style={{minHeight:"100vh",background:"transparent",padding:"0 16px 32px"}}>
       <StepBar/>
 
-      <div style={{background:A.card,borderRadius:A.r,overflow:"hidden",
+      <div style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,overflow:"hidden",
         marginBottom:14,boxShadow:A.shadow}}>
         <div style={{padding:"18px 18px 6px"}}>
           <MField label="Fecha" value={fecha} onChange={setFecha} placeholder="DD/MM/AAAA"/>
@@ -6248,7 +6261,7 @@ function MCotizador({state,dispatch,toast}) {
         </div>
       </div>
 
-      <div style={{background:A.card,borderRadius:A.r,padding:"20px 22px",marginBottom:18,boxShadow:A.shadow}}>
+      <div style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,padding:"20px 22px",marginBottom:18,boxShadow:A.shadow}}>
         <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:14}}>Resumen</div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:14}}>
           <div>
@@ -6303,14 +6316,15 @@ function MCartera({state,dispatch,toast}) {
   const now = new Date();
 
   const A = {
-    lime:"#22C55E", limeDim:"rgba(34,197,94,0.1)",
-    mint:"#3B82F6", mintDim:"rgba(59,130,246,0.07)",
-    amber:"#F59E0B", amberDim:"rgba(245,158,11,0.1)",
-    red:"#EF4444",   redDim:"rgba(239,68,68,0.1)",
-    card:"#0B1118",
-    shadow:"0 1px 3px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.2)",
-    shadowSm:"0 1px 2px rgba(0,0,0,0.2), 0 2px 8px rgba(0,0,0,0.15)",
-    t1:"#F3F4F6", t2:"#94A3B8", t3:"#64748B", r:20,
+    lime:"#8FE3BE", limeDim:"rgba(143,227,190,0.12)",
+    mint:"#8FE3BE", mintDim:"rgba(143,227,190,0.10)",
+    amber:"#F5C842", amberDim:"rgba(245,200,66,0.12)",
+    red:"#FF7A7A",   redDim:"rgba(255,122,122,0.12)",
+    card:"rgba(22,24,28,0.62)",
+    blur:"blur(28px) saturate(1.5)",
+    shadow:"0 8px 32px rgba(0,0,0,0.44), 0 1px 0 rgba(255,255,255,0.06) inset",
+    shadowSm:"0 4px 16px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.04) inset",
+    t1:"#F5F5F7", t2:"#B6BBC4", t3:"#7E848E", r:24,
   };
 
   const creditTkts = useMemo(()=>tickets.filter(t=>!t._deleted&&t.payType==="credit"&&t.status!=="cancelado"),[tickets]);
@@ -6338,7 +6352,7 @@ function MCartera({state,dispatch,toast}) {
   const cobrar = t => { dispatch({type:"TKT_COBRADO",id:t.id}); toast("Cobrado ✓","success"); };
 
   return (
-    <div style={{minHeight:"100vh",background:C.bg0,paddingBottom:40}}>
+    <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
 
       {/* Alert banner when vencidas exist */}
       {vencidas.length>0&&(
@@ -6363,7 +6377,7 @@ function MCartera({state,dispatch,toast}) {
 
       <div style={{padding:"0 16px"}}>
         {/* Hero card */}
-        <div style={{background:A.card,borderRadius:A.r,padding:"26px 24px",marginTop:16,marginBottom:12,boxShadow:A.shadow}}>
+        <div style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,padding:"26px 24px",marginTop:16,marginBottom:12,boxShadow:A.shadow}}>
           <div style={{fontSize:9,color:A.t3,letterSpacing:"0.18em",textTransform:"uppercase",marginBottom:10}}>
             Cuentas por cobrar
           </div>
@@ -6398,7 +6412,7 @@ function MCartera({state,dispatch,toast}) {
 
         {/* Aging breakdown */}
         {vencidas.length>0&&(
-          <div style={{background:A.card,borderRadius:A.r,padding:"20px 22px",marginBottom:12,boxShadow:A.shadowSm}}>
+          <div style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,padding:"20px 22px",marginBottom:12,boxShadow:A.shadowSm}}>
             <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:16}}>
               Antigüedad
             </div>
@@ -6496,7 +6510,7 @@ function MCartera({state,dispatch,toast}) {
                 const daysLeft=d?Math.ceil((d-now)/86400000):null;
                 const urgent=daysLeft!==null&&daysLeft<=3;
                 return (
-                  <div key={t.id} style={{background:A.card,borderRadius:A.r,overflow:"hidden",boxShadow:A.shadowSm}}>
+                  <div key={t.id} style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,overflow:"hidden",boxShadow:A.shadowSm}}>
                     <div style={{padding:"16px 16px 14px"}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
                         <div style={{fontSize:12,fontWeight:600,color:A.t2}}>{cl?.empresa||"Sin cliente"}</div>
@@ -6547,7 +6561,7 @@ function MCartera({state,dispatch,toast}) {
               {cobradas.slice(0,5).map(t=>{
                 const cl=clients.find(c=>c.id===t.clientId);
                 return (
-                  <div key={t.id} style={{background:A.card,borderRadius:14,padding:"12px 16px",
+                  <div key={t.id} style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:14,padding:"12px 16px",
                     display:"flex",justifyContent:"space-between",alignItems:"center",
                     boxShadow:A.shadowSm}}>
                     <div style={{minWidth:0,flex:1}}>
@@ -6658,20 +6672,21 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
   };
 
   const A = {
-    lime:"#22C55E", limeDim:"rgba(34,197,94,0.1)", limeMid:"rgba(34,197,94,0.15)",
-    mint:"#3B82F6", mintDim:"rgba(59,130,246,0.07)",
-    amber:"#F59E0B", amberDim:"rgba(245,158,11,0.1)",
-    red:"#EF4444",   redDim:"rgba(239,68,68,0.1)",
-    card:"#0B1118",
-    shadow:"0 1px 3px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.2)",
-    shadowSm:"0 1px 2px rgba(0,0,0,0.2), 0 2px 8px rgba(0,0,0,0.15)",
-    t1:"#F3F4F6", t2:"#94A3B8", t3:"#64748B", r:18,
+    lime:"#8FE3BE", limeDim:"rgba(143,227,190,0.12)", limeMid:"rgba(143,227,190,0.18)",
+    mint:"#8FE3BE", mintDim:"rgba(143,227,190,0.10)",
+    amber:"#F5C842", amberDim:"rgba(245,200,66,0.12)",
+    red:"#FF7A7A",   redDim:"rgba(255,122,122,0.12)",
+    card:"rgba(22,24,28,0.62)",
+    blur:"blur(28px) saturate(1.5)",
+    shadow:"0 8px 32px rgba(0,0,0,0.44), 0 1px 0 rgba(255,255,255,0.06) inset",
+    shadowSm:"0 4px 16px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.04) inset",
+    t1:"#F5F5F7", t2:"#B6BBC4", t3:"#7E848E", r:24,
   };
-  const prC={P1:{dot:"#EF4444",dim:"rgba(239,68,68,0.12)"},P2:{dot:"#F59E0B",dim:"rgba(245,158,11,0.12)"},
-             P3:{dot:"#22C55E",dim:"rgba(34,197,94,0.1)"},P4:{dot:"#64748B",dim:"rgba(102,112,133,0.08)"}};
+  const prC={P1:{dot:"#FF7A7A",dim:"rgba(255,122,122,0.12)"},P2:{dot:"#F5C842",dim:"rgba(245,200,66,0.12)"},
+             P3:{dot:"#8FE3BE",dim:"rgba(143,227,190,0.12)"},P4:{dot:"#7E848E",dim:"rgba(126,132,142,0.10)"}};
 
   return (
-    <div style={{minHeight:"100vh",background:C.bg0,paddingBottom:40}}>
+    <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
       <div style={{padding:"0 14px"}}>
 
         {/* Period + search */}
@@ -6689,14 +6704,14 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
 
         <input value={search} onChange={e=>setSearch(e.target.value)}
           placeholder="Buscar por título, ID, cliente..."
-          style={{width:"100%",background:C.bg1,
+          style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,
             border:`1px solid ${C.border}`,borderRadius:12,
             padding:"12px 16px",color:A.t1,fontSize:16,outline:"none",marginBottom:14,
             boxSizing:"border-box",fontFamily:"inherit"}}/>
 
         {/* Period summary */}
         {filtered.length>0&&(
-          <div style={{background:A.card,borderRadius:A.r,padding:"16px 20px",marginBottom:16,
+          <div style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,padding:"16px 20px",marginBottom:16,
             boxShadow:A.shadowSm,display:"flex",gap:0}}>
             {[
               {label:"Facturado",value:mxn(periodFact),color:A.t1},
@@ -6965,7 +6980,7 @@ function MClientes({state,dispatch,toast}) {
         </button>
       </div>
       {showForm&&(
-        <div style={{background:C.bg1,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:14,padding:16,marginBottom:12}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:14,padding:16,marginBottom:12}}>
           <div style={{fontSize:10,color:C.t3,letterSpacing:"0.15em",marginBottom:10}}>{editId?"EDITAR CLIENTE":"NUEVO CLIENTE"}</div>
           <MField label="Empresa / Razón social" value={form.empresa}       onChange={sf("empresa")}/>
           <MField label="RFC"                    value={form.rfc||""}       onChange={sf("rfc")}/>
@@ -6981,7 +6996,7 @@ function MClientes({state,dispatch,toast}) {
       )}
       {!showForm&&clients.length>0&&(
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar empresa, contacto, tel..."
-          style={{width:"100%",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.t1,fontSize:16,outline:"none",marginBottom:12,fontFamily:"inherit"}}/>
+          style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.t1,fontSize:16,outline:"none",marginBottom:12,fontFamily:"inherit"}}/>
       )}
       {clients.length===0&&!showForm&&<EmptyState icon="🏢" title="Sin clientes" sub='Agrega el primero con "+ Nuevo"'/>}
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -6991,7 +7006,7 @@ function MClientes({state,dispatch,toast}) {
           const exp=sel===c.id;
           const cliUnits=units.filter(u=>u.clientId===c.id);
           return (
-            <div key={c.id} style={{background:C.bg1,border:`1px solid ${exp?C.cyan:C.border}`,borderRadius:14,overflow:"hidden"}}>
+            <div key={c.id} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${exp?C.cyan:C.border}`,borderRadius:14,overflow:"hidden"}}>
               <div onClick={()=>setSel(exp?null:c.id)} style={{padding:"14px 16px",cursor:"pointer"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
                   <div style={{fontSize:15,fontWeight:800,color:C.t1,lineHeight:1.2,flex:1,marginRight:8}}>{c.empresa}</div>
@@ -7070,7 +7085,7 @@ function MUnidades({state,dispatch,toast}) {
         </button>
       </div>
       {showForm&&(
-        <div style={{background:C.bg1,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:14,padding:16,marginBottom:12}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:14,padding:16,marginBottom:12}}>
           <div style={{fontSize:10,color:C.t3,letterSpacing:"0.15em",marginBottom:10}}>{editId?"EDITAR UNIDAD":"NUEVA UNIDAD"}</div>
           <MField label="No. Económico"   value={form.economico||""} onChange={sf("economico")} placeholder="Ej: 1045"/>
           <MField label="Placa"           value={form.placa||""}     onChange={sf("placa")} placeholder="Ej: 912FE2"/>
@@ -7090,7 +7105,7 @@ function MUnidades({state,dispatch,toast}) {
       )}
       {!showForm&&units.length>0&&(
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar eco., placa, VIN, marca..."
-          style={{width:"100%",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.t1,fontSize:16,outline:"none",marginBottom:12,fontFamily:"inherit"}}/>
+          style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.t1,fontSize:16,outline:"none",marginBottom:12,fontFamily:"inherit"}}/>
       )}
       {units.length===0&&!showForm&&<EmptyState icon="🚛" title="Sin unidades" sub='Agrega la primera con "+ Nueva"'/>}
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -7101,7 +7116,7 @@ function MUnidades({state,dispatch,toast}) {
           const allTks=tickets.filter(t=>t.unitId===u.id);
           const exp=sel===u.id;
           return (
-            <div key={u.id} style={{background:C.bg1,border:`1px solid ${exp?C.cyan:C.border}`,borderRadius:14,overflow:"hidden",borderLeft:`4px solid ${st.dot}`}}>
+            <div key={u.id} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${exp?C.cyan:C.border}`,borderRadius:14,overflow:"hidden",borderLeft:`4px solid ${st.dot}`}}>
               <div onClick={()=>setSel(exp?null:u.id)} style={{padding:"14px 16px",cursor:"pointer"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
                   <div>
@@ -7202,7 +7217,7 @@ function MCatalogo({state,dispatch,toast}) {
 
       {/* ── Add/Edit Form ── */}
       {showForm&&(
-        <div style={{background:C.bg1,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:14,padding:16,marginBottom:12}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:14,padding:16,marginBottom:12}}>
           <div style={{fontSize:10,color:C.t3,letterSpacing:"0.15em",marginBottom:10}}>{editId?"EDITAR PARTE":"NUEVA PARTE"}</div>
           <MField label="Nombre / descripción"  value={form.nombre}       onChange={sf("nombre")}/>
           <MField label="Número OEM"            value={form.oem}          onChange={sf("oem")}/>
@@ -7220,7 +7235,7 @@ function MCatalogo({state,dispatch,toast}) {
       {!showForm&&parts.length>0&&(
         <>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar nombre, OEM, proveedor, aplicación..."
-            style={{width:"100%",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.t1,fontSize:16,outline:"none",marginBottom:10,fontFamily:"inherit",boxSizing:"border-box"}}/>
+            style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.t1,fontSize:16,outline:"none",marginBottom:10,fontFamily:"inherit",boxSizing:"border-box"}}/>
           {!isSearching&&frecuentes.length>0&&(
             <div style={{display:"flex",gap:6,marginBottom:12}}>
               {[["frecuentes","★ Frecuentes"],["todos","Todos"]].map(([v,l])=>(
@@ -7260,7 +7275,7 @@ function MCatalogo({state,dispatch,toast}) {
           const freq=p.frecuencia||0;
           const isFrecuente=freq>=2;
           return (
-            <div key={p.id} style={{background:C.bg1,
+            <div key={p.id} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,
               border:`1px solid ${exp?C.cyan:isFrecuente?`rgba(38,122,144,0.2)`:C.border}`,
               borderRadius:14,overflow:"hidden",
               boxShadow:isFrecuente?"0 0 0 1px rgba(59,130,246,0.2)":undefined}}>
@@ -7354,7 +7369,7 @@ function MProveedores({state,dispatch,toast}) {
         </button>
       </div>
       {showForm&&(
-        <div style={{background:C.bg1,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:14,padding:16,marginBottom:12}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:14,padding:16,marginBottom:12}}>
           <div style={{fontSize:10,color:C.t3,letterSpacing:"0.15em",marginBottom:10}}>{editId?"EDITAR PROVEEDOR":"NUEVO PROVEEDOR"}</div>
           <MField label="Nombre"          value={form.nombre}        onChange={sf("nombre")}/>
           <MField label="Especialidad"    value={form.especialidad}  onChange={sf("especialidad")}/>
@@ -7378,7 +7393,7 @@ function MProveedores({state,dispatch,toast}) {
           const confColor=s.confiabilidad>=90?C.green:s.confiabilidad>=75?C.yellow:C.red;
           const scoreColor=s.scoreOp>=80?C.green:s.scoreOp>=60?C.yellow:C.red;
           return (
-            <div key={s.id} style={{background:C.bg1,border:`1px solid ${exp?C.cyan:C.border}`,borderRadius:14,overflow:"hidden"}}>
+            <div key={s.id} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${exp?C.cyan:C.border}`,borderRadius:14,overflow:"hidden"}}>
               <div onClick={()=>setSel(exp?null:s.id)} style={{padding:"14px 16px",cursor:"pointer"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
                   <div style={{flex:1}}>
@@ -7434,30 +7449,31 @@ function MasSheet({open,onClose,tab,setTab}) {
     <>
       <div onClick={onClose} className="fade-enter" style={{position:"fixed",inset:0,zIndex:150,background:"rgba(10,14,26,0.4)"}}/>
       <div className="sheet-enter" style={{position:"fixed",bottom:0,left:0,right:0,zIndex:155,
-        background:"rgba(17,21,27,0.97)",backdropFilter:"blur(24px) saturate(1.4)",WebkitBackdropFilter:"blur(24px) saturate(1.4)",
-        borderRadius:"24px 24px 0 0",
-        borderTop:"1px solid rgba(255,255,255,0.08)",
+        background:"rgba(14,16,20,0.88)",backdropFilter:"blur(32px) saturate(1.8)",WebkitBackdropFilter:"blur(32px) saturate(1.8)",
+        borderRadius:"28px 28px 0 0",
+        borderTop:"1px solid rgba(255,255,255,0.10)",
         padding:`0 16px calc(20px + env(safe-area-inset-bottom,0px))`,
-        boxShadow:"0 -8px 48px rgba(0,0,0,0.5)"}}>
+        boxShadow:"0 -12px 60px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.06) inset"}}>
 
         <div style={{display:"flex",justifyContent:"center",padding:"14px 0 8px"}}>
-          <div style={{width:36,height:4,borderRadius:2,background:"rgba(255,255,255,0.08)"}}/>
+          <div style={{width:36,height:4,borderRadius:2,background:"rgba(255,255,255,0.12)"}}/>
         </div>
-        <div style={{fontSize:11,color:"#64748B",letterSpacing:"0.14em",marginBottom:16,
-          textAlign:"center",textTransform:"uppercase",fontWeight:700}}>Más módulos</div>
+        <div style={{fontSize:10,color:"#7E848E",letterSpacing:"0.16em",marginBottom:16,
+          textAlign:"center",textTransform:"uppercase",fontWeight:600}}>Más módulos</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:8}}>
           {items.map(item=>(
             <button key={item.id} onClick={()=>{setTab(item.id);onClose();}}
               style={{padding:"18px 10px",
-                background:tab===item.id?"rgba(255,255,255,0.04)":"#101722",
-                border:`1.5px solid ${tab===item.id?"#F3F4F6":"rgba(255,255,255,0.04)"}`,
-                borderRadius:18,cursor:"pointer",
+                background:tab===item.id?"rgba(143,227,190,0.10)":"rgba(22,24,28,0.60)",
+                backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",
+                border:`1.5px solid ${tab===item.id?"rgba(143,227,190,0.35)":"rgba(255,255,255,0.07)"}`,
+                borderRadius:22,cursor:"pointer",
                 display:"flex",flexDirection:"column",alignItems:"center",gap:8,
                 transition:"all 150ms ease",touchAction:"manipulation",
                 WebkitTapHighlightColor:"transparent"}}>
               <span style={{fontSize:28,lineHeight:1}}>{item.icon}</span>
-              <span style={{fontSize:12,fontWeight:700,color:tab===item.id?"#F3F4F6":"#F3F4F6",lineHeight:1}}>{item.label}</span>
-              <span style={{fontSize:10,color:"#64748B",lineHeight:1}}>{item.desc}</span>
+              <span style={{fontSize:12,fontWeight:700,color:tab===item.id?"#8FE3BE":"#F5F5F7",lineHeight:1}}>{item.label}</span>
+              <span style={{fontSize:10,color:"#7E848E",lineHeight:1}}>{item.desc}</span>
             </button>
           ))}
         </div>
@@ -7489,9 +7505,9 @@ class ErrorBoundary extends React.Component {
     if(!this.state.error) return this.props.children;
     const msg = this.state.error?.message||String(this.state.error);
     return (
-      <div style={{minHeight:"100vh",background:"#05070A",color:"#F3F4F6",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:24,fontFamily:"'Trebuchet MS',sans-serif"}}>
-        <div style={{fontSize:28,color:"#F3F4F6"}}>⚠</div>
-        <div style={{fontSize:13,fontWeight:700,color:"#F3F4F6",textAlign:"center"}}>Algo salió mal</div>
+      <div style={{minHeight:"100vh",background:"#0D0F12",color:"#F5F5F7",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:24,fontFamily:"'Trebuchet MS',sans-serif"}}>
+        <div style={{fontSize:28,color:"#F5F5F7"}}>⚠</div>
+        <div style={{fontSize:13,fontWeight:700,color:"#F5F5F7",textAlign:"center"}}>Algo salió mal</div>
         <div style={{fontSize:10,color:"#4A5568",fontFamily:"monospace",background:"#EEF1F5",padding:"8px 14px",borderRadius:4,maxWidth:320,wordBreak:"break-all",textAlign:"center"}}>{msg}</div>
         <button onClick={()=>window.location.reload()}
           style={{marginTop:8,padding:"9px 22px",background:"#F3F4F6",border:"none",borderRadius:4,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",letterSpacing:"0.05em"}}>
@@ -7717,18 +7733,18 @@ function App() {
   const sd = syncDisplay[syncStatus] || syncDisplay.idle;
 
   if(loading) return (
-    <div style={{minHeight:"100vh",background:C.bg0,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
+    <div style={{minHeight:"100vh",background:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
       <Logo/>
       <div style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",letterSpacing:"0.2em",marginTop:8}}>CARGANDO DATOS...</div>
     </div>
   );
 
   return (
-    <div style={{minHeight:"100vh",background:"#05070A",color:C.t1,fontFamily:"'Trebuchet MS',sans-serif",fontSize:13}}>
+    <div style={{minHeight:"100vh",background:"transparent",color:C.t1,fontFamily:"'Trebuchet MS',sans-serif",fontSize:13}}>
       {search&&<SearchPalette state={state} onNavigate={t=>{setTab(t);}} onClose={()=>setSearch(false)}/>}
 
       {/* NAV */}
-      <div style={{background:"rgba(11,13,16,0.96)",backdropFilter:"blur(20px) saturate(1.3)",WebkitBackdropFilter:"blur(20px) saturate(1.3)",borderBottom:`1px solid ${C.border}`,padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,flexWrap:"wrap",gap:4}}>
+      <div style={{background:"rgba(13,15,18,0.85)",backdropFilter:"blur(24px) saturate(1.6)",WebkitBackdropFilter:"blur(24px) saturate(1.6)",borderBottom:`1px solid ${C.borderHi}`,padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,flexWrap:"wrap",gap:4}}>
         <Logo/>
         <div style={{display:"flex",gap:2,alignItems:"center",flexWrap:"wrap"}}>
           {/* Desktop tabs — hidden on mobile view */}
@@ -7737,19 +7753,22 @@ function App() {
             const isP1Tab=t.id==="ops"&&p1Active>0;
             return (
               <button key={t.id} onClick={()=>setTab(t.id)}
-                style={{padding:"3px 9px",borderRadius:3,cursor:"pointer",fontSize:10,fontWeight:600,background:tab===t.id?C.blue:"transparent",border:`1px solid ${tab===t.id?C.blueHi:C.border}`,color:tab===t.id?"#0B1118":C.t2,position:"relative",letterSpacing:"0.04em"}}>
+                style={{padding:"3px 9px",borderRadius:6,cursor:"pointer",fontSize:10,fontWeight:600,
+                  background:tab===t.id?"rgba(143,227,190,0.12)":"transparent",
+                  border:`1px solid ${tab===t.id?"rgba(143,227,190,0.30)":C.border}`,
+                  color:tab===t.id?"#8FE3BE":C.t2,position:"relative",letterSpacing:"0.04em"}}>
                 {t.label}
-                {badge>0&&<span style={{position:"absolute",top:-4,right:-4,width:13,height:13,borderRadius:"50%",background:isP1Tab?C.p1dot:t.id==="cartera"?C.red:C.yellow,fontSize:7,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",color:"#000"}}>{badge}</span>}
+                {badge>0&&<span style={{position:"absolute",top:-4,right:-4,width:13,height:13,borderRadius:"50%",background:isP1Tab?C.p1dot:t.id==="cartera"?C.red:C.yellow,fontSize:7,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",color:"#0D0F12"}}>{badge}</span>}
               </button>
             );
           })}
           <div style={{width:1,height:12,background:C.border,margin:"0 3px"}}/>
-          {!mobileView&&<button onClick={()=>setSearch(true)} style={{padding:"3px 8px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:10,cursor:"pointer",touchAction:"manipulation"}}>
+          {!mobileView&&<button onClick={()=>setSearch(true)} style={{padding:"3px 8px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:6,color:C.t2,fontSize:10,cursor:"pointer",touchAction:"manipulation"}}>
             &#9906; <span style={{fontSize:7,color:C.t3}}>Ctrl+K</span>
           </button>}
           {/* Sync status indicator */}
           {syncStatus!=="idle"&&(
-            <div style={{display:"flex",alignItems:"center",gap:4,padding:"2px 8px",borderRadius:3,border:`1px solid ${C.border}`}}>
+            <div style={{display:"flex",alignItems:"center",gap:4,padding:"2px 8px",borderRadius:6,border:`1px solid ${C.border}`}}>
               <span style={{width:6,height:6,borderRadius:"50%",background:sd.dot,flexShrink:0,
                 animation:syncStatus==="saving"?"pulse 1s infinite":"none"}}/>
               <span style={{fontSize:8,color:sd.color,letterSpacing:"0.06em"}}>{sd.label}</span>
@@ -7757,7 +7776,7 @@ function App() {
           )}
           {/* Mobile/Desktop toggle */}
           <button onClick={()=>setMobileView(v=>!v)}
-            style={{padding:"3px 9px",background:mobileView?C.blueDim:"transparent",border:`1px solid ${mobileView?C.blueHi:C.border}`,borderRadius:3,color:mobileView?C.blue:C.t3,fontSize:10,cursor:"pointer",letterSpacing:"0.04em",touchAction:"manipulation"}}>
+            style={{padding:"3px 9px",background:mobileView?"rgba(143,227,190,0.10)":"transparent",border:`1px solid ${mobileView?"rgba(143,227,190,0.28)":C.border}`,borderRadius:6,color:mobileView?"#8FE3BE":C.t3,fontSize:10,cursor:"pointer",letterSpacing:"0.04em",touchAction:"manipulation"}}>
             {mobileView?"[ ] Escritorio":"[=] Movil"}
           </button>
         </div>
@@ -7766,12 +7785,15 @@ function App() {
       {/* ── Nav móvil nativa — 4 tabs + FAB ── */}
       {mobileView&&(
         <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:150,
-          background:"rgba(11,13,16,0.96)",
-          backdropFilter:"blur(20px) saturate(1.4)",WebkitBackdropFilter:"blur(20px) saturate(1.4)",
-          borderTop:"1px solid rgba(255,255,255,0.05)",
-          paddingBottom:"env(safe-area-inset-bottom,0px)",
-          display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",
-          boxShadow:"0 -8px 30px rgba(0,0,0,0.4)"}}>
+          paddingBottom:"env(safe-area-inset-bottom,0px)"}}>
+          <div style={{
+            margin:"0 12px 10px",
+            background:"rgba(15,17,22,0.78)",
+            backdropFilter:"blur(24px) saturate(1.8)",WebkitBackdropFilter:"blur(24px) saturate(1.8)",
+            border:"1px solid rgba(255,255,255,0.09)",
+            borderRadius:28,
+            display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",
+            boxShadow:"0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.06) inset"}}>
           {[
             {id:"ops",      label:"Centro",  icon:"⊙"},
             {id:"tickets",  label:"Pipeline",icon:"◈"},
@@ -7788,20 +7810,22 @@ function App() {
                 style={{padding:"10px 4px",
                   border:"none",cursor:"pointer",
                   background:"transparent",
-                  borderTop:`2.5px solid ${active?"#F3F4F6":"transparent"}`,
+                  borderTop:`2px solid ${active?"#8FE3BE":"transparent"}`,
+                  borderRadius:active?"0":"0",
                   position:"relative",display:"flex",flexDirection:"column",alignItems:"center",gap:3,
-                  minHeight:56,touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
-                <span style={{fontSize:20,lineHeight:1,color:active?"#F3F4F6":"#64748B",
+                  minHeight:52,touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
+                <span style={{fontSize:20,lineHeight:1,color:active?"#8FE3BE":"#7E848E",
                   fontWeight:active?700:400}}>{t.icon}</span>
-                <span style={{fontSize:10,color:active?"#F3F4F6":"#64748B",
-                  letterSpacing:"0.02em",fontWeight:active?700:400}}>{t.label}</span>
+                <span style={{fontSize:10,color:active?"#BFE8D3":"#7E848E",
+                  letterSpacing:"0.03em",fontWeight:active?600:400}}>{t.label}</span>
                 {badge>0&&<span style={{position:"absolute",top:8,right:"calc(50% - 18px)",
                   minWidth:16,height:16,borderRadius:8,padding:"0 3px",
-                  background:t.id==="ops"?"#EF4444":isMore?"#EF4444":"#F59E0B",
-                  fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}>{badge}</span>}
+                  background:t.id==="ops"?"#FF7A7A":isMore?"#FF7A7A":"#F5C842",
+                  fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",color:"#0D0F12"}}>{badge}</span>}
               </button>
             );
           })}
+          </div>
         </div>
       )}
 
@@ -7809,13 +7833,13 @@ function App() {
       {mobileView&&tab!=="cotizador"&&(
         <button onClick={()=>setTab("cotizador")}
           style={{position:"fixed",
-            right:16,bottom:`calc(64px + env(safe-area-inset-bottom,0px) + 14px)`,
-            zIndex:160,width:56,height:56,borderRadius:28,
-            background:"#3B82F6",
-            border:"none",
-            boxShadow:"0 4px 16px rgba(0,0,0,0.4)",
+            right:20,bottom:`calc(76px + env(safe-area-inset-bottom,0px) + 10px)`,
+            zIndex:160,width:54,height:54,borderRadius:27,
+            background:"#8FE3BE",
+            border:"1px solid rgba(255,255,255,0.25)",
+            boxShadow:"0 6px 24px rgba(143,227,190,0.28), 0 2px 8px rgba(0,0,0,0.4)",
             display:"flex",alignItems:"center",justifyContent:"center",
-            cursor:"pointer",fontSize:28,color:"#ffffff",fontWeight:300,
+            cursor:"pointer",fontSize:28,color:"#0D0F12",fontWeight:400,
             touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
           +
         </button>
@@ -7825,7 +7849,7 @@ function App() {
       {mobileView&&<MasSheet open={masOpen} onClose={()=>setMasOpen(false)} tab={tab} setTab={t=>{setTab(t);setMasOpen(false);}}/>}
 
       {/* Content */}
-      <div style={{paddingBottom:mobileView?"calc(72px + env(safe-area-inset-bottom,0px))":0,
+      <div style={{paddingBottom:mobileView?"calc(90px + env(safe-area-inset-bottom,0px))":0,
         WebkitOverflowScrolling:"touch"}}>
         {tab==="ops"        &&(mobileView?<MOps       state={state} setTab={setTab}/>                                    :<CentroOps   state={state}/>)}
         {tab==="tickets"    &&(mobileView?<MPipeline  state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Tickets     state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete}/>)}
@@ -7843,18 +7867,19 @@ function App() {
       <Toasts items={toasts}/>
 
       <style>{`
-        html,body{overscroll-behavior:none;overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;touch-action:pan-y;background:#05070A;color:#F3F4F6}
+        html,body{overscroll-behavior:none;overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;touch-action:pan-y;background:#0D0F12;color:#F5F5F7}
+        body{background:radial-gradient(ellipse 80% 60% at 50% -10%,rgba(143,227,190,0.07) 0%,transparent 60%),radial-gradient(ellipse 50% 40% at 85% 80%,rgba(143,227,190,0.04) 0%,transparent 50%),#0D0F12;min-height:100vh}
         .scroll-touch{-webkit-overflow-scrolling:touch;overflow-y:auto}
         input[type=number]::-webkit-inner-spin-button{opacity:.3}
-        input::placeholder,textarea::placeholder{color:#475569}
-        select option{background:#151A21;color:#F3F4F6}
+        input::placeholder,textarea::placeholder{color:#556070}
+        select option{background:#111418;color:#F5F5F7}
         *{box-sizing:border-box}
         button{transition:opacity 120ms ease,background 120ms ease,border-color 120ms ease;-webkit-tap-highlight-color:transparent}
         button:active{opacity:.75;transform:scale(.97)}
         ::-webkit-scrollbar{width:4px;height:4px}
-        ::-webkit-scrollbar-track{background:#05070A}
-        ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:2px}
-        textarea{color:#98A2B3;resize:vertical;font-family:'Courier New',monospace}
+        ::-webkit-scrollbar-track{background:transparent}
+        ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.10);border-radius:4px}
+        textarea{color:#B6BBC4;resize:vertical;font-family:'Courier New',monospace}
         input,select,textarea{transition:border-color 150ms ease}
         @media(max-width:640px){
           .ref-grid{grid-template-columns:1fr!important}
