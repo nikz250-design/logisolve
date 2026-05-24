@@ -1,0 +1,66 @@
+/**
+ * Glass card layer system — Logisolve
+ * Apple liquid glass / VisionOS aesthetic
+ *
+ * Usage: add className="glass-card" to any card div.
+ * Backdrop-filter and border are still set inline (theme-aware),
+ * but the pseudo-element reflections are universal.
+ */
+
+.glass-card {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* Top-edge specular reflection (bright white streak) */
+.glass-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.28) 0%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 1;
+}
+
+/* Inner surface glow */
+.glass-card::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 255, 255, 0) 60%
+  );
+  opacity: 0.9;
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 1;
+}
+
+/* Dark mode: tone down reflections */
+[data-theme="dark"] .glass-card::before {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+
+[data-theme="dark"] .glass-card::after {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0) 60%
+  );
+  opacity: 0.8;
+}
