@@ -31,12 +31,12 @@ const C_DARK = {
 const C_LIGHT = {
   _dark:false,
   // ── Surface system — Apple liquid glass / VisionOS light
-  bg0:"#F7F6F3",
-  bg1:"rgba(255,255,255,0.52)",
-  bg2:"rgba(255,255,255,0.92)",
-  bg3:"rgba(255,255,255,0.35)",
-  bg4:"rgba(255,255,255,0.70)",
-  bgSolid:"#F7F6F3",
+  bg0:"#F5F4F0",
+  bg1:"rgba(255,255,255,0.32)",
+  bg2:"rgba(255,255,255,0.80)",
+  bg3:"rgba(255,255,255,0.18)",
+  bg4:"rgba(255,255,255,0.55)",
+  bgSolid:"#F5F4F0",
   border:"rgba(0,0,0,0.06)",
   borderHi:"rgba(0,0,0,0.10)",
   // Accent — soft mint pastel (glow/tint only, not for text)
@@ -53,7 +53,7 @@ const C_LIGHT = {
   p2:"#C8860A", p2dim:"rgba(200,134,10,0.10)", p2dot:"#C8860A",
   p3:"#5CBF8A", p3dim:"rgba(92,191,138,0.15)", p3dot:"#5CBF8A",
   p4:"#A1A1A6", p4dim:"rgba(161,161,166,0.10)", p4dot:"#A1A1A6",
-  glass:"blur(28px) saturate(2.0)",
+  glass:"blur(44px) saturate(2.8) brightness(1.02)",
 };
 // Module-level alias for backwards-compat (PRIORITY, UNIT_STATUS etc.)
 const C = C_DARK;
@@ -65,30 +65,31 @@ const ThemeCtx = React.createContext(C_DARK);
 function makeA(C) {
   return {
     // ── Accent greens
-    // lime = readable text accent  |  limeFill = button/card fill
-    lime:       C._dark ? C.green : "#2A9768",          // readable in both modes
-    limeFill:   C._dark ? C.green : "#9FE0BE",          // soft pastel fill
-    limeDim:    C.greenDim,                              // very subtle tint
-    limeMid:    C._dark ? "rgba(143,227,190,0.18)" : "rgba(255,255,255,0.78)", // active pill bg
-    mint:       C._dark ? C.blue : "#2A9768",           // readable teal (cobrar, highlights)
+    lime:       C._dark ? C.green : "#2A9768",
+    limeFill:   C._dark ? C.green : "#9FE0BE",
+    limeDim:    C.greenDim,
+    limeMid:    C._dark ? "rgba(143,227,190,0.18)" : "rgba(255,255,255,0.82)",
+    mint:       C._dark ? C.blue : "#2A9768",
     mintDim:    C.blueDim,
     amber:      C.yellow,
     amberDim:   C.yellowDim,
     red:        C.red,
     redDim:     C.redDim,
-    // ── Card surfaces — truly translucent in light
-    card:       C._dark ? "rgba(22,24,28,0.62)" : "rgba(255,255,255,0.42)",
-    cardHi:     C._dark ? "rgba(32,35,42,0.75)" : "rgba(255,255,255,0.68)",
+    // ── Liquid glass card surfaces
+    // Light: very transparent + strong blur so background colors refract through
+    card:       C._dark ? "rgba(22,24,28,0.62)" : "rgba(255,255,255,0.22)",
+    cardHi:     C._dark ? "rgba(32,35,42,0.75)" : "rgba(255,255,255,0.42)",
     blur:       C.glass,
+    // Multi-layer shadow: white border ring + soft ambient + inner highlight
     shadow:     C._dark
       ? "0 8px 32px rgba(0,0,0,0.44), 0 1px 0 rgba(255,255,255,0.06) inset"
-      : "0 8px 30px rgba(0,0,0,0.05), 0 1px 0 rgba(255,255,255,0.95) inset",
+      : "0 0 0 1px rgba(255,255,255,0.75), 0 12px 40px rgba(0,0,0,0.04), 0 2px 0 rgba(255,255,255,1) inset, 0 -1px 0 rgba(255,255,255,0.20) inset",
     shadowSm:   C._dark
       ? "0 4px 16px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.04) inset"
-      : "0 4px 12px rgba(0,0,0,0.04), 0 1px 0 rgba(255,255,255,0.95) inset",
-    // ── Active pill / filter chip token set
-    pillBg:     C._dark ? "rgba(143,227,190,0.18)" : "rgba(255,255,255,0.78)",
-    pillBorder: C._dark ? C.green : "rgba(0,0,0,0.06)",
+      : "0 0 0 1px rgba(255,255,255,0.70), 0 6px 20px rgba(0,0,0,0.03), 0 1.5px 0 rgba(255,255,255,1) inset",
+    // ── Active pill / filter chip
+    pillBg:     C._dark ? "rgba(143,227,190,0.18)" : "rgba(255,255,255,0.90)",
+    pillBorder: C._dark ? C.green : "rgba(255,255,255,0.80)",
     pillColor:  C._dark ? C.green : C.t1,
     pillShadow: C._dark ? "none" : "0 4px 12px rgba(0,0,0,0.06)",
     t1: C.t1, t2: C.t2, t3: C.t3, r: 24,
@@ -7805,13 +7806,13 @@ function App() {
     <div style={{minHeight:"100vh",
       background: darkMode
         ? "radial-gradient(ellipse 80% 60% at 50% -10%,rgba(143,227,190,0.07) 0%,transparent 60%),radial-gradient(ellipse 50% 40% at 85% 80%,rgba(143,227,190,0.04) 0%,transparent 50%),#0D0F12"
-        : "linear-gradient(180deg,#F7F6F3 0%,#ECE9E4 100%)",
+        : "radial-gradient(ellipse 60% 50% at 15% 20%,rgba(159,224,190,0.28) 0%,transparent 55%),radial-gradient(ellipse 50% 45% at 88% 60%,rgba(185,215,255,0.20) 0%,transparent 50%),radial-gradient(ellipse 45% 40% at 55% 90%,rgba(220,200,255,0.14) 0%,transparent 50%),radial-gradient(ellipse 35% 30% at 75% 10%,rgba(255,220,180,0.12) 0%,transparent 45%),linear-gradient(160deg,#F5F4F0 0%,#E8E3DB 100%)",
       color:C.t1,fontFamily:"'Trebuchet MS',sans-serif",fontSize:13,
       transition:"background 350ms ease"}}>
       {search&&<SearchPalette state={state} onNavigate={t=>{setTab(t);}} onClose={()=>setSearch(false)}/>}
 
       {/* NAV */}
-      <div style={{background:darkMode?"rgba(13,15,18,0.85)":"rgba(255,255,255,0.52)",backdropFilter:"blur(30px) saturate(2.0)",WebkitBackdropFilter:"blur(30px) saturate(2.0)",borderBottom:`1px solid ${darkMode?C.borderHi:"rgba(255,255,255,0.55)"}`,padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,flexWrap:"wrap",gap:4,boxShadow:darkMode?"none":"0 1px 0 rgba(255,255,255,0.9) inset"}}>
+      <div style={{background:darkMode?"rgba(13,15,18,0.85)":"rgba(255,255,255,0.18)",backdropFilter:"blur(44px) saturate(2.8) brightness(1.02)",WebkitBackdropFilter:"blur(44px) saturate(2.8) brightness(1.02)",borderBottom:`1px solid ${darkMode?C.borderHi:"rgba(255,255,255,0.70)"}`,padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,flexWrap:"wrap",gap:4,boxShadow:darkMode?"none":"0 1px 0 rgba(255,255,255,1) inset, 0 4px 20px rgba(0,0,0,0.02)"}}>
         <Logo/>
         <div style={{display:"flex",gap:2,alignItems:"center",flexWrap:"wrap"}}>
           {/* Desktop tabs — hidden on mobile view */}
@@ -7860,14 +7861,14 @@ function App() {
           paddingBottom:"env(safe-area-inset-bottom,0px)"}}>
           <div style={{
             margin:"0 12px 10px",
-            background: darkMode ? "rgba(15,17,22,0.78)" : "rgba(255,255,255,0.48)",
-            backdropFilter:"blur(30px) saturate(2.0)",WebkitBackdropFilter:"blur(30px) saturate(2.0)",
-            border: darkMode ? "1px solid rgba(255,255,255,0.09)" : "1px solid rgba(255,255,255,0.55)",
+            background: darkMode ? "rgba(15,17,22,0.78)" : "rgba(255,255,255,0.20)",
+            backdropFilter:"blur(44px) saturate(2.8) brightness(1.02)",WebkitBackdropFilter:"blur(44px) saturate(2.8) brightness(1.02)",
+            border: darkMode ? "1px solid rgba(255,255,255,0.09)" : "1px solid rgba(255,255,255,0.72)",
             borderRadius:28,
             display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",
             boxShadow: darkMode
               ? "0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.06) inset"
-              : "0 -4px 20px rgba(0,0,0,0.04), 0 8px 30px rgba(0,0,0,0.05), 0 1px 0 rgba(255,255,255,0.95) inset"}}>
+              : "0 0 0 1px rgba(255,255,255,0.72), 0 -4px 20px rgba(0,0,0,0.03), 0 12px 40px rgba(0,0,0,0.04), 0 2px 0 rgba(255,255,255,1) inset"}}>
           {[
             {id:"ops",      label:"Centro",  icon:"⊙"},
             {id:"tickets",  label:"Pipeline",icon:"◈"},
@@ -7908,10 +7909,10 @@ function App() {
           style={{position:"fixed",
             left:20,bottom:`calc(76px + env(safe-area-inset-bottom,0px) + 10px)`,
             zIndex:160,width:42,height:42,borderRadius:21,
-            background:C._dark?"rgba(255,255,255,0.10)":"rgba(255,255,255,0.65)",
-            border:C._dark?`1px solid ${C.border}`:"1px solid rgba(255,255,255,0.70)",
-            backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",
-            boxShadow:C._dark?"0 4px 16px rgba(0,0,0,0.4)":"0 4px 16px rgba(0,0,0,0.06), 0 1px 0 rgba(255,255,255,0.9) inset",
+            background:C._dark?"rgba(255,255,255,0.10)":"rgba(255,255,255,0.24)",
+            border:C._dark?`1px solid ${C.border}`:"1px solid rgba(255,255,255,0.75)",
+            backdropFilter:"blur(44px) saturate(2.8) brightness(1.02)",WebkitBackdropFilter:"blur(44px) saturate(2.8) brightness(1.02)",
+            boxShadow:C._dark?"0 4px 16px rgba(0,0,0,0.4)":"0 0 0 1px rgba(255,255,255,0.75), 0 4px 16px rgba(0,0,0,0.05), 0 1.5px 0 rgba(255,255,255,1) inset",
             display:"flex",alignItems:"center",justifyContent:"center",
             cursor:"pointer",fontSize:18,
             touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
@@ -7925,13 +7926,13 @@ function App() {
           style={{position:"fixed",
             right:20,bottom:`calc(76px + env(safe-area-inset-bottom,0px) + 10px)`,
             zIndex:160,width:54,height:54,borderRadius:27,
-            background:C._dark?C.blue:"rgba(255,255,255,0.72)",
-            backdropFilter:C._dark?"none":"blur(20px)",
-            WebkitBackdropFilter:C._dark?"none":"blur(20px)",
-            border:C._dark?"1px solid rgba(255,255,255,0.25)":"1px solid rgba(255,255,255,0.65)",
+            background:C._dark?C.blue:"rgba(255,255,255,0.24)",
+            backdropFilter:C._dark?"none":"blur(44px) saturate(2.8) brightness(1.02)",
+            WebkitBackdropFilter:C._dark?"none":"blur(44px) saturate(2.8) brightness(1.02)",
+            border:C._dark?"1px solid rgba(255,255,255,0.25)":"1px solid rgba(255,255,255,0.78)",
             boxShadow:C._dark
               ?"0 6px 24px rgba(143,227,190,0.28), 0 2px 8px rgba(0,0,0,0.4)"
-              :"0 8px 24px rgba(0,0,0,0.08), 0 1px 0 rgba(255,255,255,0.9) inset",
+              :"0 0 0 1px rgba(255,255,255,0.78), 0 8px 28px rgba(0,0,0,0.04), 0 2px 0 rgba(255,255,255,1) inset",
             display:"flex",alignItems:"center",justifyContent:"center",
             cursor:"pointer",fontSize:28,color:C._dark?"#0D0F12":"#161616",fontWeight:300,
             touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
@@ -7962,7 +7963,7 @@ function App() {
 
       <style>{`
         :root{color-scheme:${darkMode?"dark":"light"}}
-        html{background:${darkMode?"#0D0F12":"#ECE9E4"};transition:background 350ms ease}
+        html{background:${darkMode?"#0D0F12":"#E8E3DB"};transition:background 350ms ease}
         html,body{overscroll-behavior:none;overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;touch-action:pan-y;}
         body{background:${darkMode
           ? "radial-gradient(ellipse 80% 60% at 50% -10%,rgba(143,227,190,0.07) 0%,transparent 60%),radial-gradient(ellipse 50% 40% at 85% 80%,rgba(143,227,190,0.04) 0%,transparent 50%),#0D0F12"
