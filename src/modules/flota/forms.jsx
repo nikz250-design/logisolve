@@ -3,29 +3,34 @@ import { motion } from "framer-motion";
 
 export function FlotaModal({ title, onClose, onSave, saveLabel = "Guardar", T, children }) {
   return (
-    <>
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 800,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: 16,
+    }}>
+      {/* Backdrop */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
-        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 800 }}
+        style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)" }}
       />
+      {/* Modal panel */}
       <motion.div
         initial={{ opacity: 0, scale: 0.96, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96 }}
         transition={{ type: "spring", damping: 28, stiffness: 320 }}
         style={{
-          position: "fixed", top: "50%", left: "50%",
-          transform: "translate(-50%,-50%)",
+          position: "relative", zIndex: 1,
           width: "min(92vw, 480px)",
           maxHeight: "88vh", overflowY: "auto",
           background: T.surfaceHi,
           backdropFilter: T.blur, WebkitBackdropFilter: T.blur,
           border: `1px solid ${T.border}`,
           borderRadius: 20, padding: "24px 20px",
-          zIndex: 801, boxSizing: "border-box",
+          boxSizing: "border-box",
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
@@ -46,7 +51,7 @@ export function FlotaModal({ title, onClose, onSave, saveLabel = "Guardar", T, c
           }}>{saveLabel}</button>
         </div>
       </motion.div>
-    </>
+    </div>
   );
 }
 
