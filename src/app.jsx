@@ -1,4 +1,5 @@
 import React, { useState, useReducer, useEffect, useRef, useCallback, useMemo } from "react";
+import FlotaModule from "./modules/flota/index.jsx";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // L1 — DESIGN TOKENS
@@ -7471,7 +7472,8 @@ function MasSheet({open,onClose,tab,setTab}) {
   const items=[
     {id:"cotizador",  label:"Cotizador",  icon:"🧾", desc:"Nueva cotización"},
     {id:"cartera",    label:"Cartera",    icon:"💳", desc:"Por cobrar"},
-    {id:"unidades",   label:"Flotilla",   icon:"🚛", desc:"Vehículos"},
+    {id:"flota",      label:"Flota",      icon:"🚛", desc:"Control flota"},
+    {id:"unidades",   label:"Flotilla",   icon:"🚚", desc:"Vehículos"},
     {id:"catalogo",   label:"Catálogo",   icon:"📦", desc:"Inventario"},
     {id:"clientes",   label:"Clientes",   icon:"🏢", desc:"Directorio"},
     {id:"proveedores",label:"Proveedores",icon:"🔧", desc:"Suppliers"},
@@ -7520,6 +7522,7 @@ const TABS = [
   {id:"historial",    label:"Historial"},
   {id:"cotizador",    label:"Cotizador"},
   {id:"refacciones",  label:"Refacciones"},
+  {id:"flota",        label:"Flota"},
   {id:"unidades",     label:"Unidades"},
   {id:"catalogo",     label:"Catalogo"},
   {id:"proveedores",  label:"Proveedores"},
@@ -7924,6 +7927,7 @@ function App() {
         {tab==="proveedores"&&(mobileView?<MProveedores state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Proveedores state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="clientes"   &&(mobileView?<MClientes   state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Clientes    state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="ajustes"    &&(mobileView?<MAjustes state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Ajustes state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
+        {tab==="flota"      &&<FlotaModule darkMode={darkMode}/>}
       </div>
 
       <Toasts items={toasts}/>
