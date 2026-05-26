@@ -7791,7 +7791,7 @@ function App() {
       {search&&<SearchPalette state={state} onNavigate={t=>{setTab(t);}} onClose={()=>setSearch(false)}/>}
 
       {/* NAV */}
-      <div style={{background:darkMode?"rgba(13,15,18,0.85)":"rgba(255,255,255,0.18)",backdropFilter:"blur(44px) saturate(2.8) brightness(1.02)",WebkitBackdropFilter:"blur(44px) saturate(2.8) brightness(1.02)",borderBottom:`1px solid ${darkMode?C.borderHi:"rgba(255,255,255,0.70)"}`,padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,flexWrap:"wrap",gap:4,boxShadow:darkMode?"none":"0 1px 0 rgba(255,255,255,1) inset, 0 4px 20px rgba(0,0,0,0.02)"}}>
+      <div style={{background:darkMode?"rgba(13,15,18,0.85)":"rgba(255,255,255,0.88)",backdropFilter:"blur(44px) saturate(2.8) brightness(1.01)",WebkitBackdropFilter:"blur(44px) saturate(2.8) brightness(1.01)",borderBottom:`1px solid ${darkMode?C.borderHi:"rgba(0,0,0,0.08)"}`,padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,flexWrap:"wrap",gap:4,boxShadow:darkMode?"none":"0 2px 16px rgba(0,0,0,0.06), 0 1px 0 rgba(255,255,255,1) inset"}}>
         <Logo/>
         <div style={{display:"flex",gap:2,alignItems:"center",flexWrap:"wrap"}}>
           {/* Desktop tabs — hidden on mobile view */}
@@ -7840,14 +7840,14 @@ function App() {
           paddingBottom:"env(safe-area-inset-bottom,0px)"}}>
           <div style={{
             margin:"0 12px 10px",
-            background: darkMode ? "rgba(15,17,22,0.78)" : "rgba(255,255,255,0.20)",
-            backdropFilter:"blur(44px) saturate(2.8) brightness(1.02)",WebkitBackdropFilter:"blur(44px) saturate(2.8) brightness(1.02)",
-            border: darkMode ? "1px solid rgba(255,255,255,0.09)" : "1px solid rgba(255,255,255,0.72)",
+            background: darkMode ? "rgba(15,17,22,0.78)" : "rgba(255,255,255,0.92)",
+            backdropFilter:"blur(44px) saturate(2.8) brightness(1.01)",WebkitBackdropFilter:"blur(44px) saturate(2.8) brightness(1.01)",
+            border: darkMode ? "1px solid rgba(255,255,255,0.09)" : "1px solid rgba(0,0,0,0.10)",
             borderRadius:28,
             display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",
             boxShadow: darkMode
               ? "0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.06) inset"
-              : "0 0 0 1px rgba(255,255,255,0.72), 0 -4px 20px rgba(0,0,0,0.03), 0 12px 40px rgba(0,0,0,0.04), 0 2px 0 rgba(255,255,255,1) inset"}}>
+              : "0 4px 24px rgba(0,0,0,0.10), 0 1px 0 rgba(255,255,255,1) inset"}}>
           {[
             {id:"ops",      label:"Centro",  icon:"⊙"},
             {id:"tickets",  label:"Pipeline",icon:"◈"},
@@ -7864,12 +7864,12 @@ function App() {
                 style={{padding:"10px 4px",
                   border:"none",cursor:"pointer",
                   background:"transparent",
-                  borderTop:`2px solid ${active?C.blue:"transparent"}`,
+                  borderTop:`2px solid ${active?(darkMode?C.blue:"#2A9768"):"transparent"}`,
                   position:"relative",display:"flex",flexDirection:"column",alignItems:"center",gap:3,
                   minHeight:52,touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
-                <span style={{fontSize:20,lineHeight:1,color:active?C.blue:C.t3,
+                <span style={{fontSize:20,lineHeight:1,color:active?(darkMode?C.blue:"#2A9768"):C.t3,
                   fontWeight:active?700:400}}>{t.icon}</span>
-                <span style={{fontSize:10,color:active?C.blue:C.t3,
+                <span style={{fontSize:10,color:active?(darkMode?C.blue:"#2A9768"):C.t3,
                   letterSpacing:"0.03em",fontWeight:active?600:400}}>{t.label}</span>
                 {badge>0&&<span style={{position:"absolute",top:8,right:"calc(50% - 18px)",
                   minWidth:16,height:16,borderRadius:8,padding:"0 3px",
@@ -7888,10 +7888,10 @@ function App() {
           style={{position:"fixed",
             left:20,bottom:`calc(76px + env(safe-area-inset-bottom,0px) + 10px)`,
             zIndex:160,width:42,height:42,borderRadius:21,
-            background:C._dark?"rgba(255,255,255,0.10)":"rgba(255,255,255,0.24)",
-            border:C._dark?`1px solid ${C.border}`:"1px solid rgba(255,255,255,0.75)",
-            backdropFilter:"blur(44px) saturate(2.8) brightness(1.02)",WebkitBackdropFilter:"blur(44px) saturate(2.8) brightness(1.02)",
-            boxShadow:C._dark?"0 4px 16px rgba(0,0,0,0.4)":"0 0 0 1px rgba(255,255,255,0.75), 0 4px 16px rgba(0,0,0,0.05), 0 1.5px 0 rgba(255,255,255,1) inset",
+            background:C._dark?"rgba(255,255,255,0.10)":"rgba(255,255,255,0.90)",
+            border:C._dark?`1px solid ${C.border}`:"1px solid rgba(0,0,0,0.12)",
+            backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",
+            boxShadow:C._dark?"0 4px 16px rgba(0,0,0,0.4)":"0 4px 16px rgba(0,0,0,0.12), 0 1px 0 rgba(255,255,255,1) inset",
             display:"flex",alignItems:"center",justifyContent:"center",
             cursor:"pointer",fontSize:18,
             touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
