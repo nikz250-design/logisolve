@@ -5,7 +5,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
 import { Truck, AlertTriangle, Wrench, TrendingUp, Activity, Zap } from "lucide-react";
-import { INCIDENCIAS, MANTENIMIENTOS, COSTOS_MENSUALES, KPIs, ACTIVIDAD_RECIENTE } from "./mockData";
+import { COSTOS_MENSUALES, ACTIVIDAD_RECIENTE } from "./mockData";
 
 function useCountUp(target, duration = 1200) {
   const [value, setValue] = useState(0);
@@ -58,16 +58,16 @@ function KpiCard({ icon: Icon, label, value, sub, color, T }) {
   );
 }
 
-export function FlotaDashboard({ T, darkMode }) {
+export function FlotaDashboard({ T, darkMode, unidades, incidencias, mantenimientos, kpis }) {
   const statusData = [
-    { name: "Activos", value: KPIs.activas, color: T.accent },
-    { name: "En Taller", value: KPIs.enTaller, color: T.amber },
-    { name: "Críticos", value: KPIs.criticas, color: T.red },
+    { name: "Activos",   value: kpis.activas,  color: T.accent },
+    { name: "En Taller", value: kpis.enTaller,  color: T.amber  },
+    { name: "Críticos",  value: kpis.criticas,  color: T.red    },
   ];
 
   const alertas = [
-    ...INCIDENCIAS.filter(i => i.prioridad === "critica" || i.prioridad === "alta"),
-    ...MANTENIMIENTOS.filter(m => m.diasRestantes < 0),
+    ...(incidencias || []).filter(i => i.prioridad === "critica" || i.prioridad === "alta"),
+    ...(mantenimientos || []).filter(m => m.diasRestantes < 0),
   ].slice(0, 5);
 
   return (
@@ -81,12 +81,12 @@ export function FlotaDashboard({ T, darkMode }) {
 
       {/* KPI Row */}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 24 }}>
-        <KpiCard T={T} icon={Truck}         label="Total unidades"       value={KPIs.totalUnidades}        sub="flota"    color={T.blue}   />
-        <KpiCard T={T} icon={Activity}      label="En operación"          value={KPIs.activas}              sub="activas"  color={T.accent} />
-        <KpiCard T={T} icon={Wrench}        label="En taller"             value={KPIs.enTaller}             sub="servicio" color={T.amber}  />
-        <KpiCard T={T} icon={AlertTriangle} label="Incidencias abiertas"  value={KPIs.incidenciasAbiertas}  sub="alertas"  color={T.red}    />
-        <KpiCard T={T} icon={TrendingUp}    label="Disponibilidad"        value={`${KPIs.disponibilidad}%`} sub="operativa" color={T.accent} />
-        <KpiCard T={T} icon={Zap}           label="Gasto mensual"         value={`$${(KPIs.gastoMensual/1000).toFixed(0)}K`} sub="MXN" color={T.purple} />
+        <KpiCard T={T} icon={Truck}         label="Total unidades"       value={kpis.totalUnidades}        sub="flota"     color={T.blue}   />
+        <KpiCard T={T} icon={Activity}      label="En operación"          value={kpis.activas}              sub="activas"   color={T.accent} />
+        <KpiCard T={T} icon={Wrench}        label="En taller"             value={kpis.enTaller}             sub="servicio"  color={T.amber}  />
+        <KpiCard T={T} icon={AlertTriangle} label="Incidencias abiertas"  value={kpis.incidenciasAbiertas}  sub="alertas"   color={T.red}    />
+        <KpiCard T={T} icon={TrendingUp}    label="Disponibilidad"        value={`${kpis.disponibilidad}%`} sub="operativa" color={T.accent} />
+        <KpiCard T={T} icon={Zap}           label="Gasto mensual"         value={`$${(kpis.gastoMensual/1000).toFixed(0)}K`} sub="MXN" color={T.purple} />
       </div>
 
       {/* Charts */}
@@ -158,6 +158,9 @@ export function FlotaDashboard({ T, darkMode }) {
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
         <div style={{ flex: "1 1 300px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: "18px 16px", backdropFilter: T.blur, WebkitBackdropFilter: T.blur }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 14 }}>⚠ Alertas Activas</div>
+          {alertas.length === 0 && (
+            <div style={{ fontSize: 12, color: T.textTer, textAlign: "center", padding: "16px 0" }}>Sin alertas activas</div>
+          )}
           {alertas.map((a, i) => {
             const isInc = "prioridad" in a;
             const colorMap = { critica: T.red, alta: T.amber, media: T.blue };
