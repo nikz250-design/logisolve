@@ -934,7 +934,7 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
       .hero{background:#0a0a0a;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:14px 18px;margin-top:14px;border-radius:4px}
       .hero-title{font-size:18px;font-weight:900;letter-spacing:0.05em}
       .hero-meta{text-align:right}
-      .hero-meta .lbl{font-size:8px;color:rgba(255,255,255,0.5);letter-spacing:0.1em;text-transform:uppercase}
+      .hero-meta .lbl{font-size:9px;color:rgba(255,255,255,0.6);letter-spacing:0.04em;font-weight:500}
       .hero-meta .folio{font-size:16px;font-weight:800;letter-spacing:0.02em}
       .hero-meta .date{font-size:10px;color:rgba(255,255,255,0.75);font-weight:500}
       /* ── META TABLE ── */
@@ -952,12 +952,12 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
       .totals td{border:1px solid #e8e8e8;padding:7px 11px;font-size:10px}
       .totals td:last-child{text-align:right;font-weight:700}
       .grand-total td{background:#0a0a0a;color:#fff;font-weight:800;font-size:11px}
-      /* ── BOTTOM 3 COLUMNS ── */
-      .blocks-row{display:flex;gap:14px;margin-top:16px;padding-top:14px;border-top:1px solid #e8e8e8}
-      .block{flex:1;min-width:0}
-      .block h3{font-size:9px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #ebebeb}
+      /* ── STACKED SECTIONS ── */
+      .blocks-row{margin-top:16px;padding-top:14px;border-top:1px solid #e8e8e8}
+      .block{margin-bottom:14px}
+      .block h3{font-size:10px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;color:#1a1a1a;margin-bottom:6px}
       .block ul{list-style:none;padding:0}
-      .block li{font-size:9px;line-height:1.4;color:#444;margin-bottom:3px;padding-left:10px;position:relative}
+      .block li{font-size:9.5px;line-height:1.5;color:#444;margin-bottom:3px;padding-left:12px;position:relative}
       .block li::before{content:"·";position:absolute;left:2px;color:#aaa}
       /* ── FOOTER ── */
       .footer{margin-top:14px;padding-top:8px;border-top:1px solid #e8e8e8;display:flex;justify-content:space-between;font-size:8.5px;color:#999;letter-spacing:0.02em}
@@ -966,19 +966,18 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
       <div class="top-header">
         <div class="brand">
           <h1>LOGISOLVE</h1>
-          <p>LOGISTICS &middot; SUPPLY &middot; SOLUTIONS</p>
+          <p>Logistics &middot; Supply &middot; Solutions</p>
         </div>
         <div class="issuer">
           <strong>Alejandro Saucedo</strong><br>
           RFC: SAME9612277T9<br>
-          Tel. 5562321807<br>
-          contacto@logisolve.mx
+          Tel. 5562321807
         </div>
       </div>
       <div class="hero">
         <div class="hero-title">COTIZACI&Oacute;N</div>
         <div class="hero-meta">
-          <div class="lbl">N&uacute;mero</div>
+          <div class="lbl">No.</div>
           <div class="folio">${folio}</div>
           <div class="date">Fecha: ${tkt.date.replace(/\//g," / ")}</div>
         </div>
@@ -1007,7 +1006,7 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
         <div class="block">
           <h3>Alcance del servicio</h3>
           <ul>
-            <li>Integraci&oacute;n y coordinaci&oacute;n de componente para continuidad operativa.</li>
+            <li>Integraci&oacute;n y coordinaci&oacute;n de componente requerido para continuidad operativa.</li>
             <li>Validaci&oacute;n y coordinaci&oacute;n operativa.</li>
             <li>Entrega directa en CEDIS SMO.</li>
             <li>Seguimiento y trazabilidad log&iacute;stica.</li>
@@ -1018,18 +1017,18 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
           <ul>
             <li>Precio IVA incluido en el total.</li>
             <li>Forma de pago: ${formaPago}.</li>
-            <li>Entrega conforme a disponibilidad al momento de autorizaci&oacute;n.</li>
-            <li>Precios sujetos a cambio y disponibilidad.</li>
-            <li>Vigencia: 3 d&iacute;as naturales desde emisi&oacute;n.</li>
+            <li>Entrega conforme a disponibilidad confirmada al momento de autorizaci&oacute;n.</li>
+            <li>Precios sujetos a cambio y disponibilidad al momento de confirmar.</li>
+            <li>Vigencia: 3 d&iacute;as naturales a partir de la fecha de emisi&oacute;n.</li>
             ${notaLine}
           </ul>
         </div>
         <div class="block">
           <h3>Observaciones</h3>
           <ul>
-            <li>Entrega estimada: ${entrega}, sujeto a disponibilidad.</li>
-            <li>Compatibilidad t&eacute;cnica final a validar por el cliente.</li>
-            <li>Garant&iacute;a conforme a pol&iacute;ticas del fabricante.</li>
+            <li>Tiempo estimado de entrega: ${entrega}, sujeto a disponibilidad.</li>
+            <li>La validaci&oacute;n t&eacute;cnica final de compatibilidad corresponde al cliente.</li>
+            <li>La garant&iacute;a aplica conforme a pol&iacute;ticas del fabricante o proveedor.</li>
           </ul>
         </div>
       </div>
