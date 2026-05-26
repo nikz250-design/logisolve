@@ -1,24 +1,103 @@
 import React, { useState, useReducer, useEffect, useRef, useCallback, useMemo } from "react";
+import FlotaModule from "./modules/flota/index.jsx";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // L1 — DESIGN TOKENS
 // ═══════════════════════════════════════════════════════════════════════════════
-const C = {
-  bg0:"#070909", bg1:"#0C0F11", bg2:"#101415", bg3:"#151A1C", bg4:"#1A2022",
-  border:"#222A2E", borderHi:"#2E3C42",
-  blue:"#1A4D72", blueHi:"#215E8C", blueDim:"#0A2438",
-  cyan:"#267A90", cyanDim:"#16505E",
-  green:"#246845", greenDim:"#122E1E",
-  red:"#7A2828", redDim:"#321010",
-  yellow:"#866018", yellowDim:"#322408",
-  orange:"#7A4E14",
-  amber:"#8A5A10",
-  t1:"#BEC5CA", t2:"#4E5C65", t3:"#283238", t4:"#181E22",
-  p1:"#8A2020", p1dim:"#2E0A0A", p1dot:"#C84040",   // P1 CRITICO
-  p2:"#7A5010", p2dim:"#2E1C04", p2dot:"#C08020",   // P2 URGENTE
-  p3:"#1A5A4A", p3dim:"#082418", p3dot:"#30A080",   // P3 NORMAL
-  p4:"#243A4A", p4dim:"#0C1820", p4dot:"#4A7A9A",   // P4 PREVENTIVO
+const C_DARK = {
+  _dark:true,
+  // ── Surface system — glassmorphism dark
+  bg0:"#0D0F12",
+  bg1:"rgba(22,24,28,0.62)",
+  bg2:"rgba(16,18,22,0.94)",
+  bg3:"rgba(28,32,40,0.74)",
+  bg4:"rgba(38,44,54,0.88)",
+  bgSolid:"#111418",
+  border:"rgba(255,255,255,0.07)",
+  borderHi:"rgba(255,255,255,0.13)",
+  blue:"#8FE3BE",  blueHi:"#BFE8D3", blueDim:"rgba(143,227,190,0.12)",
+  cyan:"#8FE3BE",  cyanDim:"rgba(143,227,190,0.09)",
+  green:"#8FE3BE", greenDim:"rgba(143,227,190,0.12)",
+  red:"#FF7A7A",   redDim:"rgba(255,122,122,0.12)",
+  yellow:"#F5C842",yellowDim:"rgba(245,200,66,0.12)",
+  orange:"#F97316",amber:"#F5C842",
+  purple:"#A78BFA",purpleDim:"rgba(167,139,250,0.1)",
+  t1:"#F5F5F7", t2:"#B6BBC4", t3:"#7E848E", t4:"#556070",
+  p1:"#FF7A7A", p1dim:"rgba(255,122,122,0.12)", p1dot:"#FF7A7A",
+  p2:"#F5C842", p2dim:"rgba(245,200,66,0.12)",  p2dot:"#F5C842",
+  p3:"#8FE3BE", p3dim:"rgba(143,227,190,0.12)", p3dot:"#8FE3BE",
+  p4:"#7E848E", p4dim:"rgba(126,132,142,0.10)", p4dot:"#7E848E",
+  glass:"blur(28px) saturate(1.6)",
 };
+const C_LIGHT = {
+  _dark:false,
+  // ── Surface system — Apple liquid glass / VisionOS light
+  bg0:"#F5F4F0",
+  bg1:"rgba(255,255,255,0.32)",
+  bg2:"rgba(255,255,255,0.80)",
+  bg3:"rgba(255,255,255,0.18)",
+  bg4:"rgba(255,255,255,0.55)",
+  bgSolid:"#F5F4F0",
+  border:"rgba(0,0,0,0.06)",
+  borderHi:"rgba(0,0,0,0.10)",
+  // Accent — soft mint pastel (glow/tint only, not for text)
+  blue:"#9FE0BE",  blueHi:"#BFE8D3", blueDim:"rgba(159,224,190,0.22)",
+  cyan:"#9FE0BE",  cyanDim:"rgba(159,224,190,0.16)",
+  green:"#9FE0BE", greenDim:"rgba(159,224,190,0.22)",
+  red:"#E05555",   redDim:"rgba(224,85,85,0.12)",
+  yellow:"#C8860A",yellowDim:"rgba(200,134,10,0.12)",
+  orange:"#C06620",amber:"#C8860A",
+  purple:"#9B8DD0",purpleDim:"rgba(155,141,208,0.12)",
+  // Typography — warm dark, never pure black
+  t1:"#161616", t2:"#6E6E73", t3:"#A1A1A6", t4:"#C8C8CC",
+  p1:"#E05555", p1dim:"rgba(224,85,85,0.10)", p1dot:"#E05555",
+  p2:"#C8860A", p2dim:"rgba(200,134,10,0.10)", p2dot:"#C8860A",
+  p3:"#5CBF8A", p3dim:"rgba(92,191,138,0.15)", p3dot:"#5CBF8A",
+  p4:"#A1A1A6", p4dim:"rgba(161,161,166,0.10)", p4dot:"#A1A1A6",
+  glass:"blur(44px) saturate(2.8) brightness(1.02)",
+};
+// Module-level alias for backwards-compat (PRIORITY, UNIT_STATUS etc.)
+const C = C_DARK;
+
+// Theme context — provides active palette to all components
+const ThemeCtx = React.createContext(C_DARK);
+
+// Mobile A palette derived from active theme
+function makeA(C) {
+  return {
+    // ── Accent greens
+    lime:       C._dark ? C.green : "#2A9768",
+    limeFill:   C._dark ? C.green : "#9FE0BE",
+    limeDim:    C.greenDim,
+    limeMid:    C._dark ? "rgba(143,227,190,0.18)" : "rgba(255,255,255,0.82)",
+    mint:       C._dark ? C.blue : "#2A9768",
+    mintDim:    C.blueDim,
+    amber:      C.yellow,
+    amberDim:   C.yellowDim,
+    red:        C.red,
+    redDim:     C.redDim,
+    // ── Liquid glass card surfaces
+    // Light: very transparent + strong blur so background colors refract through
+    card:       C._dark ? "rgba(22,24,28,0.62)" : "rgba(255,255,255,0.22)",
+    cardHi:     C._dark ? "rgba(32,35,42,0.75)" : "rgba(255,255,255,0.42)",
+    blur:       C.glass,
+    // Multi-layer shadow: white border ring + soft ambient + inner highlight
+    shadow:     C._dark
+      ? "0 8px 32px rgba(0,0,0,0.44), 0 1px 0 rgba(255,255,255,0.06) inset"
+      : "0 0 0 1px rgba(255,255,255,0.75), 0 12px 40px rgba(0,0,0,0.04), 0 2px 0 rgba(255,255,255,1) inset, 0 -1px 0 rgba(255,255,255,0.20) inset",
+    shadowSm:   C._dark
+      ? "0 4px 16px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.04) inset"
+      : "0 0 0 1px rgba(255,255,255,0.70), 0 6px 20px rgba(0,0,0,0.03), 0 1.5px 0 rgba(255,255,255,1) inset",
+    // ── Active pill / filter chip
+    pillBg:             C._dark ? "rgba(143,227,190,0.18)" : "rgba(255,255,255,0.90)",
+    pillBorder:         C._dark ? C.green                  : "rgba(255,255,255,0.80)",
+    pillColor:          C._dark ? C.green                  : C.t1,
+    pillShadow:         C._dark ? "none"                   : "0 4px 12px rgba(0,0,0,0.06)",
+    // ── Inactive pill border — more visible than the generic card border
+    pillBorderInactive: C._dark ? "rgba(255,255,255,0.28)" : "rgba(0,0,0,0.12)",
+    t1: C.t1, t2: C.t2, t3: C.t3, r: 24,
+  };
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // L2 — DOMAIN CONSTANTS
@@ -53,18 +132,18 @@ const TICKET_PIPELINE = [
   "comprado","transito","entregado","facturado","cobrado","cerrado",
 ];
 const TICKET_META = {
-  recibido:   { label:"Recibido",        color:"#2A3A4A", dot:"#4A6A8A" },
-  validando:  { label:"Validando",       color:"#3A3A2A", dot:"#8A8A30" },
-  sourcing:   { label:"Sourcing",        color:"#2A3A5A", dot:"#4A70C0" },
-  cotizado:   { label:"Cotizado",        color:"#3A4A2A", dot:"#70A040" },
-  autorizado: { label:"Autorizado",      color:"#1A4A2A", dot:"#30A050" },
-  comprado:   { label:"Comprado",        color:"#1A3A2A", dot:"#30805A" },
-  transito:   { label:"En Transito",     color:"#2A3A1A", dot:"#70A030" },
-  entregado:  { label:"Entregado",       color:"#1A4A3A", dot:"#30C080" },
-  facturado:  { label:"Facturado",       color:"#2A2A5A", dot:"#5050C0" },
-  cobrado:    { label:"Cobrado",         color:"#1A5A1A", dot:"#30C030" },
-  cerrado:    { label:"Cerrado",         color:"#2A3A2A", dot:"#507050" },
-  cancelado:  { label:"Cancelado",       color:"#5A1A1A", dot:"#C03030" },
+  recibido:   { label:"Recibido",        color:"rgba(74,106,138,0.18)",  dot:"#6B9EC8" },
+  validando:  { label:"Validando",       color:"rgba(200,180,50,0.14)",  dot:"#C8C050" },
+  sourcing:   { label:"Sourcing",        color:"rgba(74,112,192,0.18)",  dot:"#7AA0E0" },
+  cotizado:   { label:"Cotizado",        color:"rgba(112,160,64,0.18)",  dot:"#8FC855" },
+  autorizado: { label:"Autorizado",      color:"rgba(48,160,80,0.18)",   dot:"#50C878" },
+  comprado:   { label:"Comprado",        color:"rgba(48,128,90,0.18)",   dot:"#50A888" },
+  transito:   { label:"En Transito",     color:"rgba(112,160,48,0.18)",  dot:"#90C848" },
+  entregado:  { label:"Entregado",       color:"rgba(48,192,128,0.18)",  dot:"#8FE3BE" },
+  facturado:  { label:"Facturado",       color:"rgba(167,139,250,0.14)", dot:"#A78BFA" },
+  cobrado:    { label:"Cobrado",         color:"rgba(48,192,48,0.18)",   dot:"#50D070" },
+  cerrado:    { label:"Cerrado",         color:"rgba(126,132,142,0.14)", dot:"#8A9AA4" },
+  cancelado:  { label:"Cancelado",       color:"rgba(255,122,122,0.14)", dot:"#FF7A7A" },
 };
 const TICKET_ALL = [...TICKET_PIPELINE, "cancelado"];
 
@@ -186,6 +265,16 @@ async function seedIfEmpty() {
 }
 
 
+// ── HOOKS ────────────────────────────────────────────────────────────────────
+function useDebounce(value, delay) {
+  const [dVal, setDVal] = useState(value);
+  useEffect(()=>{
+    const t = setTimeout(()=>setDVal(value), delay);
+    return ()=>clearTimeout(t);
+  },[value, delay]);
+  return dVal;
+}
+
 // ── SAFE HELPERS ─────────────────────────────────────────────────────────────
 const safeNumber = (v, fallback=0) => {
   const n = typeof v==="string" ? parseFloat(v.replace(/,/g,"")) : Number(v);
@@ -200,6 +289,30 @@ const genId = (prefix) => {
     : Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,6).toUpperCase();
   return `${prefix}-${uuid}`;
 };
+
+// ── OPERATIONAL LOG — lightweight in-memory ring buffer ──────────────────────
+const opLog = (() => {
+  const buf = [];
+  return {
+    push: (type, data={}) => {
+      buf.push({type, data, ts: Date.now()});
+      if (buf.length > 200) buf.shift();
+      if (process.env.NODE_ENV !== "production") console.debug("[opLog]", type, data);
+    },
+    all: () => [...buf],
+  };
+})();
+
+// ── PENDING QUEUE — offline sync deferred operations ─────────────────────────
+const pendingQueue = (() => {
+  let q = [];
+  return {
+    push:  (item) => { q.push(item); },
+    peek:  ()     => [...q],
+    flush: ()     => { const out=[...q]; q=[]; return out; },
+    clear: ()     => { q=[]; },
+  };
+})();
 
 // ═══════════════════════════════════════════════════════════════════════════════
 function computeSnap(p) {
@@ -334,8 +447,7 @@ function calculateTicketTotals(ticket) {
     const qty = safeNumber(ml.qty, 1) || 1;
     const lsnap = ml.snap || snap || {};
 
-    // Defensive validation
-    if (qty <= 0) opLog.push("WARN_QTY_INVALID", {id: ticket.id, qty});
+    // Defensive validation (qty is always ≥1 via safeNumber guard above)
 
     const fin = resolveLineFinancials(ml, snap, qty);
 
@@ -379,8 +491,54 @@ function utilidadPonderada(uNeta, probId) {
   return uNeta*(p.pct/100);
 }
 
-
 // ═══════════════════════════════════════════════════════════════════════════════
+// L3.5 — SHARED SELECTORS (single source of truth for derived ticket data)
+// All components MUST use these instead of inline filter logic.
+// Changing a business rule here updates all views simultaneously.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Active non-deleted tickets
+const sel_active     = (ts) => ts.filter(t=>!t._deleted);
+
+// Operado: work already done (entregado/facturado/cobrado/cerrado)
+const sel_operados   = (ts) => sel_active(ts).filter(t=>OPERADO_SET.has(t.status));
+
+// Cash: money actually received
+const sel_cobrados   = (ts) => sel_active(ts).filter(t=>CASH_SET.has(t.status));
+
+// Cartera: delivered/invoiced but not yet paid — business rule lives here
+const sel_cartera    = (ts) => sel_active(ts).filter(t=>CARTERA_SET.has(t.status)&&!t.cobrado);
+
+// Vencidos: cartera past the promesa de pago date
+const sel_vencidos   = (ts) => sel_cartera(ts).filter(t=>{
+  if(!t.promesaPago) return false;
+  const d=parseDateMX(t.promesaPago); return d&&new Date()>d;
+});
+
+// Forecast: probable but not yet done (cotizado/autorizado)
+const sel_forecast   = (ts) => sel_active(ts).filter(t=>FORECAST_SET.has(t.status));
+
+// Open pipeline (not closed, not cancelled)
+const sel_open       = (ts) => sel_active(ts).filter(t=>!CLOSED_SET.has(t.status));
+
+// Sum a snap field over a ticket array
+const sumSnap        = (ts, key) => ts.reduce((s,t)=>s+safeNumber(t.snap?.[key]),0);
+
+// Period filter — from parseDateMX of t.date
+const sel_inRange    = (ts, from, to) => ts.filter(t=>{
+  const d=parseDateMX(t.date); return d&&d>=from&&d<=to;
+});
+
+// Build period range object
+const buildRange = (period) => {
+  const now=new Date(); const from=new Date(now);
+  if     (period==="today") from.setHours(0,0,0,0);
+  else if(period==="week")  from.setDate(now.getDate()-7);
+  else if(period==="month") from.setDate(now.getDate()-30);
+  else if(period==="3m")    from.setDate(now.getDate()-90);
+  else                      from.setFullYear(2000); // "all"
+  return {from,to:now};
+};
 const mxn   = n => new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2}).format(n||0);
 const fpct  = n => ((n||0).toFixed(1))+"%";
 const clamp = (v,mn,mx) => Math.min(Math.max(v,mn),mx);
@@ -542,7 +700,6 @@ function reducer(state,action) {
         seen.add(key);
         return true;
       });
-      opLog.push("UNITS_REPLACE", {count: deduped.length, raw: incoming.length});
       return {...state, units: deduped};
     }
     // PARTS
@@ -581,6 +738,117 @@ function useToasts() {
     setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),3000);
   },[]);
   return {toasts,push};
+}
+
+// ── buildCotizacionHTML — genera HTML del documento (usado en preview y download) ─
+function buildCotizacionHTML(tkt, cl, un, supp) {
+  const totals = calculateTicketTotals(tkt);
+  const folio  = tkt.id.replace("TKT","COT");
+  const fechaLarga=(()=>{
+    const p=tkt.date.split("/"); if(p.length!==3) return tkt.date;
+    const m=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+    return `${parseInt(p[0])} de ${m[parseInt(p[1])-1]} de ${p[2]}`;
+  })();
+  const formaPago = tkt.payType==="credit"
+    ? "Crédito"+(tkt.promesaPago?` — Fecha límite: ${tkt.promesaPago}`:"")
+    : "Contado / Transferencia bancaria";
+  const entrega = supp&&supp.entregaDias
+    ? `${supp.entregaDias} día${supp.entregaDias>1?"s":""} hábiles`
+    : "24-48 hrs hábiles";
+  const unidadStr = un
+    ? `${un.economico?"Eco. "+un.economico+" · ":""}${un.marca} ${un.modelo} ${un.anio}`
+    : "";
+  const clDirParts=[]; if(cl?.direccion)clDirParts.push(cl.direccion); if(cl?.ciudad)clDirParts.push(cl.ciudad); if(cl?.estado)clDirParts.push(cl.estado);
+  const clLine = cl ? cl.empresa+(clDirParts.length?" · "+clDirParts.join(", "):"") : "—";
+  const fmtMXN = n=>safeNumber(n).toLocaleString("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2});
+  const notaLine = tkt.notes?`<li>${tkt.notes}</li>`:"";
+  const conceptos = tkt.lineas&&tkt.lineas.length>0
+    ? tkt.lineas
+    : [{titulo:tkt.titulo,partRef:tkt.partRef||"",snap:tkt.snap,qty:1,descripcionPDF:""}];
+  const filas = conceptos.map((c,i)=>{
+    const ml=migrateLinea(c,tkt.snap); const qty=safeNumber(ml.qty,1)||1;
+    const fin=resolveLineFinancials(ml,tkt.snap,qty);
+    const desc=ml.descripcionPDF||"Atención correctiva para continuidad operativa de unidad en CEDIS SMO. Incluye integración de componente compatible, validación operativa y seguimiento logístico.";
+    const unTag=unidadStr&&i===0?`<br><br><strong>Unidad:</strong> ${unidadStr}`:"";
+    const refTag=ml.partRef?`<br><br><strong>Clave:</strong> ${ml.partRef}`:"";
+    return `<tr><td>${String(i+1).padStart(2,"0")}</td><td>${ml.titulo||"Sin descripcion"}</td><td>${desc}${unTag}${refTag}</td><td class="money">${fmtMXN(fin.lineTotal)}</td></tr>`;
+  }).join("");
+  if(!filas.trim()) return null;
+  const body=`<style>*{box-sizing:border-box;margin:0;padding:0}.page{width:794px;background:#fff;padding:50px;font-family:Arial,Helvetica,sans-serif;color:#111;font-size:14px;line-height:1.5}.top-header{border:1px solid #dcdcdc;padding:20px;display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0}.brand h1{font-size:28px;font-weight:800;margin:0}.brand p{font-size:10px;color:#666;font-weight:700;margin-top:4px}.issuer{text-align:right;font-size:11px;line-height:1.6}.hero{background:#000;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:20px;margin-top:14px}.hero-title{font-size:22px;font-weight:800}.hero-meta{text-align:right}.hero-meta .folio{font-size:18px;font-weight:800}.hero-meta .date{font-size:13px;font-weight:700}.meta-table{width:100%;border-collapse:collapse;margin-top:14px}.meta-table td{border:1px solid #e3e3e3;padding:10px 12px;font-size:11px}.meta-table td:first-child{width:100px;background:#fafafa;font-weight:700}.section-title{margin-top:22px;margin-bottom:10px;font-size:13px;font-weight:800}.detail-table{width:100%;border-collapse:collapse}.detail-table th{background:#000;color:#fff;padding:10px 12px;text-align:left;font-size:10px}.detail-table td{border:1px solid #e5e5e5;padding:12px;vertical-align:top;font-size:11px;line-height:1.6}.money{text-align:right;white-space:nowrap;font-weight:700}.totals{width:300px;margin-left:auto;margin-top:16px;border-collapse:collapse}.totals td{border:1px solid #e3e3e3;padding:10px 12px;font-size:11px}.totals td:last-child{text-align:right;font-weight:700}.grand-total td{background:#000;color:#fff;font-weight:800}.block{margin-top:22px}.block h3{font-size:13px;font-weight:800;margin-bottom:8px}.block ul{padding-left:16px}.block li{margin-bottom:5px;font-size:11px;line-height:1.6}.footer{margin-top:28px;border-top:1px solid #e5e5e5;padding-top:10px;display:flex;justify-content:space-between;font-size:10px;color:#444}</style><div class="page"><div class="top-header"><div class="brand"><h1>LOGISOLVE</h1><p>Logistics &middot; Supply &middot; Solutions</p></div><div class="issuer"><strong>Alejandro Saucedo</strong><br>RFC: SAME9612277T9<br>Tel. 5562321807<br>contacto@logisolve.mx</div></div><div class="hero"><div class="hero-title">COTIZACI&Oacute;N</div><div class="hero-meta"><div>No.</div><div class="folio">${folio}</div><div class="date">Fecha: ${tkt.date.replace(/\//g," / ")}</div></div></div><table class="meta-table"><tr><td>Cliente</td><td>${clLine}</td></tr><tr><td>Vigencia</td><td>3 d&iacute;as naturales</td></tr><tr><td>Atenci&oacute;n</td><td>&Aacute;rea de Compras / Operaciones</td></tr></table><div class="section-title">DETALLE DEL CONCEPTO</div><table class="detail-table"><thead><tr><th style="width:36px">No.</th><th style="width:160px">Concepto</th><th>Descripci&oacute;n t&eacute;cnica / operativa</th><th style="width:110px;text-align:right">Importe</th></tr></thead><tbody>${filas}</tbody></table><table class="totals"><tr><td>Subtotal</td><td>${fmtMXN(totals.subtotal)} MXN</td></tr><tr><td>IVA (${totals.ivaPct}%)</td><td>${fmtMXN(totals.ivaAmt)} MXN</td></tr><tr class="grand-total"><td>TOTAL &middot; IVA INCLUIDO</td><td>${fmtMXN(totals.total)} MXN</td></tr></table><div class="block"><h3>ALCANCE DEL SERVICIO</h3><ul><li>Integraci&oacute;n y coordinaci&oacute;n de componente requerido para continuidad operativa.</li><li>Validaci&oacute;n y coordinaci&oacute;n operativa.</li><li>Entrega directa en CEDIS SMO.</li><li>Seguimiento y trazabilidad log&iacute;stica.</li></ul></div><div class="block"><h3>CONDICIONES COMERCIALES</h3><ul><li>Precio IVA incluido en el total.</li><li>Forma de pago: ${formaPago}.</li><li>Entrega conforme a disponibilidad confirmada al momento de autorizaci&oacute;n.</li><li>Precios sujetos a cambio y disponibilidad al momento de confirmar.</li><li>Vigencia: 3 d&iacute;as naturales a partir de la fecha de emisi&oacute;n.</li>${notaLine}</ul></div><div class="block"><h3>OBSERVACIONES</h3><ul><li>Tiempo estimado de entrega: ${entrega}, sujeto a disponibilidad.</li><li>La validaci&oacute;n t&eacute;cnica final de compatibilidad corresponde al cliente.</li><li>La garant&iacute;a aplica conforme a pol&iacute;ticas del fabricante o proveedor.</li></ul></div><div class="footer"><div>Quedo atento para cualquier duda o confirmaci&oacute;n.</div><div>LogiSolve &middot; ${fechaLarga}</div></div></div>`;
+  return {folio, body};
+}
+
+// ── PDFPreviewModal — preview nativo para iPhone/Safari ──────────────────────
+function PDFPreviewModal({tkt,cl,un,supp,onClose}) {
+  const C = React.useContext(ThemeCtx);
+  const frameRef=useRef(null);
+  const [ready,setReady]=useState(false);
+  const result=useMemo(()=>buildCotizacionHTML(tkt,cl,un,supp),[tkt]);
+  const htmlDoc=useMemo(()=>{
+    if(!result) return null;
+    return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=794px"><style>body{margin:0;background:#f0f0f0;display:flex;justify-content:center;min-height:100vh;}@media print{body{background:white;margin:0;}}</style></head><body>${result.body}</body></html>`;
+  },[result]);
+
+  const handlePrint=()=>{
+    if(!htmlDoc) return;
+    try{
+      const blob=new Blob([htmlDoc],{type:"text/html;charset=utf-8"});
+      const url=URL.createObjectURL(blob);
+      const w=window.open(url,"_blank");
+      if(w){
+        w.addEventListener("load",()=>{w.focus();w.print();setTimeout(()=>URL.revokeObjectURL(url),60000);});
+      } else {
+        URL.revokeObjectURL(url);
+        frameRef.current?.contentWindow?.print();
+      }
+    }catch(e){frameRef.current?.contentWindow?.print();}
+  };
+  const handleShare=()=>{
+    if(navigator.share){
+      navigator.share({title:`Cotización ${tkt.id}`,text:`${tkt.titulo||""}\nTotal: ${mxn(tkt.snap?.precioConIVA||0)}\n${tkt.id}`}).catch(()=>{});
+    } else { handlePrint(); }
+  };
+
+  if(!htmlDoc) return (
+    <div style={{position:"fixed",inset:0,zIndex:700,background:C.bg0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
+      <div style={{fontSize:13,color:C.red}}>No se pudo generar el documento</div>
+      <button onClick={onClose} style={{padding:"12px 24px",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,color:C.t1,fontSize:14,cursor:"pointer"}}>Cerrar</button>
+    </div>
+  );
+
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:700,background:C.bg0,display:"flex",flexDirection:"column"}}>
+      {/* Header */}
+      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderBottom:`1px solid ${C.border}`,
+        padding:`calc(env(safe-area-inset-top,44px) + 10px) 16px 12px`,
+        display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+        <button onClick={onClose} style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:10,
+          color:C.t1,padding:"10px 14px",cursor:"pointer",fontSize:14,minWidth:44,minHeight:44,lineHeight:1}}>←</button>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:11,color:C.cyan,fontWeight:700,fontFamily:"'Courier New',monospace"}}>{result.folio}</div>
+          <div style={{fontSize:11,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(tkt.titulo||"").substring(0,44)}</div>
+        </div>
+        {typeof navigator!=="undefined"&&navigator.share&&(
+          <button onClick={handleShare} style={{background:C.bg0,border:`1px solid ${C.border}`,borderRadius:10,
+            color:C.t1,padding:"10px 14px",cursor:"pointer",fontSize:13,minWidth:44,minHeight:44,fontWeight:600}}>↑</button>
+        )}
+        <button onClick={handlePrint} style={{background:C.blue,border:`1px solid ${C.blueHi}`,borderRadius:10,
+          color:C.t1,padding:"10px 16px",cursor:"pointer",fontSize:13,fontWeight:700,minHeight:44,whiteSpace:"nowrap"}}>↓ PDF</button>
+      </div>
+      {/* Loading */}
+      {!ready&&(
+        <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12}}>
+          <div style={{width:32,height:32,borderRadius:16,border:`3px solid ${C.border}`,borderTopColor:C.cyan,animation:"spin 0.8s linear infinite"}}/>
+          <div style={{fontSize:12,color:C.t3}}>Generando vista previa...</div>
+        </div>
+      )}
+      {/* Preview */}
+      <iframe ref={frameRef} srcDoc={htmlDoc} onLoad={()=>setReady(true)}
+        style={{flex:1,border:"none",display:ready?"block":"none",background:"white"}}
+        title="Vista previa cotización"
+        sandbox="allow-same-origin allow-scripts allow-modals allow-popups allow-forms"/>
+    </div>
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -656,33 +924,44 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
   const innerHTML = `
     <style>
       *{box-sizing:border-box;margin:0;padding:0}
-      .page{width:794px;background:#fff;padding:50px;font-family:Arial,Helvetica,sans-serif;color:#111;font-size:14px;line-height:1.5}
-      .top-header{border:1px solid #dcdcdc;padding:20px;display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0}
-      .brand h1{font-size:28px;font-weight:800;margin:0}
-      .brand p{font-size:10px;color:#666;font-weight:700;margin-top:4px}
-      .issuer{text-align:right;font-size:11px;line-height:1.6}
-      .hero{background:#000;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:20px;margin-top:14px}
-      .hero-title{font-size:22px;font-weight:800}
+      .page{width:794px;background:#fff;padding:34px 44px 28px;font-family:-apple-system,Helvetica Neue,Arial,sans-serif;color:#1a1a1a;font-size:11px;line-height:1.45}
+      /* ── HEADER ── */
+      .top-header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:2px solid #0a0a0a;margin-bottom:0}
+      .brand h1{font-size:26px;font-weight:900;margin:0;letter-spacing:-0.02em;color:#0a0a0a}
+      .brand p{font-size:9px;color:#888;font-weight:500;margin-top:3px;letter-spacing:0.06em}
+      .issuer{text-align:right;font-size:10px;line-height:1.55;color:#444}
+      .issuer strong{color:#0a0a0a;font-size:11px}
+      /* ── HERO BAR ── */
+      .hero{background:#0a0a0a;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:14px 18px;margin-top:14px;border-radius:4px}
+      .hero-title{font-size:18px;font-weight:900;letter-spacing:0.05em}
       .hero-meta{text-align:right}
-      .hero-meta .folio{font-size:18px;font-weight:800}
-      .hero-meta .date{font-size:13px;font-weight:700}
-      .meta-table{width:100%;border-collapse:collapse;margin-top:14px}
-      .meta-table td{border:1px solid #e3e3e3;padding:10px 12px;font-size:11px}
-      .meta-table td:first-child{width:100px;background:#fafafa;font-weight:700}
-      .section-title{margin-top:22px;margin-bottom:10px;font-size:13px;font-weight:800}
+      .hero-meta .lbl{font-size:9px;color:rgba(255,255,255,0.6);letter-spacing:0.04em;font-weight:500}
+      .hero-meta .folio{font-size:16px;font-weight:800;letter-spacing:0.02em}
+      .hero-meta .date{font-size:10px;color:rgba(255,255,255,0.75);font-weight:500}
+      /* ── META TABLE ── */
+      .meta-table{width:100%;border-collapse:collapse;margin-top:12px}
+      .meta-table td{border:1px solid #e8e8e8;padding:7px 11px;font-size:10px;color:#1a1a1a}
+      .meta-table td:first-child{width:84px;background:#f5f5f5;font-weight:700;color:#555;font-size:9px;letter-spacing:0.04em;text-transform:uppercase}
+      /* ── DETAIL TABLE ── */
+      .section-title{margin-top:16px;margin-bottom:8px;font-size:10px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#555}
       .detail-table{width:100%;border-collapse:collapse}
-      .detail-table th{background:#000;color:#fff;padding:10px 12px;text-align:left;font-size:10px}
-      .detail-table td{border:1px solid #e5e5e5;padding:12px;vertical-align:top;font-size:11px;line-height:1.6}
+      .detail-table th{background:#0a0a0a;color:#fff;padding:8px 10px;text-align:left;font-size:9px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase}
+      .detail-table td{border:1px solid #e8e8e8;padding:9px 10px;vertical-align:top;font-size:10px;line-height:1.45;color:#1a1a1a}
       .money{text-align:right;white-space:nowrap;font-weight:700}
-      .totals{width:300px;margin-left:auto;margin-top:16px;border-collapse:collapse}
-      .totals td{border:1px solid #e3e3e3;padding:10px 12px;font-size:11px}
+      /* ── TOTALS ── */
+      .totals{width:270px;margin-left:auto;margin-top:10px;border-collapse:collapse}
+      .totals td{border:1px solid #e8e8e8;padding:7px 11px;font-size:10px}
       .totals td:last-child{text-align:right;font-weight:700}
-      .grand-total td{background:#000;color:#fff;font-weight:800}
-      .block{margin-top:22px}
-      .block h3{font-size:13px;font-weight:800;margin-bottom:8px}
-      .block ul{padding-left:16px}
-      .block li{margin-bottom:5px;font-size:11px;line-height:1.6}
-      .footer{margin-top:28px;border-top:1px solid #e5e5e5;padding-top:10px;display:flex;justify-content:space-between;font-size:10px;color:#444}
+      .grand-total td{background:#0a0a0a;color:#fff;font-weight:800;font-size:11px}
+      /* ── STACKED SECTIONS ── */
+      .blocks-row{margin-top:16px;padding-top:14px;border-top:1px solid #e8e8e8}
+      .block{margin-bottom:14px}
+      .block h3{font-size:10px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;color:#1a1a1a;margin-bottom:6px}
+      .block ul{list-style:none;padding:0}
+      .block li{font-size:9.5px;line-height:1.5;color:#444;margin-bottom:3px;padding-left:12px;position:relative}
+      .block li::before{content:"·";position:absolute;left:2px;color:#aaa}
+      /* ── FOOTER ── */
+      .footer{margin-top:14px;padding-top:8px;border-top:1px solid #e8e8e8;display:flex;justify-content:space-between;font-size:8.5px;color:#999;letter-spacing:0.02em}
     </style>
     <div class="page">
       <div class="top-header">
@@ -693,14 +972,13 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
         <div class="issuer">
           <strong>Alejandro Saucedo</strong><br>
           RFC: SAME9612277T9<br>
-          Tel. 5562321807<br>
-          contacto@logisolve.mx
+          Tel. 5562321807
         </div>
       </div>
       <div class="hero">
         <div class="hero-title">COTIZACI&Oacute;N</div>
         <div class="hero-meta">
-          <div>No.</div>
+          <div class="lbl">No.</div>
           <div class="folio">${folio}</div>
           <div class="date">Fecha: ${tkt.date.replace(/\//g," / ")}</div>
         </div>
@@ -710,48 +988,50 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
         <tr><td>Vigencia</td><td>3 d&iacute;as naturales</td></tr>
         <tr><td>Atenci&oacute;n</td><td>&Aacute;rea de Compras / Operaciones</td></tr>
       </table>
-      <div class="section-title">DETALLE DEL CONCEPTO</div>
+      <div class="section-title">Detalle del concepto</div>
       <table class="detail-table">
         <thead><tr>
-          <th style="width:36px">No.</th>
-          <th style="width:160px">Concepto</th>
+          <th style="width:32px">No.</th>
+          <th style="width:150px">Concepto</th>
           <th>Descripci&oacute;n t&eacute;cnica / operativa</th>
-          <th style="width:110px;text-align:right">Importe</th>
+          <th style="width:100px;text-align:right">Importe</th>
         </tr></thead>
         <tbody>${filas}</tbody>
       </table>
       <table class="totals">
         <tr><td>Subtotal</td><td>${fmtMXN(totals.subtotal)} MXN</td></tr>
         <tr><td>IVA (${totals.ivaPct}%)</td><td>${fmtMXN(totals.ivaAmt)} MXN</td></tr>
-        <tr class="grand-total"><td>TOTAL &middot; IVA INCLUIDO</td><td>${fmtMXN(totals.total)} MXN</td></tr>
+        <tr class="grand-total"><td>Total &middot; IVA incluido</td><td>${fmtMXN(totals.total)} MXN</td></tr>
       </table>
-      <div class="block">
-        <h3>ALCANCE DEL SERVICIO</h3>
-        <ul>
-          <li>Integraci&oacute;n y coordinaci&oacute;n de componente requerido para continuidad operativa.</li>
-          <li>Validaci&oacute;n y coordinaci&oacute;n operativa.</li>
-          <li>Entrega directa en CEDIS SMO.</li>
-          <li>Seguimiento y trazabilidad log&iacute;stica.</li>
-        </ul>
-      </div>
-      <div class="block">
-        <h3>CONDICIONES COMERCIALES</h3>
-        <ul>
-          <li>Precio IVA incluido en el total.</li>
-          <li>Forma de pago: ${formaPago}.</li>
-          <li>Entrega conforme a disponibilidad confirmada al momento de autorizaci&oacute;n.</li>
-          <li>Precios sujetos a cambio y disponibilidad al momento de confirmar.</li>
-          <li>Vigencia: 3 d&iacute;as naturales a partir de la fecha de emisi&oacute;n.</li>
-          ${notaLine}
-        </ul>
-      </div>
-      <div class="block">
-        <h3>OBSERVACIONES</h3>
-        <ul>
-          <li>Tiempo estimado de entrega: ${entrega}, sujeto a disponibilidad.</li>
-          <li>La validaci&oacute;n t&eacute;cnica final de compatibilidad corresponde al cliente.</li>
-          <li>La garant&iacute;a aplica conforme a pol&iacute;ticas del fabricante o proveedor.</li>
-        </ul>
+      <div class="blocks-row">
+        <div class="block">
+          <h3>Alcance del servicio</h3>
+          <ul>
+            <li>Integraci&oacute;n y coordinaci&oacute;n de componente requerido para continuidad operativa.</li>
+            <li>Validaci&oacute;n y coordinaci&oacute;n operativa.</li>
+            <li>Entrega directa en CEDIS SMO.</li>
+            <li>Seguimiento y trazabilidad log&iacute;stica.</li>
+          </ul>
+        </div>
+        <div class="block">
+          <h3>Condiciones comerciales</h3>
+          <ul>
+            <li>Precio IVA incluido en el total.</li>
+            <li>Forma de pago: ${formaPago}.</li>
+            <li>Entrega conforme a disponibilidad confirmada al momento de autorizaci&oacute;n.</li>
+            <li>Precios sujetos a cambio y disponibilidad al momento de confirmar.</li>
+            <li>Vigencia: 3 d&iacute;as naturales a partir de la fecha de emisi&oacute;n.</li>
+            ${notaLine}
+          </ul>
+        </div>
+        <div class="block">
+          <h3>Observaciones</h3>
+          <ul>
+            <li>Tiempo estimado de entrega: ${entrega}, sujeto a disponibilidad.</li>
+            <li>La validaci&oacute;n t&eacute;cnica final de compatibilidad corresponde al cliente.</li>
+            <li>La garant&iacute;a aplica conforme a pol&iacute;ticas del fabricante o proveedor.</li>
+          </ul>
+        </div>
       </div>
       <div class="footer">
         <div>Quedo atento para cualquier duda o confirmaci&oacute;n.</div>
@@ -790,7 +1070,7 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
         },
         jsPDF: { unit:"mm", format:"a4", orientation:"portrait" },
       })
-      .from(container.firstElementChild)
+      .from(container.querySelector('.page')||container.firstElementChild)
       .save()
       .finally(() => { container.remove(); });
   };
@@ -813,6 +1093,7 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
 }
 // Modal de confirmacion PDF
 function PDFConfirm({tkt,cl,un,supp,onClose}) {
+  const C = React.useContext(ThemeCtx);
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{background:C.bg2,border:`1px solid ${C.borderHi}`,borderRadius:6,padding:22,maxWidth:340,width:"90%"}}>
@@ -843,17 +1124,18 @@ function PDFConfirm({tkt,cl,un,supp,onClose}) {
 // L8 — UI PRIMITIVES
 // ═══════════════════════════════════════════════════════════════════════════════
 const Logo = React.memo(function Logo() {
+  const C = React.useContext(ThemeCtx);
   return (
     <div style={{display:"flex",alignItems:"center",gap:10}}>
       <svg width="22" height="22" viewBox="0 0 28 28">
-        <line x1="2" y1="14" x2="26" y2="14" stroke={C.cyan} strokeWidth="1.5"/>
+        <line x1="2" y1="14" x2="26" y2="14" stroke={C.blue} strokeWidth="1.5"/>
         <line x1="8" y1="14" x2="8" y2="8"   stroke={C.cyanDim} strokeWidth="1"/>
         <line x1="8" y1="8"  x2="17" y2="8"  stroke={C.cyanDim} strokeWidth="1"/>
         <line x1="17" y1="14" x2="17" y2="20" stroke={C.cyanDim} strokeWidth="1"/>
         <line x1="8"  y1="20" x2="17" y2="20" stroke={C.cyanDim} strokeWidth="1"/>
-        <circle cx="2"  cy="14" r="2"   fill={C.cyan}/>
-        <circle cx="8"  cy="14" r="1.4" fill={C.cyan}/>
-        <circle cx="17" cy="14" r="1.4" fill={C.cyan}/>
+        <circle cx="2"  cy="14" r="2"   fill={C.blue}/>
+        <circle cx="8"  cy="14" r="1.4" fill={C.blue}/>
+        <circle cx="17" cy="14" r="1.4" fill={C.blue}/>
         <circle cx="26" cy="14" r="2.2" fill={C.cyan}/>
         <circle cx="8"  cy="8"  r="1.2" fill={C.cyanDim}/>
         <circle cx="17" cy="8"  r="1.2" fill={C.orange}/>
@@ -922,6 +1204,7 @@ function Field({label,value,onChange,prefix="$",suffix,hint,hi,min=0,step=1,type
 }
 
 function Sel({label,value,onChange,options}) {
+  const C = React.useContext(ThemeCtx);
   return (
     <div style={{marginBottom:7}}>
       {label&&<div style={{fontSize:7,color:C.t3,letterSpacing:"0.14em",marginBottom:3,textTransform:"uppercase"}}>{label}</div>}
@@ -945,8 +1228,9 @@ const Toggle = React.memo(function Toggle({label,value,onChange}) {
 })
 
 const SHdr = React.memo(function SHdr({title,right}) {
+  const C = React.useContext(ThemeCtx);
   return (
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 10px",background:C.bg3,borderBottom:`1px solid ${C.border}`}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 10px",background:C.bg3,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderBottom:`1px solid ${C.border}`}}>
       <div style={{fontSize:7,color:C.t3,letterSpacing:"0.2em",fontWeight:700}}>{title}</div>
       {right&&<div style={{fontSize:9,color:C.t2}}>{right}</div>}
     </div>
@@ -954,6 +1238,7 @@ const SHdr = React.memo(function SHdr({title,right}) {
 })
 
 const MiniBar = React.memo(function MiniBar({value,max,color}) {
+  const C = React.useContext(ThemeCtx);
   return (
     <div style={{height:3,background:C.bg4,borderRadius:2,overflow:"hidden",marginTop:3}}>
       <div style={{height:"100%",width:`${clamp((value/Math.max(max,1))*100,0,100)}%`,background:color||C.cyan}}/>
@@ -962,6 +1247,7 @@ const MiniBar = React.memo(function MiniBar({value,max,color}) {
 })
 
 const EmptyState = React.memo(function EmptyState({icon,title,sub}) {
+  const C = React.useContext(ThemeCtx);
   return (
     <div style={{textAlign:"center",padding:"32px 16px",color:C.t3}}>
       <div style={{fontSize:24,marginBottom:6,opacity:.4}}>{icon}</div>
@@ -972,13 +1258,14 @@ const EmptyState = React.memo(function EmptyState({icon,title,sub}) {
 })
 
 const Confirm = React.memo(function Confirm({msg,onConfirm,onCancel}) {
+  const C = React.useContext(ThemeCtx);
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:5,padding:18,maxWidth:320,width:"90%"}}>
-        <div style={{fontSize:11,color:C.t1,marginBottom:14,lineHeight:1.5}}>{msg}</div>
-        <div style={{display:"flex",gap:7,justifyContent:"flex-end"}}>
-          <button onClick={onCancel}  style={{padding:"4px 12px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:10,cursor:"pointer"}}>Cancelar</button>
-          <button onClick={onConfirm} style={{padding:"4px 12px",background:C.red,border:"none",borderRadius:3,color:C.t1,fontSize:10,fontWeight:700,cursor:"pointer"}}>Confirmar</button>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{background:"rgba(16,18,22,0.92)",backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",border:`1px solid ${C.borderHi}`,borderRadius:20,padding:22,maxWidth:320,width:"90%",boxShadow:"0 16px 60px rgba(0,0,0,0.6)"}}>
+        <div style={{fontSize:12,color:C.t1,marginBottom:16,lineHeight:1.6}}>{msg}</div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+          <button onClick={onCancel}  style={{padding:"7px 16px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:10,color:C.t2,fontSize:11,cursor:"pointer"}}>Cancelar</button>
+          <button onClick={onConfirm} style={{padding:"7px 16px",background:C.red,border:"none",borderRadius:10,color:"#0D0F12",fontSize:11,fontWeight:700,cursor:"pointer"}}>Confirmar</button>
         </div>
       </div>
     </div>
@@ -986,16 +1273,26 @@ const Confirm = React.memo(function Confirm({msg,onConfirm,onCancel}) {
 })
 
 const Toasts = React.memo(function Toasts({items}) {
+  const C = React.useContext(ThemeCtx);
   if(!items.length) return null;
-  const s=t=>t==="success"?{border:`1px solid ${C.green}55`,color:C.green}:t==="error"?{border:`1px solid ${C.red}55`,color:C.red}:{border:`1px solid ${C.border}`,color:C.t2};
+  const s=t=>t==="success"
+    ?{border:`1px solid rgba(143,227,190,0.30)`,color:"#8FE3BE",background:"rgba(14,24,20,0.92)"}
+    :t==="error"
+    ?{border:`1px solid rgba(255,122,122,0.30)`,color:"#FF7A7A",background:"rgba(24,12,12,0.92)"}
+    :{border:`1px solid ${C.border}`,color:C.t2,background:"rgba(14,16,20,0.92)"};
   return (
-    <div style={{position:"fixed",bottom:14,right:14,zIndex:999,display:"flex",flexDirection:"column",gap:5}}>
-      {items.map(t=><div key={t.id} style={{background:C.bg3,borderRadius:3,padding:"7px 12px",fontSize:10,...s(t.type),fontFamily:"'Courier New',monospace",maxWidth:280}}>{t.msg}</div>)}
+    <div style={{position:"fixed",bottom:"calc(90px + env(safe-area-inset-bottom,0px) + 8px)",right:12,zIndex:999,display:"flex",flexDirection:"column",gap:6,maxWidth:"calc(100vw - 24px)"}}>
+      {items.map(t=>(
+        <div key={t.id} style={{borderRadius:14,padding:"10px 16px",fontSize:11,fontFamily:"'Courier New',monospace",maxWidth:300,...s(t.type),boxShadow:"0 6px 24px rgba(0,0,0,.5)",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
+          {t.msg}
+        </div>
+      ))}
     </div>
   );
 })
 
 function SearchPalette({state,onNavigate,onClose}) {
+  const C = React.useContext(ThemeCtx);
   const [q,setQ]=useState("");
   const ref=useRef();
   useEffect(()=>{ref.current?.focus();},[]);
@@ -1012,8 +1309,8 @@ function SearchPalette({state,onNavigate,onClose}) {
   },[q,state]);
   const tl={ticket:"Ticket",client:"Cliente",supplier:"Prov.",unit:"Unidad",part:"Parte"};
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.8)",zIndex:600,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:70}} onClick={onClose}>
-      <div style={{width:"90%",maxWidth:520,background:C.bg2,border:`1px solid ${C.borderHi}`,borderRadius:5,overflow:"hidden"}} onClick={e=>e.stopPropagation()}>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",zIndex:600,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:70}} onClick={onClose}>
+      <div style={{width:"90%",maxWidth:520,background:"rgba(16,18,22,0.92)",backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",border:`1px solid ${C.borderHi}`,borderRadius:16,overflow:"hidden"}} onClick={e=>e.stopPropagation()}>
         <div style={{display:"flex",alignItems:"center",gap:7,padding:"7px 11px",borderBottom:`1px solid ${C.border}`}}>
           <span style={{color:C.t3,fontSize:11}}>&#9906;</span>
           <input ref={ref} value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar ticket, unidad, parte, cliente, proveedor..."
@@ -1037,8 +1334,184 @@ function SearchPalette({state,onNavigate,onClose}) {
   );
 }
 
+// ── CLIENT PICKER (búsqueda por empresa, RFC, contacto) ─────────────────────
+function ClientPicker({clients, value, onChange, placeholder="Buscar cliente...", mobile=false}) {
+  const C = React.useContext(ThemeCtx);
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef();
+
+  const selected = clients.find(c => c.id === value);
+  const displayLabel = selected ? selected.empresa : "";
+
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    document.addEventListener("touchstart", h, {passive:true});
+    return () => { document.removeEventListener("mousedown", h); document.removeEventListener("touchstart", h); };
+  }, []);
+
+  const results = useMemo(() => {
+    if (!q.trim()) return clients.slice(0, 60);
+    const lq = q.toLowerCase();
+    return clients.filter(c =>
+      safeLower(c.empresa).includes(lq) ||
+      safeLower(c.rfc||"").includes(lq) ||
+      safeLower(c.contacto||"").includes(lq)
+    );
+  }, [q, clients]);
+
+  const triggerPad  = mobile ? "12px 14px" : "6px 8px";
+  const triggerFont = mobile ? 16 : 10;
+  const labelFont   = mobile ? 10 : 7;
+  const dropFont    = mobile ? 13 : 9;
+  const dropHeight  = mobile ? 280 : 220;
+  const itemPad     = mobile ? "10px 12px" : "6px 9px";
+
+  return (
+    <div ref={ref} style={{position:"relative", marginBottom: mobile ? 10 : 7}}>
+      <div style={{fontSize:labelFont,color:C.t3,letterSpacing:"0.14em",marginBottom: mobile ? 5 : 3,textTransform:"uppercase"}}>{mobile ? "Cliente" : "CLIENTE"}</div>
+      <div
+        onClick={() => { setOpen(o => !o); setQ(""); }}
+        style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:C.bg0,border:`1px solid ${open?C.blueHi:C.border}`,borderRadius: mobile ? 6 : 3,padding:triggerPad,cursor:"pointer",minHeight: mobile ? 46 : 28}}
+      >
+        {value ? (
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{fontSize:triggerFont,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayLabel}</div>
+            {selected?.rfc && <div style={{fontSize: mobile ? 11 : 7,color:C.t3,marginTop:2,fontFamily:"'Courier New',monospace"}}>{selected.rfc}</div>}
+          </div>
+        ) : (
+          <span style={{fontSize:triggerFont,color:C.t3}}>{placeholder}</span>
+        )}
+        <div style={{display:"flex",gap:5,alignItems:"center",flexShrink:0,marginLeft:6}}>
+          {value && <span onClick={e=>{e.stopPropagation();onChange("");}} style={{fontSize: mobile ? 18 : 10,color:C.red,cursor:"pointer",padding:"0 3px",lineHeight:1}}>×</span>}
+          <span style={{fontSize: mobile ? 10 : 8,color:C.t3}}>{open?"▲":"▼"}</span>
+        </div>
+      </div>
+      {open && (
+        <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:300,background:C.bg2,border:`1px solid ${C.blueHi}`,borderRadius: mobile ? 6 : 3,boxShadow:"0 4px 20px rgba(0,0,0,.6)",maxHeight:dropHeight,display:"flex",flexDirection:"column"}}>
+          <div style={{padding: mobile ? "10px 12px" : "5px 8px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
+            <input
+              autoFocus
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              placeholder="Empresa, RFC, contacto..."
+              style={{width:"100%",background:"transparent",border:"none",outline:"none",color:C.t1,fontSize: mobile ? 16 : 10,fontFamily:"inherit"}}
+            />
+          </div>
+          <div style={{overflowY:"auto",WebkitOverflowScrolling:"touch",flex:1}}>
+            {results.length === 0 ? (
+              <div style={{padding:itemPad,color:C.t3,fontSize:dropFont}}>Sin resultados</div>
+            ) : results.map(c => (
+              <div key={c.id}
+                onClick={() => { onChange(c.id); setOpen(false); setQ(""); }}
+                style={{padding:itemPad,cursor:"pointer",borderBottom:`1px solid ${C.border}`,background:c.id===value?C.blueDim:"transparent"}}>
+                <div style={{fontSize:dropFont,color:c.id===value?C.cyan:C.t1,fontWeight:c.id===value?700:400}}>{c.empresa}</div>
+                {c.rfc && <div style={{fontSize: mobile ? 11 : 7,color:C.t3,fontFamily:"'Courier New',monospace"}}>{c.rfc}</div>}
+              </div>
+            ))}
+          </div>
+          {value && (
+            <div style={{padding: mobile ? "10px 12px" : "5px 8px",borderTop:`1px solid ${C.border}`,flexShrink:0}}>
+              <div onClick={() => { onChange(""); setOpen(false); }} style={{fontSize:dropFont,color:C.red,cursor:"pointer"}}>× Quitar cliente</div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── SUPPLIER PICKER (búsqueda por nombre, especialidad) ──────────────────────
+function SupplierPicker({suppliers, value, onChange, placeholder="Buscar proveedor...", mobile=false}) {
+  const C = React.useContext(ThemeCtx);
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef();
+
+  const selected = suppliers.find(s => s.id === value);
+
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    document.addEventListener("touchstart", h, {passive:true});
+    return () => { document.removeEventListener("mousedown", h); document.removeEventListener("touchstart", h); };
+  }, []);
+
+  const results = useMemo(() => {
+    if (!q.trim()) return suppliers.slice(0, 60);
+    const lq = q.toLowerCase();
+    return suppliers.filter(s =>
+      safeLower(s.nombre).includes(lq) ||
+      safeLower(s.especialidad||"").includes(lq) ||
+      safeLower(s.cobertura||"").includes(lq)
+    );
+  }, [q, suppliers]);
+
+  const triggerPad  = mobile ? "12px 14px" : "6px 8px";
+  const triggerFont = mobile ? 16 : 10;
+  const labelFont   = mobile ? 10 : 7;
+  const dropFont    = mobile ? 13 : 9;
+  const dropHeight  = mobile ? 260 : 200;
+  const itemPad     = mobile ? "10px 12px" : "6px 9px";
+
+  return (
+    <div ref={ref} style={{position:"relative", marginBottom: mobile ? 10 : 7}}>
+      <div style={{fontSize:labelFont,color:C.t3,letterSpacing:"0.14em",marginBottom: mobile ? 5 : 3,textTransform:"uppercase"}}>{mobile ? "Proveedor" : "PROVEEDOR"}</div>
+      <div
+        onClick={() => { setOpen(o => !o); setQ(""); }}
+        style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:C.bg0,border:`1px solid ${open?C.blueHi:C.border}`,borderRadius: mobile ? 6 : 3,padding:triggerPad,cursor:"pointer",minHeight: mobile ? 46 : 28}}
+      >
+        {value ? (
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{fontSize:triggerFont,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selected?.nombre||value}</div>
+            {selected?.especialidad && <div style={{fontSize: mobile ? 11 : 7,color:C.t3,marginTop:2}}>{selected.especialidad}</div>}
+          </div>
+        ) : (
+          <span style={{fontSize:triggerFont,color:C.t3}}>{placeholder}</span>
+        )}
+        <div style={{display:"flex",gap:5,alignItems:"center",flexShrink:0,marginLeft:6}}>
+          {value && <span onClick={e=>{e.stopPropagation();onChange("");}} style={{fontSize: mobile ? 18 : 10,color:C.red,cursor:"pointer",padding:"0 3px",lineHeight:1}}>×</span>}
+          <span style={{fontSize: mobile ? 10 : 8,color:C.t3}}>{open?"▲":"▼"}</span>
+        </div>
+      </div>
+      {open && (
+        <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:300,background:C.bg2,border:`1px solid ${C.blueHi}`,borderRadius: mobile ? 6 : 3,boxShadow:"0 4px 20px rgba(0,0,0,.6)",maxHeight:dropHeight,display:"flex",flexDirection:"column"}}>
+          <div style={{padding: mobile ? "10px 12px" : "5px 8px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
+            <input
+              autoFocus
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              placeholder="Nombre, especialidad..."
+              style={{width:"100%",background:"transparent",border:"none",outline:"none",color:C.t1,fontSize: mobile ? 16 : 10,fontFamily:"inherit"}}
+            />
+          </div>
+          <div style={{overflowY:"auto",WebkitOverflowScrolling:"touch",flex:1}}>
+            {results.length === 0 ? (
+              <div style={{padding:itemPad,color:C.t3,fontSize:dropFont}}>Sin resultados</div>
+            ) : results.map(s => (
+              <div key={s.id}
+                onClick={() => { onChange(s.id); setOpen(false); setQ(""); }}
+                style={{padding:itemPad,cursor:"pointer",borderBottom:`1px solid ${C.border}`,background:s.id===value?C.blueDim:"transparent"}}>
+                <div style={{fontSize:dropFont,color:s.id===value?C.cyan:C.t1,fontWeight:s.id===value?700:400}}>{s.nombre}</div>
+                {s.especialidad && <div style={{fontSize: mobile ? 11 : 7,color:C.t3}}>{s.especialidad}</div>}
+              </div>
+            ))}
+          </div>
+          {value && (
+            <div style={{padding: mobile ? "10px 12px" : "5px 8px",borderTop:`1px solid ${C.border}`,flexShrink:0}}>
+              <div onClick={() => { onChange(""); setOpen(false); }} style={{fontSize:dropFont,color:C.red,cursor:"pointer"}}>× Quitar proveedor</div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── UNIT PICKER (búsqueda por económico, placa, marca, modelo) ──────────────
 function UnitPicker({units, value, onChange, placeholder="Buscar por eco, placa, marca...", mobile=false}) {
+  const C = React.useContext(ThemeCtx);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const ref = useRef();
@@ -1051,7 +1524,8 @@ function UnitPicker({units, value, onChange, placeholder="Buscar por eco, placa,
   useEffect(() => {
     const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
+    document.addEventListener("touchstart", h, {passive:true});
+    return () => { document.removeEventListener("mousedown", h); document.removeEventListener("touchstart", h); };
   }, []);
 
   const results = useMemo(() => {
@@ -1167,42 +1641,42 @@ const Timeline = React.memo(function Timeline({events}) {
 
 // ── CENTRO DE OPERACIONES (Dashboard) ────────────────────────────────────────
 function CentroOps({state}) {
+  const C = React.useContext(ThemeCtx);
   const {tickets,clients,suppliers,units} = state;
-  const active = useMemo(()=>tickets.filter(t=>!t._deleted&&t.status!=="cancelado"),[tickets]);
-
-  // ── LAYER 1: OPERADO — entregado+facturado+cobrado+cerrado ─────────────────
-  const operados = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)),[active]);
-  const revenueOp   = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[operados]);
-  const utilidadOp  = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),[operados]);
-  const uBrutaOp    = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.uBruta),0),[operados]);
-  const costoOp        = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.costoTotal),0),[operados]);
-  const costoProducto  = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.costoBase)*(1+safeNumber(t.snap.params?.iva,16)/100),0),[operados]);
-  const gastosOp       = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.gastos),0),[operados]);
-  const totalInv       = costoProducto;
-  const ivaNetoOp   = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.ivaNeto),0),[operados]);
-  const isrOp       = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.isr),0),[operados]);
+  // Use shared selectors — business rules defined once in L3.5
+  const active   = useMemo(()=>sel_active(tickets),[tickets]);
+  const operados = useMemo(()=>sel_operados(tickets),[tickets]);
+  const revenueOp   = useMemo(()=>sumSnap(operados,"precioConIVA"),[operados]);
+  const utilidadOp  = useMemo(()=>sumSnap(operados,"uNeta"),[operados]);
+  const uBrutaOp    = useMemo(()=>sumSnap(operados,"uBruta"),[operados]);
+  const costoOp     = useMemo(()=>sumSnap(operados,"costoTotal"),[operados]);
+  const costoProducto = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.costoBase)*(1+safeNumber(t.snap?.params?.iva,16)/100),0),[operados]);
+  const gastosOp    = useMemo(()=>sumSnap(operados,"gastos"),[operados]);
+  const totalInv    = costoProducto;
+  const ivaNetoOp   = useMemo(()=>sumSnap(operados,"ivaNeto"),[operados]);
+  const isrOp       = useMemo(()=>sumSnap(operados,"isr"),[operados]);
   const cargaFiscal = ivaNetoOp + isrOp;
   const margenOp    = revenueOp>0?(utilidadOp/revenueOp)*100:0;
   const eficienciaFiscal = uBrutaOp>0?(utilidadOp/uBrutaOp)*100:0;
   const roi         = totalInv>0?(utilidadOp/totalInv)*100:0;
-  const markupProm  = useMemo(()=>{const v=operados.filter(t=>safeNumber(t.snap.costoTotal)>0);return v.length>0?v.reduce((s,t)=>s+calcMarkup(t.snap.precioSinIVA,t.snap.costoTotal),0)/v.length:0;},[operados]);
+  const markupProm  = useMemo(()=>{const v=operados.filter(t=>safeNumber(t.snap?.costoTotal)>0);return v.length>0?v.reduce((s,t)=>s+calcMarkup((t.snap?.precioSinIVA||0),(t.snap?.costoTotal||0)),0)/v.length:0;},[operados]);
 
   // ── LAYER 2: CASH — solo cobrado/cerrado ───────────────────────────────────
-  const cobrados    = useMemo(()=>active.filter(t=>CASH_SET.has(t.status)),[active]);
-  const cashTotal   = useMemo(()=>cobrados.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[cobrados]);
-  const cashNeta    = useMemo(()=>cobrados.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),[cobrados]);
+  const cobrados    = useMemo(()=>sel_cobrados(tickets),[tickets]);
+  const cashTotal   = useMemo(()=>sumSnap(cobrados,"precioConIVA"),[cobrados]);
+  const cashNeta    = useMemo(()=>sumSnap(cobrados,"uNeta"),[cobrados]);
 
-  // ── LAYER 3: CARTERA — entregado+facturado no cobrado ──────────────────────
-  const cartera     = useMemo(()=>active.filter(t=>CARTERA_SET.has(t.status)&&!t.cobrado),[active]);
-  const carteraMonto= useMemo(()=>cartera.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[cartera]);
-  const cxp         = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)&&!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap.costoTotal),0),[active]);
+  // ── LAYER 3: CARTERA — shared selector (business rule defined once) ─────────
+  const cartera     = useMemo(()=>sel_cartera(tickets),[tickets]);
+  const carteraMonto= useMemo(()=>sumSnap(cartera,"precioConIVA"),[cartera]);
+  const cxp         = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)&&!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap?.costoTotal),0),[active]);
   const flujoOp     = carteraMonto - cargaFiscal - cxp;
-  const vencidos    = useMemo(()=>cartera.filter(t=>{if(!t.promesaPago)return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}),[cartera]);
+  const vencidos    = useMemo(()=>sel_vencidos(tickets),[tickets]);
 
   // ── LAYER 4: FORECAST — cotizado+autorizado ────────────────────────────────
-  const forecastTkts= useMemo(()=>active.filter(t=>FORECAST_SET.has(t.status)),[active]);
-  const forecastMonto=useMemo(()=>forecastTkts.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[forecastTkts]);
-  const forecastUtil= useMemo(()=>forecastTkts.reduce((s,t)=>s+utilidadPonderada(safeNumber(t.snap.uNeta),t.prob),0),[forecastTkts]);
+  const forecastTkts= useMemo(()=>sel_forecast(tickets),[tickets]);
+  const forecastMonto=useMemo(()=>sumSnap(forecastTkts,"precioConIVA"),[forecastTkts]);
+  const forecastUtil= useMemo(()=>forecastTkts.reduce((s,t)=>s+utilidadPonderada(safeNumber(t.snap?.uNeta),t.prob),0),[forecastTkts]);
   const cotizados   = useMemo(()=>forecastTkts.filter(t=>t.status==="cotizado"),[forecastTkts]);
   const autorizados = useMemo(()=>forecastTkts.filter(t=>t.status==="autorizado"),[forecastTkts]);
 
@@ -1215,14 +1689,14 @@ function CentroOps({state}) {
   // By category — only operados
   const byOp = useMemo(()=>OP_TYPES.map(op=>{
     const sub=operados.filter(t=>t.opId===op.id);
-    return{label:op.label,short:op.short,count:sub.length,neta:sub.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),fact:sub.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0)};
+    return{label:op.label,short:op.short,count:sub.length,neta:sub.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0),fact:sub.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0)};
   }).sort((a,b)=>b.neta-a.neta),[operados]);
   const maxByOp = Math.max(...byOp.map(o=>o.neta),1);
 
   // Top clientes — only operados
   const topClients = useMemo(()=>clients.map(c=>{
     const co=operados.filter(t=>t.clientId===c.id);
-    return{label:c.empresa,neta:co.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),fact:co.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),count:co.length};
+    return{label:c.empresa,neta:co.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0),fact:co.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),count:co.length};
   }).filter(c=>c.count>0).sort((a,b)=>b.neta-a.neta).slice(0,5),[operados,clients]);
   const maxClient = Math.max(...topClients.map(c=>c.neta),1);
 
@@ -1244,14 +1718,21 @@ function CentroOps({state}) {
   const cobradas   = useMemo(()=>active.filter(t=>PAID_SET.has(t.status)),[active]);
   const conversion = active.length > 0 ? (cobradas.length / active.length) * 100 : 0;
 
-  // Top proveedores
+  // Aging cartera — only entregado/facturado credit tickets with past promesaPago
+  const aging = useMemo(()=>{
+    const pend=tickets.filter(t=>CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t.cobrado&&!t._deleted&&t.promesaPago);
+    const bucket=(mn,mx)=>pend.filter(t=>{const d=parseDateMX(t.promesaPago);if(!d)return false;const ms=Date.now()-d.getTime();return ms>=mn*86400000&&(mx==null||ms<mx*86400000);}).reduce((s,t)=>s+(t.snap?.precioConIVA||0),0);
+    return{a30:bucket(0,30),a60:bucket(30,60),mas60:bucket(60,null)};
+  },[tickets]);
+
+  // Top proveedores — only operados (exclude cancelled, _deleted)
   const topSupp = useMemo(()=>suppliers.map(s=>{
-    const so=tickets.filter(t=>t.supplierId===s.id);
-    return{label:s.nombre,neta:so.reduce((s,t)=>s+t.snap.uNeta,0),count:so.length};
-  }).filter(s=>s.count>0).sort((a,b)=>b.neta-a.neta).slice(0,4),[tickets,suppliers]);
+    const so=operados.filter(t=>t.supplierId===s.id);
+    return{label:s.nombre,neta:so.reduce((acc,t)=>acc+(t.snap?.uNeta||0),0),count:so.length};
+  }).filter(s=>s.count>0).sort((a,b)=>b.neta-a.neta).slice(0,4),[operados,suppliers]);
 
   // Eficiencia
-  const eficientes = useMemo(()=>tickets.filter(t=>t.horasOp>0).map(t=>({titulo:t.titulo,uPH:t.snap.uNeta/t.horasOp,uNeta:t.snap.uNeta,horas:t.horasOp})).sort((a,b)=>b.uPH-a.uPH).slice(0,4),[tickets]);
+  const eficientes = useMemo(()=>tickets.filter(t=>t.horasOp>0).map(t=>({titulo:t.titulo,uPH:(t.snap?.uNeta||0)/t.horasOp,uNeta:t.snap?.uNeta||0,horas:t.horasOp})).sort((a,b)=>b.uPH-a.uPH).slice(0,4),[tickets]);
 
   return (
     <div style={{padding:"10px 13px",maxWidth:1300,margin:"0 auto"}}>
@@ -1267,7 +1748,7 @@ function CentroOps({state}) {
           )}
           {vencidos.length>0&&(
             <div style={{background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:3,padding:"5px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{fontSize:9,color:"#C04040",fontWeight:700}}>CARTERA VENCIDA — {vencidos.length} op. / {mxn(vencidos.reduce((s,t)=>s+t.snap.precioConIVA,0))}</span>
+              <span style={{fontSize:9,color:"#C04040",fontWeight:700}}>CARTERA VENCIDA — {vencidos.length} op. / {mxn(vencidos.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0))}</span>
               <span style={{fontSize:8,color:"#C04040"}}>{vencidos.map(t=>t.id).join(" / ")}</span>
             </div>
           )}
@@ -1294,7 +1775,7 @@ function CentroOps({state}) {
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7,marginBottom:7}}>
 
         {/* Col 1: Por categoria */}
-        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
           <SHdr title="UTILIDAD POR CATEGORIA"/>
           {byOp.filter(o=>o.count>0).length===0
             ?<EmptyState icon="&#128202;" title="Sin datos"/>
@@ -1313,7 +1794,7 @@ function CentroOps({state}) {
 
         {/* Col 2: Top clientes + Aging */}
         <div style={{display:"flex",flexDirection:"column",gap:7}}>
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
             <SHdr title="TOP CLIENTES — UTILIDAD"/>
             {topClients.length===0
               ?<EmptyState icon="&#127970;" title="Vincula clientes a tickets"/>
@@ -1328,7 +1809,7 @@ function CentroOps({state}) {
               ))
             }
           </div>
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
             <SHdr title="AGING CARTERA"/>
             {[["< 30 dias",aging.a30,C.green],["30-60 dias",aging.a60,C.yellow],["> 60 dias",aging.mas60,C.red]].map(([lbl,val,col],i)=>(
               <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 11px",borderBottom:`1px solid ${C.border}`}}>
@@ -1341,7 +1822,7 @@ function CentroOps({state}) {
 
         {/* Col 3: Top proveedores + Eficiencia */}
         <div style={{display:"flex",flexDirection:"column",gap:7}}>
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
             <SHdr title="TOP PROVEEDORES"/>
             {topSupp.length===0
               ?<EmptyState icon="&#127981;" title="Vincula proveedores a tickets"/>
@@ -1356,7 +1837,7 @@ function CentroOps({state}) {
               ))
             }
           </div>
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
             <SHdr title="EFICIENCIA — UTIL/HORA"/>
             {eficientes.length===0
               ?<EmptyState icon="&#9201;" title="Registra horas en tickets"/>
@@ -1375,7 +1856,7 @@ function CentroOps({state}) {
       </div>
 
       {/* Pipeline strip — ancho completo */}
-      <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:7}}>
+      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:7}}>
         <SHdr title="DISTRIBUCION PIPELINE"/>
         <div style={{display:"grid",gridTemplateColumns:`repeat(${TICKET_ALL.length},1fr)`}}>
           {TICKET_ALL.map(sid=>{
@@ -1395,7 +1876,7 @@ function CentroOps({state}) {
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7,marginBottom:7}}>
 
         {/* BLOQUE 1 — OPERACIÓN */}
-        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
           <SHdr title="OPERACIÓN REALIZADA"/>
           <div style={{fontSize:7,color:C.t3,marginBottom:6}}>Entregado · Facturado · Cobrado · {operados.length} tickets</div>
           {[
@@ -1420,7 +1901,7 @@ function CentroOps({state}) {
         </div>
 
         {/* BLOQUE 2 — COBRANZA */}
-        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
           <SHdr title="COBRANZA"/>
           <div style={{fontSize:7,color:C.t3,marginBottom:6}}>Cash recibido vs cartera pendiente</div>
           {[
@@ -1444,7 +1925,7 @@ function CentroOps({state}) {
         </div>
 
         {/* BLOQUE 3 — FORECAST */}
-        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
           <SHdr title="FORECAST / PIPELINE"/>
           <div style={{fontSize:7,color:C.t3,marginBottom:6}}>Cotizado + Autorizado — NO contamina revenue</div>
           {[
@@ -1466,7 +1947,7 @@ function CentroOps({state}) {
 
       {/* Fila inferior: categorías + prioridades */}
       <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:7}}>
-        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
           <SHdr title="RESUMEN RÁPIDO"/>
           <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5,marginTop:8}}>
             {[["Revenue op.",mxn(revenueOp),C.cyan],["Cash cobrado",mxn(cashTotal),C.green],["Cartera",mxn(carteraMonto),C.yellow],["Util. operativa",mxn(utilidadOp),utilidadOp>=0?C.green:C.red],["Forecast",mxn(forecastMonto),C.t2]].map(([lbl,val,col],i)=>(
@@ -1479,7 +1960,7 @@ function CentroOps({state}) {
         </div>
 
         {/* Prioridades */}
-        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",minWidth:220}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",minWidth:220}}>
           <SHdr title="PRIORIDADES"/>
           {Object.values(PRIORITY).map(pr=>{
             const count=tickets.filter(t=>t.priority===pr.id).length;
@@ -1499,7 +1980,8 @@ function CentroOps({state}) {
 }
 
 // ── TICKETS (pipeline operativo) ─────────────────────────────────────────────
-function Tickets({state,dispatch,toast}) {
+function Tickets({state,dispatch,toast,scheduleHardDelete}) {
+  const C = React.useContext(ThemeCtx);
   const {tickets,clients,suppliers,units} = state;
   const [fStatus, setFStatus] = useState("all");
   const [fPrio,   setFPrio]   = useState("all");
@@ -1543,19 +2025,19 @@ function Tickets({state,dispatch,toast}) {
       {/* Filtros */}
       <div style={{display:"flex",gap:5,marginBottom:7,flexWrap:"wrap",alignItems:"center"}}>
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar ticket o ID..."
-          style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 8px",color:C.t1,fontSize:10,outline:"none",width:180,fontFamily:"'Courier New',monospace"}}/>
-        <select value={fPrio} onChange={e=>setFPrio(e.target.value)} style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t1,fontSize:10,outline:"none",cursor:"pointer"}}>
+          style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 8px",color:C.t1,fontSize:10,outline:"none",width:180,fontFamily:"'Courier New',monospace"}}/>
+        <select value={fPrio} onChange={e=>setFPrio(e.target.value)} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t1,fontSize:10,outline:"none",cursor:"pointer"}}>
           <option value="all">Todas las prioridades</option>
           {Object.values(PRIORITY).map(p=><option key={p.id} value={p.id} style={{background:C.bg1}}>{p.id} — {p.label}</option>)}
         </select>
-        <select value={fStatus} onChange={e=>setFStatus(e.target.value)} style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t1,fontSize:10,outline:"none",cursor:"pointer"}}>
+        <select value={fStatus} onChange={e=>setFStatus(e.target.value)} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t1,fontSize:10,outline:"none",cursor:"pointer"}}>
           <option value="all">Todos los estados</option>
           {TICKET_ALL.map(id=><option key={id} value={id} style={{background:C.bg1}}>{TICKET_META[id].label}</option>)}
         </select>
         <span style={{fontSize:8,color:C.t3}}>{filtered.length} resultado{filtered.length!==1?"s":""}</span>
       </div>
 
-      <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
         <div style={{display:"grid",gridTemplateColumns:"24px 1.8fr 0.5fr 0.7fr 0.7fr 0.8fr 0.7fr 0.6fr 22px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:4}}>
           <span/>
           <span>ID / TITULO</span><span>TIPO</span><span>PRIORIDAD</span><span>ESTADO</span>
@@ -1582,8 +2064,8 @@ function Tickets({state,dispatch,toast}) {
                 <div style={{fontSize:8,color:C.t2,fontFamily:"'Courier New',monospace"}}>{t.opShort}</div>
                 <PriorityBadge pid={t.priority} small/>
                 <StatusBadge sid={t.status} meta={TICKET_META} small/>
-                <div style={{fontSize:9,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{mxn(t.snap.precioConIVA)}</div>
-                <div style={{fontSize:9,fontWeight:700,color:t.snap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{mxn(t.snap.uNeta)}</div>
+                <div style={{fontSize:9,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{mxn(t.snap?.precioConIVA||0)}</div>
+                <div style={{fontSize:9,fontWeight:700,color:(t.snap?.uNeta||0)>=0?C.green:C.red,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{mxn(t.snap?.uNeta||0)}</div>
                 <div>
                   <div style={{fontSize:7,color:t.payType==="credit"?C.yellow:C.t3}}>{t.payType==="credit"?"CRED":"CONT"}</div>
                   {venc&&<div style={{fontSize:7,color:C.red,fontWeight:700}}>VENC</div>}
@@ -1601,9 +2083,9 @@ function Tickets({state,dispatch,toast}) {
                       {/* Agregar evento */}
                       <div style={{padding:"6px 10px",borderTop:`1px solid ${C.border}`,display:"flex",gap:5}}>
                         <input value={tlInput.evento} onChange={e=>setTlInput(p=>({...p,evento:e.target.value}))} placeholder="Nuevo evento..."
-                          style={{flex:1,background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t1,fontSize:9,outline:"none",fontFamily:"inherit"}}/>
+                          style={{flex:1,background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t1,fontSize:9,outline:"none",fontFamily:"inherit"}}/>
                         <input value={tlInput.actor} onChange={e=>setTlInput(p=>({...p,actor:e.target.value}))} placeholder="Actor"
-                          style={{width:80,background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t2,fontSize:9,outline:"none",fontFamily:"inherit"}}/>
+                          style={{width:80,background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t2,fontSize:9,outline:"none",fontFamily:"inherit"}}/>
                         <button onClick={()=>addTlEvent(t.id)} style={{padding:"4px 9px",background:C.blue,border:"none",borderRadius:3,color:C.t1,fontSize:9,cursor:"pointer",fontWeight:600}}>+</button>
                       </div>
                     </div>
@@ -1611,7 +2093,7 @@ function Tickets({state,dispatch,toast}) {
                     <div>
                       <SHdr title="DETALLE FINANCIERO"/>
                       <div style={{padding:"6px 10px"}}>
-                        {[["Costo total",mxn(t.snap.costoTotal),C.t1],["Markup",fpct(calcMarkup(t.snap.precioSinIVA,t.snap.costoTotal)),C.blueHi],["Precio c/IVA",mxn(t.snap.precioConIVA),C.cyan],["IVA neto SAT",mxn(t.snap.ivaNeto),C.yellow],["Util. bruta",mxn(t.snap.uBruta),C.t1],["ISR",mxn(t.snap.isr),C.yellow],["Util. neta",mxn(t.snap.uNeta),t.snap.uNeta>=0?C.green:C.red],["Margen neto",fpct(t.snap.margenNetoPrecio),margenColor(t.snap.margenNetoPrecio)]].map(([lbl,val,col],j)=>(
+                        {[["Costo total",mxn(t.snap?.costoTotal||0),C.t1],["Markup",fpct(calcMarkup(t.snap?.precioSinIVA||0,t.snap?.costoTotal||0)),C.blueHi],["Precio c/IVA",mxn(t.snap?.precioConIVA||0),C.cyan],["IVA neto SAT",mxn(t.snap?.ivaNeto||0),C.yellow],["Util. bruta",mxn(t.snap?.uBruta||0),C.t1],["ISR",mxn(t.snap?.isr||0),C.yellow],["Util. neta",mxn(t.snap?.uNeta||0),(t.snap?.uNeta||0)>=0?C.green:C.red],["Margen neto",fpct(t.snap?.margenNetoPrecio||0),margenColor(t.snap?.margenNetoPrecio||0)]].map(([lbl,val,col],j)=>(
                           <div key={j} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",borderBottom:`1px solid ${C.border}`}}>
                             <span style={{fontSize:8,color:C.t2}}>{lbl}</span>
                             <span style={{fontSize:9,fontWeight:600,color:col,fontFamily:"'Courier New',monospace"}}>{val}</span>
@@ -1677,6 +2159,7 @@ const emptyLine = (opType, priority, activeMods) => {
 };
 
 function Cotizador({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {clients,suppliers,units} = state;
 
   // Ticket-level fields
@@ -1718,10 +2201,13 @@ function Cotizador({state,dispatch,toast}) {
 
   // Each line uses sharedMargin unless it has its own customMgn
   const lineSnaps = useMemo(()=>lineas.map(l=>{
-    const mg   = l.customMgn ? Math.min(safeNumber(l.customVal), opMeta.cap) : sharedMargin;
-    const qty  = safeNumber(l.qty,1)||1;
-    const costo = safeNumber(l.costoUnit) * qty;
-    return computeSnap({costo,gasolina:safeNumber(l.gasolina),otros:safeNumber(l.otros),iva,isr,
+    const mg      = l.customMgn ? Math.min(safeNumber(l.customVal), opMeta.cap) : sharedMargin;
+    const qty     = l._qtyRaw!==undefined ? (parseInt(l._qtyRaw)||1) : (safeNumber(l.qty,1)||1);
+    const costoU  = l._costoUnitRaw!==undefined ? safeNumber(l._costoUnitRaw) : safeNumber(l.costoUnit);
+    const gasol   = l._gasolinaRaw!==undefined  ? safeNumber(l._gasolinaRaw)  : safeNumber(l.gasolina);
+    const otros_  = l._otrosRaw!==undefined      ? safeNumber(l._otrosRaw)     : safeNumber(l.otros);
+    const costo   = costoU * qty;
+    return computeSnap({costo,gasolina:gasol,otros:otros_,iva,isr,
       compraConIVA:cIVA,ventaConIVA:vIVA,mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
   }),[lineas,sharedMargin,opMeta,iva,isr,cIVA,vIVA]);
 
@@ -1748,8 +2234,10 @@ function Cotizador({state,dispatch,toast}) {
   const removeLinea = useCallback(idx=>setLineas(p=>p.filter((_,i)=>i!==idx)),[]);
   const addLinea    = useCallback(()=>setLineas(p=>[...p,emptyLine(opType,priority,activeMods)]),[opType,priority,activeMods]);
 
-  // Reset custom margin when opType/priority changes
-  useEffect(()=>{setCustomMgn(false);setActiveMods([]);},[opType,priority]);
+  // Reset custom margin when opType/priority changes (state update during render — safe pattern)
+  const [lastOpKey, setLastOpKey] = useState(()=>opType+priority);
+  const curOpKey = opType+priority;
+  if(lastOpKey!==curOpKey){setLastOpKey(curOpKey);setCustomMgn(false);setActiveMods([]);}
 
   const [isSaving, setIsSaving] = useState(false);
   const save = useCallback(()=>{
@@ -1788,6 +2276,34 @@ function Cotizador({state,dispatch,toast}) {
       history:[mkEvent("created",{titulo,status,priority})],
     };
     dispatch({type:"TKT_ADD",t:tkt});
+
+    // ── Catálogo auto-sync silencioso ───────────────────────────────────
+    lineas.forEach(l=>{
+      if(!l.titulo||!l.titulo.trim()) return;
+      const nomNorm=(l.titulo||"").trim().toLowerCase();
+      const oem=(l.partRef||"").trim();
+      const exists=state.parts.find(p=>
+        (oem&&(oem===p.oem||oem===p.aftermarket))||
+        p.nombre.toLowerCase()===nomNorm||
+        (nomNorm.length>6&&p.nombre.toLowerCase().startsWith(nomNorm.slice(0,Math.floor(nomNorm.length*0.75))))
+      );
+      if(!exists&&(safeNumber(l.costoUnit)>0||oem)){
+        dispatch({type:"PART_ADD",p:{
+          id:mkPartId(),nombre:l.titulo.trim(),oem,aftermarket:"",
+          aplicacion:un?`${un.marca} ${un.modelo} ${un.anio||""}`.trim():"",
+          notas:`Auto: ${todayMX()}`,proveedor:supp?.nombre||"",
+          ultimoPrecio:safeNumber(l.costoUnit),ultimaFecha:fecha,frecuencia:1,
+        }});
+      } else if(exists){
+        const patch={frecuencia:(exists.frecuencia||1)+1};
+        if(safeNumber(l.costoUnit)>0) patch.ultimoPrecio=safeNumber(l.costoUnit);
+        if(fecha) patch.ultimaFecha=fecha;
+        if(supp?.nombre) patch.proveedor=supp.nombre;
+        dispatch({type:"PART_UPDATE",id:exists.id,patch});
+      }
+    });
+    // ───────────────────────────────────────────────────────────────────
+
     opLog.push("TKT_CREATED", {id:tkt.id, titulo});
     toast("Ticket registrado: "+tkt.id,"success");
     setPdfPending({tkt,cl,un,supp});
@@ -1830,7 +2346,7 @@ function Cotizador({state,dispatch,toast}) {
       {catalogSearch!==null&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}
           onClick={()=>{setCatalogSearch(null);setCatalogQ("");}}>
-          <div style={{background:C.bg1,border:`1px solid ${C.borderHi}`,borderRadius:5,width:"90%",maxWidth:520,overflow:"hidden"}}
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.borderHi}`,borderRadius:5,width:"90%",maxWidth:520,overflow:"hidden"}}
             onClick={e=>e.stopPropagation()}>
             <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderBottom:`1px solid ${C.border}`,background:C.bg2}}>
               <span style={{fontSize:9,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>CATALOGO — LINEA {String(catalogSearch+1).padStart(2,"0")}</span>
@@ -1911,7 +2427,7 @@ function Cotizador({state,dispatch,toast}) {
         {/* LEFT */}
         <div>
           {/* Datos del ticket */}
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
             <SHdr title="DATOS DEL TICKET"/>
             <div style={{padding:9}}>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
@@ -1958,7 +2474,7 @@ function Cotizador({state,dispatch,toast}) {
           </div>
 
           {/* Lineas de cotizacion */}
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
             <SHdr title={"LINEAS DE COTIZACION ("+lineas.length+")"} right={
               <button onClick={addLinea} style={{fontSize:8,background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,padding:"2px 8px",cursor:"pointer",fontWeight:600}}>
                 + Agregar linea
@@ -1972,7 +2488,7 @@ function Cotizador({state,dispatch,toast}) {
                 return (
                   <div key={l.key} style={{background:C.bg0,border:`1px solid ${C.borderHi}`,borderRadius:3,marginBottom:i<lineas.length-1?7:0,overflow:"hidden"}}>
                     {/* Header linea */}
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 9px",background:C.bg3,borderBottom:`1px solid ${C.border}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 9px",background:C.bg3,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderBottom:`1px solid ${C.border}`}}>
                       <span style={{fontSize:8,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>LINEA {String(i+1).padStart(2,"0")}</span>
                       <div style={{display:"flex",gap:8,alignItems:"center"}}>
                         <span style={{fontSize:10,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(lsnap.precioConIVA)}</span>
@@ -1987,12 +2503,12 @@ function Cotizador({state,dispatch,toast}) {
                           <div style={{fontSize:7,color:C.t3,marginBottom:2}}>DESCRIPCION</div>
                           <input value={l.titulo} onChange={e=>updateLinea(i,{titulo:e.target.value})}
                             placeholder={"Pieza o servicio "+(i+1)}
-                            style={{width:"100%",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.t1,fontSize:10,outline:"none",fontFamily:"inherit"}}/>
+                            style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.t1,fontSize:10,outline:"none",fontFamily:"inherit"}}/>
                         </div>
                         <div>
                           <div style={{fontSize:7,color:C.t3,marginBottom:2}}>NUM. PARTE</div>
                           <input value={l.partRef} onChange={e=>updateLinea(i,{partRef:e.target.value})} placeholder="OEM / ref."
-                            style={{width:"100%",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.t2,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace"}}/>
+                            style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.t2,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace"}}/>
                         </div>
                         <div style={{display:"flex",alignItems:"flex-end"}}>
                           <button onClick={()=>setCatalogSearch(i)}
@@ -2005,14 +2521,11 @@ function Cotizador({state,dispatch,toast}) {
                       <div style={{display:"grid",gridTemplateColumns:"80px 1fr 1fr 1fr",gap:5,marginBottom:6}}>
                         <div>
                           <div style={{fontSize:7,color:C.t3,marginBottom:2}}>CANT.</div>
-                          <div style={{display:"flex",alignItems:"center",background:C.bg1,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
+                          <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
                             <input type="text" inputMode="numeric"
                               value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)}
                               onChange={e=>updateLinea(i,{_qtyRaw:e.target.value})}
-                              onBlur={()=>{
-                                const n=parseInt(l._qtyRaw);
-                                updateLinea(i,{qty:isFinite(n)&&n>=1?n:1, _qtyRaw:undefined});
-                              }}
+                              onBlur={()=>setLineas(p=>p.map((line,idx)=>{if(idx!==i)return line;const n=parseInt(line._qtyRaw);return {...line,qty:isFinite(n)&&n>=1?n:1,_qtyRaw:undefined};}))}
                               style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:12,fontWeight:700,padding:"5px 0 5px 7px",fontFamily:"'Courier New',monospace"}}/>
                             <span style={{padding:"0 5px",color:C.t3,fontSize:9}}>pz</span>
                           </div>
@@ -2020,12 +2533,12 @@ function Cotizador({state,dispatch,toast}) {
                         {[["COSTO UNIT. (c/IVA)","costoUnit"],["GASOLINA","gasolina"],["OTROS","otros"]].map(([lbl,k])=>(
                           <div key={k}>
                             <div style={{fontSize:7,color:C.t3,marginBottom:2}}>{lbl}</div>
-                            <div style={{display:"flex",alignItems:"center",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,overflow:"hidden"}}>
+                            <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,overflow:"hidden"}}>
                               <span style={{padding:"0 5px",color:C.t3,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
                               <input type="text" inputMode="decimal"
                                 value={l[`_${k}Raw`]!==undefined?l[`_${k}Raw`]:String(l[k]||0)}
                                 onChange={e=>updateLinea(i,{[`_${k}Raw`]:e.target.value})}
-                                onBlur={()=>updateLinea(i,{[k]:safeNumber(l[`_${k}Raw`]),[`_${k}Raw`]:undefined})}
+                                onBlur={()=>setLineas(p=>p.map((line,idx)=>idx!==i?line:{...line,[k]:safeNumber(line[`_${k}Raw`]),[`_${k}Raw`]:undefined}))}
                                 style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:10,padding:"5px 0",fontFamily:"'Courier New',monospace"}}/>
                             </div>
                           </div>
@@ -2053,8 +2566,8 @@ function Cotizador({state,dispatch,toast}) {
                             {l.customMgn?(
                               <input type="number" min={0} step={0.5} value={l._customValRaw!==undefined?l._customValRaw:String(l.customVal||27)}
                               onChange={e=>updateLinea(i,{_customValRaw:e.target.value})}
-                              onBlur={()=>updateLinea(i,{customVal:safeNumber(l._customValRaw,27),_customValRaw:undefined})}
-                                style={{width:55,background:C.bg1,border:`1px solid ${C.blueHi}`,borderRadius:3,padding:"3px 5px",color:C.cyan,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace",textAlign:"right"}}/>
+                              onBlur={()=>setLineas(p=>p.map((line,idx)=>idx!==i?line:{...line,customVal:safeNumber(line._customValRaw,27),_customValRaw:undefined}))}
+                                style={{width:55,background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,padding:"3px 5px",color:C.cyan,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace",textAlign:"right"}}/>
                             ):(
                               <span style={{fontSize:11,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{fpct(mg)}</span>
                             )}
@@ -2066,7 +2579,7 @@ function Cotizador({state,dispatch,toast}) {
                         ):(
                           <div style={{display:"flex",alignItems:"center",gap:5,flex:1}}>
                             <span style={{fontSize:7,color:C.t3,flexShrink:0}}>Precio c/IVA:</span>
-                            <div style={{display:"flex",alignItems:"center",background:C.bg1,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden",flex:1}}>
+                            <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden",flex:1}}>
                               <span style={{padding:"0 4px",color:C.cyan,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
                               <input type="number" min={0} step={0.01} value={l.manualPrice} onChange={e=>updateLinea(i,{manualPrice:e.target.value})}
                                 style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:11,fontWeight:700,padding:"4px 0",fontFamily:"'Courier New',monospace"}}/>
@@ -2083,7 +2596,7 @@ function Cotizador({state,dispatch,toast}) {
           </div>
 
           {/* IVA e ISR globales */}
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
             <SHdr title="PARAMETROS FISCALES"/>
             <div style={{padding:9}}>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:6}}>
@@ -2114,7 +2627,7 @@ function Cotizador({state,dispatch,toast}) {
         {/* RIGHT — margen + resultados */}
         <div>
           {/* Margen efectivo */}
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:6,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:6,overflow:"hidden"}}>
             <SHdr title="MARGEN EFECTIVO" right={
               <div style={{display:"flex",alignItems:"center",gap:4}}>
                 <span style={{fontSize:7,color:C.t3}}>Manual</span>
@@ -2180,7 +2693,7 @@ function Cotizador({state,dispatch,toast}) {
           </div>
 
           {/* IVA */}
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:5,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:5,overflow:"hidden"}}>
             <SHdr title="FISCAL — IVA CONSOLIDADO"/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr"}}>
               {[["IVA Acreditable","Recuperas",mxn(totalSnap.ivaAcred),C.blueHi],["IVA Trasladado","Cobras",mxn(totalSnap.ivaTraslad),C.cyan],["IVA Neto SAT","Pagas al SAT",mxn(totalSnap.ivaNeto),totalSnap.ivaNeto>=0?C.yellow:C.green]].map(([lbl,sub,val,col],i)=>(
@@ -2195,7 +2708,7 @@ function Cotizador({state,dispatch,toast}) {
 
           {/* Desglose por linea cuando hay mas de una */}
           {lineas.length>1&&(
-            <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:5}}>
+            <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:5}}>
               <SHdr title="DESGLOSE POR LINEA"/>
               {lineas.map((l,i)=>{
                 const lsnap=lineSnaps[i]||{precioConIVA:0,uNeta:0,margenNetoPrecio:0};
@@ -2223,7 +2736,7 @@ function Cotizador({state,dispatch,toast}) {
           )}
 
           {/* Barra margen */}
-          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,padding:8}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:8}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
               <span style={{fontSize:8,color:C.t2}}>Margen neto promedio s/precio</span>
               <span style={{fontSize:9,fontWeight:700,color:mColor,fontFamily:"'Courier New',monospace"}}>{fpct(aggMargen)}</span>
@@ -2241,8 +2754,672 @@ function Cotizador({state,dispatch,toast}) {
   );
 }
 
+// ── COTIZADOR REFACCIONES ─────────────────────────────────────────────────────
+let _cotSeq = 1;
+function mkCotId(dateStr) {
+  const p=(dateStr||"").replace(/\//g,"-").split("-");
+  let y,m,d;
+  if(p.length===3){p[0].length===4?([y,m,d]=p):([d,m,y]=p);}
+  else{const n=new Date();y=n.getFullYear();m=String(n.getMonth()+1).padStart(2,"0");d=String(n.getDate()).padStart(2,"0");}
+  return `COT-${y}${String(m).padStart(2,"0")}${String(d).padStart(2,"0")}-${String(_cotSeq++).padStart(3,"0")}`;
+}
+
+const emptyRefLine = () => ({
+  key:         genId("REF"),
+  descripcion: "",
+  oem:         "",
+  aftermarket: "",
+  qty:         1,
+  costoUnit:   0,
+  modo:        "auto",
+  margen:      30,
+  precioManual:"0",
+  notas:       "",
+});
+
+function CotizadorRefacciones({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
+  const {clients,units,suppliers,parts} = state;
+
+  const [fecha,      setFecha]      = useState(todayMX());
+  const [clientId,   setClientId]   = useState("");
+  const [unitId,     setUnitId]     = useState("");
+  const [supplierId, setSupplierId] = useState("");
+  const [vigencia,   setVigencia]   = useState(3);
+  const [payType,    setPayType]    = useState("contado");
+  const [promesa,    setPromesa]    = useState("");
+  const [notes,      setNotes]      = useState("");
+  const [iva,        setIva]        = useState(16);
+  const [cIVA,       setCIVA]       = useState(true);
+  const [vIVA,       setVIVA]       = useState(true);
+  const [globalMargen, setGlobalMargen] = useState(30);
+  const [useGlobal,    setUseGlobal]    = useState(true);
+  const [lineas,       setLineas]       = useState([emptyRefLine()]);
+  const [catalogSearch,setCatalogSearch]= useState(null);
+  const [catalogQ,     setCatalogQ]     = useState("");
+  const [isSaving,     setIsSaving]     = useState(false);
+
+  const lineSnaps = useMemo(()=>lineas.map(l=>{
+    const mg    = useGlobal ? globalMargen : (l._mgnRaw!==undefined ? safeNumber(l._mgnRaw,30) : l.margen);
+    const qty   = l._qtyRaw!==undefined ? (parseInt(l._qtyRaw)||1) : (safeNumber(l.qty,1)||1);
+    const costoU= l._costoRaw!==undefined ? safeNumber(l._costoRaw) : safeNumber(l.costoUnit);
+    const costo = costoU*qty;
+    return computeSnap({costo,gasolina:0,otros:0,iva,isr:0,compraConIVA:cIVA,ventaConIVA:vIVA,mode:l.modo,margin:mg,manualPrice:l.precioManual||"0"});
+  }),[lineas,globalMargen,useGlobal,iva,cIVA,vIVA]);
+
+  const totalSnap = useMemo(()=>{
+    const sum=k=>lineSnaps.reduce((s,sn)=>s+safeNumber(sn[k]),0);
+    const precioSinIVA=sum("precioSinIVA"), uNeta=sum("uNeta");
+    return {
+      precioConIVA:sum("precioConIVA"), precioSinIVA,
+      costoTotal:sum("costoTotal"), uNeta, uBruta:sum("uBruta"),
+      ivaTraslad:sum("ivaTraslad"), ivaAcred:sum("ivaAcred"), ivaNeto:sum("ivaNeto"),
+      margenNetoPrecio: precioSinIVA>0?(uNeta/precioSinIVA)*100:0,
+    };
+  },[lineSnaps]);
+
+  const aggMargen = totalSnap.margenNetoPrecio;
+  const mColor    = margenColor(aggMargen);
+
+  const updateLinea = useCallback((idx,patch)=>setLineas(p=>p.map((l,i)=>i===idx?{...l,...patch}:l)),[]);
+  const removeLinea = useCallback(idx=>setLineas(p=>p.filter((_,i)=>i!==idx)),[]);
+  const addLinea    = useCallback(()=>setLineas(p=>[...p,emptyRefLine()]),[]);
+
+  const catalogResults = useMemo(()=>{
+    if(catalogSearch===null) return [];
+    const q=(catalogQ||"").toLowerCase().trim();
+    if(!q) return parts.slice(0,12);
+    return parts.filter(p=>
+      p.nombre.toLowerCase().includes(q)||
+      (p.oem||"").toLowerCase().includes(q)||
+      (p.aftermarket||"").toLowerCase().includes(q)||
+      (p.aplicacion||"").toLowerCase().includes(q)
+    ).slice(0,12);
+  },[catalogQ,catalogSearch,parts]);
+
+  const selectFromCatalog = useCallback(p=>{
+    const idx=catalogSearch;
+    updateLinea(idx,{descripcion:p.nombre,oem:p.oem||"",aftermarket:p.aftermarket||"",costoUnit:p.ultimoPrecio||0,precioManual:String(p.ultimoPrecio||0)});
+    setCatalogSearch(null); setCatalogQ("");
+  },[catalogSearch,updateLinea]);
+
+  const generarPDF = useCallback(()=>{
+    const cl   = clients.find(c=>c.id===clientId);
+    const un   = units.find(u=>u.id===unitId);
+    const supp = suppliers.find(s=>s.id===supplierId);
+    const folio = mkCotId(fecha);
+
+    const fechaLarga=(()=>{
+      const p=fecha.split("/");
+      if(p.length!==3) return fecha;
+      const meses=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+      return `${parseInt(p[0])} de ${meses[parseInt(p[1])-1]} de ${p[2]}`;
+    })();
+
+    const unidadStr=un?`${un.economico?"Eco. "+un.economico+" · ":""}${un.marca} ${un.modelo} ${un.anio}${un.placa?" · Placa: "+un.placa:""}${un.vin?" · VIN: "+un.vin:""}` : "";
+    const clLine=cl?cl.empresa+(cl.ciudad?` · ${cl.ciudad}${cl.estado?", "+cl.estado:""}` :""):"—";
+    const formaPago=payType==="credit"?`Crédito`+(promesa?` — Fecha límite: ${promesa}`:""):"Contado / Transferencia bancaria";
+    const entrega=supp?.entregaDias?`${supp.entregaDias} día${supp.entregaDias>1?"s":""} hábiles`:"24-48 hrs hábiles";
+    const fmtMXN=n=>safeNumber(n).toLocaleString("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2});
+    const vigenciaStr=`${vigencia} día${vigencia!==1?"s":""} naturales`;
+    const notaLine=notes?`<li>${notes}</li>`:"";
+    const unidadRow=unidadStr?`<tr><td>Unidad</td><td>${unidadStr}</td></tr>`:"";
+
+    const filas=lineas.map((l,i)=>{
+      const lsnap=lineSnaps[i]||{};
+      const qty=safeNumber(l.qty,1)||1;
+      const unitPrice=qty>0?safeNumber(lsnap.precioConIVA)/qty:0;
+      const refs=[l.oem&&`OEM: ${l.oem}`,l.aftermarket&&`Alt: ${l.aftermarket}`].filter(Boolean).join(" · ");
+      return `<tr>
+        <td>${String(i+1).padStart(2,"0")}</td>
+        <td><strong>${l.descripcion||"Sin descripción"}</strong>${refs?`<br><span style="font-size:10px;color:#666">${refs}</span>`:""}</td>
+        <td class="money">${qty}</td>
+        <td class="money">${fmtMXN(unitPrice)}</td>
+        <td class="money">${fmtMXN(lsnap.precioConIVA)}</td>
+      </tr>`;
+    }).join("");
+
+    const innerHTML=`
+      <style>
+        *{box-sizing:border-box;margin:0;padding:0}
+        .page{width:794px;background:#fff;padding:50px;font-family:Arial,Helvetica,sans-serif;color:#111;font-size:14px;line-height:1.5}
+        .top-header{border:1px solid #dcdcdc;padding:20px;display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0}
+        .brand h1{font-size:28px;font-weight:800;margin:0}
+        .brand p{font-size:10px;color:#666;font-weight:700;margin-top:4px}
+        .issuer{text-align:right;font-size:11px;line-height:1.6}
+        .hero{background:#000;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:20px;margin-top:14px}
+        .hero-title{font-size:20px;font-weight:800}
+        .hero-meta{text-align:right}
+        .hero-meta .folio{font-size:18px;font-weight:800}
+        .hero-meta .date{font-size:13px;font-weight:700}
+        .meta-table{width:100%;border-collapse:collapse;margin-top:14px}
+        .meta-table td{border:1px solid #e3e3e3;padding:10px 12px;font-size:11px}
+        .meta-table td:first-child{width:120px;background:#fafafa;font-weight:700}
+        .section-title{margin-top:22px;margin-bottom:10px;font-size:13px;font-weight:800}
+        .detail-table{width:100%;border-collapse:collapse}
+        .detail-table th{background:#000;color:#fff;padding:10px 12px;text-align:left;font-size:10px}
+        .detail-table td{border:1px solid #e5e5e5;padding:10px 12px;vertical-align:top;font-size:11px;line-height:1.5}
+        .money{text-align:right;white-space:nowrap;font-weight:700}
+        .totals{width:320px;margin-left:auto;margin-top:16px;border-collapse:collapse}
+        .totals td{border:1px solid #e3e3e3;padding:10px 12px;font-size:11px}
+        .totals td:last-child{text-align:right;font-weight:700}
+        .grand-total td{background:#000;color:#fff;font-weight:800}
+        .block{margin-top:22px}
+        .block h3{font-size:13px;font-weight:800;margin-bottom:8px}
+        .block ul{padding-left:16px}
+        .block li{margin-bottom:5px;font-size:11px;line-height:1.6}
+        .footer{margin-top:28px;border-top:1px solid #e5e5e5;padding-top:10px;display:flex;justify-content:space-between;font-size:10px;color:#444}
+      </style>
+      <div class="page">
+        <div class="top-header">
+          <div class="brand"><h1>LOGISOLVE</h1><p>Logistics &middot; Supply &middot; Solutions</p></div>
+          <div class="issuer"><strong>Alejandro Saucedo</strong><br>RFC: SAME9612277T9<br>Tel. 5562321807<br>contacto@logisolve.mx</div>
+        </div>
+        <div class="hero">
+          <div class="hero-title">COTIZACIÓN DE REFACCIONES</div>
+          <div class="hero-meta"><div>No.</div><div class="folio">${folio}</div><div class="date">Fecha: ${fecha.replace(/\//g," / ")}</div></div>
+        </div>
+        <table class="meta-table">
+          <tr><td>Cliente</td><td>${clLine}</td></tr>
+          ${unidadRow}
+          <tr><td>Vigencia</td><td>${vigenciaStr}</td></tr>
+          <tr><td>Forma de pago</td><td>${formaPago}</td></tr>
+          <tr><td>Atención</td><td>Área de Compras / Operaciones</td></tr>
+        </table>
+        <div class="section-title">REFACCIONES COTIZADAS</div>
+        <table class="detail-table">
+          <thead><tr>
+            <th style="width:36px">No.</th>
+            <th>Descripción / Número de parte</th>
+            <th style="width:55px;text-align:right">Cant.</th>
+            <th style="width:120px;text-align:right">P. Unit. c/IVA</th>
+            <th style="width:130px;text-align:right">Importe c/IVA</th>
+          </tr></thead>
+          <tbody>${filas}</tbody>
+        </table>
+        <table class="totals">
+          <tr><td>Subtotal (sin IVA)</td><td>${fmtMXN(totalSnap.precioSinIVA)} MXN</td></tr>
+          <tr><td>IVA (${iva}%)</td><td>${fmtMXN(totalSnap.ivaTraslad)} MXN</td></tr>
+          <tr class="grand-total"><td>TOTAL &middot; IVA INCLUIDO</td><td>${fmtMXN(totalSnap.precioConIVA)} MXN</td></tr>
+        </table>
+        <div class="block">
+          <h3>CONDICIONES COMERCIALES</h3>
+          <ul>
+            <li>Precios incluyen IVA en el total general.</li>
+            <li>Forma de pago: ${formaPago}.</li>
+            <li>Entrega estimada: ${entrega} después de confirmación de pedido.</li>
+            <li>Precios sujetos a disponibilidad al momento de autorización.</li>
+            <li>Vigencia: ${vigenciaStr} a partir de la fecha de emisión.</li>
+            ${notaLine}
+          </ul>
+        </div>
+        <div class="block">
+          <h3>OBSERVACIONES</h3>
+          <ul>
+            <li>La compatibilidad final de las refacciones debe ser validada por el técnico responsable.</li>
+            <li>La garantía aplica conforme a políticas del fabricante o proveedor.</li>
+            <li>Números de parte OEM/aftermarket indicados para referencia — confirmar aplicación antes de instalar.</li>
+          </ul>
+        </div>
+        <div class="footer">
+          <div>Quedo atento para cualquier duda o confirmación.</div>
+          <div>LogiSolve &middot; ${fechaLarga}</div>
+        </div>
+      </div>`;
+
+    const container=document.createElement("div");
+    container.style.cssText="position:absolute;top:0;left:0;width:794px;background:white;opacity:1;pointer-events:none;";
+    container.innerHTML=innerHTML;
+    document.body.appendChild(container);
+
+    const generate=()=>{
+      // eslint-disable-next-line no-undef
+      html2pdf().set({margin:0,filename:`${folio}.pdf`,image:{type:"jpeg",quality:0.98},
+        html2canvas:{scale:2,useCORS:true,backgroundColor:"#ffffff",logging:false,scrollX:0,scrollY:0},
+        jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},
+      }).from(container.querySelector('.page')||container.firstElementChild).save().finally(()=>{container.remove();});
+    };
+    const go=()=>requestAnimationFrame(()=>requestAnimationFrame(generate));
+    if(typeof html2pdf!=="undefined"){go();}
+    else{
+      const script=document.createElement("script");
+      script.src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+      script.onload=go;
+      script.onerror=()=>{container.remove();toast("Error cargando generador PDF","error");};
+      document.head.appendChild(script);
+    }
+  },[lineas,lineSnaps,totalSnap,fecha,clientId,unitId,supplierId,vigencia,payType,promesa,notes,iva,clients,units,suppliers,toast]);
+
+  const convertirATicket = useCallback(()=>{
+    if(isSaving) return;
+    const titulo=lineas.map(l=>l.descripcion.trim()||"Sin descripción").join(" / ");
+    if(!titulo||titulo==="Sin descripción"){toast("Agrega al menos una refacción","error");return;}
+    setIsSaving(true);
+    const lineasConSnap=lineas.map((l,i)=>({
+      titulo:l.descripcion||"Sin descripción", partRef:l.oem||l.aftermarket||"",
+      qty:safeNumber(l.qty,1)||1, costoUnit:safeNumber(l.costoUnit),
+      gasolina:0, otros:0, mode:l.modo, manualPrice:l.precioManual||"0",
+      descripcionPDF:l.notas||"", snap:lineSnaps[i],
+    }));
+    const snapAgregado={
+      ...totalSnap,
+      markupSobre:totalSnap.costoTotal>0?((totalSnap.precioSinIVA-totalSnap.costoTotal)/totalSnap.costoTotal)*100:0,
+      margenNetoPrecio:aggMargen, params:{iva,isr:0},
+    };
+    const tkt={
+      id:mkTicketId(fecha), titulo, opId:"general", opShort:"REF-G", priority:"P3",
+      clientId, supplierId, unitId,
+      partRef:lineas.map(l=>l.oem||l.aftermarket).filter(Boolean).join(", "),
+      date:fecha, status:"cotizado", payType,
+      promesaPago:payType==="credit"?promesa:null,
+      cobrado:false, mods:[], prob:"high", horasOp:0, notes,
+      mode:lineas.length>1?"multilinea":"auto",
+      lineas:lineasConSnap, snap:snapAgregado,
+      timeline:[{ts:nowISO(),evento:"Creado desde Cotizador de Refacciones",actor:"Operador"}],
+      history:[mkEvent("created",{titulo,status:"cotizado",priority:"P3"})],
+    };
+    dispatch({type:"TKT_ADD",t:tkt});
+    opLog.push("TKT_CREATED",{id:tkt.id,titulo});
+    toast("Ticket registrado: "+tkt.id,"success");
+    setTimeout(()=>setIsSaving(false),1500);
+  },[isSaving,lineas,lineSnaps,totalSnap,aggMargen,fecha,clientId,supplierId,unitId,payType,promesa,notes,iva,dispatch,toast]);
+
+  const reset=useCallback(()=>{
+    setLineas([emptyRefLine()]); setClientId(""); setUnitId(""); setSupplierId("");
+    setNotes(""); setPayType("contado"); setPromesa(""); setFecha(todayMX());
+  },[]);
+
+  const selectedUnit = units.find(u=>u.id===unitId);
+
+  return (
+    <div style={{padding:"10px 13px",maxWidth:1200,margin:"0 auto"}}>
+
+      {/* Catalog modal */}
+      {catalogSearch!==null&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}
+          onClick={()=>{setCatalogSearch(null);setCatalogQ("");}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.borderHi}`,borderRadius:5,width:"90%",maxWidth:520,overflow:"hidden"}}
+            onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderBottom:`1px solid ${C.border}`,background:C.bg2}}>
+              <span style={{fontSize:9,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>CATÁLOGO — REF {String(catalogSearch+1).padStart(2,"0")}</span>
+              <input autoFocus value={catalogQ} onChange={e=>setCatalogQ(e.target.value)}
+                placeholder="Buscar por nombre, OEM, aplicación..."
+                style={{flex:1,background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 8px",color:C.t1,fontSize:10,outline:"none",fontFamily:"'Courier New',monospace"}}/>
+              <button onClick={()=>{setCatalogSearch(null);setCatalogQ("");}}
+                style={{padding:"3px 8px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t3,fontSize:10,cursor:"pointer"}}>x</button>
+            </div>
+            {parts.length===0&&<div style={{padding:"20px",textAlign:"center",color:C.t3,fontSize:9}}>Sin partes en el catálogo.</div>}
+            {catalogResults.map((p,i)=>(
+              <div key={p.id} onClick={()=>selectFromCatalog(p)}
+                style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 12px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",background:i%2===0?C.bg1:C.bg0}}>
+                <div style={{minWidth:0,flex:1,marginRight:10}}>
+                  <div style={{fontSize:10,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
+                  <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace"}}>
+                    {p.oem&&<span style={{color:C.cyan}}>{p.oem}</span>}
+                    {p.oem&&p.aplicacion&&" · "}
+                    {p.aplicacion&&<span>{p.aplicacion}</span>}
+                  </div>
+                </div>
+                <div style={{textAlign:"right",flexShrink:0}}>
+                  {p.ultimoPrecio>0&&<div style={{fontSize:10,fontWeight:700,color:C.yellow,fontFamily:"'Courier New',monospace"}}>{mxn(p.ultimoPrecio)}</div>}
+                  <div style={{fontSize:7,color:C.t3}}>{p.ultimaFecha||""}</div>
+                </div>
+              </div>
+            ))}
+            {catalogResults.length===0&&catalogQ&&<div style={{padding:"16px",textAlign:"center",color:C.t3,fontSize:9}}>Sin resultados para "{catalogQ}"</div>}
+          </div>
+        </div>
+      )}
+
+      <div className="ref-grid" style={{display:"grid",gridTemplateColumns:"1fr 320px",gap:10}}>
+
+        {/* LEFT */}
+        <div>
+
+          {/* Quote header */}
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+            <SHdr title="DATOS DE LA COTIZACIÓN"/>
+            <div style={{padding:9}}>
+              <div className="ref-hdr-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:5,marginBottom:5}}>
+                <div>
+                  <div style={{fontSize:7,color:C.t3,marginBottom:2}}>FECHA</div>
+                  <input value={fecha} onChange={e=>setFecha(e.target.value)} placeholder="DD/MM/AAAA"
+                    style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 6px",color:C.t1,fontSize:10,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace"}}/>
+                </div>
+                <div>
+                  <div style={{fontSize:7,color:C.t3,marginBottom:2}}>VIGENCIA</div>
+                  <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,overflow:"hidden"}}>
+                    <input type="text" inputMode="numeric" value={vigencia}
+                      onChange={e=>setVigencia(e.target.value)}
+                      onBlur={()=>setVigencia(v=>Math.max(1,parseInt(v)||3))}
+                      style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:11,padding:"5px 7px",fontFamily:"'Courier New',monospace"}}/>
+                    <span style={{padding:"0 6px",color:C.t3,fontSize:9}}>días</span>
+                  </div>
+                </div>
+                <Sel label="Pago" value={payType} onChange={setPayType}
+                  options={[{value:"contado",label:"Contado"},{value:"credit",label:"Crédito"}]}/>
+              </div>
+              {payType==="credit"&&(
+                <div style={{marginBottom:5}}>
+                  <div style={{fontSize:7,color:C.t3,marginBottom:2}}>PROMESA DE PAGO</div>
+                  <input value={promesa} onChange={e=>setPromesa(e.target.value)} placeholder="DD/MM/AAAA"
+                    style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 6px",color:C.yellow,fontSize:10,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace"}}/>
+                </div>
+              )}
+              <div className="ref-half-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:5}}>
+                <Sel label="Cliente" value={clientId} onChange={setClientId}
+                  options={[{value:"",label:"-- Sin cliente --"},...clients.map(c=>({value:c.id,label:c.empresa}))]}/>
+                <Sel label="Proveedor" value={supplierId} onChange={setSupplierId}
+                  options={[{value:"",label:"-- Sin proveedor --"},...suppliers.map(s=>({value:s.id,label:s.nombre}))]}/>
+              </div>
+              <UnitPicker units={units} value={unitId} onChange={setUnitId}/>
+              {selectedUnit&&(
+                <div style={{background:C.bg3,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.borderHi}`,borderRadius:3,padding:"6px 9px",marginTop:4,marginBottom:4}}>
+                  <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
+                    <span style={{fontSize:9,color:C.t1,fontWeight:700}}>{selectedUnit.marca} {selectedUnit.modelo} {selectedUnit.anio}</span>
+                    {selectedUnit.motor&&<span style={{fontSize:8,color:C.t3}}>{selectedUnit.motor}</span>}
+                    {selectedUnit.vin&&<span style={{fontSize:8,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{selectedUnit.vin}</span>}
+                    {selectedUnit.placa&&<span style={{fontSize:8,color:C.t2,fontFamily:"'Courier New',monospace"}}>Placa: {selectedUnit.placa}</span>}
+                    {selectedUnit.economico&&<span style={{fontSize:8,color:C.t2,fontFamily:"'Courier New',monospace"}}>Eco: {selectedUnit.economico}</span>}
+                  </div>
+                </div>
+              )}
+              <div style={{marginTop:4}}>
+                <div style={{fontSize:7,color:C.t3,marginBottom:2}}>NOTAS / OBSERVACIONES</div>
+                <textarea rows={2} value={notes} onChange={e=>setNotes(e.target.value)}
+                  placeholder="Diagnóstico, condiciones especiales..."
+                  style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 7px",color:C.t2,fontSize:9,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
+              </div>
+            </div>
+          </div>
+
+          {/* Parts table */}
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+            <SHdr title={`REFACCIONES (${lineas.length})`} right={
+              <button onClick={addLinea}
+                style={{fontSize:8,background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,padding:"2px 8px",cursor:"pointer",fontWeight:600}}>
+                + Agregar refacción
+              </button>
+            }/>
+            <div style={{padding:9}}>
+              {lineas.map((l,i)=>{
+                const lsnap=lineSnaps[i]||{precioConIVA:0,uNeta:0,margenNetoPrecio:0};
+                const lmc=margenColor(lsnap.margenNetoPrecio);
+                const qty=safeNumber(l.qty,1)||1;
+                const unitPriceConIVA=qty>0?lsnap.precioConIVA/qty:0;
+                return (
+                  <div key={l.key} style={{background:C.bg0,border:`1px solid ${C.borderHi}`,borderRadius:3,marginBottom:i<lineas.length-1?7:0,overflow:"hidden"}}>
+                    {/* Line header */}
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 9px",background:C.bg3,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderBottom:`1px solid ${C.border}`}}>
+                      <span style={{fontSize:8,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>
+                        REFACCIÓN {String(i+1).padStart(2,"0")}
+                      </span>
+                      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                        <span style={{fontSize:10,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(lsnap.precioConIVA)}</span>
+                        <span style={{fontSize:8,color:lmc,fontFamily:"'Courier New',monospace"}}>{fpct(lsnap.margenNetoPrecio)}</span>
+                        {lineas.length>1&&(
+                          <button onClick={()=>removeLinea(i)}
+                            style={{padding:"1px 6px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:2,color:C.red,fontSize:8,cursor:"pointer",fontWeight:700}}>x</button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{padding:"8px 9px"}}>
+                      {/* Row 1: Description + OEM + Aftermarket + Catalog button */}
+                      <div className="ref-line-row1" style={{display:"grid",gridTemplateColumns:"1fr 120px 120px auto",gap:5,marginBottom:6}}>
+                        <div>
+                          <div style={{fontSize:7,color:C.t3,marginBottom:2}}>DESCRIPCIÓN</div>
+                          <input value={l.descripcion} onChange={e=>updateLinea(i,{descripcion:e.target.value})}
+                            placeholder={`Refacción ${i+1}`}
+                            style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.t1,fontSize:10,outline:"none",fontFamily:"inherit"}}/>
+                        </div>
+                        <div>
+                          <div style={{fontSize:7,color:C.t3,marginBottom:2}}>NUM. OEM</div>
+                          <input value={l.oem} onChange={e=>updateLinea(i,{oem:e.target.value})} placeholder="A0012345..."
+                            style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.cyan,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace"}}/>
+                        </div>
+                        <div>
+                          <div style={{fontSize:7,color:C.t3,marginBottom:2}}>AFTERMARKET</div>
+                          <input value={l.aftermarket} onChange={e=>updateLinea(i,{aftermarket:e.target.value})} placeholder="Alt. compatible"
+                            style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.t2,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace"}}/>
+                        </div>
+                        <div style={{display:"flex",alignItems:"flex-end"}}>
+                          <button onClick={()=>setCatalogSearch(i)}
+                            style={{padding:"4px 8px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,fontSize:8,cursor:"pointer",fontWeight:600,whiteSpace:"nowrap"}}>
+                            Catálogo
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Row 2: Qty + Cost + Mode + Price */}
+                      <div className="ref-line-row2" style={{display:"grid",gridTemplateColumns:"80px 1fr auto",gap:5,alignItems:"end"}}>
+                        <div>
+                          <div style={{fontSize:7,color:C.t3,marginBottom:2}}>CANT.</div>
+                          <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
+                            <input type="text" inputMode="numeric"
+                              value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)}
+                              onChange={e=>updateLinea(i,{_qtyRaw:e.target.value})}
+                              onBlur={()=>setLineas(p=>p.map((line,idx)=>{if(idx!==i)return line;const n=parseInt(line._qtyRaw);return {...line,qty:isFinite(n)&&n>=1?n:1,_qtyRaw:undefined};}))}
+                              style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:12,fontWeight:700,padding:"5px 0 5px 7px",fontFamily:"'Courier New',monospace"}}/>
+                            <span style={{padding:"0 5px",color:C.t3,fontSize:9}}>pz</span>
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{fontSize:7,color:C.t3,marginBottom:2}}>COSTO UNIT. {cIVA?"(c/IVA)":"(s/IVA)"}</div>
+                          <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,overflow:"hidden"}}>
+                            <span style={{padding:"0 5px",color:C.t3,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
+                            <input type="text" inputMode="decimal"
+                              value={l._costoRaw!==undefined?l._costoRaw:String(l.costoUnit||0)}
+                              onChange={e=>updateLinea(i,{_costoRaw:e.target.value})}
+                              onBlur={()=>setLineas(p=>p.map((line,idx)=>idx!==i?line:{...line,costoUnit:safeNumber(line._costoRaw),_costoRaw:undefined}))}
+                              style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:10,padding:"5px 0",fontFamily:"'Courier New',monospace"}}/>
+                          </div>
+                        </div>
+                        {/* Mode + margin or manual price */}
+                        <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                          <div style={{display:"flex",borderRadius:3,overflow:"hidden",border:`1px solid ${C.border}`,flexShrink:0}}>
+                            {[["auto","Auto"],["manual","Manual"]].map(([id,lbl])=>(
+                              <button key={id} onClick={()=>updateLinea(i,{modo:id})}
+                                style={{padding:"4px 7px",border:"none",cursor:"pointer",fontSize:8,fontWeight:600,background:l.modo===id?C.blue:C.bg2,color:l.modo===id?C.t1:C.t2}}>
+                                {lbl}
+                              </button>
+                            ))}
+                          </div>
+                          {l.modo==="auto"?(
+                            <div style={{display:"flex",alignItems:"center",gap:5}}>
+                              <span style={{fontSize:7,color:C.t3,flexShrink:0}}>Mgn:</span>
+                              {useGlobal?(
+                                <span style={{fontSize:11,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{fpct(globalMargen)}</span>
+                              ):(
+                                <input type="number" min={0} step={0.5}
+                                  value={l._mgnRaw!==undefined?l._mgnRaw:String(l.margen||30)}
+                                  onChange={e=>updateLinea(i,{_mgnRaw:e.target.value})}
+                                  onBlur={()=>setLineas(p=>p.map((line,idx)=>idx!==i?line:{...line,margen:safeNumber(line._mgnRaw,30),_mgnRaw:undefined}))}
+                                  style={{width:52,background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,padding:"3px 5px",color:C.cyan,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace",textAlign:"right"}}/>
+                              )}
+                              <span style={{fontSize:8,color:C.t3}}>→</span>
+                              <span style={{fontSize:9,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{mxn(unitPriceConIVA)}/pz</span>
+                            </div>
+                          ):(
+                            <div style={{display:"flex",alignItems:"center",gap:5}}>
+                              <span style={{fontSize:7,color:C.t3,flexShrink:0}}>Precio c/IVA:</span>
+                              <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
+                                <span style={{padding:"0 4px",color:C.cyan,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
+                                <input type="number" min={0} step={0.01} value={l.precioManual}
+                                  onChange={e=>updateLinea(i,{precioManual:e.target.value})}
+                                  style={{width:90,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:11,fontWeight:700,padding:"4px 0",fontFamily:"'Courier New',monospace"}}/>
+                              </div>
+                              <span style={{fontSize:8,color:lmc,fontFamily:"'Courier New',monospace",flexShrink:0}}>{fpct(lsnap.margenNetoPrecio)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {qty>1&&(
+                        <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace",marginTop:5}}>
+                          {qty} × {mxn(unitPriceConIVA)} = <span style={{color:C.cyan,fontWeight:700}}>{mxn(lsnap.precioConIVA)}</span> total
+                        </div>
+                      )}
+
+                      <input value={l.notas} onChange={e=>updateLinea(i,{notas:e.target.value})}
+                        placeholder="Aplicación, compatibilidad, notas internas..."
+                        style={{width:"100%",background:"transparent",border:"none",borderBottom:`1px solid ${C.border}`,outline:"none",color:C.t3,fontSize:8,padding:"5px 0",marginTop:6,fontFamily:"inherit",boxSizing:"border-box"}}/>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Tax params */}
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+            <SHdr title="PARÁMETROS FISCALES"/>
+            <div style={{padding:9,display:"grid",gridTemplateColumns:"80px 1fr 1fr",gap:8,alignItems:"center"}}>
+              <div>
+                <div style={{fontSize:7,color:C.t3,marginBottom:2}}>IVA (%)</div>
+                <input type="number" min={0} step={0.1} value={iva}
+                  onChange={e=>setIva(e.target.value)} onBlur={()=>setIva(v=>String(safeNumber(v,16)))}
+                  style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 7px",color:C.t1,fontSize:11,outline:"none",fontFamily:"'Courier New',monospace"}}/>
+              </div>
+              <Toggle label="Compra incluye IVA" value={cIVA} onChange={setCIVA}/>
+              <Toggle label="Venta incluye IVA"  value={vIVA} onChange={setVIVA}/>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
+            <button onClick={generarPDF}
+              style={{padding:"9px",background:C.blue,border:"none",borderRadius:4,color:C.t1,fontSize:10,fontWeight:700,cursor:"pointer",letterSpacing:"0.06em"}}>
+              Generar PDF
+            </button>
+            <button onClick={convertirATicket} disabled={isSaving}
+              style={{padding:"9px",background:isSaving?C.bg2:C.green,border:"none",borderRadius:4,color:isSaving?C.t3:C.t1,fontSize:10,fontWeight:700,cursor:isSaving?"not-allowed":"pointer",letterSpacing:"0.06em",opacity:isSaving?0.6:1}}>
+              {isSaving?"Registrando…":"Convertir a ticket"}
+            </button>
+            <button onClick={reset}
+              style={{padding:"9px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:4,color:C.t2,fontSize:10,cursor:"pointer"}}>
+              Limpiar
+            </button>
+          </div>
+        </div>
+
+        {/* RIGHT — margin + summary */}
+        <div>
+          {/* Global margin */}
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:6,overflow:"hidden"}}>
+            <SHdr title="MARGEN GLOBAL" right={
+              <div style={{display:"flex",alignItems:"center",gap:4}}>
+                <span style={{fontSize:7,color:C.t3}}>Por línea</span>
+                <div onClick={()=>setUseGlobal(!useGlobal)}
+                  style={{width:26,height:14,borderRadius:7,cursor:"pointer",position:"relative",background:!useGlobal?C.blue:C.bg4,border:`1px solid ${!useGlobal?C.blueHi:C.border}`}}>
+                  <div style={{position:"absolute",top:2,left:!useGlobal?11:2,width:8,height:8,borderRadius:"50%",background:!useGlobal?C.t1:C.t3,transition:"left .15s"}}/>
+                </div>
+              </div>
+            }/>
+            <div style={{padding:9}}>
+              {useGlobal?(
+                <div>
+                  <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:6}}>
+                    <div style={{fontSize:24,fontWeight:800,fontFamily:"'Courier New',monospace",color:C.cyan,lineHeight:1}}>
+                      {fpct(globalMargen)}
+                    </div>
+                    <div style={{fontSize:8,color:C.t3}}>aplicado a todas las líneas</div>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
+                    <input type="number" min={0} step={0.5} value={globalMargen}
+                      onChange={e=>setGlobalMargen(safeNumber(e.target.value,30))}
+                      style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:13,fontWeight:700,padding:"6px 8px",fontFamily:"'Courier New',monospace"}}/>
+                    <span style={{padding:"0 7px",color:C.t3,fontSize:10}}>%</span>
+                  </div>
+                </div>
+              ):(
+                <div style={{fontSize:9,color:C.t3,padding:"8px 0"}}>Margen configurado por refacción individualmente.</div>
+              )}
+            </div>
+          </div>
+
+          {/* KPI totals */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:5}}>
+            <KPI label="Total c/IVA" value={mxn(totalSnap.precioConIVA)} color={C.cyan} accent
+              sub={lineas.length>1?lineas.length+" refacciones":""}/>
+            <KPI label="Util. neta" value={mxn(totalSnap.uNeta)}
+              color={totalSnap.uNeta>=0?C.green:C.red}
+              sub={fpct(aggMargen)+" del precio"}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:5}}>
+            <KPI label="Subtotal s/IVA" value={mxn(totalSnap.precioSinIVA)}/>
+            <KPI label="Costo total"    value={mxn(totalSnap.costoTotal)}/>
+          </div>
+
+          {/* IVA breakdown */}
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:5,overflow:"hidden"}}>
+            <SHdr title="FISCAL — IVA"/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr"}}>
+              {[
+                ["IVA Acreditable","Recuperas",mxn(totalSnap.ivaAcred),C.blueHi],
+                ["IVA Trasladado","Cobras",mxn(totalSnap.ivaTraslad),C.cyan],
+                ["IVA Neto SAT","Pagas al SAT",mxn(totalSnap.ivaNeto),totalSnap.ivaNeto>=0?C.yellow:C.green],
+              ].map(([lbl,sub,val,col],i)=>(
+                <div key={i} style={{padding:"7px 8px",borderRight:i<2?`1px solid ${C.border}`:"none"}}>
+                  <div style={{fontSize:7,color:C.t3,marginBottom:2}}>{lbl}</div>
+                  <div style={{fontSize:11,fontWeight:800,color:col,fontFamily:"'Courier New',monospace"}}>{val}</div>
+                  <div style={{fontSize:7,color:C.t3,marginTop:1}}>{sub}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Per-line breakdown */}
+          {lineas.length>1&&(
+            <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:5}}>
+              <SHdr title="DESGLOSE POR REFACCIÓN"/>
+              {lineas.map((l,i)=>{
+                const lsnap=lineSnaps[i]||{precioConIVA:0,uNeta:0};
+                return (
+                  <div key={l.key} style={{display:"flex",justifyContent:"space-between",padding:"5px 9px",borderBottom:i<lineas.length-1?`1px solid ${C.border}`:"none",background:i%2===0?C.bg1:C.bg0}}>
+                    <div style={{minWidth:0,flex:1,marginRight:8}}>
+                      <div style={{fontSize:9,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.descripcion||`Refacción ${i+1}`}</div>
+                      {l.oem&&<div style={{fontSize:7,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{l.oem}</div>}
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0}}>
+                      <div style={{fontSize:10,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(lsnap.precioConIVA)}</div>
+                      <div style={{fontSize:8,color:lsnap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(lsnap.uNeta)}</div>
+                    </div>
+                  </div>
+                );
+              })}
+              <div style={{display:"flex",justifyContent:"space-between",padding:"6px 9px",background:C.blueDim,borderTop:`1px solid ${C.blueHi}`}}>
+                <span style={{fontSize:9,fontWeight:700,color:C.t1}}>TOTAL</span>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:11,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(totalSnap.precioConIVA)}</div>
+                  <div style={{fontSize:9,fontWeight:700,color:totalSnap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(totalSnap.uNeta)}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Margin bar */}
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:8}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+              <span style={{fontSize:8,color:C.t2}}>Margen neto s/precio</span>
+              <span style={{fontSize:9,fontWeight:700,color:mColor,fontFamily:"'Courier New',monospace"}}>{fpct(aggMargen)}</span>
+            </div>
+            <div style={{height:4,background:C.bg4,borderRadius:2,overflow:"hidden"}}>
+              <div style={{height:"100%",width:`${clamp(aggMargen,0,100)}%`,background:mColor,transition:"width .3s"}}/>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",marginTop:3,fontSize:7,color:C.t3}}>
+              <span>Bajo &lt;10%</span><span>Aceptable 10-20%</span><span>Óptimo &gt;20%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── UNIDADES ──────────────────────────────────────────────────────────────────
 function Unidades({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {units,clients,tickets} = state;
   const [search,  setSearch]  = useState("");
   const [fStatus, setFStatus] = useState("all");
@@ -2293,7 +3470,7 @@ function Unidades({state,dispatch,toast}) {
       </div>
 
       {showForm&&(
-        <div style={{background:C.bg1,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:4,padding:11,marginBottom:8}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:4,padding:11,marginBottom:8}}>
           <div style={{fontSize:7,color:C.t3,letterSpacing:"0.18em",marginBottom:7}}>{editId?"EDITAR UNIDAD":"NUEVA UNIDAD"}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:7}}>
             <Field label="VIN / Serial"   value={form.vin}          onChange={sf("vin")}          prefix=""/>
@@ -2323,8 +3500,8 @@ function Unidades({state,dispatch,toast}) {
       {units.length>0&&(
         <div style={{display:"flex",gap:5,marginBottom:6,alignItems:"center",flexWrap:"wrap"}}>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar eco., placa, VIN, marca..."
-            style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 8px",color:C.t1,fontSize:10,outline:"none",width:220,fontFamily:"'Courier New',monospace"}}/>
-          <select value={fStatus} onChange={e=>setFStatus(e.target.value)} style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t1,fontSize:10,outline:"none",cursor:"pointer"}}>
+            style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 8px",color:C.t1,fontSize:10,outline:"none",width:220,fontFamily:"'Courier New',monospace"}}/>
+          <select value={fStatus} onChange={e=>setFStatus(e.target.value)} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t1,fontSize:10,outline:"none",cursor:"pointer"}}>
             <option value="all">Todos los estados</option>
             {Object.entries(UNIT_STATUS).map(([k,v])=><option key={k} value={k} style={{background:C.bg1}}>{v.label}</option>)}
           </select>
@@ -2344,7 +3521,7 @@ function Unidades({state,dispatch,toast}) {
       )}
 
       {filtered.length>0&&(
-        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
           <div style={{display:"grid",gridTemplateColumns:"0.6fr 0.5fr 1.4fr 0.7fr 1fr 1fr 0.6fr 0.6fr 0.6fr 60px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:5}}>
             <span>ECO.</span><span>VIN</span><span>UNIDAD</span><span>AÑO</span><span>MOTOR</span><span>TRANSMISION</span><span>KM</span><span>CLIENTE</span><span>ESTADO</span><span/>
           </div>
@@ -2415,6 +3592,7 @@ function Unidades({state,dispatch,toast}) {
 
 // ── CATALOGO DE PARTES ────────────────────────────────────────────────────────
 function Catalogo({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {parts,suppliers} = state;
   const [search, setSearch]  = useState("");
   const [sel,    setSel]     = useState(null);
@@ -2455,7 +3633,7 @@ function Catalogo({state,dispatch,toast}) {
       </div>
 
       {showForm&&(
-        <div style={{background:C.bg1,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:4,padding:11,marginBottom:8}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:4,padding:11,marginBottom:8}}>
           <div style={{fontSize:7,color:C.t3,letterSpacing:"0.18em",marginBottom:7}}>{editId?"EDITAR PARTE":"NUEVA PARTE"}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
             <Field label="Nombre / descripcion" value={form.nombre}       onChange={sf("nombre")}       prefix=""/>
@@ -2476,13 +3654,13 @@ function Catalogo({state,dispatch,toast}) {
 
       <div style={{marginBottom:6}}>
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por nombre, OEM, aftermarket, aplicacion..."
-          style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 9px",color:C.t1,fontSize:10,outline:"none",width:320,fontFamily:"'Courier New',monospace"}}/>
+          style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 9px",color:C.t1,fontSize:10,outline:"none",width:320,fontFamily:"'Courier New',monospace"}}/>
       </div>
 
       {parts.length===0&&!showForm&&<EmptyState icon="&#128295;" title="Sin partes registradas" sub='Agrega la primera con "+ Nueva parte"'/>}
 
       {filtered.length>0&&(
-        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
           <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 2fr 0.8fr 60px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:5}}>
             <span>NOMBRE</span><span>OEM</span><span>AFTERMARKET</span><span>APLICACION</span><span>ULT. PRECIO</span><span/>
           </div>
@@ -2529,6 +3707,7 @@ function Catalogo({state,dispatch,toast}) {
 
 // ── PROVEEDORES ───────────────────────────────────────────────────────────────
 function Proveedores({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {suppliers,tickets} = state;
   const [sel,    setSel]    = useState(null);
   const [editId, setEditId] = useState(null);
@@ -2540,7 +3719,7 @@ function Proveedores({state,dispatch,toast}) {
 
   const stats=useCallback(id=>{
     const so=tickets.filter(t=>t.supplierId===id);
-    return{total:so.length,neta:so.reduce((s,t)=>s+t.snap.uNeta,0),inv:so.reduce((s,t)=>s+t.snap.costoBase*(1+(t.snap.params.iva||16)/100),0)};
+    return{total:so.length,neta:so.reduce((s,t)=>s+(t.snap?.uNeta||0),0),inv:so.reduce((s,t)=>s+(t.snap?.costoBase||0)*(1+((t.snap?.params?.iva||16))/100),0)};
   },[tickets]);
   const maxNeta=useMemo(()=>Math.max(...suppliers.map(s=>stats(s.id).neta),1),[suppliers,tickets]);
 
@@ -2566,7 +3745,7 @@ function Proveedores({state,dispatch,toast}) {
       </div>
 
       {showForm&&(
-        <div style={{background:C.bg1,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:4,padding:11,marginBottom:8}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:4,padding:11,marginBottom:8}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
             <Field label="Nombre"          value={form.nombre}        onChange={sf("nombre")}        prefix=""/>
             <Field label="Especialidad"    value={form.especialidad}  onChange={sf("especialidad")}  prefix=""/>
@@ -2590,7 +3769,7 @@ function Proveedores({state,dispatch,toast}) {
       {suppliers.length===0&&!showForm&&<EmptyState icon="&#127981;" title="Sin proveedores registrados"/>}
 
       {suppliers.length>0&&(
-        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
           <div style={{display:"grid",gridTemplateColumns:"1.8fr 0.8fr 0.6fr 0.6fr 0.7fr 1fr 1fr 60px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:5}}>
             <span>PROVEEDOR</span><span>COBERTURA</span><span>ENTREGA</span><span>CONF.</span><span>SCORE OP.</span><span>INVERTIDO</span><span>UTIL. GEN.</span><span/>
           </div>
@@ -2641,6 +3820,7 @@ function Proveedores({state,dispatch,toast}) {
 
 // ── CLIENTES ──────────────────────────────────────────────────────────────────
 function Clientes({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {clients,tickets,units} = state;
   const [sel,setSel]=useState(null);
   const [editId,setEditId]=useState(null);
@@ -2652,7 +3832,7 @@ function Clientes({state,dispatch,toast}) {
 
   const stats=useCallback(id=>{
     const co=tickets.filter(t=>t.clientId===id);
-    return{total:co.length,fact:co.reduce((s,t)=>s+t.snap.precioConIVA,0),neta:co.reduce((s,t)=>s+t.snap.uNeta,0),pend:co.filter(t=>t.payType==="credit"&&!t.cobrado).reduce((s,t)=>s+t.snap.precioConIVA,0)};
+    return{total:co.length,fact:co.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0),neta:co.reduce((s,t)=>s+(t.snap?.uNeta||0),0),pend:co.filter(t=>t.payType==="credit"&&!t.cobrado).reduce((s,t)=>s+(t.snap?.precioConIVA||0),0)};
   },[tickets]);
   const maxFact=useMemo(()=>Math.max(...clients.map(c=>stats(c.id).fact),1),[clients,tickets]);
 
@@ -2677,7 +3857,7 @@ function Clientes({state,dispatch,toast}) {
         </button>
       </div>
       {showForm&&(
-        <div style={{background:C.bg1,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:4,padding:11,marginBottom:8}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:4,padding:11,marginBottom:8}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
             <Field label="Empresa / Razón social" value={form.empresa}    onChange={sf("empresa")}    prefix="" hint="Razón social"/>
             <Field label="RFC"                    value={form.rfc||""}    onChange={sf("rfc")}         prefix=""/>
@@ -2699,7 +3879,7 @@ function Clientes({state,dispatch,toast}) {
       )}
       {clients.length===0&&!showForm&&<EmptyState icon="&#127970;" title="Sin clientes registrados"/>}
       {clients.length>0&&(
-        <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
           <div style={{display:"grid",gridTemplateColumns:"1.6fr 0.8fr 1fr 1fr 0.8fr 0.6fr 60px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:5}}>
             <span>EMPRESA</span><span>CONTACTO</span><span>FACTURADO</span><span>UTIL. NETA</span><span>PENDIENTE</span><span>SCORE</span><span/>
           </div>
@@ -2750,7 +3930,7 @@ function Clientes({state,dispatch,toast}) {
                         <span style={{color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{t.titulo}</span>
                         <PriorityBadge pid={t.priority} small/>
                         <StatusBadge sid={t.status} meta={TICKET_META} small/>
-                        <span style={{color:t.snap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace",flexShrink:0}}>{mxn(t.snap.uNeta)}</span>
+                        <span style={{color:(t.snap?.uNeta||0)>=0?C.green:C.red,fontFamily:"'Courier New',monospace",flexShrink:0}}>{mxn((t.snap?.uNeta||0))}</span>
                       </div>
                     ))}
                     {tickets.filter(t=>t.clientId===c.id).length===0&&<div style={{fontSize:8,color:C.t3}}>Sin tickets vinculados.</div>}
@@ -2767,30 +3947,31 @@ function Clientes({state,dispatch,toast}) {
 
 // ── CARTERA ───────────────────────────────────────────────────────────────────
 function Cartera({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {tickets,clients}=state;
   const now=useMemo(()=>new Date(),[]);
-  const creditOps  = useMemo(()=>tickets.filter(t=>t.payType==="credit"&&t.status!=="cancelado"),[tickets]);
-  const pendientes = useMemo(()=>creditOps.filter(t=>!t.cobrado),[creditOps]);
-  const cobrados   = useMemo(()=>creditOps.filter(t=>t.cobrado),[creditOps]);
-  const vencidos   = useMemo(()=>pendientes.filter(t=>{const d=parseDateMX(t.promesaPago);return d&&now>d;}),[pendientes,now]);
+  // Use shared selectors — same criteria as MCartera (CARTERA_SET + !cobrado)
+  const pendientes = useMemo(()=>sel_cartera(tickets),[tickets]);
+  const cobrados   = useMemo(()=>sel_cobrados(tickets),[tickets]);
+  const vencidos   = useMemo(()=>sel_vencidos(tickets),[tickets]);
 
   return (
     <div style={{padding:"10px 13px",maxWidth:950,margin:"0 auto"}}>
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:8}}>
-        <KPI label="Cartera pendiente" value={mxn(pendientes.reduce((s,t)=>s+t.snap.precioConIVA,0))} color={C.yellow} accent sub={pendientes.length+" tickets"}/>
-        <KPI label="Vencidas"          value={mxn(vencidos.reduce((s,t)=>s+t.snap.precioConIVA,0))}   color={C.red}    alert={vencidos.length>0} sub={vencidos.length+" vencidas"}/>
-        <KPI label="Cobrado (credito)" value={mxn(cobrados.reduce((s,t)=>s+t.snap.precioConIVA,0))}   color={C.green}  sub={cobrados.length+" cobradas"}/>
-        <KPI label="Emision total"     value={mxn(creditOps.reduce((s,t)=>s+t.snap.precioConIVA,0))}  color={C.t1}     sub="credito emitido"/>
+        <KPI label="Cartera pendiente" value={mxn(pendientes.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0))} color={C.yellow} accent sub={pendientes.length+" tickets"}/>
+        <KPI label="Vencidas"          value={mxn(vencidos.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0))}   color={C.red}    alert={vencidos.length>0} sub={vencidos.length+" vencidas"}/>
+        <KPI label="Cobrado (credito)" value={mxn(cobrados.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0))}   color={C.green}  sub={cobrados.length+" cobradas"}/>
+        <KPI label="Emision total"     value={mxn(creditOps.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0))}  color={C.t1}     sub="credito emitido"/>
       </div>
       {vencidos.length>0&&(
         <div style={{background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:3,padding:"6px 10px",marginBottom:7}}>
           <div style={{fontSize:8,color:C.red,fontWeight:700,marginBottom:3}}>CARTERA VENCIDA — {vencidos.length} operaciones</div>
           {vencidos.map(t=>{const cl=clients.find(c=>c.id===t.clientId);return(
-            <div key={t.id} style={{fontSize:8,color:C.t2,marginBottom:2,fontFamily:"'Courier New',monospace"}}>{t.id} · {cl?.empresa||"---"} · {mxn(t.snap.precioConIVA)} · Vto: {t.promesaPago}</div>
+            <div key={t.id} style={{fontSize:8,color:C.t2,marginBottom:2,fontFamily:"'Courier New',monospace"}}>{t.id} · {cl?.empresa||"---"} · {mxn(t.snap?.precioConIVA||0)} · Vto: {t.promesaPago}</div>
           );})}
         </div>
       )}
-      <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
         <SHdr title="CUENTAS POR COBRAR" right={pendientes.length+" pendientes"}/>
         <div style={{display:"grid",gridTemplateColumns:"1.5fr 1fr 0.8fr 0.9fr 0.8fr 0.7fr 90px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:4}}>
           <span>TICKET / OP</span><span>CLIENTE</span><span>ESTADO</span><span>MONTO</span><span>PROMESA</span><span>DIAS</span><span/>
@@ -2808,7 +3989,7 @@ function Cartera({state,dispatch,toast}) {
               </div>
               <div style={{fontSize:9,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl?.empresa||"---"}</div>
               <StatusBadge sid={t.status} meta={TICKET_META} small/>
-              <div style={{fontSize:10,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap.precioConIVA)}</div>
+              <div style={{fontSize:10,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap?.precioConIVA||0)}</div>
               <div style={{fontSize:9,color:C.t2,fontFamily:"'Courier New',monospace"}}>{t.promesaPago||"---"}</div>
               <div style={{fontSize:9,fontWeight:700,color:venc?C.red:C.green,fontFamily:"'Courier New',monospace"}}>{dias!=null?(venc?"+"+dias+"d":Math.abs(dias)+"d"):"---"}</div>
               <button onClick={()=>{dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado","success");}}
@@ -2823,6 +4004,7 @@ function Cartera({state,dispatch,toast}) {
 
 // ── AJUSTES ───────────────────────────────────────────────────────────────────
 function Ajustes({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const fileRef=useRef();
   const importUnitsFile=useRef();
   const [confirmReset,setConfirmReset]=useState(false);
@@ -2835,7 +4017,7 @@ function Ajustes({state,dispatch,toast}) {
   const [confirmDel, setConfirmDel] = useState(null);
   const [importMode, setImportMode] = useState("merge"); // "merge" | "replace"
 
-  const savedAt=(()=>{try{const r=localStorage.getItem(STORAGE_KEY);if(r){const p=JSON.parse(r);return p.savedAt?new Date(p.savedAt).toLocaleString("es-MX"):"---";}}catch{}return "---";})();
+  const savedAt=(()=>{try{const r=localStorage.getItem(STORAGE_KEY);if(r){const p=JSON.parse(r);return p.savedAt?new Date(p.savedAt).toLocaleString("es-MX"):"---";}}catch(_e){}return "---";})();
 
   const importUnitsJSON=(file, mode="merge")=>{
     const r=new FileReader();
@@ -2888,7 +4070,7 @@ function Ajustes({state,dispatch,toast}) {
       const json = JSON.stringify(payload, null, 2);
       // Save a copy in localStorage as backup
       const backupKey = "lgs_backup_"+Date.now();
-      try { localStorage.setItem(backupKey, json); } catch {}
+      try { localStorage.setItem(backupKey, json); } catch(_e) {}
       const blob = new Blob([json],{type:"application/json"});
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
@@ -3011,7 +4193,7 @@ function Ajustes({state,dispatch,toast}) {
                       </div>
                     </div>
                     {previewKey===b.key&&previewData&&(
-                      <div style={{marginTop:8,padding:"8px",background:C.bg1,borderRadius:3,border:`1px solid ${C.border}`}}>
+                      <div style={{marginTop:8,padding:"8px",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderRadius:3,border:`1px solid ${C.border}`}}>
                         <div style={{fontSize:8,color:C.t3,marginBottom:6}}>PREVIEW DEL BACKUP</div>
                         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>
                           <KPI label="Tickets"    value={String(safeArr(previewData.tickets).length)}/>
@@ -3083,7 +4265,7 @@ function Ajustes({state,dispatch,toast}) {
           </div>
         )},
       ].map(sec=>(
-        <div key={sec.title} style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+        <div key={sec.title} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
           <SHdr title={sec.title}/>
           {sec.content}
         </div>
@@ -3092,8 +4274,136 @@ function Ajustes({state,dispatch,toast}) {
   );
 }
 
+// ── MAjustes — Ajustes móvil ─────────────────────────────────────────────────
+function MAjustes({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
+  const fileRef=useRef();
+  const importUnitsFile=useRef();
+  const [confirmReset,setConfirmReset]=useState(false);
+  const [confirmClearUnits,setConfirmClearUnits]=useState(false);
+  const [exporting,setExporting]=useState(false);
+  const [importMode,setImportMode]=useState("merge");
+
+  const savedAt=(()=>{try{const r=localStorage.getItem(STORAGE_KEY);if(r){const p=JSON.parse(r);return p.savedAt?new Date(p.savedAt).toLocaleString("es-MX"):"---";}}catch(_e){}return "---";})();
+
+  const importUnitsJSON=(file,mode="merge")=>{
+    const r=new FileReader();
+    r.onload=e=>{
+      try{
+        const d=JSON.parse(e.target.result);
+        const arr=Array.isArray(d)?d:(d.units||[]);
+        if(!arr.length){toast("Sin unidades en el JSON","error");return;}
+        if(mode==="replace"){dispatch({type:"UNITS_REPLACE",units:arr.map(u=>({...u,clientId:u.clientId||"CLI-00001"}))});toast(`Flotilla reemplazada: ${arr.length} unidades`,"success");}
+        else{arr.forEach(u=>{if(!u.id)return;dispatch({type:"UNIT_ADD",u:{...u,clientId:u.clientId||"CLI-00001"}});});toast(`${arr.length} unidades agregadas`,"success");}
+      }catch{toast("Archivo inválido","error");}
+    };
+    r.readAsText(file);
+  };
+
+  const exportData=async()=>{
+    if(exporting) return;
+    setExporting(true);
+    try{
+      await new Promise(r=>setTimeout(r,0));
+      const payload={version:STORAGE_VER,exportedAt:nowISO(),...state};
+      const json=JSON.stringify(payload,null,2);
+      try{localStorage.setItem("lgs_backup_"+Date.now(),json);}catch(_e){}
+      const blob=new Blob([json],{type:"application/json"});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");
+      a.href=url;a.download="logisolve-backup-"+Date.now()+".json";a.click();
+      URL.revokeObjectURL(url);
+      toast("Backup exportado","success");
+    }catch{toast("Error al exportar","error");}
+    finally{setExporting(false);}
+  };
+
+  const importData=file=>{
+    const r=new FileReader();
+    r.onload=e=>{
+      try{
+        const d=JSON.parse(e.target.result);
+        if(!d||typeof d!=="object") throw new Error("JSON inválido");
+        dispatch({type:"IMPORT",data:d});
+        toast(`Importado: ${safeArr(d.tickets).length} tickets, ${safeArr(d.units).length} unidades`,"success");
+      }catch(e){toast("Archivo inválido: "+e?.message,"error");}
+    };
+    r.readAsText(file);
+  };
+
+  const Card=({title,children})=>(
+    <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",marginBottom:10}}>
+      <div style={{padding:"11px 16px",borderBottom:`1px solid ${C.border}`,background:C.bg3}}>
+        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.18em",fontWeight:700}}>{title}</div>
+      </div>
+      <div style={{padding:"14px 16px"}}>{children}</div>
+    </div>
+  );
+
+  return (
+    <div style={{padding:"14px 14px 8px"}}>
+      {confirmReset&&<Confirm msg="Restablecer todos los datos al estado inicial?" onConfirm={()=>{dispatch({type:"RESET"});setConfirmReset(false);toast("Sistema restablecido","info");}} onCancel={()=>setConfirmReset(false)}/>}
+      {confirmClearUnits&&<Confirm msg={`Eliminar las ${state.units.length} unidades de la flotilla?`} onConfirm={()=>{dispatch({type:"UNITS_CLEAR"});setConfirmClearUnits(false);toast("Flotilla eliminada","info");}} onCancel={()=>setConfirmClearUnits(false)}/>}
+
+      <div style={{fontSize:11,color:C.t3,letterSpacing:"0.15em",textTransform:"uppercase",fontWeight:700,marginBottom:14}}>Ajustes del sistema</div>
+
+      <Card title="PERSISTENCIA">
+        <div style={{fontSize:13,color:C.t2,marginBottom:4}}>Guardado automático en Supabase + localStorage.</div>
+        <div style={{fontSize:11,color:C.t3,marginBottom:12}}>Último guardado: <span style={{color:C.cyan,fontFamily:"'Courier New',monospace"}}>{savedAt}</span></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          {[["Tickets",state.tickets.filter(t=>!t._deleted).length],["Unidades",state.units.length],["Clientes",state.clients.length],["Partes",state.parts.length]].map(([l,v])=>(
+            <div key={l} style={{background:C.bg0,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px"}}>
+              <div style={{fontSize:22,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{v}</div>
+              <div style={{fontSize:10,color:C.t3,textTransform:"uppercase",letterSpacing:"0.1em"}}>{l}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card title="EXPORTAR BACKUP">
+        <div style={{fontSize:13,color:C.t2,marginBottom:12}}>Exporta todos los datos como JSON y guarda copia en localStorage.</div>
+        <MBtn label={exporting?"Exportando…":"⬇ Exportar JSON"} full color={C.t1} bg={exporting?C.bg2:C.blue} border={exporting?C.border:C.blue} onClick={exportData}/>
+      </Card>
+
+      <Card title="IMPORTAR FLOTILLA (JSON)">
+        <div style={{fontSize:13,color:C.t2,marginBottom:4}}>Importa unidades desde JSON. Flotilla actual: <span style={{color:C.cyan,fontWeight:700}}>{state.units.length}</span></div>
+        <div style={{display:"flex",gap:8,marginBottom:12}}>
+          {[["merge","Agregar"],["replace","Reemplazar"]].map(([m,l])=>(
+            <button key={m} onClick={()=>setImportMode(m)}
+              style={{flex:1,padding:"8px",border:`1px solid ${importMode===m?C.blueHi:C.border}`,borderRadius:8,background:importMode===m?C.blueDim:"transparent",color:importMode===m?C.cyan:C.t2,fontSize:12,cursor:"pointer",fontWeight:importMode===m?700:400}}>
+              {l}
+            </button>
+          ))}
+        </div>
+        {importMode==="replace"&&(
+          <div style={{padding:"10px 12px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:8,marginBottom:12,fontSize:12,color:C.red}}>
+            ⚠ Esto eliminará las {state.units.length} unidades actuales.
+          </div>
+        )}
+        <input ref={importUnitsFile} type="file" accept=".json" onChange={e=>{if(e.target.files[0])importUnitsJSON(e.target.files[0],importMode);e.target.value="";}} style={{display:"none"}}/>
+        <div style={{display:"flex",gap:8}}>
+          <MBtn label={importMode==="replace"?"⬆ Reemplazar flotilla":"⬆ Importar flotilla"} full color={C.cyan} bg={C.blueDim} border={C.blueHi} onClick={()=>importUnitsFile.current&&importUnitsFile.current.click()}/>
+        </div>
+        {state.units.length>0&&<div style={{marginTop:8}}><MBtn label="🗑 Limpiar flotilla" full color={C.red} bg={C.redDim} border={C.red+"44"} onClick={()=>setConfirmClearUnits(true)}/></div>}
+      </Card>
+
+      <Card title="IMPORTAR DATOS COMPLETOS">
+        <div style={{fontSize:13,color:C.t2,marginBottom:12}}>Importa un backup JSON completo. <span style={{color:C.yellow}}>Reemplaza los datos actuales.</span></div>
+        <input ref={fileRef} type="file" accept=".json" onChange={e=>{if(e.target.files[0])importData(e.target.files[0]);}} style={{display:"none"}}/>
+        <MBtn label="⬆ Importar JSON" full color={C.t2} bg="transparent" border={C.border} onClick={()=>fileRef.current&&fileRef.current.click()}/>
+      </Card>
+
+      <Card title="RESTABLECER">
+        <div style={{fontSize:13,color:C.t2,marginBottom:12}}>Elimina todos los datos y vuelve al estado inicial. <span style={{color:C.red}}>No se puede deshacer.</span></div>
+        <MBtn label="Restablecer sistema" full color={C.red} bg={C.redDim} border={C.red+"55"} onClick={()=>setConfirmReset(true)}/>
+      </Card>
+    </div>
+  );
+}
+
 // ── HISTORIAL ─────────────────────────────────────────────────────────────────
 function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
+  const C = React.useContext(ThemeCtx);
   const {tickets,clients,units,suppliers} = state;
   const [hide,    setHide]   = useState(false);
   const [expId,   setExpId]  = useState(null);
@@ -3114,22 +4424,22 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
     const toSortable = (d="") => { const p=d.split("/"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; };
     switch(sortBy){
       case "date_asc":   return arr.sort((a,b)=>toSortable(a.date).localeCompare(toSortable(b.date)));
-      case "total_desc": return arr.sort((a,b)=>safeNumber(b.snap.precioConIVA)-safeNumber(a.snap.precioConIVA));
-      case "uneta_desc": return arr.sort((a,b)=>safeNumber(b.snap.uNeta)-safeNumber(a.snap.uNeta));
+      case "total_desc": return arr.sort((a,b)=>safeNumber(b.snap?.precioConIVA)-safeNumber(a.snap?.precioConIVA));
+      case "uneta_desc": return arr.sort((a,b)=>safeNumber(b.snap?.uNeta)-safeNumber(a.snap?.uNeta));
       case "priority":   return arr.sort((a,b)=>a.priority.localeCompare(b.priority));
       default:           return arr.sort((a,b)=>toSortable(b.date).localeCompare(toSortable(a.date)));
     }
   },[activeTickets,sortBy]);
 
   const realizados = useMemo(()=>activeTickets.filter(t=>REVENUE_SET.has(t.status)),[activeTickets]);
-  const totalFact = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[realizados]);
-  const totalNeta = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),[realizados]);
-  const totalInv  = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap.costoBase)*(1+(safeNumber(t.snap.params?.iva,16))/100),0),[realizados]);
+  const totalFact = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[realizados]);
+  const totalNeta = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0),[realizados]);
+  const totalInv  = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap?.costoBase)*(1+(safeNumber(t.snap?.params?.iva,16))/100),0),[realizados]);
   const pctN      = totalFact>0?(totalNeta/totalFact)*100:0;
 
   const days = useMemo(()=>{
     const d={};
-    activeTickets.forEach(t=>{if(!d[t.date])d[t.date]={v:0,n:0,c:0};d[t.date].v+=safeNumber(t.snap.precioConIVA);d[t.date].n+=safeNumber(t.snap.uNeta);d[t.date].c++;});
+    activeTickets.forEach(t=>{if(!d[t.date])d[t.date]={v:0,n:0,c:0};d[t.date].v+=safeNumber(t.snap?.precioConIVA);d[t.date].n+=safeNumber(t.snap?.uNeta);d[t.date].c++;});
     return d;
   },[activeTickets]);
 
@@ -3142,7 +4452,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
     e.stopPropagation();
     setEditId(t.id);
     setExpId(t.id);
-    const iva = t.snap.params?.iva||16;
+    const iva = t.snap?.params?.iva||16;
     const ivaR = iva/100;
     // costoBase en snap es sin IVA; el cotizador trabaja con costo CON IVA
     const toConIVA = (snap) => (snap?.costoBase||0)*(1+ivaR);
@@ -3159,11 +4469,11 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
     } else {
       const parts=(t.titulo||"").split(" / ").filter(Boolean);
       if(parts.length>1) {
-        const pxLinea=(t.snap.precioConIVA/parts.length).toFixed(2);
+        const pxLinea=((t.snap?.precioConIVA||0)/parts.length).toFixed(2);
         const costoXLinea=toConIVA(t.snap)/parts.length;
         lineas=parts.map(p=>({titulo:p.trim(),partRef:"",qty:1,costoUnit:costoXLinea,gasolina:0,otros:0,mode:"manual",manualPrice:pxLinea,customMgn:false,customVal:27,descripcionPDF:""}));
       } else {
-        lineas=[{titulo:t.titulo||"",partRef:t.partRef||"",qty:1,costoUnit:toConIVA(t.snap),gasolina:t.snap?.gastos||0,otros:0,mode:"manual",manualPrice:(t.snap.precioConIVA||0).toFixed(2),customMgn:false,customVal:27,descripcionPDF:""}];
+        lineas=[{titulo:t.titulo||"",partRef:t.partRef||"",qty:1,costoUnit:toConIVA(t.snap),gasolina:t.snap?.gastos||0,otros:0,mode:"manual",manualPrice:(t.snap?.precioConIVA||0).toFixed(2),customMgn:false,customVal:27,descripcionPDF:""}];
       }
     }
     setEditLineas(lineas);
@@ -3171,7 +4481,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
       date:t.date, clientId:t.clientId||"", supplierId:t.supplierId||"", unitId:t.unitId||"",
       status:t.status, payType:t.payType, promesaPago:t.promesaPago||"",
       prob:t.prob||"high", horasOp:t.horasOp||0, notes:t.notes||"",
-      iva, isr:t.snap.params?.isr||20,
+      iva, isr:t.snap?.params?.isr||20,
       cIVA:true, vIVA:true,
       opType:t.opId||"consumable", activeMods:[...(t.mods||[])], priority:t.priority||"P3",
     });
@@ -3295,7 +4605,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
         <KPI label="Operaciones"     value={String(tickets.length)} color={C.t1} sub={Object.keys(days).length+" dias"}/>
       </div>
 
-      <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
         <div style={{display:"grid",gridTemplateColumns:"1.6fr 0.5fr 0.6fr 0.7fr 0.6fr 0.7fr 0.7fr 56px 20px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:4}}>
           <span>ID / TITULO</span><span>TIPO</span><span>PRIO</span><span>ESTADO</span><span>MARKUP</span><span>PRECIO</span><span>UTIL.</span><span/><span/>
         </div>
@@ -3326,9 +4636,9 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                 <div style={{fontSize:8,fontFamily:"'Courier New',monospace",color:C.t2,fontWeight:600}}>{t.opShort}</div>
                 <PriorityBadge pid={t.priority} small/>
                 <StatusBadge sid={t.status} meta={TICKET_META} small/>
-                <div style={{fontSize:9,color:C.blueHi,fontFamily:"'Courier New',monospace"}}>{hide?"---":fpct(calcMarkup(t.snap.precioSinIVA,t.snap.costoTotal))}</div>
-                <div style={{fontSize:9,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{mxn(t.snap.precioConIVA)}</div>
-                <div style={{fontSize:9,fontWeight:700,color:t.snap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{hide?"---":mxn(t.snap.uNeta)}</div>
+                <div style={{fontSize:9,color:C.blueHi,fontFamily:"'Courier New',monospace"}}>{hide?"---":fpct(calcMarkup((t.snap?.precioSinIVA||0),(t.snap?.costoTotal||0)))}</div>
+                <div style={{fontSize:9,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{mxn((t.snap?.precioConIVA||0))}</div>
+                <div style={{fontSize:9,fontWeight:700,color:(t.snap?.uNeta||0)>=0?C.green:C.red,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{hide?"---":mxn((t.snap?.uNeta||0))}</div>
                 <div style={{display:"flex",gap:3}}>
                   {!editing&&<button onClick={e=>startEdit(t,e)} style={{padding:"2px 5px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:8,cursor:"pointer"}}>Editar</button>}
                   {!editing&&<button onClick={e=>{e.stopPropagation();const cl2=clients.find(c=>c.id===t.clientId);const un2=units?.find(u=>u.id===t.unitId);const su2=suppliers?.find(s=>s.id===t.supplierId);generarCotizacionPDF(t,cl2,un2,su2);}} style={{padding:"2px 5px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,fontSize:8,cursor:"pointer"}}>PDF</button>}
@@ -3405,7 +4715,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                         const costo=(l.costoUnit||0)*(l.qty||1);
                         const lsnap = computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,iva:parseFloat(ef.iva)||16,isr:parseFloat(ef.isr)||20,compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
                         return (
-                        <div key={idx} style={{background:C.bg1,border:`1px solid ${C.borderHi}`,borderRadius:3,padding:"7px 9px",marginBottom:5}}>
+                        <div key={idx} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.borderHi}`,borderRadius:3,padding:"7px 9px",marginBottom:5}}>
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
                             <span style={{fontSize:8,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>LÍNEA {String(idx+1).padStart(2,"0")} · {mxn(lsnap.precioConIVA)} · {fpct(lsnap.margenNetoPrecio)}</span>
                             {editLineas.length>1&&<button onClick={()=>delLinea(idx)} style={{padding:"1px 6px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:2,color:C.red,fontSize:8,cursor:"pointer",fontWeight:700}}>× Eliminar</button>}
@@ -3466,7 +4776,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
 
                       {/* Preview total */}
                       {liveSnap&&(
-                        <div style={{background:C.bg3,borderRadius:3,border:`1px solid ${C.borderHi}`,padding:"6px 9px",marginBottom:6,display:"flex",gap:16,alignItems:"center"}}>
+                        <div style={{background:C.bg3,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderRadius:3,border:`1px solid ${C.borderHi}`,padding:"6px 9px",marginBottom:6,display:"flex",gap:16,alignItems:"center"}}>
                           <div>
                             <div style={{fontSize:7,color:C.t3,marginBottom:1}}>TOTAL c/IVA</div>
                             <div style={{fontSize:13,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(liveSnap.precioConIVA)}</div>
@@ -3502,9 +4812,9 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                               </div>
                             </div>
                           ))}
-                          <div style={{display:"flex",justifyContent:"space-between",padding:"5px 11px",background:C.bg3,borderBottom:`1px solid ${C.border}`}}>
+                          <div style={{display:"flex",justifyContent:"space-between",padding:"5px 11px",background:C.bg3,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderBottom:`1px solid ${C.border}`}}>
                             <span style={{fontSize:9,fontWeight:700,color:C.t1}}>TOTAL</span>
-                            <span style={{fontSize:10,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap.precioConIVA)}</span>
+                            <span style={{fontSize:10,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn((t.snap?.precioConIVA||0))}</span>
                           </div>
                         </div>
                       ) : (
@@ -3516,11 +4826,11 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                         ))
                       )}
                       <div style={{padding:"4px 11px",fontSize:7,color:C.t3,display:"flex",gap:8,flexWrap:"wrap"}}>
-                        <span>IVA {t.snap.params.iva}%</span>
-                        <span>ISR {t.snap.params.isr}%</span>
+                        <span>IVA {t.snap?.params?.iva||16}%</span>
+                        <span>ISR {t.snap?.params?.isr||20}%</span>
                         {cl&&<span>Cliente: {cl.empresa}</span>}
                         {t.mods&&t.mods.length>0&&<span>Mods: {t.mods.join(", ")}</span>}
-                        {t.horasOp>0&&<span>Util/h: {mxn(t.snap.uNeta/t.horasOp)}</span>}
+                        {t.horasOp>0&&<span>Util/h: {mxn((t.snap?.uNeta||0)/t.horasOp)}</span>}
                         {t.payType==="credit"&&<span style={{color:C.yellow}}>Credito · {t.promesaPago||"sin fecha"}</span>}
                         {t.notes&&<span style={{fontStyle:"italic"}}>{t.notes}</span>}
                       </div>
@@ -3572,7 +4882,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
             🗑 Papelera ({trashedTickets.length}) {showTrash?"▲":"▼"}
           </button>
           {showTrash&&trashedTickets.map(t=>(
-            <div key={t.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 9px",background:C.bg1,borderBottom:`1px solid ${C.border}`,opacity:0.6}}>
+            <div key={t.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 9px",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderBottom:`1px solid ${C.border}`,opacity:0.6}}>
               <div>
                 <span style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace"}}>{t.id}</span>
                 <span style={{fontSize:9,color:C.t2,marginLeft:8}}>{t.titulo}</span>
@@ -3597,48 +4907,58 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
 
 // ── Helpers móviles ──────────────────────────────────────────────────────────
 function MCard({children,style={}}) {
-  return <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:8,marginBottom:10,overflow:"hidden",...style}}>{children}</div>;
+  const C = React.useContext(ThemeCtx);
+  return <div style={{background:"rgba(22,24,28,0.82)",border:"1px solid rgba(255,255,255,0.04)",borderRadius:18,marginBottom:10,overflow:"hidden",boxShadow:"0 2px 16px rgba(255,255,255,0.04)",...style}}>{children}</div>;
 }
 function MRow({label,value,color,bold}) {
+  const C = React.useContext(ThemeCtx);
   return (
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 14px",borderBottom:`1px solid ${C.border}`}}>
-      <span style={{fontSize:12,color:C.t2}}>{label}</span>
-      <span style={{fontSize:bold?16:13,fontWeight:bold?800:600,color:color||C.t1,fontFamily:"'Courier New',monospace"}}>{value}</span>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+      <span style={{fontSize:12,color:"#4A5568"}}>{label}</span>
+      <span style={{fontSize:bold?16:13,fontWeight:bold?800:600,color:color||"#F3F4F6",fontFamily:"'Courier New',monospace"}}>{value}</span>
     </div>
   );
 }
 function MBtn({label,color,bg,border,onClick,full,small}) {
+  const C = React.useContext(ThemeCtx);
   return (
     <button onClick={onClick} style={{
       width:full?"100%":"auto",
-      padding:small?"8px 14px":"13px 18px",
-      background:bg||C.blue,
-      border:`1px solid ${border||C.blueHi}`,
-      borderRadius:6,cursor:"pointer",
-      fontSize:small?11:13,fontWeight:700,
-      color:color||C.t1,letterSpacing:"0.04em",
+      padding:small?"10px 16px":"15px 20px",
+      background:bg||"rgba(255,255,255,0.07)",
+      border:`1px solid ${border||"rgba(255,255,255,0.1)"}`,
+      borderRadius:12,cursor:"pointer",
+      fontSize:small?12:14,fontWeight:700,
+      color:color||"#F3F4F6",letterSpacing:"0.04em",
+      minHeight:small?40:48,touchAction:"manipulation",WebkitTapHighlightColor:"transparent",
     }}>{label}</button>
   );
 }
 function MField({label,value,onChange,type="text",placeholder,suffix,color}) {
+  const C = React.useContext(ThemeCtx);
   return (
     <div style={{marginBottom:10}}>
-      {label&&<div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase"}}>{label}</div>}
-      <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
+      {label&&<div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase",fontWeight:600}}>{label}</div>}
+      <div style={{display:"flex",alignItems:"center",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden",minHeight:48}}>
         <input type={type} value={value} placeholder={placeholder||""} onChange={e=>onChange(e.target.value)}
-          style={{flex:1,background:"transparent",border:"none",outline:"none",color:color||C.t1,fontSize:15,padding:"12px 14px",fontFamily:"'Courier New',monospace"}}/>
+          style={{flex:1,background:"transparent",border:"none",outline:"none",color:color||C.t1,
+            fontSize:16,/* 16px prevents iOS auto-zoom on focus */
+            padding:"12px 14px",fontFamily:"inherit"}}/>
         {suffix&&<span style={{padding:"0 12px",color:C.t3,fontSize:12}}>{suffix}</span>}
       </div>
     </div>
   );
 }
 function MSel({label,value,onChange,options}) {
+  const C = React.useContext(ThemeCtx);
   return (
     <div style={{marginBottom:10}}>
-      {label&&<div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase"}}>{label}</div>}
+      {label&&<div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase",fontWeight:600}}>{label}</div>}
       <select value={value} onChange={e=>onChange(e.target.value)}
-        style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t1,fontSize:14,outline:"none",fontFamily:"'Courier New',monospace",minHeight:46}}>
-        {options.map(o=><option key={o.value} value={o.value} style={{background:C.bg1}}>{o.label}</option>)}
+        style={{width:"100%",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px",color:C.t1,
+          fontSize:16,/* 16px prevents iOS auto-zoom on focus */
+          outline:"none",fontFamily:"inherit",minHeight:48,appearance:"auto"}}>
+        {options.map(o=><option key={o.value} value={o.value} style={{background:C.bgSolid}}>{o.label}</option>)}
       </select>
     </div>
   );
@@ -3646,1338 +4966,2563 @@ function MSel({label,value,onChange,options}) {
 
 // ── MOps — Dashboard móvil ───────────────────────────────────────────────────
 function MOps({state,setTab}) {
-  const {tickets,clients,suppliers,units} = state;
-  const active   = useMemo(()=>tickets.filter(t=>!t._deleted&&t.status!=="cancelado"),[tickets]);
-  const p1       = useMemo(()=>active.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status)),[active]);
-  const p2       = useMemo(()=>active.filter(t=>t.priority==="P2"&&!CLOSED_SET.has(t.status)),[active]);
-  const abiertos = useMemo(()=>active.filter(t=>!CLOSED_SET.has(t.status)),[active]);
-  const vencidos = useMemo(()=>active.filter(t=>{if(!t.promesaPago||t.cobrado)return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}),[active]);
-  // Layer 1: Operado
-  const operados  = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)),[active]);
-  const totalFact = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[operados]);
-  const totalNeta = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0),[operados]);
-  const totalInv  = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.costoBase)*(1+safeNumber(t.snap.params?.iva,16)/100),0),[operados]);
-  const costoProducto = totalInv;
-  const gastosOp  = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.gastos),0),[operados]);
-  const pctNeta   = totalFact>0?(totalNeta/totalFact)*100:0;
-  const ivaNetoTotal = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.ivaNeto),0),[operados]);
-  const isrTotal     = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.isr),0),[operados]);
-  const cargaFiscalTotal = ivaNetoTotal + isrTotal;
-  const rentabilidadProm = totalFact>0?(totalNeta/totalFact)*100:0;
-  const markupProm = useMemo(()=>{const v=operados.filter(t=>safeNumber(t.snap.costoTotal)>0);return v.length>0?v.reduce((s,t)=>s+calcMarkup(t.snap.precioSinIVA,t.snap.costoTotal),0)/v.length:0;},[operados]);
-  const uBrutaTotal = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap.uBruta),0),[operados]);
-  const eficienciaFiscalGlobal = uBrutaTotal>0?(totalNeta/uBrutaTotal)*100:0;
-  const roi = totalInv>0?(totalNeta/totalInv)*100:0;
-  // Layer 2: Cash
-  const cashTotal = useMemo(()=>active.filter(t=>CASH_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[active]);
-  // Layer 3: Cartera
-  const carteraMonto = useMemo(()=>active.filter(t=>CARTERA_SET.has(t.status)&&!t.cobrado).reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[active]);
-  const cxp = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)&&!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap.costoTotal),0),[active]);
-  const cartera = carteraMonto; // alias for UI compatibility
-  const flujoOp = carteraMonto - cargaFiscalTotal - cxp;
-  // Layer 4: Forecast
-  const forecast  = useMemo(()=>active.filter(t=>FORECAST_SET.has(t.status)).reduce((s,t)=>s+utilidadPonderada(safeNumber(t.snap.uNeta),t.prob),0),[active]);
-  const forecastMonto = useMemo(()=>active.filter(t=>FORECAST_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap.precioConIVA),0),[active]);
-  const totalHoras= useMemo(()=>active.reduce((s,t)=>s+safeNumber(t.horasOp),0),[active]);
-  const uPH       = totalHoras>0?totalNeta/totalHoras:0;
+  const C = React.useContext(ThemeCtx);
+  const {tickets,clients} = state;
+  const [period,setPeriod] = useState("week");
 
-  // Aging cartera
-  const aging = useMemo(()=>{
-    const pend=tickets.filter(t=>t.payType==="credit"&&!t.cobrado&&t.status!=="cancelado"&&t.promesaPago);
-    const bucket=(mn,mx)=>pend.filter(t=>{const d=parseDateMX(t.promesaPago);if(!d)return false;const ms=Date.now()-d.getTime();return ms>=mn*86400000&&(mx==null||ms<mx*86400000);}).reduce((s,t)=>s+t.snap.precioConIVA,0);
-    return{a30:bucket(0,30),a60:bucket(30,60),mas60:bucket(60,null)};
+  // ── Accent palette — Black/white monochrome
+  const A = makeA(C);
+
+  // ── Periods ───────────────────────────────────────────────────────────────
+  const range     = useMemo(()=>buildRange(period),[period]);
+  const prevRange = useMemo(()=>{
+    const ms=range.to-range.from;
+    return {from:new Date(range.from.getTime()-ms),to:new Date(range.from)};
+  },[range]);
+
+  // ── Core metrics ──────────────────────────────────────────────────────────
+  const operados = useMemo(()=>
+    sel_operados(tickets).filter(t=>{const d=parseDateMX(t.date);return d&&d>=range.from&&d<=range.to;})
+  ,[tickets,range]);
+  const prevOps = useMemo(()=>
+    sel_operados(tickets).filter(t=>{const d=parseDateMX(t.date);return d&&d>=prevRange.from&&d<=prevRange.to;})
+  ,[tickets,prevRange]);
+
+  const totalFact = useMemo(()=>sumSnap(operados,"precioConIVA"),[operados]);
+  const totalNeta = useMemo(()=>sumSnap(operados,"uNeta"),[operados]);
+  const prevFact  = useMemo(()=>sumSnap(prevOps,"precioConIVA"),[prevOps]);
+  const growth    = prevFact>0?((totalFact-prevFact)/prevFact)*100:null;
+  const margen    = totalFact>0?(totalNeta/totalFact)*100:0;
+
+  const carteraTkts  = useMemo(()=>sel_cartera(tickets),[tickets]);
+  const carteraMonto = useMemo(()=>sumSnap(carteraTkts,"precioConIVA"),[carteraTkts]);
+  const pipeline     = useMemo(()=>sel_open(tickets),[tickets]);
+  const p1Active     = useMemo(()=>pipeline.filter(t=>t.priority==="P1"),[pipeline]);
+  const p2Active     = useMemo(()=>pipeline.filter(t=>t.priority==="P2"),[pipeline]);
+  const vencidos     = useMemo(()=>sel_vencidos(tickets),[tickets]);
+
+  // ── Financial deep metrics (full breakdown) ────────────────────────────────
+  const costoProducto = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.costoBase)*(1+safeNumber(t.snap?.params?.iva,16)/100),0),[operados]);
+  const gastosOp      = useMemo(()=>sumSnap(operados,"gastos"),[operados]);
+  const uBrutaOp      = useMemo(()=>sumSnap(operados,"uBruta"),[operados]);
+  const ivaNetoOp     = useMemo(()=>sumSnap(operados,"ivaNeto"),[operados]);
+  const isrOp         = useMemo(()=>sumSnap(operados,"isr"),[operados]);
+  const cargaFiscal   = ivaNetoOp + isrOp;
+  const eficienciaFiscal = uBrutaOp>0?(totalNeta/uBrutaOp)*100:0;
+  const roi           = costoProducto>0?(totalNeta/costoProducto)*100:0;
+  const markupProm    = useMemo(()=>{
+    const v=operados.filter(t=>safeNumber(t.snap?.costoTotal)>0);
+    return v.length>0?v.reduce((s,t)=>s+calcMarkup(safeNumber(t.snap?.precioSinIVA),safeNumber(t.snap?.costoTotal)),0)/v.length:0;
+  },[operados]);
+  const cobradosTkts  = useMemo(()=>sel_cobrados(tickets),[tickets]);
+  const cashTotal     = useMemo(()=>sumSnap(cobradosTkts,"precioConIVA"),[cobradosTkts]);
+  const cxp           = useMemo(()=>sel_active(tickets).filter(t=>!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap?.costoTotal),0),[tickets]);
+  const flujoOp       = carteraMonto - cargaFiscal - cxp;
+  const forecastTkts  = useMemo(()=>sel_forecast(tickets),[tickets]);
+  const forecastMonto = useMemo(()=>sumSnap(forecastTkts,"precioConIVA"),[forecastTkts]);
+  const forecastUtil  = useMemo(()=>forecastTkts.reduce((s,t)=>s+utilidadPonderada(safeNumber(t.snap?.uNeta),t.prob),0),[forecastTkts]);
+
+  // ── Operational status ────────────────────────────────────────────────────
+  const opsStatus = useMemo(()=>{
+    if(p1Active.length>0) return {msg:`${p1Active.length} unidad${p1Active.length>1?"es":""} detenida${p1Active.length>1?"s":""}`,level:"critical"};
+    if(vencidos.length>0) return {msg:`${vencidos.length} cobro${vencidos.length>1?"s":""} vencido${vencidos.length>1?"s":""}`,level:"warning"};
+    if(operados.length===0) return {msg:"Sin operaciones en este período",level:"idle"};
+    if(margen>=25) return {msg:"Margen saludable · Todo operando",level:"good"};
+    if(margen>=15) return {msg:"Rentabilidad estable",level:"ok"};
+    return {msg:"Margen bajo — revisar precios",level:"warn"};
+  },[p1Active,vencidos,operados,margen]);
+
+  const sc = {
+    critical:{dot:A.red,   text:A.red},
+    warning: {dot:A.amber, text:A.amber},
+    idle:    {dot:A.t3,    text:A.t3},
+    good:    {dot:A.lime,  text:A.lime},
+    ok:      {dot:A.mint,  text:A.mint},
+    warn:    {dot:A.amber, text:A.amber},
+  }[opsStatus.level];
+
+  // ── 7-day sparkline ───────────────────────────────────────────────────────
+  const sparkData = useMemo(()=>{
+    const days=[];
+    for(let i=6;i>=0;i--){
+      const d=new Date(); d.setDate(d.getDate()-i);
+      const dd=String(d.getDate()).padStart(2,"0");
+      const mm=String(d.getMonth()+1).padStart(2,"0");
+      const ds=`${dd}/${mm}/${d.getFullYear()}`;
+      const val=sumSnap(sel_operados(tickets).filter(t=>t.date===ds),"uNeta");
+      days.push({val,today:i===0,label:i===0?"Hoy":`${dd}/${mm}`});
+    }
+    return days;
   },[tickets]);
+  const maxSpark = Math.max(...sparkData.map(d=>d.val),1);
 
-  // Por categoria
-  const byOp = useMemo(()=>OP_TYPES.map(op=>{
-    const sub=operados.filter(t=>t.opId===op.id);
-    return{label:op.label,count:sub.length,neta:sub.reduce((s,t)=>s+safeNumber(t.snap.uNeta),0)};
-  }).filter(o=>o.count>0).sort((a,b)=>b.neta-a.neta),[operados]);
-  const maxByOp=Math.max(...byOp.map(o=>o.neta),1);
+  // SVG sparkline path (280×52 viewBox)
+  const sparkPath = useMemo(()=>{
+    const W=280,H=50,pts=sparkData.length;
+    const xs=sparkData.map((_,i)=>(i/(pts-1))*W);
+    const ys=sparkData.map(d=>H-(Math.max(d.val,0)/maxSpark)*(H-6)-3);
+    const line=xs.map((x,i)=>`${i===0?"M":"L"}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(" ");
+    return {line, area:line+` L${W},${H} L0,${H} Z`};
+  },[sparkData,maxSpark]);
 
-  // Top clientes
-  const topClients=useMemo(()=>clients.map(c=>{
-    const co=tickets.filter(t=>t.clientId===c.id);
-    return{label:c.empresa,neta:co.reduce((s,t)=>s+t.snap.uNeta,0),count:co.length};
-  }).filter(c=>c.count>0).sort((a,b)=>b.neta-a.neta).slice(0,4),[tickets,clients]);
-  const maxClient=Math.max(...topClients.map(c=>c.neta),1);
-
-  // Top proveedores
-  const topSupp=useMemo(()=>suppliers.map(s=>{
-    const so=tickets.filter(t=>t.supplierId===s.id);
-    return{label:s.nombre,neta:so.reduce((s,t)=>s+t.snap.uNeta,0),count:so.length};
-  }).filter(s=>s.count>0).sort((a,b)=>b.neta-a.neta).slice(0,3),[tickets,suppliers]);
-
-  // Prioridades
-  const byPriority=useMemo(()=>Object.values(PRIORITY).map(pr=>({
-    pr,count:tickets.filter(t=>t.priority===pr.id).length,
-    open:tickets.filter(t=>t.priority===pr.id&&!CLOSED_SET.has(t.status)).length,
-  })),[tickets]);
+  const growthUp = growth!==null&&growth>=0;
+  const pLabel   = {"today":"Hoy","week":"7 días","month":"30 días","3m":"90 días"}[period]||"Período";
 
   return (
-    <div style={{padding:"12px 14px"}}>
+    <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
 
-      {/* Alertas */}
-      {p1.length>0&&(
-        <div style={{background:C.p1dim,border:`1px solid ${C.p1dot}44`,borderRadius:8,padding:"12px 14px",marginBottom:8}}>
-          <div style={{fontSize:13,fontWeight:800,color:C.p1dot,marginBottom:3}}>P1 ACTIVO — {p1.length} unidad{p1.length>1?"es":""} detenida{p1.length>1?"s":""}</div>
-          {p1.map(t=><div key={t.id} style={{fontSize:11,color:C.t2,fontFamily:"'Courier New',monospace"}}>{t.id} · {t.titulo.substring(0,30)}</div>)}
+      {/* ══ ALERT BANNER — breaks layout, appears FIRST ══════════════════════ */}
+      {(p1Active.length>0||vencidos.length>0)&&(
+        <div style={{
+          background: p1Active.length>0
+            ? "rgba(239,68,68,0.08)"
+            : "rgba(245,158,11,0.08)",
+          borderBottom: `1px solid ${p1Active.length>0?"rgba(239,68,68,0.2)":"rgba(245,158,11,0.2)"}`,
+          padding:"20px 20px 16px",
+        }}>
+          {p1Active.length>0&&(
+            <div style={{marginBottom:vencidos.length>0?18:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                <div style={{width:7,height:7,borderRadius:"50%",background:A.red,
+                  boxShadow:"none",flexShrink:0}}/>
+                <span style={{fontSize:10,fontWeight:800,color:A.red,letterSpacing:"0.16em",textTransform:"uppercase"}}>
+                  Acción requerida
+                </span>
+              </div>
+              {p1Active.slice(0,2).map((t,i)=>(
+                <div key={t.id} onClick={()=>setTab("tickets")}
+                  style={{display:"flex",alignItems:"center",gap:12,padding:"11px 0",
+                    cursor:"pointer",borderTop:i>0?`1px solid rgba(232,72,72,0.12)`:"none"}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:14,fontWeight:600,color:A.t1,overflow:"hidden",
+                      textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>
+                      {t.titulo}
+                    </div>
+                    <div style={{fontSize:11,color:A.red}}>
+                      Unidad detenida · {TICKET_META[t.status]?.label||t.status}
+                    </div>
+                  </div>
+                  <div style={{fontSize:20,color:A.red,opacity:0.65,flexShrink:0}}>›</div>
+                </div>
+              ))}
+              {p1Active.length>2&&(
+                <div onClick={()=>setTab("tickets")}
+                  style={{fontSize:11,color:A.red,marginTop:8,cursor:"pointer",opacity:0.8}}>
+                  +{p1Active.length-2} más →
+                </div>
+              )}
+            </div>
+          )}
+          {vencidos.length>0&&(
+            <div>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                <div style={{width:7,height:7,borderRadius:"50%",background:A.amber,flexShrink:0}}/>
+                <span style={{fontSize:10,fontWeight:800,color:A.amber,letterSpacing:"0.16em",textTransform:"uppercase"}}>
+                  Cobros vencidos
+                </span>
+              </div>
+              {vencidos.slice(0,1).map(t=>(
+                <div key={t.id} onClick={()=>setTab("cartera")}
+                  style={{display:"flex",alignItems:"center",gap:12,padding:"11px 0",cursor:"pointer"}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:14,fontWeight:600,color:A.t1,overflow:"hidden",
+                      textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>
+                      {t.titulo}
+                    </div>
+                    <div style={{fontSize:11,color:A.amber}}>Prometido {t.promesaPago} · Vencido</div>
+                  </div>
+                  <div style={{fontSize:20,color:A.amber,opacity:0.65,flexShrink:0}}>›</div>
+                </div>
+              ))}
+              {vencidos.length>1&&(
+                <div onClick={()=>setTab("cartera")}
+                  style={{fontSize:11,color:A.amber,marginTop:8,cursor:"pointer",opacity:0.8}}>
+                  +{vencidos.length-1} más →
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
-      {vencidos.length>0&&(
-        <div style={{background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",marginBottom:8}}>
-          <div style={{fontSize:13,fontWeight:800,color:"#C04040"}}>CARTERA VENCIDA — {vencidos.length} op. · {mxn(vencidos.reduce((s,t)=>s+t.snap.precioConIVA,0))}</div>
-        </div>
-      )}
 
-      {/* KPIs principales */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-        {[
-          ["Realizado (entregado+)", mxn(totalFact), C.cyan],
-          ["Utilidad neta",   mxn(totalNeta), totalNeta>=0?C.green:C.red],
-          ["Cartera pend.",   mxn(carteraMonto),   C.yellow],
-          ["Forecast",        mxn(forecast),  C.cyan],
-        ].map(([l,v,c])=>(
-          <div key={l} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px"}}>
-            <div style={{fontSize:10,color:C.t3,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.1em"}}>{l}</div>
-            <div style={{fontSize:17,fontWeight:800,color:c,fontFamily:"'Courier New',monospace",lineHeight:1}}>{v}</div>
+      <div style={{padding:"0 16px"}}>
+        {/* ── Period tabs ── */}
+        <div style={{display:"flex",gap:6,padding:"20px 0 20px",overflowX:"auto",
+          scrollbarWidth:"none",msOverflowStyle:"none"}}>
+          {[["today","Hoy"],["week","7d"],["month","30d"],["3m","3M"]].map(([v,l])=>(
+            <button key={v} onClick={()=>setPeriod(v)}
+              className={period===v?"glass-pill-active":"glass-pill-inactive"}
+              style={{
+                flexShrink:0,padding:"7px 18px",borderRadius:20,fontSize:12,fontWeight:700,
+                color:period===v ? A.pillColor : A.t3,
+                cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.18s",
+              }}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        {/* ══ HERO CARD ══════════════════════════════════════ */}
+        <div className="glass-card" style={{
+          padding:"28px 24px",
+          marginBottom:12,
+        }}>
+          {/* Operational status line */}
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:22}}>
+            <div style={{
+              width:6,height:6,borderRadius:"50%",background:sc.dot,flexShrink:0,
+              boxShadow:"none",
+            }}/>
+            <span style={{fontSize:11,fontWeight:700,color:sc.text,letterSpacing:"0.1em",textTransform:"uppercase"}}>
+              {opsStatus.msg}
+            </span>
           </div>
-        ))}
+
+          {/* Label */}
+          <div style={{fontSize:9,color:A.t3,letterSpacing:"0.18em",textTransform:"uppercase",marginBottom:10}}>
+            Facturado · {pLabel}
+          </div>
+
+          {/* GIANT number */}
+          <div style={{
+            fontSize:58,fontWeight:800,color:C.t1,lineHeight:0.9,
+            letterSpacing:"-0.025em",fontVariantNumeric:"tabular-nums",
+            marginBottom:16,
+          }}>
+            {mxn(totalFact)}
+          </div>
+
+          {/* Growth chip */}
+          {growth!==null&&(
+            <div style={{marginBottom:22}}>
+              <span style={{
+                display:"inline-flex",alignItems:"center",gap:6,
+                padding:"5px 14px",borderRadius:20,
+                background: growthUp?A.limeDim:A.redDim,
+                border:`1px solid ${growthUp?C.borderHi:"rgba(224,85,85,0.25)"}`,
+              }}>
+                <span style={{fontSize:14,fontWeight:800,color:growthUp?A.lime:A.red}}>
+                  {growthUp?"+":""}{growth.toFixed(0)}%
+                </span>
+                <span style={{fontSize:10,color:A.t3,letterSpacing:"0.05em"}}>vs anterior</span>
+              </span>
+            </div>
+          )}
+
+          {/* Divider */}
+          <div style={{height:1,background:C.border,marginBottom:22}}/>
+
+          {/* Secondary KPIs */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:0}}>
+            {[
+              {label:"Util. neta", value:mxn(totalNeta), color:A.lime},
+              {label:"Margen",    value:fpct(margen),    color:margen>=25?A.lime:margen>=15?A.mint:A.amber, border:true},
+              {label:"Ops",       value:operados.length, color:A.t1, border:true},
+            ].map(({label,value,color,border})=>(
+              <div key={label} style={{paddingLeft:border?14:0,
+                borderLeft:border?`1px solid ${C.border}`:"none"}}>
+                <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>
+                  {label}
+                </div>
+                <div style={{fontSize:22,fontWeight:800,color,letterSpacing:"-0.01em"}}>
+                  {value}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ══ QUICK ACTIONS ═════════════════════════════════════════════════════ */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+          <button onClick={()=>setTab("cotizador")} className="glass-button" style={{
+            borderRadius:18,padding:"18px 16px",
+            textAlign:"left",WebkitTapHighlightColor:"transparent",touchAction:"manipulation",
+          }}>
+            <div style={{fontSize:22,fontWeight:800,color:A.lime,lineHeight:1,marginBottom:6}}>+</div>
+            <div style={{fontSize:13,fontWeight:700,color:A.lime,letterSpacing:"-0.01em",lineHeight:1.2}}>
+              Nueva<br/>cotización
+            </div>
+          </button>
+          <button onClick={()=>setTab("tickets")} className="glass-button" style={{
+            borderRadius:18,padding:"18px 16px",
+            cursor:"pointer",textAlign:"left",
+            WebkitTapHighlightColor:"transparent",touchAction:"manipulation",
+          }}>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+              <span style={{fontSize:26,fontWeight:800,color:A.t1,lineHeight:1}}>{pipeline.length}</span>
+              {p1Active.length>0&&(
+                <span style={{width:7,height:7,borderRadius:"50%",background:A.red,display:"inline-block",
+                  }}/>
+              )}
+            </div>
+            <div style={{fontSize:12,fontWeight:600,color:A.t2}}>
+              en Pipeline
+              {p1Active.length>0&&<div style={{fontSize:10,color:A.red,marginTop:3}}>{p1Active.length} P1 urgente{p1Active.length>1?"s":""}</div>}
+            </div>
+          </button>
+        </div>
+
+        {/* ══ CARTERA WIDGET — interactive, touchable ═══════════════════════════ */}
+        <div onClick={()=>setTab("cartera")} style={{
+          background: vencidos.length>0
+            ? "rgba(245,158,11,0.08)"
+            : A.card,
+          borderRadius:A.r,
+          padding:"22px 24px",
+          marginBottom:12,
+          boxShadow:A.shadow,
+          cursor:"pointer",
+          border:`1px solid ${vencidos.length>0?"rgba(240,160,48,0.25)":C.border}`,
+          WebkitTapHighlightColor:"transparent",
+        }}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase"}}>
+              Cartera activa
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              {vencidos.length>0&&(
+                <span style={{
+                  fontSize:10,fontWeight:700,color:A.amber,
+                  background:A.amberDim,
+                  padding:"3px 10px",borderRadius:10,
+                  border:"1px solid rgba(240,160,48,0.28)",
+                }}>
+                  {vencidos.length} vencida{vencidos.length>1?"s":""}
+                </span>
+              )}
+              <span style={{fontSize:20,color:A.t3,opacity:0.5}}>›</span>
+            </div>
+          </div>
+          <div style={{
+            fontSize:42,fontWeight:800,lineHeight:1,letterSpacing:"-0.025em",
+            color:vencidos.length>0?A.amber:carteraMonto>0?A.t1:A.t3,
+            marginBottom:10,fontVariantNumeric:"tabular-nums",
+          }}>
+            {mxn(carteraMonto)}
+          </div>
+          <div style={{fontSize:11,color:A.t3}}>
+            {carteraTkts.length} ticket{carteraTkts.length!==1?"s":""} pendientes · toca para detalle
+          </div>
+        </div>
+
+        {/* ══ SPARKLINE — 7-day util trend ══════════════════════════════════════ */}
+        <div className="glass-card" style={{
+          padding:"22px 24px",marginBottom:12,
+        }}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase"}}>
+              Utilidad neta · 7 días
+            </div>
+            {growth!==null&&(
+              <span style={{fontSize:10,fontWeight:700,color:growthUp?A.lime:A.red}}>
+                {growthUp?"+":""}{growth.toFixed(0)}% sem. anterior
+              </span>
+            )}
+          </div>
+
+          <svg viewBox="0 0 280 52" style={{width:"100%",height:52,display:"block",overflow:"visible"}}>
+            <defs>
+              <linearGradient id="mops-sg" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stopColor={A.lime} stopOpacity="0.25"/>
+                <stop offset="100%" stopColor={A.lime} stopOpacity="0.02"/>
+              </linearGradient>
+            </defs>
+            <path d={sparkPath.area} fill="url(#mops-sg)"/>
+            <path d={sparkPath.line} fill="none" stroke={A.lime} strokeWidth="1.6"
+              strokeLinecap="round" strokeLinejoin="round"/>
+            {sparkData.map((d,i)=>{
+              if(!d.today) return null;
+              const x=(i/(sparkData.length-1))*280;
+              const y=50-(Math.max(d.val,0)/maxSpark)*(50-6)-3;
+              return (
+                <g key="td">
+                  <circle cx={x} cy={y} r={10} fill={A.lime} opacity={0.1}/>
+                  <circle cx={x} cy={y} r={5}  fill={A.lime} opacity={0.85}/>
+                </g>
+              );
+            })}
+          </svg>
+
+          <div style={{display:"flex",justifyContent:"space-between",marginTop:10}}>
+            {sparkData.map((d,i)=>(
+              <div key={i} style={{fontSize:8,color:d.today?A.lime:A.t3,
+                fontWeight:d.today?800:400,textAlign:"center",letterSpacing:"0.02em"}}>
+                {d.label}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ══ CLIENTE LÍDER ═════════════════════════════════════════════════════ */}
+        {(()=>{
+          const map={};
+          operados.forEach(t=>{if(t.clientId) map[t.clientId]=(map[t.clientId]||0)+safeNumber(t.snap?.precioConIVA);});
+          const top=Object.entries(map).sort((a,b)=>b[1]-a[1])[0];
+          if(!top) return null;
+          const cl=clients.find(c=>c.id===top[0]);
+          if(!cl) return null;
+          const pct=totalFact>0?(top[1]/totalFact)*100:0;
+          return (
+            <div className="glass-card" style={{padding:"22px 24px",marginBottom:12}}>
+              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:18}}>
+                Cliente líder · {pLabel}
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:16}}>
+                <div>
+                  <div style={{fontSize:15,fontWeight:700,color:A.t1,marginBottom:6}}>{cl.empresa}</div>
+                  <div style={{fontSize:30,fontWeight:800,color:A.t1,letterSpacing:"-0.02em",fontVariantNumeric:"tabular-nums"}}>
+                    {mxn(top[1])}
+                  </div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:26,fontWeight:800,color:A.lime,letterSpacing:"-0.02em",lineHeight:1}}>
+                    {pct.toFixed(0)}%
+                  </div>
+                  <div style={{fontSize:9,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginTop:4}}>
+                    del total
+                  </div>
+                </div>
+              </div>
+              <div style={{height:3,background:C.border,borderRadius:2,overflow:"hidden"}}>
+                <div style={{height:"100%",width:`${Math.min(pct,100)}%`,
+                  background:`linear-gradient(90deg,${A.lime},${A.mint})`,
+                  borderRadius:2,transition:"width 600ms ease"}}/>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ── Sin datos empty state ── */}
+        {operados.length===0&&!p1Active.length&&!vencidos.length&&(
+          <div style={{textAlign:"center",padding:"48px 20px"}}>
+            <div style={{fontSize:11,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
+              Sin operaciones en {pLabel.toLowerCase()}
+            </div>
+            <div style={{fontSize:13,color:A.t3,marginBottom:20}}>
+              Crea una cotización para comenzar
+            </div>
+            <button onClick={()=>setTab("cotizador")} style={{
+              background:A.limeDim,border:`1px solid ${C.borderHi}`,
+              borderRadius:12,padding:"10px 22px",cursor:"pointer",
+              fontSize:13,fontWeight:600,color:A.lime,letterSpacing:"0.04em",
+            }}>
+              + Nueva cotización
+            </button>
+          </div>
+        )}
+
+        {/* ══ RESUMEN FINANCIERO — tabla completa ══════════════════════════════ */}
+        <div className="glass-card" style={{
+          overflow:"hidden",marginBottom:12,
+        }}>
+          {/* Header */}
+          <div style={{padding:"20px 22px 16px",borderBottom:`1px solid ${C.border}`}}>
+            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:6}}>
+              Resumen financiero
+            </div>
+            <div style={{fontSize:11,color:A.t2}}>{pLabel} · {operados.length} operación{operados.length!==1?"es":""}</div>
+          </div>
+          {/* Rows */}
+          {[
+            {label:"Revenue operado",   val:mxn(totalFact),          col:A.lime,     bold:true},
+            {label:"Costo producto",    val:mxn(costoProducto),      col:A.t2},
+            {label:"Gastos operativos", val:mxn(gastosOp),           col:A.t2},
+            {label:"Cash cobrado",      val:mxn(cashTotal),          col:"#8FE3BE"},
+            {label:"Utilidad operativa",val:mxn(totalNeta),          col:totalNeta>=0?"#8FE3BE":A.red, bold:true},
+            {label:"Markup promedio",   val:fpct(markupProm),        col:A.lime},
+            {label:"Rentabilidad neta", val:fpct(margen),            col:margen>=20?"#8FE3BE":margen>=10?"#F3F4F6":A.amber},
+            {label:"ROI operativo",     val:fpct(roi),               col:roi>=25?"#8FE3BE":A.amber},
+            {label:"IVA neto SAT",      val:mxn(ivaNetoOp),         col:A.amber},
+            {label:"ISR estimado",      val:mxn(isrOp),              col:A.amber},
+            {label:"Carga fiscal",      val:mxn(cargaFiscal),        col:A.red},
+            {label:"Eficiencia fiscal", val:fpct(eficienciaFiscal),  col:eficienciaFiscal>=75?"#8FE3BE":A.amber},
+            {label:"Cartera pendiente", val:mxn(carteraMonto),       col:vencidos.length>0?A.amber:A.t1},
+            {label:"Flujo operativo",   val:mxn(flujoOp),            col:flujoOp>=0?"#8FE3BE":A.red},
+            {label:"Forecast revenue",  val:mxn(forecastMonto),      col:A.t2},
+            {label:"Forecast utilidad", val:mxn(forecastUtil),       col:forecastUtil>0?A.lime:A.t2},
+            {label:"P1 activos",        val:String(p1Active.length), col:p1Active.length>0?A.red:A.t3, bold:p1Active.length>0},
+            {label:"P2 activos",        val:String(p2Active.length), col:p2Active.length>0?A.amber:A.t3},
+          ].map(({label,val,col,bold},i,arr)=>(
+            <div key={label} style={{
+              display:"flex",justifyContent:"space-between",alignItems:"center",
+              padding:"12px 22px",
+              borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none",
+              background:bold?(C._dark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.02)"):"transparent",
+            }}>
+              <span style={{fontSize:12,color:A.t2,letterSpacing:"0.01em"}}>{label}</span>
+              <span style={{
+                fontSize:bold?15:13,fontWeight:bold?800:600,
+                color:col,fontFamily:"'Courier New',monospace",
+                letterSpacing:"0.01em",
+              }}>{val}</span>
+            </div>
+          ))}
+          {/* Footer CTA */}
+          <div style={{padding:"16px 22px"}}>
+            <button onClick={()=>setTab("cotizador")}
+              style={{width:"100%",padding:"14px",
+                background:A.limeFill,
+                border:"none",borderRadius:14,cursor:"pointer",
+                fontSize:14,fontWeight:700,color:C._dark?"#0A1F14":"#161616",
+                letterSpacing:"0.02em",touchAction:"manipulation",
+                boxShadow:`0 4px 20px ${A.limeDim}`,
+              }}>
+              + Nueva cotización
+            </button>
+          </div>
+        </div>
       </div>
-
-      {/* KPIs secundarios */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
-        {[
-          ["Abiertos",    String(abiertos.length), C.t1],
-          ["Rentabilidad neta", fpct(rentabilidadProm),         margenColor(rentabilidadProm)],
-          ["Util/hora",   totalHoras>0?mxn(uPH):"---", C.cyan],
-        ].map(([l,v,c])=>(
-          <div key={l} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 12px"}}>
-            <div style={{fontSize:9,color:C.t3,marginBottom:3,textTransform:"uppercase",letterSpacing:"0.1em"}}>{l}</div>
-            <div style={{fontSize:14,fontWeight:800,color:c,fontFamily:"'Courier New',monospace",lineHeight:1}}>{v}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Pipeline strip */}
-      <MCard>
-        <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`}}>
-          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em"}}>DISTRIBUCION PIPELINE</div>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",borderBottom:`1px solid ${C.border}`}}>
-          {TICKET_PIPELINE.slice(0,6).map(sid=>{
-            const s=TICKET_META[sid];
-            const count=tickets.filter(t=>t.status===sid).length;
-            return (
-              <div key={sid} style={{padding:"10px 4px",textAlign:"center",borderRight:`1px solid ${C.border}`}}>
-                <div style={{fontSize:18,fontWeight:800,color:count>0?s.dot:C.t3,fontFamily:"'Courier New',monospace",lineHeight:1}}>{count}</div>
-                <div style={{fontSize:7,color:C.t3,marginTop:3,lineHeight:1.2}}>{s.label}</div>
-              </div>
-            );
-          })}
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)"}}>
-          {[...TICKET_PIPELINE.slice(6),"cancelado"].map(sid=>{
-            const s=TICKET_META[sid];
-            const count=tickets.filter(t=>t.status===sid).length;
-            return (
-              <div key={sid} style={{padding:"10px 4px",textAlign:"center",borderRight:`1px solid ${C.border}`}}>
-                <div style={{fontSize:18,fontWeight:800,color:count>0?s.dot:C.t3,fontFamily:"'Courier New',monospace",lineHeight:1}}>{count}</div>
-                <div style={{fontSize:7,color:C.t3,marginTop:3,lineHeight:1.2}}>{s.label}</div>
-              </div>
-            );
-          })}
-        </div>
-      </MCard>
-
-      {/* Prioridades */}
-      <MCard>
-        <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`}}>
-          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em"}}>PRIORIDADES</div>
-        </div>
-        {byPriority.map(({pr,count,open})=>(
-          <div key={pr.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderBottom:`1px solid ${C.border}`}}>
-            <div style={{width:10,height:10,borderRadius:"50%",background:pr.dot,flexShrink:0}}/>
-            <div style={{flex:1}}>
-              <div style={{fontSize:12,fontWeight:700,color:pr.dot,fontFamily:"'Courier New',monospace"}}>{pr.id}</div>
-              <div style={{fontSize:10,color:C.t3}}>{pr.label}</div>
-            </div>
-            <div style={{textAlign:"right"}}>
-              <div style={{fontSize:13,fontWeight:700,color:open>0?pr.dot:C.t3,fontFamily:"'Courier New',monospace"}}>{open} abiertos</div>
-              <div style={{fontSize:10,color:C.t3}}>{count} total</div>
-            </div>
-          </div>
-        ))}
-      </MCard>
-
-      {/* Utilidad por categoria */}
-      {byOp.length>0&&(
-        <MCard>
-          <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`}}>
-            <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em"}}>UTILIDAD POR CATEGORIA</div>
-          </div>
-          {byOp.map((o,i)=>(
-            <div key={o.label} style={{padding:"10px 14px",borderBottom:i<byOp.length-1?`1px solid ${C.border}`:"none"}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                <span style={{fontSize:12,color:C.t2}}>{o.label} <span style={{fontSize:10,color:C.t3}}>({o.count})</span></span>
-                <span style={{fontSize:13,fontWeight:700,color:o.neta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(o.neta)}</span>
-              </div>
-              <div style={{height:3,background:C.bg4,borderRadius:2,overflow:"hidden"}}>
-                <div style={{height:"100%",width:`${Math.max((o.neta/maxByOp)*100,0)}%`,background:C.cyanDim}}/>
-              </div>
-            </div>
-          ))}
-        </MCard>
-      )}
-
-      {/* Top clientes */}
-      {topClients.length>0&&(
-        <MCard>
-          <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`}}>
-            <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em"}}>TOP CLIENTES</div>
-          </div>
-          {topClients.map((c,i)=>(
-            <div key={c.label} style={{padding:"10px 14px",borderBottom:i<topClients.length-1?`1px solid ${C.border}`:"none"}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                <span style={{fontSize:12,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"60%"}}>{c.label}</span>
-                <span style={{fontSize:13,fontWeight:700,color:c.neta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(c.neta)}</span>
-              </div>
-              <div style={{height:3,background:C.bg4,borderRadius:2,overflow:"hidden"}}>
-                <div style={{height:"100%",width:`${Math.max((c.neta/maxClient)*100,0)}%`,background:C.greenDim}}/>
-              </div>
-            </div>
-          ))}
-        </MCard>
-      )}
-
-      {/* Aging cartera */}
-      <MCard>
-        <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`}}>
-          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em"}}>AGING CARTERA</div>
-        </div>
-        {[["Menos de 30 dias",aging.a30,C.green],["30 a 60 dias",aging.a60,C.yellow],["Mas de 60 dias",aging.mas60,C.red]].map(([l,v,c],i)=>(
-          <div key={l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 14px",borderBottom:i<2?`1px solid ${C.border}`:"none"}}>
-            <span style={{fontSize:12,color:C.t2}}>{l}</span>
-            <span style={{fontSize:14,fontWeight:700,color:v>0?c:C.t3,fontFamily:"'Courier New',monospace"}}>{mxn(v)}</span>
-          </div>
-        ))}
-      </MCard>
-
-      {/* Top proveedores */}
-      {topSupp.length>0&&(
-        <MCard>
-          <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`}}>
-            <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em"}}>TOP PROVEEDORES</div>
-          </div>
-          {topSupp.map((s,i)=>(
-            <div key={s.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 14px",borderBottom:i<topSupp.length-1?`1px solid ${C.border}`:"none"}}>
-              <div>
-                <div style={{fontSize:12,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:200}}>{s.label}</div>
-                <div style={{fontSize:10,color:C.t3}}>{s.count} ops</div>
-              </div>
-              <span style={{fontSize:13,fontWeight:700,color:s.neta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(s.neta)}</span>
-            </div>
-          ))}
-        </MCard>
-      )}
-
-      {/* Resumen financiero */}
-      <MCard>
-        <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`}}>
-          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em"}}>RESUMEN FINANCIERO</div>
-        </div>
-        {[
-          ["Revenue operado",    mxn(totalFact),              C.cyan],
-          ["Costo producto",     mxn(costoProducto),          C.t2],
-          ["Gastos operativos",  mxn(gastosOp),               C.t2],
-          ["Cash cobrado",       mxn(cashTotal),              C.green],
-          ["Utilidad operativa", mxn(totalNeta),              totalNeta>=0?C.green:C.red],
-          ["Markup promedio",    fpct(markupProm),            C.blueHi],
-          ["Rentabilidad neta",  fpct(rentabilidadProm),      margenColor(rentabilidadProm)],
-          ["ROI operativo",      fpct(roi),                   roi>=25?C.green:C.yellow],
-          ["IVA neto SAT",       mxn(ivaNetoTotal),           C.yellow],
-          ["ISR estimado",       mxn(isrTotal),               C.yellow],
-          ["Carga fiscal",       mxn(cargaFiscalTotal),       C.red],
-          ["Eficiencia fiscal",  fpct(eficienciaFiscalGlobal),eficienciaFiscalGlobal>=75?C.green:C.yellow],
-          ["Cartera pendiente",  mxn(carteraMonto),           C.yellow],
-          ["Flujo operativo",    mxn(flujoOp),                flujoOp>=0?C.green:C.red],
-          ["Forecast revenue",   mxn(forecastMonto),          C.t2],
-          ["Forecast utilidad",  mxn(forecast),               C.cyan],
-          ["P1 activos",         String(p1.length),           p1.length>0?C.p1dot:C.t3],
-          ["P2 activos",         String(p2.length),           p2.length>0?C.p2dot:C.t3],
-        ].map(([l,v,c],i,arr)=>(
-          <div key={l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 14px",borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none"}}>
-            <span style={{fontSize:12,color:C.t2}}>{l}</span>
-            <span style={{fontSize:14,fontWeight:700,color:c,fontFamily:"'Courier New',monospace"}}>{v}</span>
-          </div>
-        ))}
-      </MCard>
-
-      <MBtn label="+ Nuevo ticket" full onClick={()=>setTab("cotizador")}/>
     </div>
+  );
+}
+
+// ── StatusFlowSheet — bottom sheet para cambiar estado de ticket en mobile ────
+function StatusFlowSheet({tkt, dispatch, toast, onClose}) {
+  const C = React.useContext(ThemeCtx);
+  if(!tkt) return null;
+  const nexts = TICKET_TRANSITIONS[tkt.status] || [];
+  const meta  = TICKET_META[tkt.status] || {};
+  return (
+    <>
+      <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,0.55)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)"}}/>
+      <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:201,
+        background:"rgba(14,16,20,0.92)",backdropFilter:"blur(32px) saturate(1.8)",WebkitBackdropFilter:"blur(32px) saturate(1.8)",
+        borderRadius:"28px 28px 0 0",borderTop:`1px solid rgba(255,255,255,0.10)`,
+        padding:`16px 16px calc(20px + env(safe-area-inset-bottom,0px))`,
+        boxShadow:"0 -12px 60px rgba(0,0,0,0.7), 0 1px 0 rgba(255,255,255,0.06) inset"}}>
+        {/* Handle */}
+        <div style={{display:"flex",justifyContent:"center",marginBottom:14}}>
+          <div style={{width:40,height:4,borderRadius:2,background:C.border}}/>
+        </div>
+        {/* Current state */}
+        <div style={{marginBottom:4}}>
+          <div style={{fontSize:9,color:C.t3,letterSpacing:"0.15em",textTransform:"uppercase",marginBottom:4}}>Estado actual</div>
+          <div style={{fontSize:13,fontWeight:700,color:meta.dot||C.t2}}>{meta.label||tkt.status}</div>
+          <div style={{fontSize:11,color:C.t3,marginTop:2,marginBottom:16}}>{tkt.titulo}</div>
+        </div>
+        {/* Transitions */}
+        {nexts.length===0?(
+          <div style={{textAlign:"center",padding:"16px 0",color:C.t3,fontSize:13}}>
+            Ticket en estado final — sin transiciones disponibles
+          </div>
+        ):(
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>
+              Mover a:
+            </div>
+            {nexts.map(to=>{
+              const m=TICKET_META[to]||{};
+              const isCancel=to==="cancelado";
+              return (
+                <button key={to} onClick={()=>{
+                  dispatch({type:"TKT_STATUS",id:tkt.id,to});
+                  toast(`${meta.label||tkt.status} → ${m.label||to}`,"success");
+                  onClose();
+                }}
+                  style={{padding:"14px 18px",borderRadius:14,cursor:"pointer",
+                    background:isCancel?C.redDim:C.bg2,
+                    border:`1px solid ${isCancel?C.red+"50":m.dot||C.border}`,
+                    display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
+                  <div style={{width:10,height:10,borderRadius:5,background:m.dot||C.border,flexShrink:0}}/>
+                  <div>
+                    <div style={{fontSize:14,fontWeight:700,color:isCancel?C.red:C.t1}}>{m.label||to}</div>
+                    {to==="cancelado"&&<div style={{fontSize:10,color:C.red,marginTop:1}}>Esta acción no se puede deshacer</div>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <button onClick={onClose}
+          style={{marginTop:16,width:"100%",padding:"12px",borderRadius:12,
+            background:"transparent",border:`1px solid ${C.border}`,
+            color:C.t2,fontSize:13,cursor:"pointer",fontWeight:600}}>
+          Cancelar
+        </button>
+      </div>
+    </>
   );
 }
 
 // ── MPipeline — Pipeline móvil ───────────────────────────────────────────────
 function MPipeline({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {tickets,clients,units} = state;
-  const [expId,setExpId] = useState(null);
-  const [fPrio,setFPrio] = useState("all");
-  const abiertos = useMemo(()=>tickets.filter(t=>!CLOSED_SET.has(t.status))
-    .filter(t=>fPrio==="all"||t.priority===fPrio)
-    .sort((a,b)=>a.priority.localeCompare(b.priority)),[tickets,fPrio]);
+  const [filter,setFilter]       = useState("active");
+  const [statusSheet,setStatusSheet] = useState(null);
+  const [expandId,setExpandId]   = useState(null);
+
+  // Accent palette — glassmorphism
+  const A = makeA(C);
+
+  const PIPE_STAGES = ["recibido","validando","sourcing","cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado"];
+  const stageProgress = s => { if(s==="cancelado") return 0; const i=PIPE_STAGES.indexOf(s); return i>=0?((i+1)/PIPE_STAGES.length)*100:0; };
+  const progColor = s => { const i=PIPE_STAGES.indexOf(s); return i<=1?A.amber:i<=4?A.mint:A.lime; };
+
+  const prC = {
+    P1:{dot:C.p1, dim:C.p1dim},
+    P2:{dot:C.p2, dim:C.p2dim},
+    P3:{dot:C.p3, dim:C.p3dim},
+    P4:{dot:C.p4, dim:C.p4dim},
+  };
+
+  const active   = useMemo(()=>tickets.filter(t=>!t._deleted),[tickets]);
+  const filtered = useMemo(()=>{
+    let arr=active;
+    if(filter==="active") arr=arr.filter(t=>!CLOSED_SET.has(t.status));
+    else if(filter==="p1") arr=arr.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status));
+    else if(filter==="venc") arr=arr.filter(t=>{
+      if(!t.promesaPago||t.cobrado) return false;
+      const d=parseDateMX(t.promesaPago); return d&&new Date()>d;
+    });
+    const pOrd={P1:0,P2:1,P3:2,P4:3};
+    return [...arr].sort((a,b)=>{
+      const pd=(pOrd[a.priority]||3)-(pOrd[b.priority]||3);
+      if(pd!==0) return pd;
+      return b.date.localeCompare(a.date);
+    });
+  },[active,filter]);
+
+  const counts = useMemo(()=>({
+    active: active.filter(t=>!CLOSED_SET.has(t.status)).length,
+    p1:     active.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status)).length,
+    venc:   active.filter(t=>{if(!t.promesaPago||t.cobrado) return false; const d=parseDateMX(t.promesaPago); return d&&new Date()>d;}).length,
+    all:    active.length,
+  }),[active]);
 
   return (
-    <div style={{padding:"12px 14px"}}>
-      {/* Filtro prioridad */}
-      <div style={{display:"flex",gap:6,marginBottom:12,overflowX:"auto",paddingBottom:4}}>
-        {[["all","Todos"],["P1","P1"],["P2","P2"],["P3","P3"],["P4","P4"]].map(([v,l])=>(
-          <button key={v} onClick={()=>setFPrio(v)}
-            style={{padding:"7px 14px",borderRadius:20,border:`1px solid ${fPrio===v?C.cyan:C.border}`,background:fPrio===v?C.blueDim:"transparent",color:fPrio===v?C.cyan:C.t3,fontSize:12,cursor:"pointer",fontWeight:600,whiteSpace:"nowrap",flexShrink:0}}>
-            {l}
-          </button>
-        ))}
-      </div>
+    <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
+      {statusSheet&&<StatusFlowSheet tkt={statusSheet} dispatch={dispatch} toast={toast} onClose={()=>setStatusSheet(null)}/>}
 
-      {abiertos.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:C.t3,fontSize:13}}>Sin tickets abiertos</div>}
+      <div style={{padding:"0 14px"}}>
+        {/* Filter chips */}
+        <div style={{display:"flex",gap:6,padding:"18px 0 16px",overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
+          {[["active","Activos",counts.active],["p1","P1",counts.p1],["venc","Vencidos",counts.venc],["all","Todos",counts.all]].map(([v,l,c])=>(
+            <button key={v} onClick={()=>setFilter(v)}
+              className={filter===v?"glass-pill-active":"glass-pill-inactive"}
+              style={{
+                flexShrink:0,display:"flex",alignItems:"center",gap:6,
+                padding:"7px 16px",borderRadius:20,fontSize:11,fontWeight:700,
+                color:filter===v ? A.pillColor : A.t3,
+                cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.18s",whiteSpace:"nowrap",
+              }}>
+              {l}
+              {c>0&&<span style={{fontSize:10,fontWeight:800,
+                background:filter===v?A.limeDim:C.bg3,
+                color:filter===v?A.lime:A.t3,borderRadius:9,padding:"1px 6px",
+                border:`1px solid ${filter===v?A.pillBorder:A.pillBorderInactive}`}}>{c}</span>}
+            </button>
+          ))}
+        </div>
 
-      {abiertos.map(t=>{
-        const exp=expId===t.id;
-        const cl=clients.find(c=>c.id===t.clientId);
-        const un=units.find(u=>u.id===t.unitId);
-        const pr=PRIORITY[t.priority]||PRIORITY.P4;
-        const allowed=TICKET_TRANSITIONS[t.status]||[];
-        const venc=t.promesaPago&&!t.cobrado&&parseDateMX(t.promesaPago)&&new Date()>parseDateMX(t.promesaPago);
-        return (
-          <MCard key={t.id}>
-            <div onClick={()=>setExpId(exp?null:t.id)} style={{padding:"14px",borderLeft:`5px solid ${pr.dot}`,cursor:"pointer"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-                <div style={{flex:1,marginRight:10}}>
-                  <div style={{fontSize:9,color:pr.dot,fontWeight:700,fontFamily:"'Courier New',monospace",marginBottom:3}}>{t.id} · {t.priority}</div>
-                  <div style={{fontSize:14,fontWeight:700,color:C.t1,lineHeight:1.3}}>{t.titulo}</div>
-                </div>
-                <StatusBadge sid={t.status} meta={TICKET_META}/>
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span style={{fontSize:11,color:C.t3}}>{cl?cl.empresa:"---"}{un?" · "+un.marca+" "+un.modelo:""}</span>
-                <span style={{fontSize:15,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap.precioConIVA)}</span>
-              </div>
-              {venc&&<div style={{marginTop:4,fontSize:10,color:C.red,fontWeight:700}}>CREDITO VENCIDO — {t.promesaPago}</div>}
+        {filtered.length===0&&(
+          <div style={{textAlign:"center",padding:"48px 20px"}}>
+            <div style={{fontSize:11,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
+              {filter==="active"?"Pipeline vacío":filter==="p1"?"Sin P1 activos":filter==="venc"?"Sin vencidos":"Sin tickets"}
             </div>
+            <div style={{fontSize:13,color:A.t3}}>{filter==="active"?"Crea una cotización para comenzar":"Ajusta el filtro"}</div>
+          </div>
+        )}
 
-            {exp&&(
-              <div style={{borderTop:`1px solid ${C.border}`,padding:"12px 14px"}}>
-                {/* Timeline ultimos eventos */}
-                {t.timeline&&t.timeline.slice(-3).map((ev,j)=>(
-                  <div key={j} style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:4}}>{fmtTS(ev.ts)} — {ev.evento}</div>
-                ))}
-                {/* Mover estado */}
-                <div style={{fontSize:10,color:C.t3,letterSpacing:"0.1em",margin:"10px 0 8px"}}>MOVER A:</div>
-                <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:10}}>
-                  {allowed.map(to=>{
-                    const s=TICKET_META[to];
-                    return (
-                      <button key={to} onClick={()=>{if(!canTransition(t.status,to))return;dispatch({type:"TKT_STATUS",id:t.id,to});toast(s.label,"info");setExpId(null);}}
-                        style={{padding:"9px 16px",borderRadius:6,border:`1px solid ${s.dot}55`,background:s.color+"33",color:s.dot,fontSize:12,cursor:"pointer",fontWeight:700}}>
-                        {s.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div style={{display:"flex",gap:8}}>
-                  {t.payType==="credit"&&!t.cobrado&&(
-                    <MBtn label="Cobrado" bg={C.greenDim} border={C.green+"44"} color={C.green} small onClick={()=>{dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado","success");setExpId(null);}}/>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {filtered.map(t=>{
+            const meta     = TICKET_META[t.status]||{};
+            const pr       = prC[t.priority]||prC.P4;
+            const cl       = clients.find(c=>c.id===t.clientId);
+            const un       = units.find(u=>u.id===t.unitId);
+            const prog     = stageProgress(t.status);
+            const pCol     = progColor(t.status);
+            const isClosed = CLOSED_SET.has(t.status);
+            const isP1     = t.priority==="P1";
+            const isVenc   = !t.cobrado&&t.promesaPago&&(()=>{const d=parseDateMX(t.promesaPago);return d&&new Date()>d;})();
+            const isExp    = expandId===t.id;
+            const price    = safeNumber(t.snap?.precioConIVA);
+            const uNeta    = safeNumber(t.snap?.uNeta);
+
+            return (
+              <div key={t.id} style={{
+                background:isP1?"rgba(239,68,68,0.08)":A.card,
+                borderRadius:A.r,overflow:"hidden",
+                boxShadow:isP1
+                  ? "0 1px 3px rgba(0,0,0,0.3), 0 0 0 1px rgba(239,68,68,0.15)"
+                  : A.shadow,
+              }}>
+                {/* Tap area */}
+                <div onClick={()=>setExpandId(isExp?null:t.id)} style={{padding:"16px 16px 14px",cursor:"pointer"}}>
+                  {/* Row 1: badges + date */}
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                    <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"nowrap"}}>
+                      <span style={{display:"inline-flex",alignItems:"center",gap:4,
+                        fontSize:9,fontWeight:800,padding:"3px 8px",borderRadius:10,
+                        background:pr.dim,color:pr.dot,letterSpacing:"0.08em"}}>
+                        <span style={{width:5,height:5,borderRadius:"50%",background:pr.dot,
+                          boxShadow:isP1?`0 0 6px ${pr.dot}`:"none",display:"inline-block",flexShrink:0}}/>
+                        {t.priority}
+                      </span>
+                      <span style={{fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:10,
+                        background:`${meta.dot||"#8A9AA4"}18`,color:meta.dot||A.t3,letterSpacing:"0.05em"}}>
+                        {meta.label||t.status}
+                      </span>
+                      {isVenc&&<span style={{fontSize:9,fontWeight:800,padding:"3px 7px",borderRadius:10,
+                        background:A.redDim,color:A.red,letterSpacing:"0.06em"}}>VENCIDO</span>}
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                      <span style={{fontSize:10,color:A.t3}}>{t.date}</span>
+                      <span style={{fontSize:14,color:A.t3,transform:isExp?"rotate(90deg)":"none",
+                        transition:"transform 200ms",display:"inline-block",lineHeight:1}}>›</span>
+                    </div>
+                  </div>
+                  {/* Title */}
+                  <div style={{fontSize:15,fontWeight:700,color:A.t1,lineHeight:1.3,marginBottom:6}}>{t.titulo}</div>
+                  {/* Client + unit */}
+                  {(cl||un)&&(
+                    <div style={{fontSize:11,color:A.t2,marginBottom:10,
+                      overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                      {cl&&<span>{cl.empresa}</span>}
+                      {cl&&un&&<span style={{color:A.t3,margin:"0 4px"}}>·</span>}
+                      {un&&<span style={{color:A.t3}}>{un.economico?"Eco. "+un.economico:un.marca+" "+un.modelo}</span>}
+                    </div>
                   )}
-                  <MBtn label="Cotizacion PDF" bg={C.blueDim} border={C.blueHi} color={C.cyan} small onClick={()=>{const cl2=state.clients.find(c=>c.id===t.clientId);const un2=state.units?.find(u=>u.id===t.unitId);const su2=state.suppliers?.find(s=>s.id===t.supplierId);generarCotizacionPDF(t,cl2,un2,su2);}}/>
+                  {/* Progress */}
+                  {!isClosed&&(
+                    <div>
+                      <div style={{height:2,background:C.border,borderRadius:2,overflow:"hidden",marginBottom:4}}>
+                        <div style={{height:"100%",width:`${prog}%`,background:pCol,borderRadius:2,transition:"width 400ms ease"}}/>
+                      </div>
+                      <div style={{display:"flex",justifyContent:"space-between"}}>
+                        <span style={{fontSize:8,color:A.t3}}>Etapa {PIPE_STAGES.indexOf(t.status)+1}/{PIPE_STAGES.length}</span>
+                        <span style={{fontSize:8,color:pCol,fontWeight:700}}>{prog.toFixed(0)}%</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Expanded */}
+                {isExp&&(
+                  <div style={{borderTop:`1px solid ${C.border}`,padding:"16px",background:C.bg0}}>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+                      {[
+                        {l:"Precio c/IVA", v:mxn(price),    c:A.t1},
+                        {l:"Util. neta",   v:mxn(uNeta),    c:uNeta>=0?A.lime:A.red},
+                        {l:"Costo total",  v:mxn(safeNumber(t.snap?.costoTotal)), c:A.t2},
+                        {l:"Margen",       v:fpct(safeNumber(t.snap?.margenNetoPrecio)), c:A.t2},
+                      ].map(({l,v,c})=>(
+                        <div key={l}>
+                          <div style={{fontSize:8,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>{l}</div>
+                          <div style={{fontSize:16,fontWeight:700,color:c,fontVariantNumeric:"tabular-nums"}}>{v}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {t.notes&&<div style={{fontSize:11,color:A.t2,padding:"10px 12px",background:C._dark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.03)",
+                      borderRadius:10,marginBottom:12,border:`1px solid ${C.border}`}}>{t.notes}</div>}
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div style={{fontSize:8,color:A.t3,letterSpacing:"0.08em",textTransform:"uppercase"}}>{t.id}</div>
+                      <button onClick={e=>{e.stopPropagation();
+                        const c2=clients.find(c=>c.id===t.clientId);
+                        const u2=units.find(u=>u.id===t.unitId);
+                        generarCotizacionPDF(t,c2,u2,null).catch(()=>toast("Error PDF","error"));}}
+                        style={{padding:"7px 14px",borderRadius:10,background:"transparent",
+                          border:`1px solid ${C.border}`,color:A.t2,fontSize:10,
+                          fontWeight:600,cursor:"pointer",letterSpacing:"0.06em"}}>
+                        PDF ↗
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Footer */}
+                <div style={{padding:"12px 16px",borderTop:`1px solid ${C.border}`,
+                  display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{fontSize:22,fontWeight:800,color:A.t1,lineHeight:1,
+                      letterSpacing:"-0.02em",fontVariantNumeric:"tabular-nums"}}>{mxn(price)}</div>
+                    <div style={{fontSize:10,color:uNeta>=0?A.lime:A.red,marginTop:3,fontWeight:600}}>
+                      Util. {mxn(uNeta)}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    {CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t.cobrado&&(
+                      <button onClick={e=>{e.stopPropagation();dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado ✓","success");}}
+                        style={{padding:"10px 14px",borderRadius:12,background:A.mintDim,
+                          border:`1px solid ${C.blue}33`,color:A.mint,
+                          fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:"0.03em",
+                          WebkitTapHighlightColor:"transparent"}}>
+                        Cobrar ✓
+                      </button>
+                    )}
+                    {!isClosed&&(
+                      <button onClick={e=>{e.stopPropagation();setStatusSheet(t);}}
+                        style={{padding:"10px 18px",borderRadius:12,
+                          background:isP1?"rgba(232,72,72,0.15)":A.limeDim,
+                          border:`1px solid ${isP1?"rgba(214,66,66,0.3)":"rgba(255,255,255,0.09)"}`,
+                          color:isP1?A.red:A.lime,fontSize:12,fontWeight:700,cursor:"pointer",
+                          letterSpacing:"0.04em",WebkitTapHighlightColor:"transparent"}}>
+                        Estado →
+                      </button>
+                    )}
+                    {isClosed&&(
+                      <div style={{padding:"8px 14px",borderRadius:12,
+                        background:t.status==="cancelado"?A.redDim:A.mintDim,
+                        border:`1px solid ${t.status==="cancelado"?"rgba(232,72,72,0.25)":"rgba(60,207,170,0.25)"}`}}>
+                        <div style={{fontSize:11,fontWeight:700,
+                          color:t.status==="cancelado"?A.red:A.mint}}>
+                          {t.status==="cancelado"?"Cancelado":t.cobrado?"Cobrado ✓":"Cerrado"}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            )}
-          </MCard>
-        );
-      })}
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
 
-// ── MCotizador — Cotizador móvil simplificado ─────────────────────────────────
+// ── MCotizador — Flujo unificado mobile ────────────────────────────────────────
+// ── PartPicker — Autocomplete inteligente del catálogo ──────────────────────
+function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
+  const C = React.useContext(ThemeCtx);
+  const [open, setOpen] = useState(false);
+  const ref  = useRef();
+
+  useEffect(()=>{
+    const h=e=>{if(ref.current&&!ref.current.contains(e.target)){setOpen(false);}};
+    document.addEventListener("mousedown",h);
+    document.addEventListener("touchstart",h,{passive:true});
+    return()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
+  },[]);
+
+  const results = useMemo(()=>{
+    const q=(value||"").toLowerCase().trim();
+    if(!q||q.length<1){
+      // Show most frequent / recently used
+      return [...parts].sort((a,b)=>(b.frecuencia||0)-(a.frecuencia||0)).slice(0,8);
+    }
+    return parts.filter(p=>
+      safeLower(p.nombre).includes(q)||
+      safeLower(p.oem||"").includes(q)||
+      safeLower(p.aftermarket||"").includes(q)||
+      safeLower(p.aplicacion||"").includes(q)
+    ).slice(0,10);
+  },[value,parts]);
+
+  const showDropdown = open && (results.length>0 || (value||"").trim().length>0);
+
+  return (
+    <div ref={ref} style={{position:"relative",flex:1}}>
+      <input
+        value={value||""}
+        onChange={e=>{onChange(e.target.value);setOpen(true);}}
+        onFocus={()=>setOpen(true)}
+        placeholder={placeholder||"Buscar o describir pieza..."}
+        autoComplete="off"
+        style={{width:"100%",background:C.bg2,border:`1px solid ${open?C.t1:C.border}`,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,
+          borderRadius:10,padding:"13px 14px",color:"#F5F5F7",fontSize:16,
+          outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}
+      />
+      {showDropdown&&(
+        <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,zIndex:400,
+          background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:10,
+          boxShadow:"0 8px 32px rgba(13,24,37,0.12)",maxHeight:280,overflowY:"auto",
+          WebkitOverflowScrolling:"touch"}}>
+          {results.map(p=>(
+            <div key={p.id}
+              onMouseDown={e=>{e.preventDefault();onSelect(p);setOpen(false);}}
+              onTouchEnd={e=>{e.preventDefault();onSelect(p);setOpen(false);}}
+              style={{padding:"11px 14px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",
+                display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:700,color:"#F5F5F7",overflow:"hidden",
+                  textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
+                <div style={{fontSize:10,color:"#7E848E",marginTop:1,fontFamily:"'Courier New',monospace"}}>
+                  {p.oem&&<span>OEM: {p.oem}</span>}
+                  {p.oem&&p.ultimoPrecio>0&&<span style={{color:C.border}}> · </span>}
+                  {p.ultimoPrecio>0&&<span style={{color:C.yellow}}>{mxn(p.ultimoPrecio)}</span>}
+                  {p.proveedor&&<span style={{color:C.border}}> · </span>}
+                  {p.proveedor&&<span>{p.proveedor}</span>}
+                </div>
+                {p.aplicacion&&<div style={{fontSize:9,color:C.t3,marginTop:1}}>{p.aplicacion}</div>}
+              </div>
+              {(p.frecuencia||0)>1&&(
+                <div style={{fontSize:9,color:"#F5F5F7",background:C.border,padding:"2px 7px",
+                  borderRadius:10,flexShrink:0,fontWeight:700}}>×{p.frecuencia}</div>
+              )}
+            </div>
+          ))}
+          {(value||"").trim().length>2&&(
+            <div onMouseDown={e=>{e.preventDefault();onSelect({nombre:(value||"").trim(),oem:"",ultimoPrecio:0});setOpen(false);}}
+              onTouchEnd={e=>{e.preventDefault();onSelect({nombre:(value||"").trim(),oem:"",ultimoPrecio:0});setOpen(false);}}
+              style={{padding:"11px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:18,color:"#F5F5F7",lineHeight:1}}>＋</span>
+              <span style={{fontSize:13,color:"#F5F5F7",fontWeight:600}}>Agregar "{(value||"").trim().slice(0,30)}"</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── MCotizador — Flujo unificado mobile ──────────────────────────────────────
 function MCotizador({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {clients,suppliers,units} = state;
-  const [step,     setStep]     = useState(0); // 0=tipo, 1=lineas, 2=datos
-  const [priority, setPriority] = useState("P3");
-  const [opType,   setOpType]   = useState("consumable");
-  const [clientId, setClientId] = useState("");
-  const [unitId,   setUnitId]   = useState("");
-  const [supplierId,setSupplierId]=useState("");
-  const [payType,  setPayType]  = useState("contado");
-  const [promesa,  setPromesa]  = useState("");
-  const [fecha,    setFecha]    = useState(todayMX());
-  const [notes,    setNotes]    = useState("");
-  const [iva,      setIva]      = useState(16);
-  const [isr,      setIsr]      = useState(20);
-  const [lineas,   setLineas]   = useState([emptyLine("consumable","P3",[])]);
-  const [catalogSearch, setCatalogSearch] = useState(null);
-  const [catalogQ,      setCatalogQ]      = useState("");
-  const [activeMods,    setActiveMods]    = useState([]);
-  const [pdfPending,    setPdfPending]    = useState(null);
+
+  // Accent palette — Black/white monochrome
+  const A = makeA(C);
+
+  // Priority semantic colors
+  const prColors = {
+    P1:{dot:C.p1, dim:C.p1dim, label:"Unidad detenida"},
+    P2:{dot:C.p2, dim:C.p2dim, label:"Operación comprometida"},
+    P3:{dot:C.p3, dim:C.p3dim, label:"Preventivo urgente"},
+    P4:{dot:C.p4, dim:C.p4dim, label:"Solicitud normal"},
+  };
+
+  const [step,setStep]          = useState(0);
+  const [priority,setPriority]  = useState("P3");
+  const [opType,setOpType]      = useState("consumable");
+  const [activeMods,setActiveMods] = useState([]);
+  const [iva]                   = useState(16);
+  const [isr]                   = useState(20);
+  const [lineas,setLineas]      = useState([emptyLine("consumable","P3",[])]);
+  const [partQ,setPartQ]        = useState({});
+  const [clientId,setClientId]  = useState("");
+  const [unitId,setUnitId]      = useState("");
+  const [supplierId,setSupplierId] = useState("");
+  const [payType,setPayType]    = useState("contado");
+  const [promesa,setPromesa]    = useState("");
+  const [fecha,setFecha]        = useState(todayMX());
+  const [notes,setNotes]        = useState("");
+  const [pdfPending,setPdfPending] = useState(null);
+
   const sharedMargin = useMemo(()=>effectiveMargin(opType,priority,activeMods,false,27),[opType,priority,activeMods]);
   const lineSnaps = useMemo(()=>lineas.map(l=>{
-    const mg   = l.customMgn?Math.min(l.customVal,100):sharedMargin;
-    const costo= (l.costoUnit||0)*(l.qty||1);
-    return computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,iva,isr,compraConIVA:true,ventaConIVA:true,mode:l.mode||"auto",margin:mg,manualPrice:l.manualPrice||"0"});
+    const mg=l.customMgn?Math.min(l.customVal,100):sharedMargin;
+    const costo=(l.costoUnit||0)*(l.qty||1);
+    return computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,iva,isr,
+      compraConIVA:true,ventaConIVA:true,mode:l.mode||"auto",margin:mg,manualPrice:l.manualPrice||"0"});
   }),[lineas,sharedMargin,iva,isr]);
+
   const totalPrecio = lineSnaps.reduce((s,sn)=>s+sn.precioConIVA,0);
   const totalNeta   = lineSnaps.reduce((s,sn)=>s+sn.uNeta,0);
-  const aggMargen   = lineSnaps.reduce((s,sn)=>s+sn.precioSinIVA,0)>0?(totalNeta/lineSnaps.reduce((s,sn)=>s+sn.precioSinIVA,0))*100:0;
+  const aggMargen   = lineSnaps.reduce((s,sn)=>s+sn.precioSinIVA,0)>0
+    ?(totalNeta/lineSnaps.reduce((s,sn)=>s+sn.precioSinIVA,0))*100:0;
 
   const upd = (i,patch)=>setLineas(p=>p.map((l,j)=>j===i?{...l,...patch}:l));
-  const addLinea = ()=>setLineas(p=>[...p,emptyLine(opType,priority,[])]);
+  const addLine = ()=>setLineas(p=>[...p,emptyLine(opType,priority,[])]);
+  const removeLine = i=>setLineas(p=>p.length>1?p.filter((_,j)=>j!==i):p);
+  const selectPart = (i,p) => {
+    setPartQ(q=>{const nq={...q};delete nq[i];return nq;}); // remove key → falls back to l.titulo
+    upd(i,{titulo:p.nombre,partRef:p.oem||"",costoUnit:p.ultimoPrecio||0,manualPrice:String(p.ultimoPrecio||0)});
+  };
+
+  const cl   = clients.find(c=>c.id===clientId);
+  const un   = units.find(u=>u.id===unitId);
+  const supp = suppliers.find(s=>s.id===supplierId);
 
   const save = ()=>{
-    const titulo = lineas.map(l=>l.titulo.trim()||"Sin descripcion").join(" / ");
-    const cl   = clients.find(c=>c.id===clientId);
-    const un   = units.find(u=>u.id===unitId);
-    const supp = suppliers.find(s=>s.id===supplierId);
-    const lineasConSnap = lineas.map((l,i)=>({titulo:l.titulo||"Sin descripcion",partRef:l.partRef||"",snap:lineSnaps[i]}));
-    const totalSnap = {
-      precioConIVA:totalPrecio,precioSinIVA:lineSnaps.reduce((s,sn)=>s+sn.precioSinIVA,0),
-      costoTotal:lineSnaps.reduce((s,sn)=>s+sn.costoTotal,0),costoBase:lineSnaps.reduce((s,sn)=>s+sn.costoBase,0),
-      gastos:lineSnaps.reduce((s,sn)=>s+sn.gastos,0),uNeta:totalNeta,uBruta:lineSnaps.reduce((s,sn)=>s+sn.uBruta,0),
-      isr:lineSnaps.reduce((s,sn)=>s+sn.isr,0),ivaTraslad:lineSnaps.reduce((s,sn)=>s+sn.ivaTraslad,0),
-      ivaAcred:lineSnaps.reduce((s,sn)=>s+sn.ivaAcred,0),ivaNeto:lineSnaps.reduce((s,sn)=>s+sn.ivaNeto,0),
-      markupSobre:0,margenNetoPrecio:aggMargen,params:{iva,isr},
+    if(!lineas.some(l=>l.titulo?.trim())) { toast("Agrega al menos una descripción","error"); return; }
+    const titulo=lineas.map(l=>l.titulo.trim()||"Sin descripción").join(" / ");
+    const lineasConSnap=lineas.map((l,i)=>({titulo:l.titulo||"Sin descripción",partRef:l.partRef||"",snap:lineSnaps[i]}));
+    const pSin=lineSnaps.reduce((s,sn)=>s+sn.precioSinIVA,0);
+    const cTot=lineSnaps.reduce((s,sn)=>s+sn.costoTotal,0);
+    const totalSnap={
+      precioConIVA:totalPrecio,precioSinIVA:pSin,costoTotal:cTot,
+      costoBase:lineSnaps.reduce((s,sn)=>s+sn.costoBase,0),
+      gastos:lineSnaps.reduce((s,sn)=>s+sn.gastos,0),
+      uNeta:totalNeta,uBruta:lineSnaps.reduce((s,sn)=>s+sn.uBruta,0),
+      isr:lineSnaps.reduce((s,sn)=>s+sn.isr,0),
+      ivaTraslad:lineSnaps.reduce((s,sn)=>s+sn.ivaTraslad,0),
+      ivaAcred:lineSnaps.reduce((s,sn)=>s+sn.ivaAcred,0),
+      ivaNeto:lineSnaps.reduce((s,sn)=>s+sn.ivaNeto,0),
+      markupSobre:cTot>0?((pSin-cTot)/cTot)*100:0,
+      margenNetoPrecio:aggMargen,params:{iva,isr},
     };
     const tkt={
-      id:mkTicketId(fecha),titulo,opId:opType,opShort:(OP_TYPES.find(o=>o.id===opType)||OP_TYPES[0]).short,priority,
-      clientId,supplierId,unitId,partRef:lineas.map(l=>l.partRef).filter(Boolean).join(", "),
-      date:fecha,status:"recibido",payType,promesaPago:payType==="credit"?promesa:null,cobrado:false,
-      mods:[...activeMods],prob:"high",horasOp:0,notes,mode:"multilinea",lineas:lineasConSnap,snap:totalSnap,
+      id:mkTicketId(fecha),titulo,
+      opId:opType,opShort:(OP_TYPES.find(o=>o.id===opType)||OP_TYPES[0]).short,
+      priority,clientId,supplierId,unitId,
+      partRef:lineas.map(l=>l.partRef).filter(Boolean).join(", "),
+      date:fecha,status:"recibido",payType,
+      promesaPago:payType==="credit"?promesa:null,cobrado:false,
+      mods:[...activeMods],prob:"high",horasOp:0,notes,
+      mode:"multilinea",lineas:lineasConSnap,snap:totalSnap,
       timeline:[{ts:nowISO(),evento:"Ticket creado",actor:"Operador"}],
       history:[mkEvent("created",{titulo,status:"recibido",priority})],
     };
     dispatch({type:"TKT_ADD",t:tkt});
+    lineas.forEach(l=>{
+      if(!l.titulo?.trim()) return;
+      const nomNorm=(l.titulo||"").trim().toLowerCase();
+      const oem=(l.partRef||"").trim();
+      const exists=state.parts.find(p=>
+        (oem&&(oem===p.oem||oem===p.aftermarket))||
+        p.nombre.toLowerCase()===nomNorm||
+        (nomNorm.length>6&&p.nombre.toLowerCase().startsWith(nomNorm.slice(0,Math.floor(nomNorm.length*0.75))))
+      );
+      if(!exists&&(safeNumber(l.costoUnit)>0||oem)){
+        dispatch({type:"PART_ADD",p:{id:mkPartId(),nombre:l.titulo.trim(),oem,aftermarket:"",
+          aplicacion:un?`${un.marca} ${un.modelo} ${un.anio||""}`.trim():"",
+          notas:`Auto: ${todayMX()}`,proveedor:supp?.nombre||"",
+          ultimoPrecio:safeNumber(l.costoUnit),ultimaFecha:fecha,frecuencia:1}});
+      } else if(exists){
+        const patch={frecuencia:(exists.frecuencia||1)+1};
+        if(safeNumber(l.costoUnit)>0) patch.ultimoPrecio=safeNumber(l.costoUnit);
+        if(fecha) patch.ultimaFecha=fecha;
+        if(supp?.nombre) patch.proveedor=supp.nombre;
+        dispatch({type:"PART_UPDATE",id:exists.id,patch});
+      }
+    });
     toast("Ticket: "+tkt.id,"success");
     setPdfPending({tkt,cl,un,supp});
-    setLineas([emptyLine(opType,priority,[])]);setNotes("");setStep(0);
-    setClientId("");setUnitId("");setSupplierId("");setPayType("contado");setPromesa("");
+    setLineas([emptyLine(opType,priority,[])]);
+    setNotes(""); setPartQ({});
+    setClientId(""); setUnitId(""); setSupplierId("");
+    setPayType("contado"); setPromesa(""); setStep(0);
   };
 
-  const catalogResults = useMemo(()=>{
-    if(catalogSearch===null) return [];
-    const q=(catalogQ||"").toLowerCase().trim();
-    if(!q) return state.parts.slice(0,12);
-    return state.parts.filter(p=>
-      p.nombre.toLowerCase().includes(q)||
-      (p.oem||"").toLowerCase().includes(q)||
-      (p.aplicacion||"").toLowerCase().includes(q)
-    ).slice(0,12);
-  },[catalogQ,catalogSearch,state.parts]);
+  // ── Step bar ──────────────────────────────────────────────────────────────
+  const stepNames=["Tipo","Líneas","Datos"];
+  const StepBar=()=>(
+    <div style={{display:"flex",alignItems:"center",padding:"18px 0 22px",gap:0}}>
+      {stepNames.map((name,i)=>{
+        const done=i<step; const curr=i===step;
+        return (
+          <React.Fragment key={i}>
+            {i>0&&(
+              <div style={{flex:1,height:2,
+                background:done?A.lime:C.border,
+                borderRadius:1,margin:"0 8px",marginTop:-14}}/>
+            )}
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,
+              cursor:done?"pointer":"default"}}
+              onClick={()=>done&&setStep(i)}>
+              <div style={{
+                width:30,height:30,borderRadius:15,
+                background:done?A.lime:curr?"transparent":"transparent",
+                border:`2px solid ${done?A.lime:curr?A.lime:C.border}`,
+                display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:11,fontWeight:800,
+                color:done?"#0A1800":curr?A.lime:A.t3,
+                transition:"all 0.2s",
+              }}>
+                {done?"✓":i+1}
+              </div>
+              <div style={{fontSize:9,fontWeight:curr||done?700:400,
+                color:done?A.lime:curr?A.lime:A.t3,
+                letterSpacing:"0.1em",textTransform:"uppercase"}}>
+                {name}
+              </div>
+            </div>
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
 
-  const selectFromCatalog = (p)=>{
-    const idx=catalogSearch;
-    upd(idx,{titulo:p.nombre,partRef:p.oem||p.aftermarket||"",costoUnit:p.ultimoPrecio||0,manualPrice:String(p.ultimoPrecio||0)});
-    setCatalogSearch(null); setCatalogQ("");
-  };
-
-  const pr=PRIORITY[priority]||PRIORITY.P4;
-
+  // ══ STEP 0 — Tipo / Prioridad / Modificadores ════════════════════════════════
   if(step===0) return (
-    <div style={{padding:"14px"}}>
+    <div style={{minHeight:"100vh",background:"transparent",padding:"0 16px 32px"}}>
       {pdfPending&&<PDFConfirm {...pdfPending} onClose={()=>setPdfPending(null)}/>}
-      <div style={{fontSize:11,color:C.t3,letterSpacing:"0.14em",marginBottom:12}}>PRIORIDAD OPERATIVA</div>
-      {Object.values(PRIORITY).map(p=>(
-        <div key={p.id} onClick={()=>setPriority(p.id)}
-          style={{padding:"14px",borderRadius:8,marginBottom:8,cursor:"pointer",background:priority===p.id?p.dim:C.bg1,border:`2px solid ${priority===p.id?p.dot:C.border}`,display:"flex",alignItems:"center",gap:12}}>
-          <div style={{width:14,height:14,borderRadius:"50%",background:priority===p.id?p.dot:C.t3,flexShrink:0}}/>
-          <div>
-            <div style={{fontSize:15,fontWeight:800,color:priority===p.id?p.dot:C.t2,fontFamily:"'Courier New',monospace"}}>{p.id}</div>
-            <div style={{fontSize:12,color:priority===p.id?C.t1:C.t3}}>{p.label}</div>
+      <StepBar/>
+
+      <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",marginBottom:12,textTransform:"uppercase",fontWeight:700}}>Prioridad</div>
+      {Object.entries(prColors).map(([pid,pc])=>{
+        const sel=priority===pid;
+        const pr=PRIORITY[pid]||PRIORITY.P4;
+        return (
+          <div key={pid} onClick={()=>setPriority(pid)}
+            style={{padding:"16px",borderRadius:16,marginBottom:8,cursor:"pointer",
+              background:sel?pc.dim:A.card,
+              boxShadow:sel?`0 2px 20px rgba(0,0,0,0.5), 0 0 0 1.5px ${pc.dot}`:A.shadowSm,
+              display:"flex",alignItems:"center",gap:14,
+              transition:"all 0.15s",WebkitTapHighlightColor:"transparent"}}>
+            <div style={{width:10,height:10,borderRadius:"50%",
+              background:sel?pc.dot:C.border,flexShrink:0,
+              boxShadow:"none",transition:"all 0.15s"}}/>
+            <div style={{flex:1}}>
+              <div style={{fontSize:14,fontWeight:800,color:sel?pc.dot:A.t2,transition:"color 0.15s"}}>
+                {pid} — {pc.label}
+              </div>
+            </div>
+            {sel&&pr.marginBonus>0&&(
+              <span style={{fontSize:10,color:pc.dot,fontWeight:700,
+                background:`${pc.dot}18`,padding:"3px 10px",borderRadius:10,
+                border:`1px solid ${pc.dot}30`}}>+{pr.marginBonus}% margen</span>
+            )}
           </div>
-          {priority===p.id&&p.marginBonus>0&&<span style={{marginLeft:"auto",fontSize:11,color:p.dot,fontWeight:700}}>+{p.marginBonus}% margen</span>}
-        </div>
-      ))}
-      <div style={{height:1,background:C.border,margin:"14px 0"}}/>
-      <div style={{fontSize:11,color:C.t3,letterSpacing:"0.14em",marginBottom:12}}>TIPO DE OPERACION</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
-        {OP_TYPES.map(op=>(
-          <div key={op.id} onClick={()=>setOpType(op.id)}
-            style={{padding:"12px",borderRadius:8,cursor:"pointer",background:opType===op.id?C.blueDim:C.bg1,border:`1px solid ${opType===op.id?C.blueHi:C.border}`}}>
-            <div style={{fontSize:13,fontWeight:700,color:opType===op.id?C.t1:C.t2}}>{op.label}</div>
-            <div style={{fontSize:10,color:C.t3,marginTop:2}}>{op.baseMin}--{op.baseMax}%</div>
-          </div>
-        ))}
-      </div>
-      <div style={{height:1,background:C.border,margin:"14px 0"}}/>
-      <div style={{fontSize:11,color:C.t3,letterSpacing:"0.14em",marginBottom:12}}>MODIFICADORES</div>
+        );
+      })}
+
+      <div style={{height:1,background:C.border,margin:"20px 0"}}/>
+
+      <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",marginBottom:12,textTransform:"uppercase",fontWeight:700}}>Tipo de operación</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:20}}>
-        {MODIFIERS.map(mod=>{
-          const active=activeMods.includes(mod.id);
+        {OP_TYPES.map(op=>{
+          const sel=opType===op.id;
           return (
-            <div key={mod.id} onClick={()=>setActiveMods(p=>p.includes(mod.id)?p.filter(x=>x!==mod.id):[...p,mod.id])}
-              style={{padding:"12px 14px",borderRadius:8,cursor:"pointer",background:active?C.blueDim:C.bg1,border:`2px solid ${active?C.blueHi:C.border}`,display:"flex",alignItems:"center",gap:10}}>
-              <div style={{width:12,height:12,borderRadius:"50%",background:active?C.cyan:C.t3,flexShrink:0}}/>
+            <div key={op.id} onClick={()=>setOpType(op.id)}
+              style={{padding:"14px",borderRadius:14,cursor:"pointer",
+                background:sel?A.limeDim:A.card,
+                boxShadow:sel?`0 0 0 1.5px ${C.blue}`:A.shadowSm,
+                WebkitTapHighlightColor:"transparent",transition:"all 0.15s"}}>
+              <div style={{fontSize:13,fontWeight:700,color:sel?A.lime:A.t2,marginBottom:4}}>{op.label}</div>
+              <div style={{fontSize:10,color:A.t3}}>{op.baseMin}–{op.baseMax}%</div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",marginBottom:12,textTransform:"uppercase",fontWeight:700}}>Modificadores</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:22}}>
+        {MODIFIERS.map(mod=>{
+          const on=activeMods.includes(mod.id);
+          return (
+            <div key={mod.id}
+              onClick={()=>setActiveMods(p=>p.includes(mod.id)?p.filter(x=>x!==mod.id):[...p,mod.id])}
+              style={{padding:"14px",borderRadius:14,cursor:"pointer",
+                background:on?A.limeDim:A.card,
+                boxShadow:on?`0 0 0 1.5px ${C.blue}`:A.shadowSm,
+                display:"flex",alignItems:"flex-start",gap:10,
+                WebkitTapHighlightColor:"transparent",transition:"all 0.15s"}}>
+              <div style={{width:8,height:8,borderRadius:"50%",marginTop:3,flexShrink:0,
+                background:on?A.lime:C.border,
+                boxShadow:on?"none":"none",transition:"all 0.15s"}}/>
               <div>
-                <div style={{fontSize:13,fontWeight:700,color:active?C.t1:C.t2}}>{mod.label}</div>
-                <div style={{fontSize:11,color:active?C.cyan:C.t3}}>+{mod.pct}% margen</div>
+                <div style={{fontSize:12,fontWeight:700,color:on?A.lime:A.t2,marginBottom:2}}>{mod.label}</div>
+                <div style={{fontSize:10,color:on?A.lime:A.t3,fontWeight:on?700:400}}>+{mod.pct}%</div>
               </div>
             </div>
           );
         })}
       </div>
-      {activeMods.length>0&&(
-        <div style={{background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:8,padding:"10px 14px",marginBottom:14}}>
-          <div style={{fontSize:11,color:C.t3,marginBottom:2}}>Margen efectivo con modificadores</div>
-          <div style={{fontSize:20,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{fpct(sharedMargin)}</div>
+
+      <div className="glass-card" style={{padding:"20px 22px",marginBottom:24}}>
+        <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:10}}>Margen efectivo</div>
+        <div style={{fontSize:46,fontWeight:800,color:A.lime,lineHeight:1,letterSpacing:"-0.02em",marginBottom:8}}>
+          {fpct(sharedMargin)}
         </div>
-      )}
-      <MBtn label="Siguiente: Lineas de cotizacion" full onClick={()=>setStep(1)}/>
+        <div style={{fontSize:10,color:A.t3}}>
+          {opType} · P{priority.slice(1)} · {activeMods.length>0?activeMods.join(", "):"sin modificadores"}
+        </div>
+      </div>
+
+      <button onClick={()=>setStep(1)} style={{
+        width:"100%",padding:"16px",borderRadius:16,
+        background:A.limeFill,
+        border:"none",color:C._dark?"#0A1F14":"#161616",fontSize:14,fontWeight:700,cursor:"pointer",
+        letterSpacing:"0.02em",WebkitTapHighlightColor:"transparent",
+      }}>
+        Siguiente: Líneas →
+      </button>
     </div>
   );
 
+  // ══ STEP 1 — Líneas con PartPicker ══════════════════════════════════════════
   if(step===1) return (
-    <div style={{padding:"14px"}}>
-      {/* Modal catalogo */}
-      {catalogSearch!==null&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:500,display:"flex",flexDirection:"column"}}
-          onClick={()=>{setCatalogSearch(null);setCatalogQ("");}}>
-          <div style={{background:C.bg1,borderBottom:`1px solid ${C.border}`,padding:"12px 14px",display:"flex",gap:8,alignItems:"center"}}
-            onClick={e=>e.stopPropagation()}>
-            <input autoFocus value={catalogQ} onChange={e=>setCatalogQ(e.target.value)}
-              placeholder="Buscar en catalogo..."
-              style={{flex:1,background:C.bg0,border:`1px solid ${C.border}`,borderRadius:8,padding:"11px 14px",color:C.t1,fontSize:15,outline:"none",fontFamily:"'Courier New',monospace"}}/>
-            <button onClick={()=>{setCatalogSearch(null);setCatalogQ("");}}
-              style={{padding:"10px 16px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:8,color:C.red,fontSize:14,cursor:"pointer",fontWeight:700,flexShrink:0}}>x</button>
-          </div>
-          <div style={{flex:1,overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
-            {state.parts.length===0&&(
-              <div style={{padding:"32px",textAlign:"center",color:C.t3,fontSize:13}}>Sin partes en el catalogo.</div>
-            )}
-            {catalogResults.map((p,i)=>(
-              <div key={p.id} onClick={()=>selectFromCatalog(p)}
-                style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 16px",borderBottom:`1px solid ${C.border}`,background:i%2===0?C.bg1:C.bg0,cursor:"pointer"}}>
-                <div style={{flex:1,minWidth:0,marginRight:12}}>
-                  <div style={{fontSize:14,fontWeight:700,color:C.t1,marginBottom:4}}>{p.nombre}</div>
-                  <div style={{fontSize:11,color:C.t3,fontFamily:"'Courier New',monospace"}}>
-                    {p.oem&&<span style={{color:C.cyan}}>{p.oem}</span>}
-                    {p.oem&&p.aplicacion&&" · "}
-                    {p.aplicacion}
+    <div style={{minHeight:"100vh",background:"transparent",padding:"0 16px 32px"}}>
+      <StepBar/>
+
+      {lineas.map((l,i)=>{
+        const sn=lineSnaps[i];
+        const isManual=l.mode==="manual";
+        return (
+          <div key={i} className="glass-card" style={{overflow:"hidden",marginBottom:12}}>
+            <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,
+              display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div style={{fontSize:9,color:A.t3,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase"}}>
+                Línea {i+1}
+              </div>
+              {lineas.length>1&&(
+                <button onClick={()=>removeLine(i)}
+                  style={{background:"transparent",border:"none",color:A.red,
+                    fontSize:18,cursor:"pointer",padding:"0 4px",lineHeight:1,
+                    WebkitTapHighlightColor:"transparent"}}>×</button>
+              )}
+            </div>
+            <div style={{padding:"16px"}}>
+              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.14em",marginBottom:8,textTransform:"uppercase",fontWeight:700}}>
+                Descripción / Pieza
+              </div>
+              <PartPicker
+                parts={state.parts}
+                value={partQ[i]!==undefined?partQ[i]:(l.titulo||"")}
+                onChange={v=>{setPartQ(q=>({...q,[i]:v}));upd(i,{titulo:v});}}
+                onSelect={p=>selectPart(i,p)}
+                mobile
+              />
+              {l.partRef&&(
+                <div style={{fontSize:10,color:A.t3,marginTop:6,marginBottom:10,letterSpacing:"0.04em"}}>
+                  OEM: {l.partRef}
+                </div>
+              )}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 80px",gap:8,marginBottom:8}}>
+                <MField label="Costo unitario (c/IVA)" value={String(l.costoUnit||"")}
+                  type="number" suffix="$"
+                  onChange={v=>upd(i,{costoUnit:safeNumber(v),manualPrice:String(safeNumber(v))})}/>
+                <MField label="Cant." value={String(l.qty||1)} type="number"
+                  onChange={v=>upd(i,{qty:Math.max(1,safeNumber(v,1))||1})}/>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+                <MField label="Gasolina / flete" value={String(l.gasolina||"")} type="number" suffix="$"
+                  onChange={v=>upd(i,{gasolina:safeNumber(v)})}/>
+                <MField label="Otros gastos" value={String(l.otros||"")} type="number" suffix="$"
+                  onChange={v=>upd(i,{otros:safeNumber(v)})}/>
+              </div>
+              <div style={{display:"flex",gap:8,marginBottom:10}}>
+                {[["auto","Auto (margen)"],["manual","Precio fijo"]].map(([m,lbl])=>(
+                  <button key={m} onClick={()=>upd(i,{mode:m})}
+                    style={{flex:1,padding:"9px",borderRadius:10,fontSize:11,fontWeight:700,
+                      border:`1.5px solid ${l.mode===m?"rgba(255,255,255,0.15)":C.border}`,
+                      background:l.mode===m?A.limeDim:"transparent",
+                      color:l.mode===m?A.lime:A.t3,cursor:"pointer",
+                      transition:"all 0.15s",WebkitTapHighlightColor:"transparent"}}>
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+              {isManual?(
+                <MField label="Precio al cliente (c/IVA)" value={l.manualPrice||""} type="number" suffix="$"
+                  onChange={v=>upd(i,{manualPrice:v})} color={A.amber}/>
+              ):(
+                <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
+                  <button onClick={()=>upd(i,{customMgn:!l.customMgn})}
+                    style={{padding:"9px 14px",borderRadius:10,fontSize:10,fontWeight:700,flexShrink:0,
+                      border:`1.5px solid ${l.customMgn?"rgba(255,255,255,0.15)":C.border}`,
+                      background:l.customMgn?A.limeDim:"transparent",
+                      color:l.customMgn?A.lime:A.t3,cursor:"pointer",WebkitTapHighlightColor:"transparent"}}>
+                    Margen personalizado
+                  </button>
+                  {l.customMgn&&(
+                    <MField label="" value={String(l.customVal||27)} type="number" suffix="%"
+                      onChange={v=>upd(i,{customVal:safeNumber(v)})}/>
+                  )}
+                </div>
+              )}
+              <div style={{background:A.limeDim,borderRadius:12,padding:"12px 14px",
+                display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:10,
+                border:`1px solid ${C.border}`}}>
+                {[
+                  {label:"Precio línea",value:mxn(sn.precioConIVA),color:A.t1},
+                  {label:"Util. neta",  value:mxn(sn.uNeta),       color:sn.uNeta>=0?A.lime:A.red},
+                  {label:"Margen",      value:fpct(sn.margenNetoPrecio||0),
+                    color:sn.margenNetoPrecio>=25?A.lime:sn.margenNetoPrecio>=15?A.mint:A.amber},
+                ].map(({label,value,color})=>(
+                  <div key={label}>
+                    <div style={{fontSize:8,color:A.t3,textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:4}}>{label}</div>
+                    <div style={{fontSize:18,fontWeight:800,color,fontVariantNumeric:"tabular-nums"}}>{value}</div>
                   </div>
-                </div>
-                <div style={{textAlign:"right",flexShrink:0}}>
-                  {p.ultimoPrecio>0&&<div style={{fontSize:15,fontWeight:800,color:C.yellow,fontFamily:"'Courier New',monospace"}}>{mxn(p.ultimoPrecio)}</div>}
-                  <div style={{fontSize:10,color:C.t3,marginTop:2}}>Toca para agregar</div>
-                </div>
+                ))}
               </div>
-            ))}
-            {catalogResults.length===0&&catalogQ&&(
-              <div style={{padding:"32px",textAlign:"center",color:C.t3,fontSize:13}}>Sin resultados para "{catalogQ}"</div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <div>
-          <div style={{fontSize:11,color:C.t3,letterSpacing:"0.14em"}}>LINEAS DE COTIZACION</div>
-          <div style={{fontSize:10,color:pr.dot,marginTop:2}}>{pr.id} · {pr.label} · Margen {fpct(sharedMargin)}</div>
-        </div>
-        <button onClick={()=>setStep(0)} style={{fontSize:11,color:C.t3,background:"transparent",border:`1px solid ${C.border}`,borderRadius:6,padding:"6px 10px",cursor:"pointer"}}>Atras</button>
-      </div>
-
-      {lineas.map((l,i)=>(
-        <MCard key={l.key}>
-          <div style={{padding:"12px 14px"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <span style={{fontSize:10,color:C.cyan,fontWeight:700,fontFamily:"'Courier New',monospace"}}>LINEA {String(i+1).padStart(2,"0")}</span>
-              <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                <span style={{fontSize:14,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(lineSnaps[i]?.precioConIVA||0)}</span>
-                {lineas.length>1&&<button onClick={()=>setLineas(p=>p.filter((_,j)=>j!==i))} style={{padding:"5px 10px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:5,color:C.red,fontSize:12,cursor:"pointer",fontWeight:700}}>x</button>}
-              </div>
-            </div>
-
-            {/* Descripcion */}
-            <MField label="Descripcion" value={l.titulo} onChange={v=>upd(i,{titulo:v})} placeholder={"Pieza o servicio "+(i+1)}/>
-
-            {/* Num parte + boton catalogo */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8,marginBottom:10}}>
-              <div>
-                <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>NUM. PARTE / OEM</div>
-                <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                  <input value={l.partRef||""} onChange={e=>upd(i,{partRef:e.target.value})} placeholder="OEM / referencia"
-                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t2,fontSize:14,padding:"12px 14px",fontFamily:"'Courier New',monospace"}}/>
-                </div>
-              </div>
-              <div style={{display:"flex",alignItems:"flex-end"}}>
-                <button onClick={()=>setCatalogSearch(i)}
-                  style={{padding:"12px 14px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:6,color:C.cyan,fontSize:12,cursor:"pointer",fontWeight:700,whiteSpace:"nowrap",minHeight:46}}>
-                  Catalogo
-                </button>
-              </div>
-            </div>
-
-            {/* Cantidad + Costo unitario */}
-            <div style={{display:"grid",gridTemplateColumns:"90px 1fr",gap:8,marginBottom:8}}>
-              <div>
-                <div style={{fontSize:10,color:C.t3,marginBottom:5,letterSpacing:"0.12em"}}>CANTIDAD</div>
-                <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                  <input type="text" inputMode="numeric"
-                    value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)}
-                    onChange={e=>upd(i,{_qtyRaw:e.target.value})}
-                    onBlur={()=>{const n=parseInt(l._qtyRaw);upd(i,{qty:isFinite(n)&&n>=1?n:1,_qtyRaw:undefined});}}
-                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:20,fontWeight:800,padding:"10px 0 10px 12px",fontFamily:"'Courier New',monospace"}}/>
-                  <span style={{padding:"0 10px",color:C.t3,fontSize:11}}>pz</span>
-                </div>
-              </div>
-              <div>
-                <div style={{fontSize:10,color:C.t3,marginBottom:5,letterSpacing:"0.12em"}}>COSTO UNIT. (c/IVA)</div>
-                <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                  <span style={{padding:"0 10px",color:C.t3,fontSize:14,fontFamily:"'Courier New',monospace"}}>$</span>
-                  <input type="text" inputMode="decimal" value={l._costoRaw!==undefined?l._costoRaw:String(l.costoUnit||0)}
-                    onChange={e=>upd(i,{_costoRaw:e.target.value})}
-                    onBlur={()=>{const n=safeNumber(l._costoRaw);upd(i,{costoUnit:n,_costoRaw:undefined});}}
-                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:16,padding:"10px 0",fontFamily:"'Courier New',monospace"}}/>
-                </div>
-              </div>
-            </div>
-
-            {(l.qty||1)>1&&(
-              <div style={{fontSize:12,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:8}}>
-                {l.qty} × {mxn(safeNumber(l.costoUnit))} = <span style={{color:C.t2,fontWeight:700}}>{mxn(safeNumber(l.costoUnit)*safeNumber(l.qty,1))}</span>
-              </div>
-            )}
-
-            {/* Gasolina y otros */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-              <div>
-                <div style={{fontSize:10,color:C.t3,marginBottom:5,letterSpacing:"0.12em"}}>GASOLINA</div>
-                <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                  <span style={{padding:"0 10px",color:C.t3,fontSize:14,fontFamily:"'Courier New',monospace"}}>$</span>
-                  <input type="text" inputMode="decimal"
-                    value={l._gasolinaRaw!==undefined?l._gasolinaRaw:String(l.gasolina||0)}
-                    onChange={e=>upd(i,{_gasolinaRaw:e.target.value})}
-                    onBlur={()=>upd(i,{gasolina:safeNumber(l._gasolinaRaw),_gasolinaRaw:undefined})}
-                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:16,padding:"10px 0",fontFamily:"'Courier New',monospace"}}/>
-                </div>
-              </div>
-              <div>
-                <div style={{fontSize:10,color:C.t3,marginBottom:5,letterSpacing:"0.12em"}}>OTROS</div>
-                <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                  <span style={{padding:"0 10px",color:C.t3,fontSize:14,fontFamily:"'Courier New',monospace"}}>$</span>
-                  <input type="text" inputMode="decimal"
-                    value={l._otrosRaw!==undefined?l._otrosRaw:String(l.otros||0)}
-                    onChange={e=>upd(i,{_otrosRaw:e.target.value})}
-                    onBlur={()=>upd(i,{otros:safeNumber(l._otrosRaw),_otrosRaw:undefined})}
-                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:16,padding:"10px 0",fontFamily:"'Courier New',monospace"}}/>
-                </div>
-              </div>
-            </div>
-
-            {/* Modo precio */}
-            <div style={{display:"flex",gap:6,marginBottom:8}}>
-              {[["auto","Auto"],["manual","Manual"]].map(([id,lbl])=>(
-                <button key={id} onClick={()=>upd(i,{mode:id})}
-                  style={{flex:1,padding:"10px",borderRadius:6,border:`1px solid ${l.mode===id?C.blueHi:C.border}`,background:l.mode===id?C.blue:"transparent",color:l.mode===id?C.t1:C.t2,fontSize:13,fontWeight:700,cursor:"pointer"}}>
-                  {lbl}
-                </button>
-              ))}
-            </div>
-            {l.mode==="manual"&&(
-              <div style={{marginBottom:6}}>
-                <div style={{fontSize:10,color:C.t3,marginBottom:5,letterSpacing:"0.12em"}}>PRECIO VENTA C/IVA</div>
-                <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:6,overflow:"hidden",minHeight:50}}>
-                  <span style={{padding:"0 12px",color:C.cyan,fontSize:18,fontFamily:"'Courier New',monospace"}}>$</span>
-                  <input type="number" min={0} step={0.01} value={l.manualPrice} onChange={e=>upd(i,{manualPrice:e.target.value})}
-                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:20,fontWeight:800,padding:"12px 0",fontFamily:"'Courier New',monospace"}}/>
-                </div>
-              </div>
-            )}
-            <div style={{fontSize:12,color:C.t3,fontFamily:"'Courier New',monospace",marginTop:4}}>
-              Precio: <span style={{color:C.cyan,fontWeight:700}}>{mxn(lineSnaps[i]?.precioConIVA||0)}</span>
-              {"  ·  "}Util: <span style={{color:(lineSnaps[i]?.uNeta||0)>=0?C.green:C.red,fontWeight:700}}>{mxn(lineSnaps[i]?.uNeta||0)}</span>
-              {"  ·  "}Margen: <span style={{color:margenColor(lineSnaps[i]?.margenNetoPrecio||0),fontWeight:700}}>{fpct(lineSnaps[i]?.margenNetoPrecio||0)}</span>
             </div>
           </div>
-        </MCard>
-      ))}
+        );
+      })}
 
-      <button onClick={addLinea} style={{width:"100%",padding:"12px",background:"transparent",border:`1px dashed ${C.blueHi}`,borderRadius:8,color:C.cyan,fontSize:13,fontWeight:700,cursor:"pointer",marginBottom:12}}>
-        + Agregar linea
+      <button onClick={addLine} style={{
+        width:"100%",padding:"14px",borderRadius:16,
+        background:"transparent",border:`2px dashed ${C.border}`,
+        color:A.t3,fontSize:13,fontWeight:700,cursor:"pointer",
+        display:"flex",alignItems:"center",justifyContent:"center",gap:10,
+        marginBottom:16,WebkitTapHighlightColor:"transparent",
+      }}>
+        <span style={{fontSize:22,color:A.lime,lineHeight:1,fontWeight:300}}>+</span>
+        Agregar línea
       </button>
 
-      {/* Total */}
-      <MCard>
-        <MRow label="Total c/IVA" value={mxn(totalPrecio)} color={C.cyan} bold/>
-        <MRow label="Util. neta"  value={mxn(totalNeta)}   color={totalNeta>=0?C.green:C.red} bold/>
-        <MRow label="Rentabilidad neta" value={fpct(aggMargen)}  color={margenColor(aggMargen)}/>
-      </MCard>
+      <div className="glass-card" style={{padding:"20px 22px",marginBottom:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
+          <div>
+            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.14em",marginBottom:8,textTransform:"uppercase"}}>
+              Total · {lineas.length} línea{lineas.length>1?"s":""}
+            </div>
+            <div style={{fontSize:40,fontWeight:800,color:A.t1,lineHeight:1,
+              letterSpacing:"-0.025em",fontVariantNumeric:"tabular-nums"}}>
+              {mxn(totalPrecio)}
+            </div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontSize:9,color:A.t3,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.12em"}}>Util. neta</div>
+            <div style={{fontSize:26,fontWeight:800,
+              color:totalNeta>=0?A.lime:A.red,letterSpacing:"-0.02em",fontVariantNumeric:"tabular-nums"}}>
+              {mxn(totalNeta)}
+            </div>
+            <div style={{fontSize:12,fontWeight:700,marginTop:4,
+              color:aggMargen>=25?A.lime:aggMargen>=15?A.mint:A.amber}}>
+              {fpct(aggMargen)}
+            </div>
+          </div>
+        </div>
+      </div>
 
-      <MBtn label="Siguiente: Datos del ticket" full onClick={()=>setStep(2)}/>
+      <div style={{display:"flex",gap:10}}>
+        <button onClick={()=>setStep(0)}
+          style={{padding:"14px 20px",borderRadius:14,background:"transparent",
+            border:`1px solid ${C.border}`,color:A.t3,fontSize:12,cursor:"pointer",
+            WebkitTapHighlightColor:"transparent"}}>
+          ← Atrás
+        </button>
+        <button onClick={()=>setStep(2)} style={{
+          flex:1,padding:"14px",borderRadius:14,
+          background:A.limeFill,
+          border:"none",color:C._dark?"#0A1F14":"#161616",fontSize:14,fontWeight:700,cursor:"pointer",
+          WebkitTapHighlightColor:"transparent",
+        }}>
+          Siguiente: Datos →
+        </button>
+      </div>
     </div>
   );
 
+  // ══ STEP 2 — Datos del ticket ════════════════════════════════════════════════
   return (
-    <div style={{padding:"14px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <div style={{fontSize:11,color:C.t3,letterSpacing:"0.14em"}}>DATOS DEL TICKET</div>
-        <button onClick={()=>setStep(1)} style={{fontSize:11,color:C.t3,background:"transparent",border:`1px solid ${C.border}`,borderRadius:6,padding:"6px 10px",cursor:"pointer"}}>Atras</button>
-      </div>
+    <div style={{minHeight:"100vh",background:"transparent",padding:"0 16px 32px"}}>
+      <StepBar/>
 
-      <MCard>
-        <div style={{padding:"12px 14px"}}>
-          <div style={{fontSize:10,color:C.t3,marginBottom:4}}>FECHA</div>
-          <input value={fecha} onChange={e=>setFecha(e.target.value)} placeholder="DD/MM/AAAA"
-            style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t1,fontSize:15,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace",marginBottom:10}}/>
-          <MSel label="Cliente"   value={clientId}   onChange={setClientId}   options={[{value:"",label:"-- Sin cliente --"},...clients.map(c=>({value:c.id,label:c.empresa}))]}/>
-          <UnitPicker units={units} value={unitId} onChange={setUnitId} placeholder="Buscar por eco., placa, marca..." mobile/>
-          <MSel label="Proveedor" value={supplierId} onChange={setSupplierId} options={[{value:"",label:"-- Sin proveedor --"},...suppliers.map(s=>({value:s.id,label:s.nombre}))]}/>
-          <MSel label="Pago"      value={payType}    onChange={setPayType}    options={[{value:"contado",label:"Contado"},{value:"credit",label:"Credito"}]}/>
-          {payType==="credit"&&<MField label="Promesa de pago" value={promesa} onChange={setPromesa} placeholder="DD/MM/AAAA" color={C.yellow}/>}
-          <div>
-            <div style={{fontSize:10,color:C.t3,marginBottom:5,letterSpacing:"0.12em"}}>NOTAS</div>
-            <textarea rows={3} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Diagnostico, observaciones..."
-              style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t2,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
+      <div className="glass-card" style={{overflow:"hidden",
+        marginBottom:14}}>
+        <div style={{padding:"18px 18px 6px"}}>
+          <MField label="Fecha" value={fecha} onChange={setFecha} placeholder="DD/MM/AAAA"/>
+          <ClientPicker   clients={clients}     value={clientId}    onChange={setClientId}   mobile/>
+          <UnitPicker     units={units}          value={unitId}      onChange={setUnitId}     mobile/>
+          <SupplierPicker suppliers={suppliers}  value={supplierId}  onChange={setSupplierId} mobile/>
+          <MSel label="Pago" value={payType} onChange={setPayType}
+            options={[{value:"contado",label:"Contado — sin seguimiento"},{value:"credit",label:"Crédito — genera cartera"}]}/>
+          {payType==="credit"&&(
+            <MField label="Promesa de pago" value={promesa} onChange={setPromesa}
+              placeholder="DD/MM/AAAA" color={A.amber}/>
+          )}
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:9,color:A.t3,marginBottom:8,letterSpacing:"0.14em",
+              textTransform:"uppercase",fontWeight:700}}>Notas</div>
+            <textarea rows={3} value={notes} onChange={e=>setNotes(e.target.value)}
+              placeholder="Diagnóstico, observaciones..."
+              style={{width:"100%",background:"rgba(255,255,255,0.03)",
+                border:`1px solid ${C.border}`,borderRadius:12,
+                padding:"12px 14px",color:A.t2,fontSize:13,outline:"none",
+                boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
           </div>
         </div>
-      </MCard>
+      </div>
 
-      {/* Resumen final */}
-      <MCard>
-        <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,fontSize:10,color:C.t3,letterSpacing:"0.12em"}}>RESUMEN</div>
-        <MRow label="Total c/IVA" value={mxn(totalPrecio)} color={C.cyan} bold/>
-        <MRow label="Util. neta"  value={mxn(totalNeta)}   color={totalNeta>=0?C.green:C.red} bold/>
-        <MRow label="Lineas"      value={String(lineas.length)} color={C.t1}/>
-        <MRow label="Cliente"     value={clients.find(c=>c.id===clientId)?.empresa||"---"} color={C.t2}/>
-      </MCard>
+      <div className="glass-card" style={{padding:"20px 22px",marginBottom:18}}>
+        <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:14}}>Resumen</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:14}}>
+          <div>
+            <div style={{fontSize:9,color:A.t3,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.12em"}}>Total c/IVA</div>
+            <div style={{fontSize:36,fontWeight:800,color:A.t1,lineHeight:1,
+              letterSpacing:"-0.025em",fontVariantNumeric:"tabular-nums"}}>
+              {mxn(totalPrecio)}
+            </div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontSize:9,color:A.t3,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.12em"}}>Util. neta</div>
+            <div style={{fontSize:24,fontWeight:800,
+              color:totalNeta>=0?A.lime:A.red,fontVariantNumeric:"tabular-nums"}}>
+              {mxn(totalNeta)}
+            </div>
+          </div>
+        </div>
+        <div style={{height:1,background:C.border,marginBottom:14}}/>
+        <div style={{display:"flex",flexDirection:"column",gap:5}}>
+          {lineas.length>1&&<div style={{fontSize:10,color:A.t3}}>{lineas.length} líneas</div>}
+          {cl&&<div style={{fontSize:11,color:A.t2}}>Cliente: <span style={{fontWeight:700,color:A.t1}}>{cl.empresa}</span></div>}
+          {un&&<div style={{fontSize:11,color:A.t2}}>Unidad: <span style={{color:A.t1}}>{un.economico?"Eco. "+un.economico+" ":""}{un.marca} {un.modelo}</span></div>}
+          <div style={{fontSize:10,color:A.t3}}>
+            Pago: {payType==="credit"?`Crédito${promesa?" · "+promesa:""}` : "Contado"}
+          </div>
+        </div>
+      </div>
 
-      <MBtn label="Registrar ticket + PDF" full onClick={save}/>
+      <div style={{display:"flex",gap:10}}>
+        <button onClick={()=>setStep(1)}
+          style={{padding:"14px 20px",borderRadius:14,background:"transparent",
+            border:`1px solid ${C.border}`,color:A.t3,fontSize:12,cursor:"pointer",
+            WebkitTapHighlightColor:"transparent"}}>
+          ← Atrás
+        </button>
+        <button onClick={save} style={{
+          flex:1,padding:"16px",borderRadius:14,
+          background:A.limeFill,
+          border:"none",color:C._dark?"#0A1F14":"#161616",fontSize:14,fontWeight:700,cursor:"pointer",
+          letterSpacing:"0.02em",WebkitTapHighlightColor:"transparent",
+        }}>
+          Registrar ticket + PDF →
+        </button>
+      </div>
     </div>
   );
 }
 
 // ── MCartera — Cartera móvil ──────────────────────────────────────────────────
 function MCartera({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
   const {tickets,clients} = state;
-  const pendientes = useMemo(()=>tickets.filter(t=>t.payType==="credit"&&!t.cobrado&&t.status!=="cancelado"),[tickets]);
-  const totalPend  = pendientes.reduce((s,t)=>s+t.snap.precioConIVA,0);
-  const now        = useMemo(()=>new Date(),[]);
-  const venc       = useMemo(()=>pendientes.filter(t=>{const d=parseDateMX(t.promesaPago);return d&&now>d;}),[pendientes,now]);
+  const now = new Date();
+
+  const A = makeA(C);
+
+  const creditTkts = useMemo(()=>tickets.filter(t=>!t._deleted&&t.payType==="credit"&&t.status!=="cancelado"),[tickets]);
+  const pendientes = useMemo(()=>creditTkts.filter(t=>!t.cobrado&&CARTERA_SET.has(t.status)),[creditTkts]);
+  const cobradas   = useMemo(()=>creditTkts.filter(t=>t.cobrado||PAID_SET.has(t.status)),[creditTkts]);
+  const totalPend  = useMemo(()=>pendientes.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[pendientes]);
+  const totalCob   = useMemo(()=>cobradas.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[cobradas]);
+
+  const msDay    = 86400000;
+  const ageMs    = t => { const d=parseDateMX(t.promesaPago||t.date); return d?(now-d):0; };
+  const daysOver = t => { const d=parseDateMX(t.promesaPago); if(!d) return 0; return Math.floor((now-d)/msDay); };
+
+  const vencidas  = useMemo(()=>pendientes.filter(t=>{const d=parseDateMX(t.promesaPago);return d&&now>d;}),[pendientes]);
+  const corriente = useMemo(()=>pendientes.filter(t=>{const d=parseDateMX(t.promesaPago);return !d||(d&&now<=d);}),[pendientes]);
+  const totalVenc = useMemo(()=>vencidas.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[vencidas]);
+  const totalCorr = useMemo(()=>corriente.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[corriente]);
+
+  const aging = useMemo(()=>{
+    const b=[{label:"0–30 d",min:0,max:30*msDay,monto:0},{label:"30–60 d",min:30*msDay,max:60*msDay,monto:0},{label:">60 d",min:60*msDay,max:Infinity,monto:0}];
+    vencidas.forEach(t=>{const ms=ageMs(t);const bk=b.find(bk=>ms>=bk.min&&ms<bk.max);if(bk) bk.monto+=safeNumber(t.snap?.precioConIVA);});
+    return b;
+  },[vencidas]);
+  const maxAging = Math.max(...aging.map(b=>b.monto),1);
+
+  const cobrar = t => { dispatch({type:"TKT_COBRADO",id:t.id}); toast("Cobrado ✓","success"); };
 
   return (
-    <div style={{padding:"14px"}}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-        <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px"}}>
-          <div style={{fontSize:10,color:C.t3,marginBottom:4}}>PENDIENTE</div>
-          <div style={{fontSize:18,fontWeight:800,color:C.yellow,fontFamily:"'Courier New',monospace"}}>{mxn(totalPend)}</div>
-          <div style={{fontSize:10,color:C.t3,marginTop:2}}>{pendientes.length} ops</div>
-        </div>
-        <div style={{background:venc.length>0?C.redDim:C.bg2,border:`1px solid ${venc.length>0?C.red+"44":C.border}`,borderRadius:8,padding:"12px 14px"}}>
-          <div style={{fontSize:10,color:C.t3,marginBottom:4}}>VENCIDAS</div>
-          <div style={{fontSize:18,fontWeight:800,color:venc.length>0?"#C04040":C.t3,fontFamily:"'Courier New',monospace"}}>{venc.length}</div>
-          <div style={{fontSize:10,color:C.t3,marginTop:2}}>{mxn(venc.reduce((s,t)=>s+t.snap.precioConIVA,0))}</div>
-        </div>
-      </div>
+    <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
 
-      {pendientes.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:C.t3,fontSize:13}}>Sin creditos pendientes</div>}
+      {/* Alert banner when vencidas exist */}
+      {vencidas.length>0&&(
+        <div style={{
+          background:"#0D1825",
+          borderBottom:"1px solid rgba(212,146,26,0.3)",
+          padding:"18px 20px 16px",
+        }}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+            <div style={{width:6,height:6,borderRadius:"50%",background:A.amber,flexShrink:0}}/>
+            <span style={{fontSize:10,fontWeight:800,color:A.amber,letterSpacing:"0.16em",textTransform:"uppercase"}}>
+              {vencidas.length} cobro{vencidas.length>1?"s":""} vencido{vencidas.length>1?"s":""}
+            </span>
+          </div>
+          <div style={{fontSize:30,fontWeight:800,color:A.amber,letterSpacing:"-0.02em",
+            fontVariantNumeric:"tabular-nums",marginTop:8,marginBottom:4}}>
+            {mxn(totalVenc)}
+          </div>
+          <div style={{fontSize:11,color:A.t3}}>por cobrar urgente</div>
+        </div>
+      )}
 
-      {pendientes.map(t=>{
-        const cl=clients.find(c=>c.id===t.clientId);
-        const dias=daysFromNow(t.promesaPago);
-        const esVenc=dias!=null&&dias>0;
-        return (
-          <MCard key={t.id} style={{border:`1px solid ${esVenc?C.red+"55":C.border}`}}>
-            <div style={{padding:"14px",borderLeft:`5px solid ${esVenc?C.red:C.yellow}`}}>
-              <div style={{fontSize:9,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:4}}>{t.id}</div>
-              <div style={{fontSize:14,fontWeight:700,color:C.t1,marginBottom:6,lineHeight:1.3}}>{t.titulo}</div>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-                <div>
-                  <div style={{fontSize:11,color:C.t3}}>{cl?cl.empresa:"---"}</div>
-                  <div style={{fontSize:11,color:esVenc?C.red:C.yellow,fontWeight:600}}>{t.promesaPago||"Sin fecha"}{esVenc?" · VENCIDA "+dias+"d":""}</div>
-                </div>
-                <div style={{textAlign:"right"}}>
-                  <div style={{fontSize:18,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap.precioConIVA)}</div>
-                  <StatusBadge sid={t.status} meta={TICKET_META} small/>
-                </div>
+      <div style={{padding:"0 16px"}}>
+        {/* Hero card */}
+        <div className="glass-card" style={{padding:"26px 24px",marginTop:16,marginBottom:12}}>
+          <div style={{fontSize:9,color:A.t3,letterSpacing:"0.18em",textTransform:"uppercase",marginBottom:10}}>
+            Cuentas por cobrar
+          </div>
+          <div style={{fontSize:48,fontWeight:800,color:totalVenc>0?A.amber:A.t1,lineHeight:1,
+            letterSpacing:"-0.025em",fontVariantNumeric:"tabular-nums",marginBottom:20}}>
+            {mxn(totalPend)}
+          </div>
+          <div style={{height:1,background:C.border,marginBottom:20}}/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0}}>
+            <div>
+              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>Vencido</div>
+              <div style={{fontSize:22,fontWeight:800,color:totalVenc>0?A.red:A.t3,
+                fontVariantNumeric:"tabular-nums",letterSpacing:"-0.01em"}}>
+                {mxn(totalVenc)}
               </div>
-              <MBtn label="Marcar cobrado" full bg={C.greenDim} border={C.green+"44"} color={C.green}
-                onClick={()=>{dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado","success");}}/>
-            </div>
-          </MCard>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── DEBOUNCE HOOK ─────────────────────────────────────────────────────────────
-function useDebounce(value, delay=250) {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(()=>{
-    const t = setTimeout(()=>setDebounced(value), delay);
-    return ()=>clearTimeout(t);
-  }, [value, delay]);
-  return debounced;
-}
-
-// ── OPERATIONAL LOG ───────────────────────────────────────────────────────────
-const opLog = {
-  _logs: [],
-  push(action, detail={}) {
-    const entry = { ts: new Date().toISOString(), action, ...detail };
-    this._logs.push(entry);
-    if (this._logs.length > 200) this._logs.shift();
-    if (detail.error) console.warn("[LogiSolve]", action, detail);
-  },
-  get() { return [...this._logs]; },
-};
-
-// ── SAVING STATE HOOK ─────────────────────────────────────────────────────────
-function useSyncStatus() {
-  const [status, setStatus] = useState("idle"); // idle | saving | saved | offline | error
-  const timerRef = useRef(null);
-  const setSaving  = ()=>setStatus("saving");
-  const setSaved   = ()=>{ setStatus("saved"); clearTimeout(timerRef.current); timerRef.current=setTimeout(()=>setStatus("idle"),2500); };
-  const setOffline = ()=>setStatus("offline");
-  const setError   = ()=>{ setStatus("error"); clearTimeout(timerRef.current); timerRef.current=setTimeout(()=>setStatus("idle"),4000); };
-  return { status, setSaving, setSaved, setOffline, setError };
-}
-
-// ── PENDING CHANGES QUEUE (offline support) ───────────────────────────────────
-const pendingQueue = {
-  _q: [],
-  push(op) { this._q.push({ ...op, ts: Date.now() }); this._persist(); },
-  flush() { const q=[...this._q]; this._q=[]; this._persist(); return q; },
-  peek() { return [...this._q]; },
-  _persist() { try { localStorage.setItem("lgs_pending", JSON.stringify(this._q)); } catch{} },
-  _restore() { try { const s=localStorage.getItem("lgs_pending"); if(s) this._q=JSON.parse(s)||[]; } catch{} },
-};
-pendingQueue._restore();
-
-
-function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
-  const {tickets,clients,units,suppliers} = state;
-  const realizados = useMemo(()=>tickets.filter(t=>REVENUE_SET.has(t.status)),[tickets]);
-  const totalFact  = useMemo(()=>realizados.reduce((s,t)=>s+t.snap.precioConIVA,0),[realizados]);
-  const totalNeta  = useMemo(()=>realizados.reduce((s,t)=>s+t.snap.uNeta,0),[realizados]);
-  const [expId,     setExpId]     = useState(null);
-  const [editId,    setEditId]    = useState(null);
-  const [ef,        setEf]        = useState({});
-  const [editLineas,setEditLineas]= useState([]);
-  const [pdfPending,setPdfPending]= useState(null);
-  const [confirm,   setConfirm]   = useState(null);
-  const sfn = k => v => setEf(p=>({...p,[k]:v}));
-
-  const updLinea = (idx,patch) => setEditLineas(p=>p.map((l,i)=>i===idx?{...l,...patch}:l));
-  const delLinea = idx => setEditLineas(p=>p.filter((_,i)=>i!==idx));
-  const addLinea = () => setEditLineas(p=>[...p,{titulo:"",partRef:"",costoUnit:0,gasolina:0,otros:0,qty:1,mode:"manual",manualPrice:"0",customMgn:false,customVal:27}]);
-
-  // Snap igual que cotizador — usa safeNumber y qty
-  const liveSnap = useMemo(()=>{
-    if(!editId||!editLineas.length) return null;
-    const iva=safeNumber(ef.iva,16); const isr=safeNumber(ef.isr,20);
-    const opType=ef.opType||"consumable"; const priority=ef.priority||"P3";
-    const activeMods=safeArr(ef.activeMods);
-    const sharedMgn=effectiveMargin(opType,priority,activeMods,false,27);
-    const snaps=editLineas.map(l=>{
-      const mg=l.customMgn?Math.min(safeNumber(l.customVal),99):sharedMgn;
-      const qty=safeNumber(l.qty,1)||1;
-      const costo=safeNumber(l.costoUnit)*qty;
-      return computeSnap({costo,gasolina:safeNumber(l.gasolina),otros:safeNumber(l.otros),iva,isr,
-        compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,
-        mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
-    });
-    const sum=k=>snaps.reduce((s,sn)=>s+safeNumber(sn[k]),0);
-    const precioSinIVA=sum("precioSinIVA"); const uNeta=sum("uNeta");
-    return {
-      precioConIVA:sum("precioConIVA"),precioSinIVA,
-      ivaTraslad:sum("ivaTraslad"),ivaAcred:sum("ivaAcred"),ivaNeto:sum("ivaNeto"),
-      costoTotal:sum("costoTotal"),costoBase:sum("costoBase"),gastos:sum("gastos"),
-      uNeta,uBruta:sum("uBruta"),isr:sum("isr"),
-      markupSobre:sum("costoTotal")>0?((precioSinIVA-sum("costoTotal"))/sum("costoTotal"))*100:0,
-      margenNetoPrecio:precioSinIVA>0?(uNeta/precioSinIVA)*100:0,
-      params:{iva,isr},
-    };
-  },[editId,editLineas,ef]);
-
-  const startEdit = (t) => {
-    setEditId(t.id);
-    setExpId(t.id);
-    const iva = t.snap.params?.iva||16;
-    const ivaR = iva/100;
-    const toConIVA = (snap) => (snap?.costoBase||0)*(1+ivaR);
-    let lineas;
-    if(t.lineas&&t.lineas.length>0) {
-      lineas=t.lineas.map(l=>({
-        titulo:l.titulo||"",partRef:l.partRef||"",
-        qty:l.qty||1,costoUnit:toConIVA(l.snap),
-        gasolina:l.snap?.gastos||0,otros:0,
-        mode:"manual",manualPrice:(l.snap?.precioConIVA||0).toFixed(2),
-        customMgn:false,customVal:27,
-      }));
-    } else {
-      const parts=(t.titulo||"").split(" / ").filter(Boolean);
-      if(parts.length>1) {
-        const pxLinea=(t.snap.precioConIVA/parts.length).toFixed(2);
-        const costoXLinea=toConIVA(t.snap)/parts.length;
-        lineas=parts.map(p=>({titulo:p.trim(),partRef:"",qty:1,costoUnit:costoXLinea,gasolina:0,otros:0,mode:"manual",manualPrice:pxLinea,customMgn:false,customVal:27}));
-      } else {
-        lineas=[{titulo:t.titulo||"",partRef:t.partRef||"",qty:1,costoUnit:toConIVA(t.snap),gasolina:t.snap?.gastos||0,otros:0,mode:"manual",manualPrice:(t.snap.precioConIVA||0).toFixed(2),customMgn:false,customVal:27}];
-      }
-    }
-    setEditLineas(lineas);
-    setEf({
-      date:t.date, clientId:t.clientId||"", supplierId:t.supplierId||"", unitId:t.unitId||"",
-      status:t.status, payType:t.payType, promesaPago:t.promesaPago||"",
-      prob:t.prob||"high", horasOp:t.horasOp||0, notes:t.notes||"",
-      iva, isr:t.snap.params?.isr||20,
-      cIVA:true, vIVA:true,
-      opType:t.opId||"consumable", activeMods:[...(t.mods||[])], priority:t.priority||"P3",
-    });
-  };
-
-  const cancelEdit = () => { setEditId(null); setEf({}); setEditLineas([]); };
-
-  const saveEdit = (id) => {
-    if(!liveSnap) return;
-    const opType=ef.opType||"consumable"; const priority=ef.priority||"P3";
-    const activeMods=ef.activeMods||[];
-    const sharedMgn=effectiveMargin(opType,priority,activeMods,false,27);
-    const opMeta=OP_TYPES.find(o=>o.id===opType)||OP_TYPES[0];
-    const titulo=editLineas.map(l=>l.titulo.trim()||"Sin descripcion").join(" / ");
-    const lineasConSnap=editLineas.map(l=>{
-      const mg=l.customMgn?Math.min(l.customVal,99):sharedMgn;
-      const costo=(l.costoUnit||0)*(l.qty||1);
-      const snap=computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,
-        iva:parseFloat(ef.iva)||16,isr:parseFloat(ef.isr)||20,
-        compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,
-        mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
-      return {titulo:l.titulo||"Sin descripcion",partRef:l.partRef||"",snap,qty:l.qty||1};
-    });
-    const patch={
-      titulo, lineas:lineasConSnap,
-      opId:opType, opShort:opMeta.short, priority, mods:[...activeMods],
-      date:ef.date, clientId:ef.clientId, supplierId:ef.supplierId, unitId:ef.unitId||"",
-      status:ef.status, payType:ef.payType, priority,
-      promesaPago:ef.payType==="credit"?ef.promesaPago:null,
-      cobrado:PAID_SET.has(ef.status), prob:ef.prob,
-      horasOp:parseFloat(ef.horasOp)||0, notes:ef.notes,
-      snap:liveSnap, mode:editLineas.length>1?"multilinea":"auto",
-      partRef:editLineas.map(l=>l.partRef).filter(Boolean).join(", "),
-    };
-    dispatch({type:"TKT_UPDATE",id,patch});
-    toast("Ticket actualizado","success");
-    cancelEdit();
-  };
-
-  const MSel2 = ({label,value,onChange,options}) => (
-    <div style={{marginBottom:10}}>
-      {label&&<div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase"}}>{label}</div>}
-      <select value={value} onChange={e=>onChange(e.target.value)}
-        style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t1,fontSize:14,outline:"none",fontFamily:"'Courier New',monospace"}}>
-        {options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-    </div>
-  );
-
-  return (
-    <div style={{padding:"14px"}}>
-      {pdfPending&&<PDFConfirm {...pdfPending} onClose={()=>setPdfPending(null)}/>}
-      {confirm&&<Confirm msg={"Eliminar: "+confirm.titulo+"?"} onConfirm={()=>{
-        const id=confirm.id;
-        dispatch({type:"TKT_SOFT_DEL",id});
-        scheduleHardDelete(id);
-        toast("Ticket a papelera — restaurable","info");
-        setConfirm(null);setExpId(null);
-      }} onCancel={()=>setConfirm(null)}/>}
-
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-        <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px"}}>
-          <div style={{fontSize:10,color:C.t3,marginBottom:4}}>REALIZADO</div>
-          <div style={{fontSize:16,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(totalFact)}</div>
-        </div>
-        <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px"}}>
-          <div style={{fontSize:10,color:C.t3,marginBottom:4}}>UTIL. NETA</div>
-          <div style={{fontSize:16,fontWeight:800,color:totalNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(totalNeta)}</div>
-        </div>
-      </div>
-
-      {tickets.filter(t=>!t._deleted).slice().reverse().map(t=>{
-        const cl=clients.find(c=>c.id===t.clientId);
-        const un=units.find(u=>u.id===t.unitId);
-        const exp=expId===t.id;
-        const editing=editId===t.id;
-        const pr=PRIORITY[t.priority]||PRIORITY.P4;
-        return (
-          <MCard key={t.id}>
-            {/* Header */}
-            <div onClick={()=>{if(!editing)setExpId(exp?null:t.id);}} style={{padding:"14px",cursor:"pointer",borderLeft:`4px solid ${pr.dot}`}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                <span style={{fontSize:9,color:C.t3,fontFamily:"'Courier New',monospace"}}>{t.id} · {t.date}</span>
-                <StatusBadge sid={t.status} meta={TICKET_META} small/>
-              </div>
-              {/* Mostrar líneas individuales en el header si existen */}
-              {t.lineas&&t.lineas.length>1 ? (
-                <div style={{marginBottom:6}}>
-                  {t.lineas.map((l,j)=>(
-                    <div key={j} style={{fontSize:12,color:C.t1,lineHeight:1.4}}>· {l.titulo}</div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{fontSize:13,fontWeight:700,color:C.t1,marginBottom:6,lineHeight:1.3}}>{t.titulo}</div>
-              )}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div>
-                  <span style={{fontSize:11,color:C.t3}}>{cl?cl.empresa:"---"}</span>
-                  {un&&<div style={{fontSize:10,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{un.economico?"Eco."+un.economico+" · ":""}{un.marca} {un.modelo}</div>}
-                </div>
-                <div style={{textAlign:"right"}}>
-                  <div style={{fontSize:15,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap.precioConIVA)}</div>
-                  <div style={{fontSize:11,color:t.snap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap.uNeta)}</div>
-                </div>
+              <div style={{fontSize:10,color:totalVenc>0?A.red:A.t3,marginTop:4}}>
+                {vencidas.length} factura{vencidas.length!==1?"s":""}
               </div>
             </div>
+            <div style={{paddingLeft:16,borderLeft:`1px solid ${C.border}`}}>
+              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>Al corriente</div>
+              <div style={{fontSize:22,fontWeight:800,color:A.mint,
+                fontVariantNumeric:"tabular-nums",letterSpacing:"-0.01em"}}>
+                {mxn(totalCorr)}
+              </div>
+              <div style={{fontSize:10,color:A.t3,marginTop:4}}>
+                {corriente.length} factura{corriente.length!==1?"s":""}
+              </div>
+            </div>
+          </div>
+        </div>
 
-            {/* Expandido */}
-            {exp&&(
-              <div style={{borderTop:`1px solid ${C.border}`}}>
-                {editing ? (
-                  <div style={{padding:"14px"}}>
-                    <div style={{fontSize:10,color:C.cyan,letterSpacing:"0.14em",marginBottom:12,fontWeight:700}}>EDITANDO {t.id}</div>
-
-                    {/* Datos generales */}
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
-                      <div>
-                        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>FECHA</div>
-                        <input value={ef.date} onChange={e=>sfn("date")(e.target.value)} placeholder="DD/MM/AAAA"
-                          style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t1,fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace"}}/>
-                      </div>
-                      <MSel2 label="Estado" value={ef.status} onChange={sfn("status")} options={TICKET_ALL.map(id=>({value:id,label:TICKET_META[id].label}))}/>
-                    </div>
-
-                    {/* Prioridad */}
-                    <div style={{marginBottom:10}}>
-                      <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:6}}>PRIORIDAD</div>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-                        {Object.values(PRIORITY).map(p=>(
-                          <div key={p.id} onClick={()=>sfn("priority")(p.id)}
-                            style={{padding:"10px 12px",borderRadius:6,cursor:"pointer",background:(ef.priority||t.priority)===p.id?p.dim:C.bg2,border:`2px solid ${(ef.priority||t.priority)===p.id?p.dot:C.border}`,display:"flex",alignItems:"center",gap:8}}>
-                            <div style={{width:8,height:8,borderRadius:"50%",background:(ef.priority||t.priority)===p.id?p.dot:C.t3,flexShrink:0}}/>
-                            <div>
-                              <div style={{fontSize:10,fontWeight:700,color:(ef.priority||t.priority)===p.id?p.dot:C.t2}}>{p.id}</div>
-                              <div style={{fontSize:9,color:C.t3}}>{p.label}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <MSel2 label="Cliente"   value={ef.clientId}   onChange={sfn("clientId")}   options={[{value:"",label:"-- Sin cliente --"},...clients.map(c=>({value:c.id,label:c.empresa}))]}/>
-                    <MSel2 label="Proveedor" value={ef.supplierId} onChange={sfn("supplierId")} options={[{value:"",label:"-- Sin proveedor --"},...suppliers.map(s=>({value:s.id,label:s.nombre}))]}/>
-                    <UnitPicker units={units} value={ef.unitId||""} onChange={sfn("unitId")} mobile/>
-
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                      <MSel2 label="Pago" value={ef.payType} onChange={sfn("payType")} options={[{value:"contado",label:"Contado"},{value:"credit",label:"Credito"}]}/>
-                      <MSel2 label="Prob." value={ef.prob} onChange={sfn("prob")} options={PROB.map(p=>({value:p.id,label:p.label+" ("+p.pct+"%)"}))}/> 
-                    </div>
-                    {ef.payType==="credit"&&(
-                      <div style={{marginBottom:10}}>
-                        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>PROMESA DE PAGO</div>
-                        <input value={ef.promesaPago} onChange={e=>sfn("promesaPago")(e.target.value)} placeholder="DD/MM/AAAA"
-                          style={{width:"100%",background:C.bg0,border:`1px solid ${C.yellow}55`,borderRadius:6,padding:"12px 14px",color:C.yellow,fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace"}}/>
-                      </div>
-                    )}
-
-                      {/* IVA/ISR */}
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-                      <div>
-                        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>IVA %</div>
-                        <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                          <input type="text" inputMode="decimal" value={ef.iva} onChange={e=>sfn("iva")(e.target.value)}
-                            style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:15,padding:"10px 14px",fontFamily:"'Courier New',monospace"}}/>
-                          <span style={{padding:"0 12px",color:C.t3,fontSize:13}}>%</span>
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>ISR %</div>
-                        <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                          <input type="text" inputMode="decimal" value={ef.isr} onChange={e=>sfn("isr")(e.target.value)}
-                            style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:15,padding:"10px 14px",fontFamily:"'Courier New',monospace"}}/>
-                          <span style={{padding:"0 12px",color:C.t3,fontSize:13}}>%</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Tipo operación */}
-                    <MSel2 label="Tipo de operación" value={ef.opType||"consumable"} onChange={sfn("opType")} options={OP_TYPES.map(o=>({value:o.id,label:o.label+" ("+o.baseMin+"-"+o.baseMax+"%)"}))}/>
-
-                    {/* IVA/ISR */}
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-                      <div>
-                        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>IVA %</div>
-                        <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                          <input type="text" inputMode="decimal" value={ef.iva} onChange={e=>sfn("iva")(e.target.value)}
-                            style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:15,padding:"10px 14px",fontFamily:"'Courier New',monospace"}}/>
-                          <span style={{padding:"0 12px",color:C.t3,fontSize:13}}>%</span>
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>ISR %</div>
-                        <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                          <input type="text" inputMode="decimal" value={ef.isr} onChange={e=>sfn("isr")(e.target.value)}
-                            style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:15,padding:"10px 14px",fontFamily:"'Courier New',monospace"}}/>
-                          <span style={{padding:"0 12px",color:C.t3,fontSize:13}}>%</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{display:"flex",gap:12,marginBottom:10}}>
-                      <Toggle label="Compra c/IVA" value={ef.cIVA!==false} onChange={v=>sfn("cIVA")(v)}/>
-                      <Toggle label="Venta c/IVA"  value={ef.vIVA!==false} onChange={v=>sfn("vIVA")(v)}/>
-                    </div>
-
-                    {/* ── LÍNEAS ── */}
-                    <div style={{height:1,background:C.border,margin:"4px 0 12px"}}/>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                      <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em"}}>PRODUCTOS / SERVICIOS ({editLineas.length})</div>
-                      <button onClick={addLinea}
-                        style={{padding:"7px 14px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:6,color:C.cyan,fontSize:12,cursor:"pointer",fontWeight:700}}>
-                        + Agregar
-                      </button>
-                    </div>
-
-                    {editLineas.map((l,idx)=>{
-                      const mg=l.customMgn?Math.min(l.customVal,99):effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
-                      const costo=(l.costoUnit||0)*(l.qty||1);
-                      const lsnap=computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,iva:parseFloat(ef.iva)||16,isr:parseFloat(ef.isr)||20,compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
-                      return (
-                      <div key={idx} style={{background:C.bg1,border:`1px solid ${C.borderHi}`,borderRadius:8,padding:"12px 14px",marginBottom:10}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                          <div>
-                            <span style={{fontSize:10,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>Línea {String(idx+1).padStart(2,"0")}</span>
-                            <span style={{fontSize:10,color:margenColor(lsnap.margenNetoPrecio),fontFamily:"'Courier New',monospace",marginLeft:8}}>{mxn(lsnap.precioConIVA)} · {fpct(lsnap.margenNetoPrecio)}</span>
-                          </div>
-                          {editLineas.length>1&&(
-                            <button onClick={()=>delLinea(idx)}
-                              style={{padding:"6px 12px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:6,color:C.red,fontSize:12,cursor:"pointer",fontWeight:700}}>
-                              × Eliminar
-                            </button>
-                          )}
-                        </div>
-                        {/* Descripción */}
-                        <div style={{marginBottom:10}}>
-                          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>DESCRIPCIÓN</div>
-                          <input value={l.titulo} onChange={e=>updLinea(idx,{titulo:e.target.value})} placeholder="Producto o servicio..."
-                            style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t1,fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
-                        </div>
-                        {/* Descripción PDF */}
-                        <div style={{marginBottom:10}}>
-                          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>DESCRIPCIÓN EN COTIZACIÓN PDF</div>
-                          <textarea value={l.descripcionPDF||""} onChange={e=>updLinea(idx,{descripcionPDF:e.target.value})} rows={3}
-                            placeholder="Dejar vacío para texto por defecto..."
-                            style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t2,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
-                        </div>
-                        {/* Ref */}
-                        <div style={{marginBottom:10}}>
-                          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>REF. / OEM</div>
-                          <input value={l.partRef||""} onChange={e=>updLinea(idx,{partRef:e.target.value})} placeholder="Número de parte..."
-                            style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t2,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace"}}/>
-                        </div>
-                        {/* Cant + Costo en 2 col */}
-                        <div style={{display:"grid",gridTemplateColumns:"90px 1fr",gap:8,marginBottom:8}}>
-                          <div>
-                            <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>CANT.</div>
-                            <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                              <input type="text" inputMode="numeric"
-                                value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)}
-                                onChange={e=>updLinea(idx,{_qtyRaw:e.target.value})}
-                                onBlur={()=>{const n=parseInt(l._qtyRaw);updLinea(idx,{qty:isFinite(n)&&n>=1?n:1,_qtyRaw:undefined});}}
-                                style={{flex:1,minWidth:0,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:16,fontWeight:700,padding:"10px 10px",fontFamily:"'Courier New',monospace"}}/>
-                              <span style={{padding:"0 8px",color:C.t3,fontSize:11,flexShrink:0}}>pz</span>
-                            </div>
-                          </div>
-                          <div>
-                            <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>COSTO UNIT. C/IVA</div>
-                            <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                              <span style={{padding:"0 8px",color:C.t3,fontSize:13,fontFamily:"'Courier New',monospace",flexShrink:0}}>$</span>
-                              <input type="text" inputMode="decimal"
-                                value={l._costoRaw!==undefined?l._costoRaw:String(l.costoUnit||0)}
-                                onChange={e=>updLinea(idx,{_costoRaw:e.target.value})}
-                                onBlur={()=>updLinea(idx,{costoUnit:safeNumber(l._costoRaw),_costoRaw:undefined})}
-                                style={{flex:1,minWidth:0,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:14,padding:"10px 8px 10px 0",fontFamily:"'Courier New',monospace"}}/>
-                            </div>
-                          </div>
-                        </div>
-                        {/* Gasolina + Otros en 2 col */}
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-                          {[["GASOLINA","gasolina"],["OTROS","otros"]].map(([lbl,k])=>(
-                            <div key={k}>
-                              <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>{lbl}</div>
-                              <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,overflow:"hidden",minHeight:46}}>
-                                <span style={{padding:"0 8px",color:C.t3,fontSize:13,fontFamily:"'Courier New',monospace",flexShrink:0}}>$</span>
-                                <input type="text" inputMode="decimal"
-                                  value={l[`_${k}Raw`]!==undefined?l[`_${k}Raw`]:String(l[k]||0)}
-                                  onChange={e=>updLinea(idx,{[`_${k}Raw`]:e.target.value})}
-                                  onBlur={()=>updLinea(idx,{[k]:safeNumber(l[`_${k}Raw`]),[`_${k}Raw`]:undefined})}
-                                  style={{flex:1,minWidth:0,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:14,padding:"10px 8px 10px 0",fontFamily:"'Courier New',monospace"}}/>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        {(safeNumber(l.qty,1))>1&&<div style={{fontSize:11,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:8}}>{l.qty} × {mxn(safeNumber(l.costoUnit))} = {mxn(safeNumber(l.costoUnit)*safeNumber(l.qty,1))}</div>}
-                        {/* Modo */}
-                        <div style={{marginBottom:8}}>
-                          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:6}}>MODO PRECIO</div>
-                          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                            <div style={{display:"flex",borderRadius:6,overflow:"hidden",border:`1px solid ${C.border}`}}>
-                              {[["auto","Auto"],["manual","Manual"]].map(([id,lbl])=>(
-                                <button key={id} onClick={()=>updLinea(idx,{mode:id})}
-                                  style={{padding:"10px 18px",border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:l.mode===id?C.blue:C.bg2,color:l.mode===id?C.t1:C.t2}}>{lbl}</button>
-                              ))}
-                            </div>
-                            {l.mode==="auto"&&(
-                              <div style={{flex:1,textAlign:"right"}}>
-                                <span style={{fontSize:13,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>Margen: {fpct(mg)}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        {/* Precio manual */}
-                        {l.mode==="manual"&&(
-                          <div>
-                            <div style={{fontSize:10,color:C.cyan,letterSpacing:"0.12em",marginBottom:5}}>PRECIO VENTA C/IVA</div>
-                            <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:6,overflow:"hidden",minHeight:50}}>
-                              <span style={{padding:"0 10px",color:C.cyan,fontSize:16,fontFamily:"'Courier New',monospace",flexShrink:0}}>$</span>
-                              <input type="text" inputMode="decimal" value={l.manualPrice} onChange={e=>updLinea(idx,{manualPrice:e.target.value})}
-                                style={{flex:1,minWidth:0,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:18,fontWeight:800,padding:"10px 8px 10px 0",fontFamily:"'Courier New',monospace"}}/>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      );
-                    })}
-
-                    {/* Preview total */}
-                    {liveSnap&&(
-                      <div style={{background:C.bg3,border:`1px solid ${C.borderHi}`,borderRadius:8,padding:"12px 14px",marginBottom:12}}>
-                        <div style={{fontSize:9,color:C.t3,marginBottom:6}}>TOTAL ({editLineas.length} línea{editLineas.length>1?"s":""})</div>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <div>
-                            <div style={{fontSize:17,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(liveSnap.precioConIVA)}</div>
-                            <div style={{fontSize:11,color:C.t3,marginTop:2}}>c/IVA incluido</div>
-                          </div>
-                          <div style={{textAlign:"right"}}>
-                            <div style={{fontSize:15,fontWeight:700,color:liveSnap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(liveSnap.uNeta)}</div>
-                            <div style={{fontSize:11,color:C.t3,marginTop:2}}>util. neta</div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Notas */}
-                    <div style={{marginBottom:14}}>
-                      <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5}}>NOTAS</div>
-                      <textarea rows={3} value={ef.notes} onChange={e=>sfn("notes")(e.target.value)} placeholder="Diagnostico, observaciones..."
-                        style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px",color:C.t2,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
-                    </div>
-
-                    <div style={{display:"flex",gap:8}}>
-                      <MBtn label="Guardar cambios" full onClick={()=>saveEdit(t.id)}/>
-                      <MBtn label="Cancelar" bg="transparent" border={C.border} color={C.t2} small onClick={cancelEdit}/>
-                    </div>
-                  </div>
-                ) : (
-                  /* ── VISTA DETALLE ── */
-                  <div style={{padding:"12px 14px"}}>
-
-                    {/* Líneas individuales si existen */}
-                    {t.lineas&&t.lineas.length>0&&(
-                      <div style={{marginBottom:12}}>
-                        <div style={{fontSize:9,color:C.t3,letterSpacing:"0.14em",marginBottom:6}}>PRODUCTOS / SERVICIOS</div>
-                        {t.lineas.map((l,j)=>(
-                          <div key={j} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
-                            <div style={{flex:1,minWidth:0,marginRight:12}}>
-                              <div style={{fontSize:13,fontWeight:600,color:C.t1}}>{l.titulo}</div>
-                              {l.partRef&&<div style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",marginTop:2}}>{l.partRef}</div>}
-                            </div>
-                            <div style={{textAlign:"right",flexShrink:0}}>
-                              <div style={{fontSize:14,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(l.snap?.precioConIVA||0)}</div>
-                              <div style={{fontSize:10,color:C.t3}}>c/IVA</div>
-                            </div>
-                          </div>
-                        ))}
-                        <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0"}}>
-                          <span style={{fontSize:13,fontWeight:700,color:C.t1}}>TOTAL</span>
-                          <span style={{fontSize:15,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap.precioConIVA)}</span>
-                        </div>
-                        <div style={{height:1,background:C.border,marginBottom:12}}/>
-                      </div>
-                    )}
-
-                    {/* Desglose financiero completo */}
-                    <div style={{fontSize:9,color:C.cyan,letterSpacing:"0.14em",marginBottom:8,fontWeight:700}}>DESGLOSE COMPLETO</div>
-                    {(()=>{
-                      const s=t.snap||{};
-                      const carga=safeNumber(s.cargaFiscal,safeNumber(s.ivaNeto)+safeNumber(s.isr));
-                      const efic=safeNumber(s.eficienciaFiscal,safeNumber(s.uBruta)>0?(safeNumber(s.uNeta)/safeNumber(s.uBruta))*100:0);
-                      return [
-                        ["Costo producto (c/IVA)", mxn(safeNumber(s.costoBase)*(1+safeNumber(s.params?.iva,16)/100)), C.t2,   false],
-                        ["IVA acreditable",          mxn(s.ivaAcred),               C.blueHi,false],
-                        ["Gastos operativos",        mxn(s.gastos),                 C.t2,    false],
-                        ["Costo operativo total",    mxn(s.costoTotal),             C.t1,    true ],
-                        ["Markup s/costo",           fpct(calcMarkup(s.precioSinIVA,s.costoTotal)),           C.blueHi,false],
-                        ["Precio sin IVA",           mxn(s.precioSinIVA),           C.cyan,  false],
-                        ["IVA trasladado",           mxn(s.ivaTraslad),             C.cyan,  false],
-                        ["Precio con IVA",           mxn(s.precioConIVA),           C.cyan,  true ],
-                        ["IVA neto SAT",             mxn(s.ivaNeto),                C.yellow,false],
-                        ["Utilidad bruta",           mxn(s.uBruta),                 C.t2,    false],
-                        ["ISR estimado SAT",         mxn(s.isr),                    C.yellow,false],
-                        ["Carga fiscal total",       mxn(carga),                    C.red,   false],
-                        ["Utilidad neta",            mxn(s.uNeta),                  safeNumber(s.uNeta)>=0?C.green:C.red, true],
-                        ["Rentabilidad neta",        fpct(s.margenNetoPrecio),      margenColor(safeNumber(s.margenNetoPrecio)),false],
-                        ["Eficiencia fiscal",        fpct(efic),                    efic>=75?C.green:efic>=60?C.yellow:C.red,false],
-                      ];
-                    })().map(([lbl,val,col,bold],j)=>(
-                      <div key={j} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${C.border}`,background:bold?C.bg3:"transparent"}}>
-                        <span style={{fontSize:13,color:bold?C.t1:C.t2,fontWeight:bold?700:400,paddingLeft:bold?4:0}}>{lbl}</span>
-                        <span style={{fontSize:bold?15:13,fontWeight:bold?800:600,color:col,fontFamily:"'Courier New',monospace"}}>{val}</span>
-                      </div>
-                    ))}
-
-                    {/* Datos adicionales */}
-                    <div style={{marginTop:12,paddingTop:4}}>
-                      {un&&<MRow label="Unidad" value={(un.economico?"Eco."+un.economico+" · ":"")+un.marca+" "+un.modelo} color={C.cyan}/>}
-                      {t.payType==="credit"&&<MRow label="Promesa pago" value={t.promesaPago||"---"} color={C.yellow}/>}
-                      {t.notes&&<div style={{padding:"8px 0",fontSize:11,color:C.t3,fontStyle:"italic",borderBottom:`1px solid ${C.border}`}}>"{t.notes}"</div>}
-                    </div>
-
-                    {/* Timeline */}
-                    {t.timeline&&t.timeline.length>0&&(
-                      <div style={{marginTop:10,paddingTop:8,borderTop:`1px solid ${C.border}`}}>
-                        <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",marginBottom:6}}>ÚLTIMOS EVENTOS</div>
-                        {t.timeline.slice(-3).map((ev,j)=>(
-                          <div key={j} style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:4}}>{fmtTS(ev.ts)} — {ev.evento}</div>
-                        ))}
-                      </div>
-                    )}
-
-                    <div style={{display:"flex",gap:8,marginTop:14,flexWrap:"wrap"}}>
-                      <MBtn label="Editar" small bg={C.blueDim} border={C.blueHi} color={C.cyan} onClick={()=>startEdit(t)}/>
-                      <MBtn label="PDF" small bg={C.bg2} border={C.border} color={C.t2}
-                        onClick={()=>{const cl2=clients.find(c=>c.id===t.clientId);const un2=units?.find(u=>u.id===t.unitId);const su2=suppliers?.find(s=>s.id===t.supplierId);setPdfPending({tkt:t,cl:cl2,un:un2,supp:su2});}}/>
-                      <MBtn label="Eliminar" small bg={C.redDim} border={C.red+"44"} color={C.red} onClick={()=>setConfirm(t)}/>
-                    </div>
+        {/* Aging breakdown */}
+        {vencidas.length>0&&(
+          <div className="glass-card" style={{padding:"20px 22px",marginBottom:12}}>
+            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:16}}>
+              Antigüedad
+            </div>
+            {aging.map((b,i)=>(
+              <div key={i} style={{marginBottom:i<2?14:0}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                  <span style={{fontSize:11,color:b.monto>0?A.t2:A.t3,fontWeight:b.monto>0?600:400}}>
+                    {b.label}
+                  </span>
+                  <span style={{fontSize:12,fontWeight:700,fontVariantNumeric:"tabular-nums",
+                    color:b.monto>0?(i===2?A.red:A.amber):A.t3}}>
+                    {b.monto>0?mxn(b.monto):"—"}
+                  </span>
+                </div>
+                {b.monto>0&&(
+                  <div style={{height:3,background:C.border,borderRadius:2,overflow:"hidden"}}>
+                    <div style={{height:"100%",width:`${(b.monto/maxAging)*100}%`,
+                      background:i===2?A.red:A.amber,borderRadius:2,transition:"width 500ms ease"}}/>
                   </div>
                 )}
               </div>
-            )}
-          </MCard>
-        );
-      })}
+            ))}
+          </div>
+        )}
+
+        {/* Vencidas section */}
+        {vencidas.length>0&&(
+          <div style={{marginBottom:12}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:A.red,flexShrink:0}}/>
+              <span style={{fontSize:10,fontWeight:800,color:A.red,letterSpacing:"0.14em",textTransform:"uppercase"}}>
+                Vencidas · {vencidas.length}
+              </span>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {vencidas.map(t=>{
+                const cl=clients.find(c=>c.id===t.clientId);
+                const over=daysOver(t);
+                return (
+                  <div key={t.id} style={{
+                    background:"rgba(239,68,68,0.08)",
+                    borderRadius:A.r,overflow:"hidden",
+                    boxShadow:"0 1px 3px rgba(0,0,0,0.3), 0 0 0 1px rgba(239,68,68,0.15)",
+                  }}>
+                    <div style={{padding:"16px 16px 14px"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                        <div style={{fontSize:12,fontWeight:700,color:A.red}}>{cl?.empresa||"Sin cliente"}</div>
+                        <div style={{fontSize:11,fontWeight:700,color:A.red,
+                          background:"rgba(232,72,72,0.12)",padding:"2px 8px",borderRadius:8,
+                          border:"1px solid rgba(232,72,72,0.2)"}}>
+                          +{over}d
+                        </div>
+                      </div>
+                      <div style={{fontSize:14,fontWeight:700,color:A.t1,marginBottom:6,
+                        overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                        {t.titulo}
+                      </div>
+                      <div style={{fontSize:10,color:A.t3}}>Prometido: {t.promesaPago||"—"}</div>
+                    </div>
+                    <div style={{padding:"12px 16px",borderTop:"1px solid rgba(232,72,72,0.12)",
+                      display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div style={{fontSize:22,fontWeight:800,color:A.red,letterSpacing:"-0.02em",
+                        fontVariantNumeric:"tabular-nums"}}>
+                        {mxn(t.snap?.precioConIVA||0)}
+                      </div>
+                      <button onClick={()=>cobrar(t)} style={{
+                        padding:"10px 18px",borderRadius:12,
+                        background:A.mintDim,border:`1px solid ${C.blue}33`,
+                        color:A.mint,fontSize:12,fontWeight:800,cursor:"pointer",
+                        letterSpacing:"0.04em",WebkitTapHighlightColor:"transparent",
+                      }}>
+                        Cobrar ✓
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Al corriente */}
+        {corriente.length>0&&(
+          <div style={{marginBottom:12}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:A.mint,flexShrink:0}}/>
+              <span style={{fontSize:10,fontWeight:800,color:A.mint,letterSpacing:"0.14em",textTransform:"uppercase"}}>
+                Al corriente · {corriente.length}
+              </span>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {corriente.map(t=>{
+                const cl=clients.find(c=>c.id===t.clientId);
+                const d=parseDateMX(t.promesaPago);
+                const daysLeft=d?Math.ceil((d-now)/86400000):null;
+                const urgent=daysLeft!==null&&daysLeft<=3;
+                return (
+                  <div key={t.id} className="glass-card-sm" style={{overflow:"hidden"}}>
+                    <div style={{padding:"16px 16px 14px"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                        <div style={{fontSize:12,fontWeight:600,color:A.t2}}>{cl?.empresa||"Sin cliente"}</div>
+                        {daysLeft!==null&&(
+                          <div style={{fontSize:10,fontWeight:600,
+                            color:urgent?A.amber:A.t3,
+                            background:urgent?"rgba(240,160,48,0.12)":"transparent",
+                            padding:"2px 8px",borderRadius:8}}>
+                            {daysLeft<=0?"hoy":daysLeft===1?"mañana":`en ${daysLeft}d`}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{fontSize:14,fontWeight:700,color:A.t1,marginBottom:4,
+                        overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                        {t.titulo}
+                      </div>
+                      <div style={{fontSize:10,color:A.t3}}>Vence: {t.promesaPago||"—"}</div>
+                    </div>
+                    <div style={{padding:"12px 16px",borderTop:`1px solid ${C.border}`,
+                      display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div style={{fontSize:22,fontWeight:800,color:A.t1,letterSpacing:"-0.02em",
+                        fontVariantNumeric:"tabular-nums"}}>
+                        {mxn(t.snap?.precioConIVA||0)}
+                      </div>
+                      <button onClick={()=>cobrar(t)} style={{
+                        padding:"10px 18px",borderRadius:12,
+                        background:A.mintDim,border:`1px solid ${C.blue}33`,
+                        color:A.mint,fontSize:12,fontWeight:800,cursor:"pointer",
+                        letterSpacing:"0.04em",WebkitTapHighlightColor:"transparent",
+                      }}>
+                        Cobrar ✓
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Historial cobrado */}
+        {cobradas.length>0&&(
+          <div>
+            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:10}}>
+              Cobrado · {cobradas.length} ops · {mxn(totalCob)}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {cobradas.slice(0,5).map(t=>{
+                const cl=clients.find(c=>c.id===t.clientId);
+                return (
+                  <div key={t.id} className="glass-card-sm" style={{padding:"12px 16px",
+                    display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div style={{minWidth:0,flex:1}}>
+                      <div style={{fontSize:12,fontWeight:600,color:A.t2,overflow:"hidden",
+                        textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                      <div style={{fontSize:10,color:A.t3,marginTop:2}}>{cl?.empresa||""} · {t.date}</div>
+                    </div>
+                    <div style={{fontSize:14,fontWeight:800,color:A.mint,fontVariantNumeric:"tabular-nums",
+                      marginLeft:12,flexShrink:0}}>
+                      {mxn(t.snap?.precioConIVA||0)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {pendientes.length===0&&cobradas.length===0&&(
+          <div style={{textAlign:"center",padding:"48px 20px"}}>
+            <div style={{fontSize:11,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
+              Sin operaciones a crédito
+            </div>
+            <div style={{fontSize:13,color:A.t3}}>Las ventas a crédito aparecen aquí</div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
+
+function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
+  const C = React.useContext(ThemeCtx);
+  const {tickets,clients,units,suppliers} = state;
+  const [period,setPeriod]   = useState("week");
+  const [search,setSearch]   = useState("");
+  const [expandId,setExpandId] = useState(null);
+  const [editId,setEditId]   = useState(null);
+
+  // ── Period range ──────────────────────────────────────────────────────────
+  const range = useMemo(()=>{
+    const now=new Date(); const from=new Date(now);
+    if(period==="today")       { from.setHours(0,0,0,0); }
+    else if(period==="week")   { from.setDate(now.getDate()-7); }
+    else if(period==="month")  { from.setDate(now.getDate()-30); }
+    else if(period==="3m")     { from.setDate(now.getDate()-90); }
+    else                       { from.setFullYear(2000); } // "all"
+    return {from,to:now};
+  },[period]);
+
+  const inRange = useCallback(t=>{
+    const d=parseDateMX(t.date); return d&&d>=range.from&&d<=range.to;
+  },[range]);
+
+  // ── All non-deleted ───────────────────────────────────────────────────────
+  const allActive = useMemo(()=>tickets.filter(t=>!t._deleted),[tickets]);
+
+  const filtered = useMemo(()=>{
+    let arr=allActive.filter(inRange);
+    if(search.trim()) {
+      const lq=search.toLowerCase();
+      arr=arr.filter(t=>t.titulo?.toLowerCase().includes(lq)||t.id?.toLowerCase().includes(lq)||
+        clients.find(c=>c.id===t.clientId)?.empresa?.toLowerCase().includes(lq));
+    }
+    return [...arr].sort((a,b)=>b.date.localeCompare(a.date));
+  },[allActive,inRange,search,clients]);
+
+  // ── Group by date ─────────────────────────────────────────────────────────
+  const grouped = useMemo(()=>{
+    const groups={};
+    filtered.forEach(t=>{
+      const d=t.date||"Sin fecha";
+      if(!groups[d]) groups[d]=[];
+      groups[d].push(t);
+    });
+    // Sort dates desc
+    return Object.entries(groups).sort((a,b)=>b[0].localeCompare(a[0]));
+  },[filtered]);
+
+  // ── Period summary ────────────────────────────────────────────────────────
+  const periodFact = useMemo(()=>filtered.filter(t=>OPERADO_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[filtered]);
+  const periodNeta = useMemo(()=>filtered.filter(t=>OPERADO_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0),[filtered]);
+
+  const todayStr = todayMX();
+  const yesterdayStr = (()=>{const d=new Date();d.setDate(d.getDate()-1);const dd=String(d.getDate()).padStart(2,"0");const mm=String(d.getMonth()+1).padStart(2,"0");return `${dd}/${mm}/${d.getFullYear()}`;})();
+
+  const dayLabel = d => {
+    if(d===todayStr)     return "Hoy";
+    if(d===yesterdayStr) return "Ayer";
+    return d;
+  };
+
+  // ── Edit form state (lightweight) ────────────────────────────────────────
+  const [ef,setEf]     = useState({});
+  const sfn = k => v => setEf(p=>({...p,[k]:v}));
+
+  const openEdit = t => {
+    setEf({status:t.status,clientId:t.clientId||"",supplierId:t.supplierId||"",
+           unitId:t.unitId||"",payType:t.payType||"contado",promesaPago:t.promesaPago||"",
+           notes:t.notes||""});
+    setEditId(t.id);
+    setExpandId(null);
+  };
+
+  const saveEdit = t => {
+    dispatch({type:"TKT_UPDATE",id:t.id,patch:{...ef}});
+    toast("Actualizado","success");
+    setEditId(null);
+  };
+
+  const A = makeA(C);
+  const prC={P1:{dot:C.p1,dim:C.p1dim},P2:{dot:C.p2,dim:C.p2dim},
+             P3:{dot:C.p3,dim:C.p3dim},P4:{dot:C.p4,dim:C.p4dim}};
+
+  return (
+    <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
+      <div style={{padding:"0 14px"}}>
+
+        {/* Period + search */}
+        <div style={{display:"flex",gap:6,padding:"18px 0 12px",overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
+          {[["today","Hoy"],["week","7d"],["month","30d"],["3m","3M"],["all","Todo"]].map(([v,l])=>(
+            <button key={v} onClick={()=>setPeriod(v)}
+              className={period===v?"glass-pill-active":"glass-pill-inactive"}
+              style={{
+                flexShrink:0,padding:"7px 16px",borderRadius:20,fontSize:11,fontWeight:700,
+                color:period===v ? A.pillColor : A.t3,
+                cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.18s",
+              }}>{l}</button>
+          ))}
+        </div>
+
+        <input value={search} onChange={e=>setSearch(e.target.value)}
+          placeholder="Buscar por título, ID, cliente..."
+          style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,
+            border:`1px solid ${C.border}`,borderRadius:12,
+            padding:"12px 16px",color:A.t1,fontSize:16,outline:"none",marginBottom:14,
+            boxSizing:"border-box",fontFamily:"inherit"}}/>
+
+        {/* Period summary */}
+        {filtered.length>0&&(
+          <div className="glass-card" style={{padding:"16px 20px",marginBottom:16,display:"flex",gap:0}}>
+            {[
+              {label:"Facturado",value:mxn(periodFact),color:A.t1},
+              {label:"Util. neta",value:mxn(periodNeta),color:A.lime,border:true},
+              {label:"Ops",value:filtered.length,color:A.t2,border:true},
+            ].map(({label,value,color,border})=>(
+              <div key={label} style={{flex:1,paddingLeft:border?14:0,
+                borderLeft:border?`1px solid ${C.border}`:"none"}}>
+                <div style={{fontSize:8,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>
+                  {label}
+                </div>
+                <div style={{fontSize:16,fontWeight:800,color,fontVariantNumeric:"tabular-nums"}}>{value}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {filtered.length===0&&(
+          <div style={{textAlign:"center",padding:"48px 20px"}}>
+            <div style={{fontSize:11,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
+              Sin resultados
+            </div>
+            <div style={{fontSize:13,color:A.t3}}>Ajusta el período o la búsqueda</div>
+          </div>
+        )}
+
+        {/* Grouped by day */}
+        {grouped.map(([date,dayTickets])=>{
+          const dayFact=dayTickets.filter(t=>OPERADO_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
+          const dayNeta=dayTickets.filter(t=>OPERADO_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0);
+          return (
+            <div key={date} style={{marginBottom:20}}>
+              {/* Day header */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.08em",
+                  color:date===todayStr?A.lime:A.t2}}>
+                  {dayLabel(date)}
+                </div>
+                {dayFact>0&&(
+                  <div style={{fontSize:10,color:A.t3,fontVariantNumeric:"tabular-nums"}}>
+                    {mxn(dayFact)} · util {mxn(dayNeta)}
+                  </div>
+                )}
+              </div>
+
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {dayTickets.map(t=>{
+                  const meta   = TICKET_META[t.status]||{};
+                  const pr     = prC[t.priority]||prC.P4;
+                  const cl     = clients.find(c=>c.id===t.clientId);
+                  const un     = units.find(u=>u.id===t.unitId);
+                  const isExp  = expandId===t.id;
+                  const isEdit = editId===t.id;
+                  const isOp   = OPERADO_SET.has(t.status);
+                  const isCan  = t.status==="cancelado";
+                  const price  = safeNumber(t.snap?.precioConIVA);
+                  const uNeta  = safeNumber(t.snap?.uNeta);
+
+                  return (
+                    <div key={t.id} style={{
+                      background:isCan?"rgba(239,68,68,0.06)":A.card,
+                      borderRadius:A.r,overflow:"hidden",
+                      boxShadow:isCan
+                        ?"0 2px 12px rgba(239,68,68,0.08), 0 0 0 1px rgba(239,68,68,0.18)"
+                        :A.shadow,
+                      opacity:isCan?0.85:1,
+                    }}>
+                      {/* Tap to expand */}
+                      <div onClick={()=>{if(!isEdit) setExpandId(isExp?null:t.id);}}
+                        style={{padding:"14px 16px",cursor:"pointer"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                          <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"nowrap"}}>
+                            <span style={{fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:10,
+                              background:`${meta.dot||"#8A9AA4"}18`,color:meta.dot||A.t3,letterSpacing:"0.05em"}}>
+                              {meta.label||t.status}
+                            </span>
+                            <span style={{fontSize:9,fontWeight:800,padding:"3px 7px",borderRadius:10,
+                              background:pr.dim,color:pr.dot,letterSpacing:"0.06em"}}>
+                              {t.priority}
+                            </span>
+                          </div>
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            <span style={{fontSize:16,fontWeight:800,
+                              color:isOp?A.t1:A.t3,fontVariantNumeric:"tabular-nums"}}>
+                              {mxn(price)}
+                            </span>
+                            <span style={{fontSize:14,color:A.t3,
+                              transform:isExp?"rotate(90deg)":"none",
+                              transition:"transform 200ms",display:"inline-block",lineHeight:1}}>›</span>
+                          </div>
+                        </div>
+                        <div style={{fontSize:13,fontWeight:700,color:A.t1,lineHeight:1.3,marginBottom:4}}>
+                          {t.titulo}
+                        </div>
+                        {(cl||un)&&(
+                          <div style={{fontSize:10,color:A.t3,
+                            overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                            {cl&&<span style={{color:A.t2}}>{cl.empresa}</span>}
+                            {cl&&un&&<span style={{margin:"0 4px"}}>·</span>}
+                            {un&&<span>{un.economico?"Eco. "+un.economico:un.marca+" "+un.modelo}</span>}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Expanded detail */}
+                      {isExp&&!isEdit&&(
+                        <div style={{borderTop:`1px solid ${C.border}`,
+                          padding:"16px",background:C.bg0}}>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+                            {[
+                              {l:"Precio",    v:mxn(price),  c:A.t1},
+                              {l:"Util. neta",v:mxn(uNeta),  c:uNeta>=0?A.lime:A.red},
+                              {l:"Costo",     v:mxn(safeNumber(t.snap?.costoTotal)), c:A.t2},
+                              {l:"Margen",    v:fpct(safeNumber(t.snap?.margenNetoPrecio)), c:A.t2},
+                            ].map(({l,v,c})=>(
+                              <div key={l}>
+                                <div style={{fontSize:8,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>{l}</div>
+                                <div style={{fontSize:15,fontWeight:700,color:c,fontVariantNumeric:"tabular-nums"}}>{v}</div>
+                              </div>
+                            ))}
+                          </div>
+                          {t.timeline&&t.timeline.length>0&&(
+                            <div style={{marginBottom:14}}>
+                              <div style={{fontSize:8,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
+                                Últimos eventos
+                              </div>
+                              {[...t.timeline].reverse().slice(0,3).map((ev,i)=>(
+                                <div key={i} style={{display:"flex",gap:8,alignItems:"flex-start",marginBottom:5}}>
+                                  <div style={{width:4,height:4,borderRadius:"50%",
+                                    background:C.border,marginTop:5,flexShrink:0}}/>
+                                  <div style={{fontSize:10,color:A.t3,flex:1}}>
+                                    <span style={{color:A.t2}}>{ev.evento}</span>
+                                    {ev.ts&&<span style={{marginLeft:6,fontSize:9}}>{fmtTS(ev.ts)}</span>}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                            <button onClick={()=>openEdit(t)} style={{
+                              flex:1,padding:"9px 14px",borderRadius:10,background:"transparent",
+                              border:`1px solid ${C.border}`,color:A.t2,
+                              fontSize:11,fontWeight:600,cursor:"pointer",
+                            }}>✏ Editar</button>
+                            <button onClick={()=>{
+                              const c2=clients.find(c=>c.id===t.clientId);
+                              const u2=units.find(u=>u.id===t.unitId);
+                              generarCotizacionPDF(t,c2,u2,null).catch(()=>toast("Error PDF","error"));
+                            }} style={{
+                              flex:1,padding:"9px 14px",borderRadius:10,background:"transparent",
+                              border:`1px solid ${C.border}`,color:A.t2,
+                              fontSize:11,fontWeight:600,cursor:"pointer",
+                            }}>PDF ↗</button>
+                            {CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t.cobrado&&(
+                              <button onClick={()=>{dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado ✓","success");setExpandId(null);}}
+                                style={{flex:1,padding:"9px 14px",borderRadius:10,background:A.mintDim,
+                                  border:`1px solid ${C.blue}33`,color:A.mint,fontSize:11,fontWeight:800,cursor:"pointer"}}>
+                                Cobrar ✓
+                              </button>
+                            )}
+                            {!CLOSED_SET.has(t.status)&&(
+                              <button onClick={()=>{dispatch({type:"TKT_SOFT_DEL",id:t.id});toast("Eliminado","info");setExpandId(null);}}
+                                style={{padding:"9px 12px",borderRadius:10,background:"transparent",
+                                  border:"1px solid rgba(232,72,72,0.25)",color:A.red,fontSize:11,cursor:"pointer"}}>
+                                🗑
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Quick edit form */}
+                      {isEdit&&(
+                        <div style={{borderTop:`1px solid ${C.border}`,
+                          background:C.bg0,padding:"16px"}}>
+                          <div style={{fontSize:9,color:A.lime,letterSpacing:"0.14em",
+                            textTransform:"uppercase",marginBottom:14,fontWeight:800}}>
+                            Editando: {t.titulo?.slice(0,28)}
+                          </div>
+                          <MSel label="Estado" value={ef.status} onChange={sfn("status")}
+                            options={TICKET_ALL.map(s=>({value:s,label:(TICKET_META[s]?.label||s)}))}/>
+                          <ClientPicker clients={clients} value={ef.clientId||""} onChange={sfn("clientId")} mobile/>
+                          <UnitPicker units={units} value={ef.unitId||""} onChange={sfn("unitId")} mobile/>
+                          <MSel label="Pago" value={ef.payType} onChange={sfn("payType")}
+                            options={[{value:"contado",label:"Contado"},{value:"credit",label:"Crédito"}]}/>
+                          {ef.payType==="credit"&&(
+                            <MField label="Promesa de pago" value={ef.promesaPago}
+                              onChange={sfn("promesaPago")} placeholder="DD/MM/AAAA" color={A.amber}/>
+                          )}
+                          <div style={{fontSize:9,color:A.t3,marginBottom:6,letterSpacing:"0.12em",textTransform:"uppercase"}}>
+                            Notas
+                          </div>
+                          <textarea rows={2} value={ef.notes} onChange={e=>sfn("notes")(e.target.value)}
+                            placeholder="Notas..."
+                            style={{width:"100%",background:"rgba(255,255,255,0.03)",
+                              border:`1px solid ${C.border}`,borderRadius:10,
+                              padding:"10px 12px",color:A.t2,fontSize:13,outline:"none",
+                              boxSizing:"border-box",fontFamily:"inherit",resize:"none",marginBottom:14}}/>
+                          <div style={{display:"flex",gap:8}}>
+                            <button onClick={()=>saveEdit(t)} style={{
+                              flex:1,padding:"13px",borderRadius:12,
+                              background:"rgba(43,181,160,0.15)",border:"1px solid rgba(43,181,160,0.3)",
+                              color:A.lime,fontSize:13,fontWeight:700,cursor:"pointer",
+                            }}>Guardar</button>
+                            <button onClick={()=>setEditId(null)} style={{
+                              padding:"13px 16px",borderRadius:12,background:"transparent",
+                              border:`1px solid ${C.border}`,color:A.t3,fontSize:13,cursor:"pointer",
+                            }}>Cancelar</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── MClientes — Clientes móvil ────────────────────────────────────────────────
+function MClientes({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
+  const {clients,tickets,units} = state;
+  const [search,setSearch]=useState("");
+  const [sel,setSel]=useState(null);
+  const [editId,setEditId]=useState(null);
+  const [adding,setAdding]=useState(false);
+  const [confirm,setConfirm]=useState(null);
+  const empty={empresa:"",contacto:"",tel:"",correo:"",rfc:"",direccion:"",ciudad:"",estado:"",creditDays:15,category:"B",score:70};
+  const [form,setForm]=useState(empty);
+  const sf=k=>v=>setForm(p=>({...p,[k]:v}));
+  const dSearch=useDebounce(search,250);
+
+  const stats=useCallback(id=>{
+    const co=tickets.filter(t=>t.clientId===id);
+    return{total:co.length,fact:co.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0),neta:co.reduce((s,t)=>s+(t.snap?.uNeta||0),0),pend:co.filter(t=>t.payType==="credit"&&!t.cobrado).reduce((s,t)=>s+(t.snap?.precioConIVA||0),0)};
+  },[tickets]);
+
+  const filtered=useMemo(()=>clients.filter(c=>{
+    if(!dSearch.trim()) return true;
+    const lq=safeLower(dSearch);
+    return safeLower(c.empresa).includes(lq)||safeLower(c.contacto).includes(lq)||safeLower(c.tel).includes(lq);
+  }),[clients,dSearch]);
+
+  const startAdd=()=>{setAdding(true);setEditId(null);setSel(null);setForm(empty);window.scrollTo(0,0);};
+  const startEdit=(c)=>{setEditId(c.id);setAdding(false);setSel(null);setForm({...c});window.scrollTo(0,0);};
+  const cancel=()=>{setAdding(false);setEditId(null);setForm(empty);};
+  const save=()=>{
+    if(editId){dispatch({type:"CLI_UPDATE",id:editId,patch:form});toast("Cliente actualizado","success");}
+    else{dispatch({type:"CLI_ADD",c:{...form,id:genId("CLI"),unidades:[]}});toast("Cliente registrado","success");}
+    cancel();
+  };
+  const del=(c)=>setConfirm(c);
+  const showForm=adding||!!editId;
+
+  return (
+    <div style={{padding:"14px 14px 8px"}}>
+      {confirm&&<Confirm msg={"Eliminar: "+confirm.empresa+"?"} onConfirm={()=>{dispatch({type:"CLI_DELETE",id:confirm.id});setSel(null);setConfirm(null);toast("Eliminado","info");}} onCancel={()=>setConfirm(null)}/>}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{fontSize:11,color:C.t3,letterSpacing:"0.15em",textTransform:"uppercase",fontWeight:700}}>Clientes · {clients.length}</div>
+        <button onClick={showForm?cancel:startAdd} style={{padding:"7px 14px",background:showForm?"transparent":C.blue,border:`1px solid ${showForm?C.border:C.blue}`,borderRadius:20,color:showForm?C.t2:C.t1,fontSize:12,fontWeight:700,cursor:"pointer",minHeight:36}}>
+          {showForm?"× Cancelar":"+ Nuevo"}
+        </button>
+      </div>
+      {showForm&&(
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:14,padding:16,marginBottom:12}}>
+          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.15em",marginBottom:10}}>{editId?"EDITAR CLIENTE":"NUEVO CLIENTE"}</div>
+          <MField label="Empresa / Razón social" value={form.empresa}       onChange={sf("empresa")}/>
+          <MField label="RFC"                    value={form.rfc||""}       onChange={sf("rfc")}/>
+          <MField label="Contacto"               value={form.contacto}      onChange={sf("contacto")}/>
+          <MField label="Teléfono"               value={form.tel}           onChange={sf("tel")} type="tel"/>
+          <MField label="Correo"                 value={form.correo||""}    onChange={sf("correo")} type="email"/>
+          <MField label="Días crédito"           value={form.creditDays}    onChange={sf("creditDays")} type="number" suffix="días"/>
+          <MField label="Dirección"              value={form.direccion||""} onChange={sf("direccion")}/>
+          <MField label="Ciudad"                 value={form.ciudad||""}    onChange={sf("ciudad")}/>
+          <MField label="Estado"                 value={form.estado||""}    onChange={sf("estado")}/>
+          <MBtn label={editId?"Guardar cambios":"Guardar cliente"} full color={C.t1} bg={C.blue} border={C.blue} onClick={save}/>
+        </div>
+      )}
+      {!showForm&&clients.length>0&&(
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar empresa, contacto, tel..."
+          style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.t1,fontSize:16,outline:"none",marginBottom:12,fontFamily:"inherit"}}/>
+      )}
+      {clients.length===0&&!showForm&&<EmptyState icon="🏢" title="Sin clientes" sub='Agrega el primero con "+ Nuevo"'/>}
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {filtered.map(c=>{
+          const st=stats(c.id);
+          const pctU=st.fact>0?(st.neta/st.fact)*100:0;
+          const exp=sel===c.id;
+          const cliUnits=units.filter(u=>u.clientId===c.id);
+          return (
+            <div key={c.id} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${exp?C.cyan:C.border}`,borderRadius:14,overflow:"hidden"}}>
+              <div onClick={()=>setSel(exp?null:c.id)} style={{padding:"14px 16px",cursor:"pointer"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                  <div style={{fontSize:15,fontWeight:800,color:C.t1,lineHeight:1.2,flex:1,marginRight:8}}>{c.empresa}</div>
+                  <div style={{fontSize:14,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace",flexShrink:0}}>{st.fact>0?mxn(st.fact):"—"}</div>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div style={{fontSize:11,color:C.t3}}>{c.contacto||"—"} · {c.tel||"—"}</div>
+                  <div style={{fontSize:11,color:st.neta>=0?C.green:C.red,fontWeight:600}}>{st.fact>0?fpct(pctU)+" margen":st.total+" ops"}</div>
+                </div>
+                {st.pend>0&&<div style={{marginTop:4,fontSize:10,color:C.yellow,fontWeight:700}}>⚠ {mxn(st.pend)} por cobrar</div>}
+              </div>
+              {exp&&(
+                <div style={{background:C.bg0,borderTop:`1px solid ${C.border}`,padding:"12px 16px"}}>
+                  {c.rfc&&<div style={{fontSize:11,color:C.t3,marginBottom:4}}>RFC: <span style={{color:C.t2,fontFamily:"'Courier New',monospace"}}>{c.rfc}</span></div>}
+                  {c.correo&&<div style={{fontSize:11,color:C.t3,marginBottom:4}}>Email: <span style={{color:C.cyan}}>{c.correo}</span></div>}
+                  {c.direccion&&<div style={{fontSize:11,color:C.t3,marginBottom:4}}>Dir: <span style={{color:C.t2}}>{c.direccion}{c.ciudad?", "+c.ciudad:""}{c.estado?", "+c.estado:""}</span></div>}
+                  <div style={{fontSize:11,color:C.t3,marginBottom:10}}>Crédito: <span style={{color:C.yellow}}>{c.creditDays}d</span> · Tickets: <span style={{color:C.t1}}>{st.total}</span> · Score: <span style={{color:c.score>=80?C.green:c.score>=60?C.yellow:C.red,fontWeight:700}}>{c.score}</span></div>
+                  {cliUnits.length>0&&(
+                    <div style={{marginBottom:10}}>
+                      <div style={{fontSize:9,color:C.t3,marginBottom:4,letterSpacing:"0.1em"}}>FLOTILLA VINCULADA</div>
+                      {cliUnits.map(u=><div key={u.id} style={{fontSize:11,color:C.t2,marginBottom:2}}>🚛 {u.marca} {u.modelo} {u.anio}{u.economico?" · Eco "+u.economico:""}</div>)}
+                    </div>
+                  )}
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={()=>startEdit(c)} style={{flex:1,padding:"9px",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,color:C.t1,fontSize:13,cursor:"pointer",fontWeight:600}}>Editar</button>
+                    <button onClick={()=>del(c)} style={{padding:"9px 14px",background:"transparent",border:`1px solid ${C.red}44`,borderRadius:10,color:C.red,fontSize:13,cursor:"pointer"}}>Eliminar</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── MUnidades — Flotilla móvil ────────────────────────────────────────────────
+function MUnidades({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
+  const {units,clients,tickets} = state;
+  const [search,setSearch]=useState("");
+  const [sel,setSel]=useState(null);
+  const [editId,setEditId]=useState(null);
+  const [adding,setAdding]=useState(false);
+  const [confirm,setConfirm]=useState(null);
+  const empty={vin:"",marca:"",modelo:"",anio:"",motor:"",transmision:"",config:"",clientId:"",statusOp:"operativa",km:"",notas:"",placa:"",economico:""};
+  const [form,setForm]=useState(empty);
+  const sf=k=>v=>setForm(p=>({...p,[k]:v}));
+  const dSearch=useDebounce(search,250);
+
+  const filtered=useMemo(()=>units.filter(u=>{
+    if(!dSearch.trim()) return true;
+    const lq=safeLower(dSearch);
+    return safeLower(u.vin).includes(lq)||safeLower(u.marca).includes(lq)||safeLower(u.modelo).includes(lq)||safeLower(u.economico||"").includes(lq)||safeLower(u.placa||"").includes(lq);
+  }),[units,dSearch]);
+
+  const startAdd=()=>{setAdding(true);setEditId(null);setSel(null);setForm(empty);window.scrollTo(0,0);};
+  const startEdit=(u)=>{setEditId(u.id);setAdding(false);setSel(null);setForm({...u});window.scrollTo(0,0);};
+  const cancel=()=>{setAdding(false);setEditId(null);setForm(empty);};
+  const save=()=>{
+    const parsed={...form,km:parseInt(form.km)||0};
+    if(editId){dispatch({type:"UNIT_UPDATE",id:editId,patch:parsed});toast("Unidad actualizada","success");}
+    else{dispatch({type:"UNIT_ADD",u:{...parsed,id:mkUnitId()}});toast("Unidad registrada","success");}
+    cancel();
+  };
+  const del=(u)=>setConfirm(u);
+  const showForm=adding||!!editId;
+
+  return (
+    <div style={{padding:"14px 14px 8px"}}>
+      {confirm&&<Confirm msg={"Eliminar: "+confirm.marca+" "+confirm.modelo+"?"} onConfirm={()=>{dispatch({type:"UNIT_DELETE",id:confirm.id});setSel(null);setConfirm(null);toast("Eliminada","info");}} onCancel={()=>setConfirm(null)}/>}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{fontSize:11,color:C.t3,letterSpacing:"0.15em",textTransform:"uppercase",fontWeight:700}}>Flotilla · {units.length}</div>
+        <button onClick={showForm?cancel:startAdd} style={{padding:"7px 14px",background:showForm?"transparent":C.blue,border:`1px solid ${showForm?C.border:C.blue}`,borderRadius:20,color:showForm?C.t2:C.t1,fontSize:12,fontWeight:700,cursor:"pointer",minHeight:36}}>
+          {showForm?"× Cancelar":"+ Nueva"}
+        </button>
+      </div>
+      {showForm&&(
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:14,padding:16,marginBottom:12}}>
+          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.15em",marginBottom:10}}>{editId?"EDITAR UNIDAD":"NUEVA UNIDAD"}</div>
+          <MField label="No. Económico"   value={form.economico||""} onChange={sf("economico")} placeholder="Ej: 1045"/>
+          <MField label="Placa"           value={form.placa||""}     onChange={sf("placa")} placeholder="Ej: 912FE2"/>
+          <MField label="Marca"           value={form.marca}         onChange={sf("marca")}/>
+          <MField label="Modelo"          value={form.modelo}        onChange={sf("modelo")}/>
+          <MField label="Año"             value={form.anio}          onChange={sf("anio")} type="number"/>
+          <MField label="VIN / Serial"    value={form.vin}           onChange={sf("vin")}/>
+          <MField label="Motor"           value={form.motor}         onChange={sf("motor")}/>
+          <MField label="Transmisión"     value={form.transmision}   onChange={sf("transmision")}/>
+          <MField label="Configuración"   value={form.config}        onChange={sf("config")} placeholder="4x2, 6x4..."/>
+          <MField label="Kilometraje"     value={form.km}            onChange={sf("km")} type="number" suffix="km"/>
+          <ClientPicker clients={clients} value={form.clientId||""} onChange={sf("clientId")} mobile/>
+          <MSel   label="Estado"          value={form.statusOp}      onChange={sf("statusOp")} options={Object.entries(UNIT_STATUS).map(([k,v])=>({value:k,label:v.label}))}/>
+          <MField label="Notas técnicas"  value={form.notas}         onChange={sf("notas")} placeholder="Historial, advertencias..."/>
+          <MBtn label={editId?"Guardar cambios":"Guardar unidad"} full color={C.t1} bg={C.blue} border={C.blue} onClick={save}/>
+        </div>
+      )}
+      {!showForm&&units.length>0&&(
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar eco., placa, VIN, marca..."
+          style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.t1,fontSize:16,outline:"none",marginBottom:12,fontFamily:"inherit"}}/>
+      )}
+      {units.length===0&&!showForm&&<EmptyState icon="🚛" title="Sin unidades" sub='Agrega la primera con "+ Nueva"'/>}
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {filtered.map(u=>{
+          const st=UNIT_STATUS[u.statusOp]||UNIT_STATUS.operativa;
+          const cl=clients.find(c=>c.id===u.clientId);
+          const openTks=tickets.filter(t=>t.unitId===u.id&&!CLOSED_SET.has(t.status));
+          const allTks=tickets.filter(t=>t.unitId===u.id);
+          const exp=sel===u.id;
+          return (
+            <div key={u.id} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${exp?C.cyan:C.border}`,borderRadius:14,overflow:"hidden",borderLeft:`4px solid ${st.dot}`}}>
+              <div onClick={()=>setSel(exp?null:u.id)} style={{padding:"14px 16px",cursor:"pointer"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                  <div>
+                    <span style={{fontSize:16,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",marginRight:8}}>{u.economico||"—"}</span>
+                    <span style={{fontSize:13,fontWeight:700,color:C.t1}}>{u.marca} {u.modelo}</span>
+                  </div>
+                  <span style={{padding:"3px 8px",borderRadius:6,background:st.color+"22",border:`1px solid ${st.color}55`,fontSize:10,color:st.dot,fontWeight:600,flexShrink:0}}>{st.label}</span>
+                </div>
+                <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+                  <span style={{fontSize:11,color:C.t3}}>{u.anio} · {u.placa||"Sin placa"}</span>
+                  {u.km>0&&<span style={{fontSize:11,color:C.t3}}>{u.km.toLocaleString()} km</span>}
+                  {openTks.length>0&&<span style={{fontSize:10,fontWeight:700,color:C.yellow,background:C.yellowDim,border:`1px solid ${C.yellow}44`,borderRadius:4,padding:"1px 6px"}}>{openTks.length} op. abierta{openTks.length>1?"s":""}</span>}
+                </div>
+                {cl&&<div style={{fontSize:11,color:C.t3,marginTop:2}}>🏢 {cl.empresa}</div>}
+              </div>
+              {exp&&(
+                <div style={{background:C.bg0,borderTop:`1px solid ${C.border}`,padding:"12px 16px"}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10,fontSize:11}}>
+                    <div style={{color:C.t3}}>VIN: <span style={{color:C.t2,fontFamily:"'Courier New',monospace",fontSize:10}}>{u.vin||"—"}</span></div>
+                    <div style={{color:C.t3}}>Motor: <span style={{color:C.t2}}>{u.motor||"—"}</span></div>
+                    <div style={{color:C.t3}}>Trans: <span style={{color:C.t2}}>{u.transmision||"—"}</span></div>
+                    <div style={{color:C.t3}}>Config: <span style={{color:C.t2}}>{u.config||"—"}</span></div>
+                  </div>
+                  {u.notas&&<div style={{fontSize:11,color:C.t3,fontStyle:"italic",marginBottom:10,lineHeight:1.5}}>"{u.notas}"</div>}
+                  {allTks.length>0&&(
+                    <div style={{marginBottom:10}}>
+                      <div style={{fontSize:9,color:C.t3,marginBottom:4,letterSpacing:"0.1em"}}>HISTORIAL ({allTks.length} tickets)</div>
+                      {allTks.slice(0,3).map(t=>(
+                        <div key={t.id} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:`1px solid ${C.border}`,fontSize:11,alignItems:"center"}}>
+                          <span style={{color:C.t3,fontFamily:"'Courier New',monospace",fontSize:10,flexShrink:0}}>{t.id}</span>
+                          <span style={{color:C.t2,flex:1,marginLeft:8,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</span>
+                          <StatusBadge sid={t.status} meta={TICKET_META} small/>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={()=>startEdit(u)} style={{flex:1,padding:"9px",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,color:C.t1,fontSize:13,cursor:"pointer",fontWeight:600}}>Editar</button>
+                    <button onClick={()=>del(u)} style={{padding:"9px 14px",background:"transparent",border:`1px solid ${C.red}44`,borderRadius:10,color:C.red,fontSize:13,cursor:"pointer"}}>Eliminar</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── MCatalogo — Catálogo móvil ────────────────────────────────────────────────
+function MCatalogo({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
+  const {parts} = state;
+  const [search,setSearch]=useState("");
+  const [sel,setSel]=useState(null);
+  const [editId,setEditId]=useState(null);
+  const [adding,setAdding]=useState(false);
+  const [confirm,setConfirm]=useState(null);
+  const [view,setView]=useState("frecuentes"); // "frecuentes"|"todos"
+  const empty={nombre:"",oem:"",aftermarket:"",aplicacion:"",notas:"",proveedor:"",ultimoPrecio:"",ultimaFecha:"",frecuencia:0};
+  const [form,setForm]=useState(empty);
+  const sf=k=>v=>setForm(p=>({...p,[k]:v}));
+  const dSearch=useDebounce(search,250);
+
+  const frecuentes=useMemo(()=>[...parts].filter(p=>(p.frecuencia||0)>0).sort((a,b)=>(b.frecuencia||0)-(a.frecuencia||0)).slice(0,10),[parts]);
+
+  const filtered=useMemo(()=>{
+    const base=view==="frecuentes"&&!dSearch.trim()?frecuentes:parts;
+    if(!dSearch.trim()) return base;
+    const lq=safeLower(dSearch);
+    return parts.filter(p=>safeLower(p.nombre).includes(lq)||safeLower(p.oem).includes(lq)||safeLower(p.aftermarket).includes(lq)||safeLower(p.aplicacion).includes(lq)||safeLower(p.proveedor).includes(lq));
+  },[parts,frecuentes,dSearch,view]);
+
+  const startAdd=()=>{setAdding(true);setEditId(null);setSel(null);setForm(empty);window.scrollTo(0,0);};
+  const startEdit=(p)=>{setEditId(p.id);setAdding(false);setSel(null);setForm({...p,ultimoPrecio:String(p.ultimoPrecio||""),frecuencia:String(p.frecuencia||0)});window.scrollTo(0,0);};
+  const cancel=()=>{setAdding(false);setEditId(null);setForm(empty);};
+  const save=()=>{
+    const parsed={...form,ultimoPrecio:parseFloat(form.ultimoPrecio)||0,frecuencia:parseInt(form.frecuencia)||0};
+    if(editId){dispatch({type:"PART_UPDATE",id:editId,patch:parsed});toast("Parte actualizada","success");}
+    else{dispatch({type:"PART_ADD",p:{...parsed,id:mkPartId()}});toast("Parte registrada","success");}
+    cancel();
+  };
+  const del=(p)=>setConfirm(p);
+  const showForm=adding||!!editId;
+  const isSearching=dSearch.trim().length>0;
+
+  return (
+    <div style={{padding:"14px 14px 8px"}}>
+      {confirm&&<Confirm msg={"Eliminar: "+confirm.nombre+"?"} onConfirm={()=>{dispatch({type:"PART_DELETE",id:confirm.id});setSel(null);setConfirm(null);toast("Eliminado","info");}} onCancel={()=>setConfirm(null)}/>}
+
+      {/* ── Header ── */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{fontSize:11,color:C.t3,letterSpacing:"0.15em",textTransform:"uppercase",fontWeight:700}}>Catálogo · {parts.length}</div>
+        <button onClick={showForm?cancel:startAdd} style={{padding:"7px 14px",background:showForm?"transparent":C.blue,border:`1px solid ${showForm?C.border:C.blue}`,borderRadius:20,color:showForm?C.t2:C.t1,fontSize:12,fontWeight:700,cursor:"pointer",minHeight:36}}>
+          {showForm?"× Cancelar":"+ Nueva parte"}
+        </button>
+      </div>
+
+      {/* ── Add/Edit Form ── */}
+      {showForm&&(
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:14,padding:16,marginBottom:12}}>
+          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.15em",marginBottom:10}}>{editId?"EDITAR PARTE":"NUEVA PARTE"}</div>
+          <MField label="Nombre / descripción"  value={form.nombre}       onChange={sf("nombre")}/>
+          <MField label="Número OEM"            value={form.oem}          onChange={sf("oem")}/>
+          <MField label="Aftermarket / equiv."  value={form.aftermarket}  onChange={sf("aftermarket")} placeholder="Marca · código"/>
+          <MField label="Aplicación / modelos"  value={form.aplicacion}   onChange={sf("aplicacion")} placeholder="Marca modelo año motor"/>
+          <MField label="Último precio (c/IVA)" value={form.ultimoPrecio} onChange={sf("ultimoPrecio")} type="number"/>
+          <MField label="Última fecha"          value={form.ultimaFecha}  onChange={sf("ultimaFecha")} placeholder="DD/MM/AAAA"/>
+          <MField label="Proveedor habitual"    value={form.proveedor}    onChange={sf("proveedor")}/>
+          <MField label="Notas técnicas"        value={form.notas}        onChange={sf("notas")} placeholder="Advertencias, variantes..."/>
+          <MBtn label={editId?"Guardar cambios":"Guardar parte"} full color={C.t1} bg={C.blue} border={C.blue} onClick={save}/>
+        </div>
+      )}
+
+      {/* ── Search & View Tabs ── */}
+      {!showForm&&parts.length>0&&(
+        <>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar nombre, OEM, proveedor, aplicación..."
+            style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.t1,fontSize:16,outline:"none",marginBottom:10,fontFamily:"inherit",boxSizing:"border-box"}}/>
+          {!isSearching&&frecuentes.length>0&&(
+            <div style={{display:"flex",gap:6,marginBottom:12}}>
+              {[["frecuentes","★ Frecuentes"],["todos","Todos"]].map(([v,l])=>(
+                <button key={v} onClick={()=>setView(v)}
+                  style={{padding:"6px 14px",borderRadius:20,fontSize:11,fontWeight:700,cursor:"pointer",
+                    background:"transparent",border:`1px solid ${view===v?C.cyan:C.border}`,
+                    color:view===v?C.cyan:C.t3}}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {parts.length===0&&!showForm&&<EmptyState icon="📦" title="Sin partes en catálogo" sub='Agrega la primera con "+ Nueva parte". Las partes que uses en cotizaciones aparecen aquí automáticamente.'/>}
+
+      {/* ── Frecuentes hero banner ── */}
+      {!showForm&&!isSearching&&view==="frecuentes"&&frecuentes.length>0&&(
+        <div style={{background:"linear-gradient(135deg,rgba(15,20,22,0.95) 0%,rgba(20,27,29,0.90) 100%)",
+          backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",
+          border:`1px solid rgba(38,122,144,0.25)`,borderRadius:16,padding:"14px 16px",marginBottom:12,
+          boxShadow:"0 4px 20px rgba(0,0,0,0.4)"}}>
+          <div style={{fontSize:9,color:C.cyan,letterSpacing:"0.16em",textTransform:"uppercase",fontWeight:700,marginBottom:6}}>
+            ★ MÁS USADAS EN COTIZACIONES
+          </div>
+          <div style={{fontSize:11,color:C.t3,lineHeight:1.5}}>
+            Top {frecuentes.length} piezas por frecuencia de uso. El catálogo se sincroniza automáticamente cuando creas una cotización.
+          </div>
+        </div>
+      )}
+
+      {/* ── Parts list ── */}
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {filtered.map((p,idx)=>{
+          const exp=sel===p.id;
+          const freq=p.frecuencia||0;
+          const isFrecuente=freq>=2;
+          return (
+            <div key={p.id} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,
+              border:`1px solid ${exp?C.cyan:isFrecuente?`rgba(38,122,144,0.2)`:C.border}`,
+              borderRadius:14,overflow:"hidden",
+              boxShadow:isFrecuente?"0 0 0 1px rgba(59,130,246,0.2)":undefined}}>
+              <div onClick={()=>setSel(exp?null:p.id)} style={{padding:"13px 15px",cursor:"pointer"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:3}}>
+                  <div style={{fontSize:13,fontWeight:700,color:C.t1,flex:1,marginRight:8,lineHeight:1.3}}>{p.nombre}</div>
+                  <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                    {freq>0&&(
+                      <div style={{padding:"2px 7px",borderRadius:20,background:freq>=5?`${C.cyan}22`:freq>=2?`${C.blue}22`:`${C.border}`,
+                        border:`1px solid ${freq>=5?C.cyan+"44":freq>=2?C.blueHi+"44":C.border}`,
+                        fontSize:9,fontWeight:800,color:freq>=5?C.cyan:freq>=2?C.blueHi:C.t3,letterSpacing:"0.04em"}}>
+                        ×{freq}
+                      </div>
+                    )}
+                    {p.ultimoPrecio>0&&<div style={{fontSize:12,fontWeight:700,color:C.yellow,fontFamily:"'Courier New',monospace"}}>{mxn(p.ultimoPrecio)}</div>}
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+                  {p.oem&&<div style={{fontSize:10,color:C.cyan,fontFamily:"'Courier New',monospace"}}>OEM: {p.oem}</div>}
+                  {p.proveedor&&<div style={{fontSize:10,color:C.t3}}>· {p.proveedor}</div>}
+                </div>
+                {p.aplicacion&&<div style={{fontSize:10,color:C.t3,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.aplicacion}</div>}
+              </div>
+              {exp&&(
+                <div style={{background:C.bg0,borderTop:`1px solid ${C.border}`,padding:"12px 15px"}}>
+                  {p.aftermarket&&<div style={{fontSize:11,color:C.t3,marginBottom:5}}>Aftermarket: <span style={{color:C.t2}}>{p.aftermarket}</span></div>}
+                  {p.proveedor&&<div style={{fontSize:11,color:C.t3,marginBottom:5}}>Proveedor: <span style={{color:C.t2}}>{p.proveedor}</span></div>}
+                  {p.ultimaFecha&&<div style={{fontSize:11,color:C.t3,marginBottom:5}}>Ult. compra: <span style={{color:C.t2}}>{p.ultimaFecha}</span></div>}
+                  {freq>0&&<div style={{fontSize:11,color:C.t3,marginBottom:5}}>Usado en cotizaciones: <span style={{color:C.cyan,fontWeight:700}}>×{freq} veces</span></div>}
+                  {p.aplicacion&&<div style={{fontSize:11,color:C.t3,marginBottom:8,lineHeight:1.5}}>Aplicación: <span style={{color:C.t1}}>{p.aplicacion}</span></div>}
+                  {p.notas&&<div style={{fontSize:11,color:C.t3,fontStyle:"italic",marginBottom:8,lineHeight:1.5}}>"{p.notas}"</div>}
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={()=>startEdit(p)} style={{flex:1,padding:"9px",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,color:C.t1,fontSize:13,cursor:"pointer",fontWeight:600}}>Editar</button>
+                    <button onClick={()=>del(p)} style={{padding:"9px 14px",background:"transparent",border:`1px solid ${C.red}44`,borderRadius:10,color:C.red,fontSize:13,cursor:"pointer"}}>Eliminar</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {filtered.length===0&&isSearching&&(
+          <div style={{textAlign:"center",padding:"32px 16px"}}>
+            <div style={{fontSize:28,marginBottom:8}}>🔍</div>
+            <div style={{fontSize:14,color:C.t2,fontWeight:600,marginBottom:4}}>Sin resultados</div>
+            <div style={{fontSize:12,color:C.t3}}>"{dSearch}" no está en el catálogo</div>
+            <button onClick={()=>{setAdding(true);setForm({...empty,nombre:dSearch.trim()});}}
+              style={{marginTop:14,padding:"10px 20px",background:C.blue,border:`1px solid ${C.blueHi}`,borderRadius:12,color:C.t1,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              + Agregar "{dSearch.trim()}"
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── MProveedores — Proveedores móvil ─────────────────────────────────────────
+function MProveedores({state,dispatch,toast}) {
+  const C = React.useContext(ThemeCtx);
+  const {suppliers,tickets} = state;
+  const [sel,setSel]=useState(null);
+  const [editId,setEditId]=useState(null);
+  const [adding,setAdding]=useState(false);
+  const [confirm,setConfirm]=useState(null);
+  const empty={nombre:"",categoria:"heavy",especialidad:"",entregaDias:1,confiabilidad:85,contacto:"",correo:"",horario:"",cobertura:"",scoreOp:80,incidencias:0};
+  const [form,setForm]=useState(empty);
+  const sf=k=>v=>setForm(p=>({...p,[k]:v}));
+
+  const stats=useCallback(id=>{
+    const so=tickets.filter(t=>t.supplierId===id);
+    return{total:so.length,neta:so.reduce((s,t)=>s+(t.snap?.uNeta||0),0)};
+  },[tickets]);
+
+  const startAdd=()=>{setAdding(true);setEditId(null);setSel(null);setForm(empty);window.scrollTo(0,0);};
+  const startEdit=(s)=>{setEditId(s.id);setAdding(false);setSel(null);setForm({...s});window.scrollTo(0,0);};
+  const cancel=()=>{setAdding(false);setEditId(null);setForm(empty);};
+  const save=()=>{
+    if(editId){dispatch({type:"SUP_UPDATE",id:editId,patch:form});toast("Proveedor actualizado","success");}
+    else{dispatch({type:"SUP_ADD",s:{...form,id:"PRV-"+Date.now().toString().slice(-5)}});toast("Proveedor registrado","success");}
+    cancel();
+  };
+  const del=(s)=>setConfirm(s);
+  const showForm=adding||!!editId;
+
+  return (
+    <div style={{padding:"14px 14px 8px"}}>
+      {confirm&&<Confirm msg={"Eliminar: "+confirm.nombre+"?"} onConfirm={()=>{dispatch({type:"SUP_DELETE",id:confirm.id});setSel(null);setConfirm(null);toast("Eliminado","info");}} onCancel={()=>setConfirm(null)}/>}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{fontSize:11,color:C.t3,letterSpacing:"0.15em",textTransform:"uppercase",fontWeight:700}}>Proveedores · {suppliers.length}</div>
+        <button onClick={showForm?cancel:startAdd} style={{padding:"7px 14px",background:showForm?"transparent":C.blue,border:`1px solid ${showForm?C.border:C.blue}`,borderRadius:20,color:showForm?C.t2:C.t1,fontSize:12,fontWeight:700,cursor:"pointer",minHeight:36}}>
+          {showForm?"× Cancelar":"+ Nuevo"}
+        </button>
+      </div>
+      {showForm&&(
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:14,padding:16,marginBottom:12}}>
+          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.15em",marginBottom:10}}>{editId?"EDITAR PROVEEDOR":"NUEVO PROVEEDOR"}</div>
+          <MField label="Nombre"          value={form.nombre}        onChange={sf("nombre")}/>
+          <MField label="Especialidad"    value={form.especialidad}  onChange={sf("especialidad")}/>
+          <MField label="Contacto"        value={form.contacto}      onChange={sf("contacto")}/>
+          <MField label="Correo"          value={form.correo}        onChange={sf("correo")} type="email"/>
+          <MField label="Horario"         value={form.horario}       onChange={sf("horario")} placeholder="Lun-Sab 07:00-20:00"/>
+          <MField label="Cobertura"       value={form.cobertura}     onChange={sf("cobertura")} placeholder="CDMX, Edomex..."/>
+          <MField label="Entrega (días)"  value={form.entregaDias}   onChange={sf("entregaDias")} type="number"/>
+          <MField label="Confiabilidad"   value={form.confiabilidad} onChange={sf("confiabilidad")} type="number" suffix="/100"/>
+          <MField label="Score operativo" value={form.scoreOp}       onChange={sf("scoreOp")} type="number" suffix="/100"/>
+          <MField label="Incidencias"     value={form.incidencias}   onChange={sf("incidencias")} type="number"/>
+          <MSel   label="Categoría"       value={form.categoria}     onChange={sf("categoria")} options={OP_TYPES.map(o=>({value:o.id,label:o.label}))}/>
+          <MBtn label={editId?"Guardar cambios":"Guardar proveedor"} full color={C.t1} bg={C.blue} border={C.blue} onClick={save}/>
+        </div>
+      )}
+      {suppliers.length===0&&!showForm&&<EmptyState icon="🔧" title="Sin proveedores" sub='Agrega el primero con "+ Nuevo"'/>}
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {suppliers.map(s=>{
+          const st=stats(s.id);
+          const exp=sel===s.id;
+          const confColor=s.confiabilidad>=90?C.green:s.confiabilidad>=75?C.yellow:C.red;
+          const scoreColor=s.scoreOp>=80?C.green:s.scoreOp>=60?C.yellow:C.red;
+          return (
+            <div key={s.id} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${exp?C.cyan:C.border}`,borderRadius:14,overflow:"hidden"}}>
+              <div onClick={()=>setSel(exp?null:s.id)} style={{padding:"14px 16px",cursor:"pointer"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:14,fontWeight:700,color:C.t1,marginBottom:2}}>{s.nombre}</div>
+                    <div style={{fontSize:11,color:C.t3}}>{s.especialidad||"—"} · {s.cobertura||"—"}</div>
+                  </div>
+                  <div style={{textAlign:"right",flexShrink:0,marginLeft:8}}>
+                    <div style={{fontSize:12,color:confColor,fontWeight:700}}>{s.confiabilidad}%</div>
+                    <div style={{fontSize:10,color:C.t3}}>confiab.</div>
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                  <span style={{fontSize:11,color:C.t3}}>{s.entregaDias}d entrega</span>
+                  {st.total>0&&<span style={{fontSize:11,color:C.t3}}>{st.total} ops · <span style={{color:st.neta>=0?C.green:C.red,fontWeight:600}}>{mxn(st.neta)}</span></span>}
+                </div>
+              </div>
+              {exp&&(
+                <div style={{background:C.bg0,borderTop:`1px solid ${C.border}`,padding:"12px 16px"}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10,fontSize:11}}>
+                    <div style={{color:C.t3}}>Contacto: <span style={{color:C.t2}}>{s.contacto||"—"}</span></div>
+                    <div style={{color:C.t3}}>Horario: <span style={{color:C.t2}}>{s.horario||"—"}</span></div>
+                    <div style={{color:C.t3}}>Score op: <span style={{color:scoreColor,fontWeight:700}}>{s.scoreOp}</span></div>
+                    <div style={{color:C.t3}}>Incidencias: <span style={{color:s.incidencias>0?C.red:C.green,fontWeight:700}}>{s.incidencias}</span></div>
+                  </div>
+                  {s.correo&&<div style={{fontSize:11,color:C.t3,marginBottom:8}}>Email: <span style={{color:C.cyan}}>{s.correo}</span></div>}
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={()=>startEdit(s)} style={{flex:1,padding:"9px",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,color:C.t1,fontSize:13,cursor:"pointer",fontWeight:600}}>Editar</button>
+                    <button onClick={()=>del(s)} style={{padding:"9px 14px",background:"transparent",border:`1px solid ${C.red}44`,borderRadius:10,color:C.red,fontSize:13,cursor:"pointer"}}>Eliminar</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── MasSheet — bottom sheet del menú "Más" ───────────────────────────────────
+function MasSheet({open,onClose,tab,setTab}) {
+  const C = React.useContext(ThemeCtx);
+  if(!open) return null;
+  const items=[
+    {id:"cotizador",  label:"Cotizador",  icon:"🧾", desc:"Nueva cotización"},
+    {id:"cartera",    label:"Cartera",    icon:"💳", desc:"Por cobrar"},
+    {id:"flota",      label:"Flota",      icon:"🚛", desc:"Control flota"},
+    {id:"unidades",   label:"Flotilla",   icon:"🚚", desc:"Vehículos"},
+    {id:"catalogo",   label:"Catálogo",   icon:"📦", desc:"Inventario"},
+    {id:"clientes",   label:"Clientes",   icon:"🏢", desc:"Directorio"},
+    {id:"proveedores",label:"Proveedores",icon:"🔧", desc:"Suppliers"},
+    {id:"ajustes",    label:"Ajustes",    icon:"⚙",  desc:"Config"},
+  ];
+  return (
+    <>
+      <div onClick={onClose} className="fade-enter" style={{position:"fixed",inset:0,zIndex:150,background:C._dark?"rgba(0,0,0,0.55)":"rgba(0,0,0,0.25)"}}/>
+      <div className="sheet-enter" style={{position:"fixed",bottom:0,left:0,right:0,zIndex:155,
+        background:C._dark?"rgba(14,16,20,0.90)":"rgba(248,247,244,0.94)",backdropFilter:"blur(32px) saturate(1.8)",WebkitBackdropFilter:"blur(32px) saturate(1.8)",
+        borderRadius:"28px 28px 0 0",
+        borderTop:`1px solid ${C.borderHi}`,
+        padding:`0 16px calc(20px + env(safe-area-inset-bottom,0px))`,
+        boxShadow:C._dark?"0 -12px 60px rgba(0,0,0,0.6)":"0 -12px 60px rgba(0,0,0,0.12)"}}>
+
+        <div style={{display:"flex",justifyContent:"center",padding:"14px 0 8px"}}>
+          <div style={{width:36,height:4,borderRadius:2,background:C.border}}/>
+        </div>
+        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.16em",marginBottom:16,
+          textAlign:"center",textTransform:"uppercase",fontWeight:600}}>Más módulos</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:8}}>
+          {items.map(item=>(
+            <button key={item.id} onClick={()=>{setTab(item.id);onClose();}}
+              style={{padding:"18px 10px",
+                background:tab===item.id?C.blueDim:C.bg1,
+                backdropFilter:C.glass,WebkitBackdropFilter:C.glass,
+                border:`1.5px solid ${tab===item.id?C.blueHi:C.border}`,
+                borderRadius:22,cursor:"pointer",
+                display:"flex",flexDirection:"column",alignItems:"center",gap:8,
+                transition:"all 150ms ease",touchAction:"manipulation",
+                WebkitTapHighlightColor:"transparent"}}>
+              <span style={{fontSize:28,lineHeight:1}}>{item.icon}</span>
+              <span style={{fontSize:12,fontWeight:700,color:tab===item.id?C.blue:C.t1,lineHeight:1}}>{item.label}</span>
+              <span style={{fontSize:10,color:C.t3,lineHeight:1}}>{item.desc}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
 const TABS = [
   {id:"ops",          label:"Centro Ops"},
   {id:"tickets",      label:"Pipeline"},
   {id:"historial",    label:"Historial"},
   {id:"cotizador",    label:"Cotizador"},
+  {id:"refacciones",  label:"Refacciones"},
+  {id:"flota",        label:"Flota"},
   {id:"unidades",     label:"Unidades"},
   {id:"catalogo",     label:"Catalogo"},
   {id:"proveedores",  label:"Proveedores"},
@@ -4986,13 +7531,61 @@ const TABS = [
   {id:"ajustes",      label:"Ajustes"},
 ];
 
-export default function App() {
+// ── ErrorBoundary — catches any render crash, shows recovery screen instead of blank ──
+class ErrorBoundary extends React.Component {
+  constructor(props){ super(props); this.state={error:null}; }
+  static getDerivedStateFromError(e){ return {error:e}; }
+  componentDidCatch(e,info){ console.error("[ErrorBoundary]",e,info); }
+  render(){
+    if(!this.state.error) return this.props.children;
+    const msg = this.state.error?.message||String(this.state.error);
+    return (
+      <div style={{minHeight:"100vh",background:"#0D0F12",color:"#F5F5F7",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:24,fontFamily:"'Trebuchet MS',sans-serif"}}>
+        <div style={{fontSize:28,color:"#F5F5F7"}}>⚠</div>
+        <div style={{fontSize:13,fontWeight:700,color:"#F5F5F7",textAlign:"center"}}>Algo salió mal</div>
+        <div style={{fontSize:10,color:"#4A5568",fontFamily:"monospace",background:"#EEF1F5",padding:"8px 14px",borderRadius:4,maxWidth:320,wordBreak:"break-all",textAlign:"center"}}>{msg}</div>
+        <button onClick={()=>window.location.reload()}
+          style={{marginTop:8,padding:"9px 22px",background:"#F3F4F6",border:"none",borderRadius:4,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",letterSpacing:"0.05em"}}>
+          REINICIAR APP
+        </button>
+      </div>
+    );
+  }
+}
+
+// ── useSyncStatus — estado del sync Supabase ─────────────────────────────────
+function useSyncStatus() {
+  const [status, setStatus] = useState("idle"); // "idle"|"saving"|"saved"|"offline"|"error"
+  const timerRef = useRef(null);
+  const resetToIdle = useCallback((delay=3000) => {
+    if(timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(()=>setStatus("idle"), delay);
+  }, []);
+  const setSaving  = useCallback(()=>{ setStatus("saving");  if(timerRef.current) clearTimeout(timerRef.current); }, []);
+  const setSaved   = useCallback(()=>{ setStatus("saved");   resetToIdle(3000); }, [resetToIdle]);
+  const setOffline = useCallback(()=>{ setStatus("offline"); resetToIdle(8000); }, [resetToIdle]);
+  const setError   = useCallback(()=>{ setStatus("error");   resetToIdle(6000); }, [resetToIdle]);
+  useEffect(()=>()=>{ if(timerRef.current) clearTimeout(timerRef.current); },[]);
+  return { status, setSaving, setSaved, setOffline, setError };
+}
+
+export default function AppRoot(){
+  return <ErrorBoundary><App/></ErrorBoundary>;
+}
+
+function App() {
   const [state,dispatch]=useReducer(reducer,initialState);
   const {toasts,push:toast}=useToasts();
   const [tab,setTab]=useState("ops");
   const [search,setSearch]=useState(false);
   const [loading,setLoading]=useState(true);
   const [mobileView,setMobileView]=useState(()=>window.innerWidth<768);
+  const [quickOpen,setQuickOpen]=useState(false); // scroll-lock compat
+  const [masOpen,setMasOpen]=useState(false);
+  const [darkMode,setDarkMode]=useState(()=>{
+    try { return localStorage.getItem("logisolve_theme")!=="light"; } catch{ return true; }
+  });
+  const C = darkMode ? C_DARK : C_LIGHT; // local C shadows module-level alias
   const { status: syncStatus, setSaving, setSaved, setOffline, setError: setSyncError } = useSyncStatus();
 
   // Double-click / concurrent save protection
@@ -5045,14 +7638,28 @@ export default function App() {
   // Load from Supabase on mount
   useEffect(()=>{
     (async()=>{
+      const bumpSeq = (tickets=[]) => {
+        const maxSeq = tickets.reduce((m,t)=>{
+          const n=parseInt((t.id||'').split('-').pop())||0; return Math.max(m,n);
+        }, 7);
+        if(maxSeq >= _seq) _seq = maxSeq + 1;
+      };
       try {
         await seedIfEmpty();
         const data = await loadAllFromSupabase();
-        if(data) dispatch({type:"IMPORT",data});
-        opLog.push("LOAD_OK");
+        if(data) { dispatch({type:"IMPORT",data}); bumpSeq(data.tickets); opLog.push("LOAD_OK"); }
+        else {
+          const stored = loadFromStorage();
+          if(stored) { dispatch({type:"IMPORT", data:stored}); bumpSeq(stored.tickets); }
+          toast("Sin datos Supabase — usando datos locales del dispositivo","info");
+          opLog.push("LOAD_LOCAL_FALLBACK");
+        }
       } catch(e){
         opLog.push("LOAD_ERROR", {error: e?.message});
         console.warn("Supabase load error:",e);
+        const stored = loadFromStorage();
+        if(stored) { dispatch({type:"IMPORT", data:stored}); bumpSeq(stored.tickets); }
+        toast("Error Supabase: "+e?.message+" — datos locales cargados","error");
       }
       finally { setLoading(false); }
     })();
@@ -5122,6 +7729,34 @@ export default function App() {
     return()=>window.removeEventListener("keydown",h);
   },[]);
 
+  useEffect(()=>{
+    const h=()=>setMobileView(window.innerWidth<768);
+    window.addEventListener("resize",h);
+    return()=>window.removeEventListener("resize",h);
+  },[]);
+
+  // Body scroll lock when a bottom sheet is open on mobile — prevents scroll into empty space on iPhone
+  useEffect(()=>{
+    if(!mobileView||(!quickOpen&&!masOpen)) {
+      document.body.style.overflow="";
+      document.body.style.position="";
+      document.body.style.width="";
+      return;
+    }
+    const y=window.scrollY;
+    document.body.style.overflow="hidden";
+    document.body.style.position="fixed";
+    document.body.style.top=`-${y}px`;
+    document.body.style.width="100%";
+    return()=>{
+      document.body.style.overflow="";
+      document.body.style.position="";
+      document.body.style.top="";
+      document.body.style.width="";
+      window.scrollTo(0,y);
+    };
+  },[mobileView,quickOpen,masOpen]);
+
   const p1Active  = useMemo(()=>state.tickets.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status)).length,[state.tickets]);
   const vencidos  = useMemo(()=>state.tickets.filter(t=>{if(!t.promesaPago||t.cobrado||t.status==="cancelado")return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}).length,[state.tickets]);
   const abiertas  = useMemo(()=>state.tickets.filter(t=>!CLOSED_SET.has(t.status)).length,[state.tickets]);
@@ -5137,18 +7772,26 @@ export default function App() {
   const sd = syncDisplay[syncStatus] || syncDisplay.idle;
 
   if(loading) return (
-    <div style={{minHeight:"100vh",background:C.bg0,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
-      <Logo/>
-      <div style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",letterSpacing:"0.2em",marginTop:8}}>CARGANDO DATOS...</div>
-    </div>
+    <ThemeCtx.Provider value={C}>
+      <div style={{minHeight:"100vh",background:darkMode?"#0D0F12":"linear-gradient(180deg,#F7F6F3 0%,#ECE9E4 100%)",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
+        <Logo/>
+        <div style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",letterSpacing:"0.2em",marginTop:8}}>CARGANDO DATOS...</div>
+      </div>
+    </ThemeCtx.Provider>
   );
 
   return (
-    <div style={{minHeight:"100vh",background:C.bg0,color:C.t1,fontFamily:"'Trebuchet MS',sans-serif",fontSize:13}}>
+    <ThemeCtx.Provider value={C}>
+    <div data-theme={darkMode?"dark":"light"} style={{minHeight:"100vh",
+      background: darkMode
+        ? "radial-gradient(ellipse 80% 60% at 50% -10%,rgba(143,227,190,0.07) 0%,transparent 60%),radial-gradient(ellipse 50% 40% at 85% 80%,rgba(143,227,190,0.04) 0%,transparent 50%),#0D0F12"
+        : "radial-gradient(ellipse 60% 50% at 15% 20%,rgba(159,224,190,0.28) 0%,transparent 55%),radial-gradient(ellipse 50% 45% at 88% 60%,rgba(185,215,255,0.20) 0%,transparent 50%),radial-gradient(ellipse 45% 40% at 55% 90%,rgba(220,200,255,0.14) 0%,transparent 50%),radial-gradient(ellipse 35% 30% at 75% 10%,rgba(255,220,180,0.12) 0%,transparent 45%),linear-gradient(160deg,#F5F4F0 0%,#E8E3DB 100%)",
+      color:C.t1,fontFamily:"'Trebuchet MS',sans-serif",fontSize:13,
+      transition:"background 350ms ease"}}>
       {search&&<SearchPalette state={state} onNavigate={t=>{setTab(t);}} onClose={()=>setSearch(false)}/>}
 
       {/* NAV */}
-      <div style={{background:C.bg1,borderBottom:`1px solid ${C.border}`,padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,flexWrap:"wrap",gap:4}}>
+      <div style={{background:darkMode?"rgba(13,15,18,0.85)":"rgba(255,255,255,0.88)",backdropFilter:"blur(44px) saturate(2.8) brightness(1.01)",WebkitBackdropFilter:"blur(44px) saturate(2.8) brightness(1.01)",borderBottom:`1px solid ${darkMode?C.borderHi:"rgba(0,0,0,0.08)"}`,padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,flexWrap:"wrap",gap:4,boxShadow:darkMode?"none":"0 2px 16px rgba(0,0,0,0.06), 0 1px 0 rgba(255,255,255,1) inset"}}>
         <Logo/>
         <div style={{display:"flex",gap:2,alignItems:"center",flexWrap:"wrap"}}>
           {/* Desktop tabs — hidden on mobile view */}
@@ -5157,19 +7800,22 @@ export default function App() {
             const isP1Tab=t.id==="ops"&&p1Active>0;
             return (
               <button key={t.id} onClick={()=>setTab(t.id)}
-                style={{padding:"3px 9px",borderRadius:3,cursor:"pointer",fontSize:10,fontWeight:600,background:tab===t.id?C.blue:"transparent",border:`1px solid ${tab===t.id?C.blueHi:C.border}`,color:tab===t.id?C.t1:C.t2,position:"relative",letterSpacing:"0.04em"}}>
+                style={{padding:"3px 9px",borderRadius:6,cursor:"pointer",fontSize:10,fontWeight:600,
+                  background:tab===t.id?C.blueDim:"transparent",
+                  border:`1px solid ${tab===t.id?C.blueHi:C.border}`,
+                  color:tab===t.id?C.blue:C.t2,position:"relative",letterSpacing:"0.04em"}}>
                 {t.label}
-                {badge>0&&<span style={{position:"absolute",top:-4,right:-4,width:13,height:13,borderRadius:"50%",background:isP1Tab?C.p1dot:t.id==="cartera"?C.red:C.yellow,fontSize:7,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",color:"#000"}}>{badge}</span>}
+                {badge>0&&<span style={{position:"absolute",top:-4,right:-4,width:13,height:13,borderRadius:"50%",background:isP1Tab?C.p1dot:t.id==="cartera"?C.red:C.yellow,fontSize:7,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",color:"#0D0F12"}}>{badge}</span>}
               </button>
             );
           })}
           <div style={{width:1,height:12,background:C.border,margin:"0 3px"}}/>
-          {!mobileView&&<button onClick={()=>setSearch(true)} style={{padding:"3px 8px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:10,cursor:"pointer"}}>
+          {!mobileView&&<button onClick={()=>setSearch(true)} style={{padding:"3px 8px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:6,color:C.t2,fontSize:10,cursor:"pointer",touchAction:"manipulation"}}>
             &#9906; <span style={{fontSize:7,color:C.t3}}>Ctrl+K</span>
           </button>}
           {/* Sync status indicator */}
           {syncStatus!=="idle"&&(
-            <div style={{display:"flex",alignItems:"center",gap:4,padding:"2px 8px",borderRadius:3,border:`1px solid ${C.border}`}}>
+            <div style={{display:"flex",alignItems:"center",gap:4,padding:"2px 8px",borderRadius:6,border:`1px solid ${C.border}`}}>
               <span style={{width:6,height:6,borderRadius:"50%",background:sd.dot,flexShrink:0,
                 animation:syncStatus==="saving"?"pulse 1s infinite":"none"}}/>
               <span style={{fontSize:8,color:sd.color,letterSpacing:"0.06em"}}>{sd.label}</span>
@@ -5177,86 +7823,150 @@ export default function App() {
           )}
           {/* Mobile/Desktop toggle */}
           <button onClick={()=>setMobileView(v=>!v)}
-            style={{padding:"3px 9px",background:mobileView?C.blueDim:"transparent",border:`1px solid ${mobileView?C.blueHi:C.border}`,borderRadius:3,color:mobileView?C.cyan:C.t3,fontSize:10,cursor:"pointer",letterSpacing:"0.04em"}}>
+            style={{padding:"3px 9px",background:mobileView?C.blueDim:"transparent",border:`1px solid ${mobileView?C.blueHi:C.border}`,borderRadius:6,color:mobileView?C.blue:C.t3,fontSize:10,cursor:"pointer",letterSpacing:"0.04em",touchAction:"manipulation"}}>
             {mobileView?"[ ] Escritorio":"[=] Movil"}
+          </button>
+          {/* Theme toggle */}
+          <button onClick={()=>{ const v=!darkMode; setDarkMode(v); try{localStorage.setItem("logisolve_theme",v?"dark":"light");}catch{} }}
+            style={{padding:"3px 9px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:6,color:C.blue,fontSize:11,cursor:"pointer",letterSpacing:"0.02em",touchAction:"manipulation",minWidth:36}}>
+            {darkMode?"☀":"🌙"}
           </button>
         </div>
       </div>
 
-      {/* Mobile bottom nav — solo 5 tabs principales */}
+      {/* ── Nav móvil nativa — 4 tabs + FAB ── */}
       {mobileView&&(
-        <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,background:C.bg1,borderTop:`1px solid ${C.border}`,display:"grid",gridTemplateColumns:"repeat(6,1fr)"}}>
+        <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:150,
+          paddingBottom:"env(safe-area-inset-bottom,0px)"}}>
+          <div style={{
+            margin:"0 12px 10px",
+            background: darkMode ? "rgba(15,17,22,0.78)" : "rgba(255,255,255,0.92)",
+            backdropFilter:"blur(44px) saturate(2.8) brightness(1.01)",WebkitBackdropFilter:"blur(44px) saturate(2.8) brightness(1.01)",
+            border: darkMode ? "1px solid rgba(255,255,255,0.09)" : "1px solid rgba(0,0,0,0.10)",
+            borderRadius:28,
+            display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",
+            boxShadow: darkMode
+              ? "0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.06) inset"
+              : "0 4px 24px rgba(0,0,0,0.10), 0 1px 0 rgba(255,255,255,1) inset"}}>
           {[
-            {id:"ops",      label:"Ops",      icon:"*"},
-            {id:"tickets",  label:"Pipeline", icon:">"},
-            {id:"cotizador",label:"Nuevo",    icon:"+"},
-            {id:"cartera",  label:"Cartera",  icon:"$"},
-            {id:"historial",label:"Historial",icon:"="},
-            {id:"__mas__",  label:"Más",      icon:"≡"},
+            {id:"ops",      label:"Centro",  icon:"⊙"},
+            {id:"tickets",  label:"Pipeline",icon:"◈"},
+            {id:"historial",label:"Historial",icon:"☰"},
+            {id:"__mas__",  label:"Más",     icon:"···"},
           ].map(t=>{
-            const badge=t.id==="cartera"&&vencidos>0?vencidos:t.id==="tickets"&&abiertas>0?abiertas:t.id==="ops"&&p1Active>0?p1Active:0;
-            const isMore=t.id==="__mas__";
-            const moreActive=["unidades","catalogo","proveedores","clientes","ajustes"].includes(tab);
-            const active=isMore?moreActive:tab===t.id;
+            const isMore = t.id==="__mas__";
+            const badge = t.id==="tickets"&&abiertas>0?abiertas : t.id==="ops"&&p1Active>0?p1Active : isMore&&vencidos>0?vencidos : 0;
+            const moreActive = ["unidades","catalogo","proveedores","clientes","ajustes","cartera","cotizador","refacciones"].includes(tab);
+            const active = isMore ? (moreActive||masOpen) : tab===t.id;
             return (
-              <button key={t.id} onClick={()=>isMore?setTab(moreActive?"ops":"unidades"):setTab(t.id)}
-                style={{padding:"10px 2px 12px",border:"none",cursor:"pointer",background:active?C.blueDim:"transparent",borderTop:`3px solid ${active?C.cyan:"transparent"}`,position:"relative",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-                <span style={{fontSize:16,fontWeight:800,color:active?C.cyan:C.t3,fontFamily:"'Courier New',monospace",lineHeight:1}}>{t.icon}</span>
-                <span style={{fontSize:9,color:active?C.cyan:C.t3,letterSpacing:"0.04em",fontWeight:active?700:400}}>{t.label}</span>
-                {badge>0&&<span style={{position:"absolute",top:6,right:"calc(50% - 16px)",width:14,height:14,borderRadius:"50%",background:t.id==="cartera"?C.red:t.id==="ops"?C.p1dot:C.yellow,fontSize:8,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",color:"#000"}}>{badge}</span>}
+              <button key={t.id}
+                onClick={()=>{ if(isMore){setMasOpen(v=>!v);}else{setTab(t.id);setMasOpen(false);} }}
+                style={{padding:"10px 4px",
+                  border:"none",cursor:"pointer",
+                  background:"transparent",
+                  borderTop:`2px solid ${active?(darkMode?C.blue:"#2A9768"):"transparent"}`,
+                  position:"relative",display:"flex",flexDirection:"column",alignItems:"center",gap:3,
+                  minHeight:52,touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
+                <span style={{fontSize:20,lineHeight:1,color:active?(darkMode?C.blue:"#2A9768"):C.t3,
+                  fontWeight:active?700:400}}>{t.icon}</span>
+                <span style={{fontSize:10,color:active?(darkMode?C.blue:"#2A9768"):C.t3,
+                  letterSpacing:"0.03em",fontWeight:active?600:400}}>{t.label}</span>
+                {badge>0&&<span style={{position:"absolute",top:8,right:"calc(50% - 18px)",
+                  minWidth:16,height:16,borderRadius:8,padding:"0 3px",
+                  background:t.id==="ops"?C.p1dot:isMore?C.p1dot:C.p2dot,
+                  fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",color:darkMode?"#0D0F12":"#fff"}}>{badge}</span>}
               </button>
             );
           })}
+          </div>
         </div>
       )}
 
-      {/* Submenú "Más" en móvil */}
-      {mobileView&&["unidades","catalogo","proveedores","clientes","ajustes"].includes(tab)&&(
-        <div style={{position:"fixed",bottom:64,left:0,right:0,zIndex:99,background:C.bg2,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-around",padding:"8px 0"}}>
-          {[
-            {id:"unidades",   label:"Flotilla",   icon:"🚛"},
-            {id:"catalogo",   label:"Catálogo",   icon:"📦"},
-            {id:"clientes",   label:"Clientes",   icon:"🏢"},
-            {id:"proveedores",label:"Proveedores",icon:"🔧"},
-            {id:"ajustes",    label:"Ajustes",    icon:"⚙"},
-          ].map(t=>(
-            <button key={t.id} onClick={()=>setTab(t.id)}
-              style={{padding:"6px 10px",border:"none",cursor:"pointer",background:tab===t.id?C.blueDim:"transparent",borderRadius:6,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-              <span style={{fontSize:18}}>{t.icon}</span>
-              <span style={{fontSize:9,color:tab===t.id?C.cyan:C.t3,fontWeight:tab===t.id?700:400}}>{t.label}</span>
-            </button>
-          ))}
-        </div>
+      {/* Theme toggle — mobile floating button */}
+      {mobileView&&(
+        <button onClick={()=>{ const v=!darkMode; setDarkMode(v); try{localStorage.setItem("logisolve_theme",v?"dark":"light");}catch{} }}
+          style={{position:"fixed",
+            left:20,bottom:`calc(76px + env(safe-area-inset-bottom,0px) + 10px)`,
+            zIndex:160,width:42,height:42,borderRadius:21,
+            background:C._dark?"rgba(255,255,255,0.10)":"rgba(255,255,255,0.90)",
+            border:C._dark?`1px solid ${C.border}`:"1px solid rgba(0,0,0,0.12)",
+            backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",
+            boxShadow:C._dark?"0 4px 16px rgba(0,0,0,0.4)":"0 4px 16px rgba(0,0,0,0.12), 0 1px 0 rgba(255,255,255,1) inset",
+            display:"flex",alignItems:"center",justifyContent:"center",
+            cursor:"pointer",fontSize:18,
+            touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
+          {darkMode?"☀":"🌙"}
+        </button>
       )}
+
+      {/* FAB — Nueva cotización */}
+      {mobileView&&tab!=="cotizador"&&(
+        <button className="fab-liquid"
+          onClick={()=>setTab("cotizador")}
+          style={{position:"fixed",
+            right:20,bottom:`calc(76px + env(safe-area-inset-bottom,0px) + 10px)`,
+            zIndex:160}}>
+          +
+        </button>
+      )}
+
+      {/* MasSheet — bottom sheet for "Más" modules */}
+      {mobileView&&<MasSheet open={masOpen} onClose={()=>setMasOpen(false)} tab={tab} setTab={t=>{setTab(t);setMasOpen(false);}}/>}
 
       {/* Content */}
-      <div style={{paddingBottom:mobileView?(["unidades","catalogo","proveedores","clientes","ajustes"].includes(tab)?130:80):0}}>
+      <div style={{paddingBottom:mobileView?"calc(90px + env(safe-area-inset-bottom,0px))":0,
+        WebkitOverflowScrolling:"touch"}}>
         {tab==="ops"        &&(mobileView?<MOps       state={state} setTab={setTab}/>                                    :<CentroOps   state={state}/>)}
-        {tab==="tickets"    &&(mobileView?<MPipeline  state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Tickets     state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
+        {tab==="tickets"    &&(mobileView?<MPipeline  state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Tickets     state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete}/>)}
         {tab==="historial"  &&(mobileView?<MHistorial state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>:<Historial   state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>)}
-        {tab==="cotizador"  &&(mobileView?<MCotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Cotizador   state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
+        {tab==="cotizador"  &&(mobileView?<MCotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Cotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
+        {tab==="refacciones"&&(mobileView?<MCotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>:<CotizadorRefacciones state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="cartera"    &&(mobileView?<MCartera   state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Cartera     state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
-        {tab==="unidades"   &&<Unidades    state={state} dispatch={dispatchWithDelete} toast={toast}/>}
-        {tab==="catalogo"   &&<Catalogo    state={state} dispatch={dispatchWithDelete} toast={toast}/>}
-        {tab==="proveedores"&&<Proveedores state={state} dispatch={dispatchWithDelete} toast={toast}/>}
-        {tab==="clientes"   &&<Clientes    state={state} dispatch={dispatchWithDelete} toast={toast}/>}
-        {tab==="ajustes"    &&<Ajustes     state={state} dispatch={dispatchWithDelete} toast={toast}/>}
+        {tab==="unidades"   &&(mobileView?<MUnidades   state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Unidades    state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
+        {tab==="catalogo"   &&(mobileView?<MCatalogo   state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Catalogo    state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
+        {tab==="proveedores"&&(mobileView?<MProveedores state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Proveedores state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
+        {tab==="clientes"   &&(mobileView?<MClientes   state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Clientes    state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
+        {tab==="ajustes"    &&(mobileView?<MAjustes state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Ajustes state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
+        {tab==="flota"      &&<FlotaModule darkMode={darkMode}/>}
       </div>
 
       <Toasts items={toasts}/>
 
       <style>{`
-        input[type=number]::-webkit-inner-spin-button{opacity:.2}
-        input::placeholder,textarea::placeholder{color:${C.t3}}
-        select option{background:${C.bg1};color:${C.t1}}
+        :root{color-scheme:${darkMode?"dark":"light"}}
+        html{background:${darkMode?"#0D0F12":"#E8E3DB"};transition:background 350ms ease}
+        html,body{overscroll-behavior:none;overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;touch-action:pan-y;}
+        body{background:${darkMode
+          ? "radial-gradient(ellipse 80% 60% at 50% -10%,rgba(143,227,190,0.07) 0%,transparent 60%),radial-gradient(ellipse 50% 40% at 85% 80%,rgba(143,227,190,0.04) 0%,transparent 50%),#0D0F12"
+          : "linear-gradient(180deg,#F7F6F3 0%,#ECE9E4 100%)"
+        };color:${C.t1};min-height:100vh;transition:background 350ms ease}
+        .scroll-touch{-webkit-overflow-scrolling:touch;overflow-y:auto}
+        input[type=number]::-webkit-inner-spin-button{opacity:.3}
+        input::placeholder,textarea::placeholder{color:${C.t4}}
+        select option{background:${C.bgSolid};color:${C.t1}}
         *{box-sizing:border-box}
-        button:active{opacity:.75}
+        button{transition:opacity 120ms ease,background 120ms ease,border-color 120ms ease;-webkit-tap-highlight-color:transparent}
+        button:active{opacity:.75;transform:scale(.97)}
         ::-webkit-scrollbar{width:4px;height:4px}
-        ::-webkit-scrollbar-track{background:${C.bg1}}
-        ::-webkit-scrollbar-thumb{background:${C.border};border-radius:2px}
+        ::-webkit-scrollbar-track{background:transparent}
+        ::-webkit-scrollbar-thumb{background:${darkMode?"rgba(255,255,255,0.10)":"rgba(0,0,0,0.12)"};border-radius:4px}
         textarea{color:${C.t2};resize:vertical;font-family:'Courier New',monospace}
+        input,select,textarea{transition:border-color 150ms ease}
+        @media(max-width:640px){
+          .ref-grid{grid-template-columns:1fr!important}
+          .ref-hdr-grid{grid-template-columns:1fr 1fr!important}
+          .ref-half-grid{grid-template-columns:1fr!important}
+          .ref-line-row1{grid-template-columns:1fr 1fr!important}
+          .ref-line-row2{grid-template-columns:80px 1fr!important}
+        }
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes slideUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
+        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+        .sheet-enter{animation:slideUp 280ms cubic-bezier(.22,.8,.22,1) both}
+        .fade-enter{animation:fadeIn 200ms ease both}
       `}</style>
     </div>
+    </ThemeCtx.Provider>
   );
 }
