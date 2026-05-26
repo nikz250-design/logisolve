@@ -5150,16 +5150,13 @@ function MOps({state,setTab}) {
         <div style={{display:"flex",gap:6,padding:"20px 0 20px",overflowX:"auto",
           scrollbarWidth:"none",msOverflowStyle:"none"}}>
           {[["today","Hoy"],["week","7d"],["month","30d"],["3m","3M"]].map(([v,l])=>(
-            <button key={v} onClick={()=>setPeriod(v)} style={{
-              flexShrink:0,padding:"7px 18px",borderRadius:20,fontSize:12,fontWeight:700,
-              background:period===v ? A.pillBg : "transparent",
-              border:`1.5px solid ${period===v ? A.pillBorder : A.pillBorderInactive}`,
-              color:period===v ? A.pillColor : A.t3,
-              boxShadow:period===v ? A.pillShadow : "none",
-              backdropFilter:period===v&&!C._dark?"blur(16px)":"none",
-              WebkitBackdropFilter:period===v&&!C._dark?"blur(16px)":"none",
-              cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.15s",
-            }}>
+            <button key={v} onClick={()=>setPeriod(v)}
+              className={period===v?"glass-pill-active":"glass-pill-inactive"}
+              style={{
+                flexShrink:0,padding:"7px 18px",borderRadius:20,fontSize:12,fontWeight:700,
+                color:period===v ? A.pillColor : A.t3,
+                cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.18s",
+              }}>
               {l}
             </button>
           ))}
@@ -5167,13 +5164,8 @@ function MOps({state,setTab}) {
 
         {/* ══ HERO CARD ══════════════════════════════════════ */}
         <div className="glass-card" style={{
-          background: A.card,
-          backdropFilter: A.blur, WebkitBackdropFilter: A.blur,
-          borderRadius: A.r,
           padding:"28px 24px",
           marginBottom:12,
-          boxShadow: A.shadow,
-          border:`1px solid ${C.border}`,
         }}>
           {/* Operational status line */}
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:22}}>
@@ -5242,24 +5234,18 @@ function MOps({state,setTab}) {
 
         {/* ══ QUICK ACTIONS ═════════════════════════════════════════════════════ */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-          <button onClick={()=>setTab("cotizador")} style={{
-            background:A.limeDim,
-            backdropFilter:A.blur,WebkitBackdropFilter:A.blur,
-            border:`1.5px solid ${C.blue}55`,borderRadius:18,padding:"18px 16px",
-            cursor:"pointer",textAlign:"left",WebkitTapHighlightColor:"transparent",touchAction:"manipulation",
-            boxShadow:`0 4px 24px ${A.limeDim}`,
+          <button onClick={()=>setTab("cotizador")} className="glass-button" style={{
+            borderRadius:18,padding:"18px 16px",
+            textAlign:"left",WebkitTapHighlightColor:"transparent",touchAction:"manipulation",
           }}>
             <div style={{fontSize:22,fontWeight:800,color:A.lime,lineHeight:1,marginBottom:6}}>+</div>
             <div style={{fontSize:13,fontWeight:700,color:A.lime,letterSpacing:"-0.01em",lineHeight:1.2}}>
               Nueva<br/>cotización
             </div>
           </button>
-          <button onClick={()=>setTab("tickets")} style={{
-            background:A.cardHi,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,
-            border:`1px solid ${C.border}`,
+          <button onClick={()=>setTab("tickets")} className="glass-button" style={{
             borderRadius:18,padding:"18px 16px",
             cursor:"pointer",textAlign:"left",
-            boxShadow:A.shadowSm,
             WebkitTapHighlightColor:"transparent",touchAction:"manipulation",
           }}>
             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
@@ -5321,8 +5307,7 @@ function MOps({state,setTab}) {
 
         {/* ══ SPARKLINE — 7-day util trend ══════════════════════════════════════ */}
         <div className="glass-card" style={{
-          background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,
-          padding:"22px 24px",marginBottom:12,boxShadow:A.shadowSm,
+          padding:"22px 24px",marginBottom:12,
         }}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
             <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase"}}>
@@ -5378,7 +5363,7 @@ function MOps({state,setTab}) {
           if(!cl) return null;
           const pct=totalFact>0?(top[1]/totalFact)*100:0;
           return (
-            <div className="glass-card" style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,padding:"22px 24px",marginBottom:12,boxShadow:A.shadowSm}}>
+            <div className="glass-card" style={{padding:"22px 24px",marginBottom:12}}>
               <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:18}}>
                 Cliente líder · {pLabel}
               </div>
@@ -5428,8 +5413,7 @@ function MOps({state,setTab}) {
 
         {/* ══ RESUMEN FINANCIERO — tabla completa ══════════════════════════════ */}
         <div className="glass-card" style={{
-          background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,
-          overflow:"hidden",marginBottom:12,boxShadow:A.shadow,
+          overflow:"hidden",marginBottom:12,
         }}>
           {/* Header */}
           <div style={{padding:"20px 22px 16px",borderBottom:`1px solid ${C.border}`}}>
@@ -5614,17 +5598,14 @@ function MPipeline({state,dispatch,toast}) {
         {/* Filter chips */}
         <div style={{display:"flex",gap:6,padding:"18px 0 16px",overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
           {[["active","Activos",counts.active],["p1","P1",counts.p1],["venc","Vencidos",counts.venc],["all","Todos",counts.all]].map(([v,l,c])=>(
-            <button key={v} onClick={()=>setFilter(v)} style={{
-              flexShrink:0,display:"flex",alignItems:"center",gap:6,
-              padding:"7px 16px",borderRadius:20,fontSize:11,fontWeight:700,
-              background:filter===v ? A.pillBg : "transparent",
-              border:`1.5px solid ${filter===v ? A.pillBorder : A.pillBorderInactive}`,
-              color:filter===v ? A.pillColor : A.t3,
-              boxShadow:filter===v ? A.pillShadow : "none",
-              backdropFilter:filter===v&&!C._dark?"blur(16px)":"none",
-              WebkitBackdropFilter:filter===v&&!C._dark?"blur(16px)":"none",
-              cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.15s",whiteSpace:"nowrap",
-            }}>
+            <button key={v} onClick={()=>setFilter(v)}
+              className={filter===v?"glass-pill-active":"glass-pill-inactive"}
+              style={{
+                flexShrink:0,display:"flex",alignItems:"center",gap:6,
+                padding:"7px 16px",borderRadius:20,fontSize:11,fontWeight:700,
+                color:filter===v ? A.pillColor : A.t3,
+                cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.18s",whiteSpace:"nowrap",
+              }}>
               {l}
               {c>0&&<span style={{fontSize:10,fontWeight:800,
                 background:filter===v?A.limeDim:C.bg3,
@@ -6120,7 +6101,7 @@ function MCotizador({state,dispatch,toast}) {
         })}
       </div>
 
-      <div className="glass-card" style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,padding:"20px 22px",marginBottom:24,boxShadow:A.shadow}}>
+      <div className="glass-card" style={{padding:"20px 22px",marginBottom:24}}>
         <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:10}}>Margen efectivo</div>
         <div style={{fontSize:46,fontWeight:800,color:A.lime,lineHeight:1,letterSpacing:"-0.02em",marginBottom:8}}>
           {fpct(sharedMargin)}
@@ -6150,8 +6131,7 @@ function MCotizador({state,dispatch,toast}) {
         const sn=lineSnaps[i];
         const isManual=l.mode==="manual";
         return (
-          <div key={i} style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,overflow:"hidden",
-            marginBottom:12,boxShadow:A.shadow}}>
+          <div key={i} className="glass-card" style={{overflow:"hidden",marginBottom:12}}>
             <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,
               display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div style={{fontSize:9,color:A.t3,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase"}}>
@@ -6254,7 +6234,7 @@ function MCotizador({state,dispatch,toast}) {
         Agregar línea
       </button>
 
-      <div className="glass-card" style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,padding:"20px 22px",marginBottom:16,boxShadow:A.shadow}}>
+      <div className="glass-card" style={{padding:"20px 22px",marginBottom:16}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
           <div>
             <div style={{fontSize:9,color:A.t3,letterSpacing:"0.14em",marginBottom:8,textTransform:"uppercase"}}>
@@ -6303,8 +6283,8 @@ function MCotizador({state,dispatch,toast}) {
     <div style={{minHeight:"100vh",background:"transparent",padding:"0 16px 32px"}}>
       <StepBar/>
 
-      <div className="glass-card" style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,overflow:"hidden",
-        marginBottom:14,boxShadow:A.shadow}}>
+      <div className="glass-card" style={{overflow:"hidden",
+        marginBottom:14}}>
         <div style={{padding:"18px 18px 6px"}}>
           <MField label="Fecha" value={fecha} onChange={setFecha} placeholder="DD/MM/AAAA"/>
           <ClientPicker   clients={clients}     value={clientId}    onChange={setClientId}   mobile/>
@@ -6329,7 +6309,7 @@ function MCotizador({state,dispatch,toast}) {
         </div>
       </div>
 
-      <div className="glass-card" style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,padding:"20px 22px",marginBottom:18,boxShadow:A.shadow}}>
+      <div className="glass-card" style={{padding:"20px 22px",marginBottom:18}}>
         <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:14}}>Resumen</div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:14}}>
           <div>
@@ -6436,7 +6416,7 @@ function MCartera({state,dispatch,toast}) {
 
       <div style={{padding:"0 16px"}}>
         {/* Hero card */}
-        <div className="glass-card" style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,padding:"26px 24px",marginTop:16,marginBottom:12,boxShadow:A.shadow}}>
+        <div className="glass-card" style={{padding:"26px 24px",marginTop:16,marginBottom:12}}>
           <div style={{fontSize:9,color:A.t3,letterSpacing:"0.18em",textTransform:"uppercase",marginBottom:10}}>
             Cuentas por cobrar
           </div>
@@ -6471,7 +6451,7 @@ function MCartera({state,dispatch,toast}) {
 
         {/* Aging breakdown */}
         {vencidas.length>0&&(
-          <div className="glass-card" style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,padding:"20px 22px",marginBottom:12,boxShadow:A.shadowSm}}>
+          <div className="glass-card" style={{padding:"20px 22px",marginBottom:12}}>
             <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:16}}>
               Antigüedad
             </div>
@@ -6569,7 +6549,7 @@ function MCartera({state,dispatch,toast}) {
                 const daysLeft=d?Math.ceil((d-now)/86400000):null;
                 const urgent=daysLeft!==null&&daysLeft<=3;
                 return (
-                  <div key={t.id} style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,overflow:"hidden",boxShadow:A.shadowSm}}>
+                  <div key={t.id} className="glass-card-sm" style={{overflow:"hidden"}}>
                     <div style={{padding:"16px 16px 14px"}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
                         <div style={{fontSize:12,fontWeight:600,color:A.t2}}>{cl?.empresa||"Sin cliente"}</div>
@@ -6620,9 +6600,8 @@ function MCartera({state,dispatch,toast}) {
               {cobradas.slice(0,5).map(t=>{
                 const cl=clients.find(c=>c.id===t.clientId);
                 return (
-                  <div key={t.id} style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:14,padding:"12px 16px",
-                    display:"flex",justifyContent:"space-between",alignItems:"center",
-                    boxShadow:A.shadowSm}}>
+                  <div key={t.id} className="glass-card-sm" style={{padding:"12px 16px",
+                    display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <div style={{minWidth:0,flex:1}}>
                       <div style={{fontSize:12,fontWeight:600,color:A.t2,overflow:"hidden",
                         textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
@@ -6742,16 +6721,13 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
         {/* Period + search */}
         <div style={{display:"flex",gap:6,padding:"18px 0 12px",overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
           {[["today","Hoy"],["week","7d"],["month","30d"],["3m","3M"],["all","Todo"]].map(([v,l])=>(
-            <button key={v} onClick={()=>setPeriod(v)} style={{
-              flexShrink:0,padding:"7px 16px",borderRadius:20,fontSize:11,fontWeight:700,
-              background:period===v ? A.pillBg : "transparent",
-              border:`1.5px solid ${period===v ? A.pillBorder : A.pillBorderInactive}`,
-              color:period===v ? A.pillColor : A.t3,
-              boxShadow:period===v ? A.pillShadow : "none",
-              backdropFilter:period===v&&!C._dark?"blur(16px)":"none",
-              WebkitBackdropFilter:period===v&&!C._dark?"blur(16px)":"none",
-              cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.15s",
-            }}>{l}</button>
+            <button key={v} onClick={()=>setPeriod(v)}
+              className={period===v?"glass-pill-active":"glass-pill-inactive"}
+              style={{
+                flexShrink:0,padding:"7px 16px",borderRadius:20,fontSize:11,fontWeight:700,
+                color:period===v ? A.pillColor : A.t3,
+                cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.18s",
+              }}>{l}</button>
           ))}
         </div>
 
@@ -6764,8 +6740,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
 
         {/* Period summary */}
         {filtered.length>0&&(
-          <div style={{background:A.card,backdropFilter:A.blur,WebkitBackdropFilter:A.blur,borderRadius:A.r,padding:"16px 20px",marginBottom:16,
-            boxShadow:A.shadowSm,display:"flex",gap:0}}>
+          <div className="glass-card" style={{padding:"16px 20px",marginBottom:16,display:"flex",gap:0}}>
             {[
               {label:"Facturado",value:mxn(periodFact),color:A.t1},
               {label:"Util. neta",value:mxn(periodNeta),color:A.lime,border:true},
@@ -7924,20 +7899,11 @@ function App() {
 
       {/* FAB — Nueva cotización */}
       {mobileView&&tab!=="cotizador"&&(
-        <button onClick={()=>setTab("cotizador")}
+        <button className="fab-liquid"
+          onClick={()=>setTab("cotizador")}
           style={{position:"fixed",
             right:20,bottom:`calc(76px + env(safe-area-inset-bottom,0px) + 10px)`,
-            zIndex:160,width:54,height:54,borderRadius:27,
-            background:C._dark?C.blue:"rgba(255,255,255,0.24)",
-            backdropFilter:C._dark?"none":"blur(44px) saturate(2.8) brightness(1.02)",
-            WebkitBackdropFilter:C._dark?"none":"blur(44px) saturate(2.8) brightness(1.02)",
-            border:C._dark?"1px solid rgba(255,255,255,0.25)":"1px solid rgba(255,255,255,0.78)",
-            boxShadow:C._dark
-              ?"0 6px 24px rgba(143,227,190,0.28), 0 2px 8px rgba(0,0,0,0.4)"
-              :"0 0 0 1px rgba(255,255,255,0.78), 0 8px 28px rgba(0,0,0,0.04), 0 2px 0 rgba(255,255,255,1) inset",
-            display:"flex",alignItems:"center",justifyContent:"center",
-            cursor:"pointer",fontSize:28,color:C._dark?"#0D0F12":"#161616",fontWeight:300,
-            touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
+            zIndex:160}}>
           +
         </button>
       )}

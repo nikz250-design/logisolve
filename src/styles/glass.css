@@ -1,66 +1,251 @@
-/**
- * Glass card layer system — Logisolve
- * Apple liquid glass / VisionOS aesthetic
- *
- * Usage: add className="glass-card" to any card div.
- * Backdrop-filter and border are still set inline (theme-aware),
- * but the pseudo-element reflections are universal.
- */
+/* ================================================================
+ * Glass Card System — Logisolve
+ * Apple VisionOS / Liquid Glass aesthetic
+ * ================================================================ */
 
+/* ── Base glass card ── */
 .glass-card {
   position: relative;
   overflow: hidden;
   isolation: isolate;
+  border-radius: 28px;
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.42) 0%,
+    rgba(255, 255, 255, 0.18) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  box-shadow:
+    0 8px 32px rgba(15, 23, 42, 0.06),
+    inset 0 1px 1px rgba(255, 255, 255, 0.35);
 }
 
-/* Top-edge specular reflection (bright white streak) */
+/* ── Top-edge specular reflection ── */
 .glass-card::before {
   content: "";
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 50%;
+  inset: 0;
+  border-radius: inherit;
   background: linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0.28) 0%,
-    rgba(255, 255, 255, 0) 100%
+    rgba(255, 255, 255, 0.32) 0%,
+    rgba(255, 255, 255, 0.02) 100%
   );
   pointer-events: none;
-  border-radius: inherit;
   z-index: 1;
 }
 
-/* Inner surface glow */
+/* ── Inner depth / corner glow ── */
 .glass-card::after {
   content: "";
   position: absolute;
   inset: 1px;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.18) 0%,
-    rgba(255, 255, 255, 0) 60%
-  );
-  opacity: 0.9;
-  pointer-events: none;
   border-radius: inherit;
+  background: radial-gradient(
+    circle at top left,
+    rgba(255, 255, 255, 0.18),
+    transparent 45%
+  );
+  pointer-events: none;
   z-index: 1;
 }
 
-/* Dark mode: tone down reflections */
+/* ── Dark mode overrides ── */
+[data-theme="dark"] .glass-card {
+  background: linear-gradient(
+    135deg,
+    rgba(18, 24, 34, 0.52) 0%,
+    rgba(10, 14, 20, 0.24) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 10px 40px rgba(0, 0, 0, 0.22),
+    inset 0 1px 1px rgba(255, 255, 255, 0.08);
+}
+
 [data-theme="dark"] .glass-card::before {
   background: linear-gradient(
     180deg,
     rgba(255, 255, 255, 0.06) 0%,
-    rgba(255, 255, 255, 0) 100%
+    rgba(255, 255, 255, 0.00) 100%
   );
 }
 
 [data-theme="dark"] .glass-card::after {
+  background: radial-gradient(
+    circle at top left,
+    rgba(255, 255, 255, 0.05),
+    transparent 45%
+  );
+}
+
+/* ================================================================
+ * Ticket list glass card (smaller radius)
+ * ================================================================ */
+.glass-card-sm {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: 18px;
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.38) 0%,
+    rgba(255, 255, 255, 0.14) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  box-shadow:
+    0 4px 18px rgba(15, 23, 42, 0.05),
+    inset 0 1px 1px rgba(255, 255, 255, 0.30);
+}
+
+.glass-card-sm::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(255, 255, 255, 0.00) 60%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+[data-theme="dark"] .glass-card-sm {
+  background: linear-gradient(
+    135deg,
+    rgba(22, 28, 40, 0.55) 0%,
+    rgba(12, 16, 24, 0.28) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow:
+    0 4px 18px rgba(0, 0, 0, 0.20),
+    inset 0 1px 1px rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .glass-card-sm::before {
   background: linear-gradient(
     180deg,
     rgba(255, 255, 255, 0.04) 0%,
-    rgba(255, 255, 255, 0) 60%
+    rgba(255, 255, 255, 0.00) 60%
   );
-  opacity: 0.8;
+}
+
+/* ================================================================
+ * Glass Button — liquid pill
+ * ================================================================ */
+
+.glass-button {
+  background: rgba(255, 255, 255, 0.34);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.25),
+    0 4px 18px rgba(15, 23, 42, 0.05);
+  border-radius: 999px;
+  transition: all 0.25s ease;
+  cursor: pointer;
+}
+
+.glass-button:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.48);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.30),
+    0 6px 24px rgba(15, 23, 42, 0.08);
+}
+
+[data-theme="dark"] .glass-button {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.05),
+    0 4px 18px rgba(0, 0, 0, 0.18);
+}
+
+[data-theme="dark"] .glass-button:hover {
+  background: rgba(255, 255, 255, 0.13);
+}
+
+/* ================================================================
+ * FAB — floating liquid sphere
+ * ================================================================ */
+
+.fab-liquid {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.58) 0%,
+    rgba(255, 255, 255, 0.30) 100%
+  );
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.68);
+  box-shadow:
+    0 10px 30px rgba(15, 23, 42, 0.10),
+    inset 0 1px 1px rgba(255, 255, 255, 0.50);
+  color: #161616;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  font-size: 28px;
+  font-weight: 300;
+}
+
+.fab-liquid:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 16px 40px rgba(15, 23, 42, 0.14),
+    inset 0 1px 1px rgba(255, 255, 255, 0.60);
+}
+
+[data-theme="dark"] .fab-liquid {
+  background: linear-gradient(
+    180deg,
+    rgba(143, 255, 209, 0.20) 0%,
+    rgba(143, 255, 209, 0.08) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 8px 28px rgba(143, 255, 209, 0.15),
+    inset 0 1px 1px rgba(255, 255, 255, 0.09);
+  color: #8FFFD1;
+}
+
+/* ================================================================
+ * Glass pills / tabs
+ * ================================================================ */
+
+.glass-pill-active {
+  background: rgba(255, 255, 255, 0.65) !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.72) !important;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06) !important;
+}
+
+.glass-pill-inactive {
+  background: rgba(255, 255, 255, 0.18) !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.28) !important;
+  box-shadow: none !important;
+}
+
+[data-theme="dark"] .glass-pill-active {
+  background: rgba(143, 255, 209, 0.15) !important;
+  border: 1.5px solid rgba(143, 255, 209, 0.30) !important;
+}
+
+[data-theme="dark"] .glass-pill-inactive {
+  background: transparent !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.18) !important;
 }
