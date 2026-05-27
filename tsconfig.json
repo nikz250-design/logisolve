@@ -1,28 +1,21 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "CommonJS",
-    "lib": ["ES2020"],
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
     "strict": false,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    "moduleResolution": "node",
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "baseUrl": "."
   },
   "include": [
-    "api/**/*",
-    "src/ai/services/**/*",
-    "src/ai/middleware/**/*",
-    "src/ai/prompts/**/*"
+    "api/**/*"
   ],
   "exclude": [
     "node_modules",
-    "dist",
-    "src/ai/context/**/*",
-    "src/ai/actions/**/*",
-    "src/ai/index.ts",
-    "src/components/**/*"
+    "dist"
   ]
 }
