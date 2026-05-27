@@ -8,6 +8,9 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import Anthropic from "@anthropic-ai/sdk";
 
+// claude-sonnet-4-6: listed in SDK @anthropic-ai/sdk@0.99.0 Model type
+const MODEL = "claude-sonnet-4-6";
+
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -31,7 +34,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ── Optional custom prompt from body (POST) ───────────────
   let prompt = "Di exactamente: 'Logisolve AI operativo ✓' y nada más.";
   if (req.method === "POST" && req.body?.prompt) {
-    // Sanitise: max 500 chars, strip any injection attempts
     prompt = String(req.body.prompt).slice(0, 500);
   }
 
@@ -39,13 +41,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const t0 = Date.now();
   try {
     const client = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY, // server-side only
+      apiKey: process.env.ANTHROPIC_API_KEY,
     });
 
     const message = await client.messages.create({
-      model: "claude-opus-4-7",
+      model: MODEL,
       max_tokens: 256,
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        {
+          role: "user",
+          content: [{ type: "text", text: prompt }],
+        },
+      ],
     });
 
     const text =
@@ -56,17 +63,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       response: text,
       model: message.model,
       usage: {
-        input_tokens: message.usage.input_tokens,
+        input_tokens:  message.usage.input_tokens,
         output_tokens: message.usage.output_tokens,
       },
       duration_ms: Date.now() - t0,
-      // ⚠️  API key is NEVER included here — only a masked hint
       key_hint: `sk-ant-...${process.env.ANTHROPIC_API_KEY.slice(-4)}`,
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    const status =
-      message.includes("401") || message.includes("auth") ? 401 : 500;
-    return res.status(status).json({ ok: false, error: message });
+    // Surface the full Anthropic error for diagnosis
+    const isAPIError = err instanceof Anthropic.APIError;
+    const errMsg   = err instanceof Error ? err.message : "Unknown error";
+    const httpStatus = isAPIError ? (err as InstanceType<typeof Anthropic.APIError>).status : 500;
+    return res.status(httpStatus ?? 500).json({
+      ok:     false,
+      error:  errMsg,
+      status: httpStatus,
+      type:   isAPIError ? (err as InstanceType<typeof Anthropic.APIError>).name : "Error",
+    });
   }
 }
