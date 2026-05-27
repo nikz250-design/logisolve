@@ -184,10 +184,10 @@ export class AnthropicService extends BaseAIProvider {
           break;
         }
 
-        // Retry on rate limit / overload with exponential back-off
+        // Retry on rate limit / overload (503) with exponential back-off
         if (
           err instanceof Anthropic.RateLimitError ||
-          err instanceof Anthropic.OverloadedError
+          (err instanceof Anthropic.InternalServerError && (err as InstanceType<typeof Anthropic.InternalServerError>).status === 529)
         ) {
           const delay = CONFIG.retryBaseMs * Math.pow(2, attempt);
           this.logger.log({

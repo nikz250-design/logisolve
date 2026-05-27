@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "lib": ["ES2020"],
+    "strict": false,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "baseUrl": "."
+  },
+  "include": [
+    "api/**/*",
+    "src/ai/services/**/*",
+    "src/ai/middleware/**/*",
+    "src/ai/prompts/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/ai/context/**/*",
+    "src/ai/actions/**/*",
+    "src/ai/index.ts",
+    "src/components/**/*"
+  ]
+}
