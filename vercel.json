@@ -1,19 +1,18 @@
 {
   "functions": {
-    "api/ai/*.ts": {
-      "runtime": "nodejs20.x",
-      "maxDuration": 30
-    }
+    "api/ai/analyze.ts": { "maxDuration": 30 },
+    "api/ai/stream.ts":  { "maxDuration": 30 },
+    "api/ai/test.ts":    { "maxDuration": 30 }
   },
   "rewrites": [
-    { "source": "/api/ai/(.*)", "destination": "/api/ai/$1" }
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
-      "source": "/api/ai/(.*)",
+      "source": "/api/(.*)",
       "headers": [
         { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options", "value": "DENY" }
+        { "key": "X-Frame-Options",        "value": "DENY"    }
       ]
     }
   ]
