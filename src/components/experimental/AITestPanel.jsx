@@ -23,9 +23,6 @@ export default function AITestPanel() {
   const [status, setStatus]     = useState("idle"); // idle | loading | ok | error
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Gate: never render if experimental flag is off
-  if (import.meta.env.VITE_ENABLE_AI_EXPERIMENTAL !== "true") return null;
-
   async function runTest(e) {
     e.preventDefault();
     setStatus("loading");
