@@ -1,5 +1,10 @@
-import React, { useState, useReducer, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useReducer, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from "react";
 import FlotaModule from "./modules/flota/index.jsx";
+
+// ── Experimental AI Test Panel (feature-gated, lazy-loaded) ─
+const AITestPanel = import.meta.env.VITE_ENABLE_AI_EXPERIMENTAL === "true"
+  ? lazy(() => import("./components/experimental/AITestPanel.jsx"))
+  : null;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // L1 — DESIGN TOKENS
@@ -7966,6 +7971,13 @@ function App() {
         .sheet-enter{animation:slideUp 280ms cubic-bezier(.22,.8,.22,1) both}
         .fade-enter{animation:fadeIn 200ms ease both}
       `}</style>
+
+      {/* ── AI Test Panel: solo visible si VITE_ENABLE_AI_EXPERIMENTAL=true ── */}
+      {AITestPanel && (
+        <Suspense fallback={null}>
+          <AITestPanel />
+        </Suspense>
+      )}
     </div>
     </ThemeCtx.Provider>
   );
