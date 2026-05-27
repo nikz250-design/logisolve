@@ -4,7 +4,8 @@
   "functions": {
     "api/ai/analyze.ts": { "maxDuration": 30 },
     "api/ai/stream.ts":  { "maxDuration": 30 },
-    "api/ai/test.ts":    { "maxDuration": 30 }
+    "api/ai/test.ts":    { "maxDuration": 30 },
+    "api/ai/debug.ts":   { "maxDuration": 30 }
   },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
