@@ -40,7 +40,8 @@ export default function AITestPanel() {
 
       if (!res.ok || !data.ok) {
         setStatus("error");
-        setErrorMsg(data.error ?? `HTTP ${res.status}`);
+        // Show full debug JSON so we can see the exact Anthropic error
+        setErrorMsg(JSON.stringify(data, null, 2));
       } else {
         setStatus("ok");
         setResult(data);
@@ -58,7 +59,7 @@ export default function AITestPanel() {
     try {
       const res  = await fetch(API_URL);
       const data = await res.json();
-      if (!res.ok || !data.ok) { setStatus("error"); setErrorMsg(data.error ?? `HTTP ${res.status}`); }
+      if (!res.ok || !data.ok) { setStatus("error"); setErrorMsg(JSON.stringify(data, null, 2)); }
       else { setStatus("ok"); setResult(data); }
     } catch (err) { setStatus("error"); setErrorMsg(err.message); }
   }

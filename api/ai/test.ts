@@ -1,13 +1,13 @@
 // ============================================================
-// Logisolve AI — /api/ai/test  (debug + working)
-// Loggea request exacto enviado a Anthropic + respuesta completa.
+// Logisolve AI — /api/ai/test
+// Usa https nativo de Node.js — sin SDK, sin fetch, cero deps extra.
+// Loggea todo: request, response, error exacto de Anthropic.
 // ============================================================
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import Anthropic from "@anthropic-ai/sdk";
+import https from "https";
 
-const MODEL   = "claude-haiku-4-5-20251001"; // dated model — confirmed in SDK types
-const API_URL = "https://api.anthropic.com/v1/messages";
+const MODEL   = "claude-haiku-4-5-20251001";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -15,101 +15,107 @@ const CORS = {
   "Access-Control-Allow-Headers": "Content-Type",
 } as const;
 
+// Raw HTTPS call to Anthropic — no SDK, no fetch polyfill issues
+function callAnthropic(apiKey: string, payload: object): Promise<{ status: number; body: unknown; rawBody: string }> {
+  return new Promise((resolve, reject) => {
+    const bodyStr = JSON.stringify(payload);
+    const options = {
+      hostname: "api.anthropic.com",
+      path:     "/v1/messages",
+      method:   "POST",
+      headers: {
+        "Content-Type":      "application/json",
+        "Content-Length":    Buffer.byteLength(bodyStr),
+        "x-api-key":         apiKey.trim(),
+        "anthropic-version": "2023-06-01",
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      let data = "";
+      res.on("data", chunk => { data += chunk; });
+      res.on("end", () => {
+        let parsed: unknown;
+        try { parsed = JSON.parse(data); } catch { parsed = data; }
+        resolve({ status: res.statusCode ?? 0, body: parsed, rawBody: data });
+      });
+    });
+
+    req.on("error", reject);
+    req.setTimeout(28_000, () => { req.destroy(new Error("Request timeout")); });
+    req.write(bodyStr);
+    req.end();
+  });
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
   if (req.method === "OPTIONS") return res.status(200).end();
 
-  const apiKey = process.env.ANTHROPIC_API_KEY ?? "";
+  const apiKey = (process.env.ANTHROPIC_API_KEY ?? "").trim();
   if (!apiKey) {
     return res.status(503).json({ ok: false, error: "ANTHROPIC_API_KEY missing" });
   }
 
-  const rawBodyPrompt =
+  const prompt: string =
     req.method === "POST" && typeof req.body?.prompt === "string"
       ? req.body.prompt.slice(0, 500)
-      : null;
+      : "Di exactamente: 'Logisolve AI operativo ✓' y nada más.";
 
-  const prompt = rawBodyPrompt ?? "Di exactamente: 'Logisolve AI operativo ✓' y nada más.";
-
-  // ── Captured request/response for debugging ─────────────────
-  let capturedReqBody  = "";
-  let capturedReqHdrs: Record<string, string> = {};
-  let capturedResStatus = 0;
-  let capturedResBody   = "";
-
-  const interceptedFetch: typeof fetch = async (input, init) => {
-    // Capture outbound request
-    capturedReqBody  = String(init?.body ?? "");
-    const h = init?.headers;
-    capturedReqHdrs  =
-      h instanceof Headers
-        ? Object.fromEntries(h.entries())
-        : (h as Record<string, string>) ?? {};
-
-    // Make real call
-    const r = await fetch(input, init);
-
-    // Clone and capture response
-    capturedResStatus = r.status;
-    const clone = r.clone();
-    capturedResBody   = await clone.text();
-    return r;
+  const payload = {
+    model:      MODEL,
+    max_tokens: 256,
+    messages:   [{ role: "user", content: prompt }],
   };
 
   const t0 = Date.now();
 
   try {
-    const client = new Anthropic({ apiKey, fetch: interceptedFetch });
+    const { status, body, rawBody } = await callAnthropic(apiKey, payload);
 
-    const message = await client.messages.create({
-      model: MODEL,
-      max_tokens: 256,
-      messages: [{ role: "user", content: prompt }],
-    });
+    if (status !== 200) {
+      // Return FULL Anthropic error so we can see exactly what failed
+      return res.status(status).json({
+        ok:    false,
+        error: (body as { error?: { message?: string } })?.error?.message ?? rawBody,
+        debug: {
+          anthropic_status:   status,
+          anthropic_response: body,
+          model:              MODEL,
+          payload,
+          key_hint:           `sk-ant-...${apiKey.slice(-4)}`,
+          key_length:         apiKey.length,
+          key_starts_with:    apiKey.slice(0, 12),
+        },
+      });
+    }
 
-    const text =
-      message.content[0]?.type === "text" ? message.content[0].text : "";
+    const b = body as {
+      content: Array<{ type: string; text?: string }>;
+      model: string;
+      usage: { input_tokens: number; output_tokens: number };
+    };
+    const text = b.content?.find(c => c.type === "text")?.text ?? "";
 
     return res.status(200).json({
-      ok: true,
-      response: text,
-      model: message.model,
-      usage: message.usage,
+      ok:          true,
+      response:    text,
+      model:       b.model,
+      usage:       b.usage,
       duration_ms: Date.now() - t0,
-      key_hint: `sk-ant-...${apiKey.slice(-4)}`,
-      debug: {
-        endpoint:     API_URL,
-        model_used:   MODEL,
-        req_body:     JSON.parse(capturedReqBody),
-        req_headers:  { ...capturedReqHdrs, "x-api-key": "[REDACTED]" },
-        res_status:   capturedResStatus,
-      },
+      key_hint:    `sk-ant-...${apiKey.slice(-4)}`,
     });
 
   } catch (err: unknown) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    const stack  = err instanceof Error ? err.stack  : undefined;
-    const isAPI  = err instanceof Anthropic.APIError;
-
-    return res.status(isAPI ? ((err as InstanceType<typeof Anthropic.APIError>).status ?? 500) : 500).json({
-      ok: false,
-      error: errMsg,
+    return res.status(500).json({
+      ok:    false,
+      error: err instanceof Error ? err.message : String(err),
       debug: {
-        endpoint:     API_URL,
-        model_used:   MODEL,
-        req_body:     capturedReqBody ? JSON.parse(capturedReqBody) : null,
-        req_headers:  { ...capturedReqHdrs, "x-api-key": "[REDACTED]" },
-        res_status:   capturedResStatus,
-        res_body:     (() => { try { return JSON.parse(capturedResBody); } catch { return capturedResBody; } })(),
-        stack,
-        anthropic_api_error: isAPI ? {
-          status:  (err as InstanceType<typeof Anthropic.APIError>).status,
-          name:    (err as InstanceType<typeof Anthropic.APIError>).name,
-          message: errMsg,
-        } : null,
-        received_prompt: prompt,
-        req_method:      req.method,
-        req_body_raw:    req.body,
+        model:       MODEL,
+        payload,
+        key_hint:    `sk-ant-...${apiKey.slice(-4)}`,
+        key_length:  apiKey.length,
+        key_starts:  apiKey.slice(0, 12),
       },
     });
   }
