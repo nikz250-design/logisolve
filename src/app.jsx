@@ -4,6 +4,9 @@ import FlotaModule from "./modules/flota/index.jsx";
 // ── AI Test Panel — siempre activo en esta rama (feature/ai-layer preview) ─
 import AITestPanel from "./components/experimental/AITestPanel.jsx";
 
+// ── AI Modules Hub — 10 módulos IA integrados (feature/ai-layer) ────────────
+import AIModulesHub from "./components/ai/AIModulesHub.jsx";
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // L1 — DESIGN TOKENS
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -7972,6 +7975,9 @@ function App() {
 
       {/* ── AI Test Panel — siempre activo en feature/ai-layer preview ── */}
       <AITestPanel />
+
+      {/* ── AI Modules Hub — 10 módulos IA contextuales (feature/ai-layer) ── */}
+      <AIModulesHub state={state} tab={tab} C={C} />
     </div>
     </ThemeCtx.Provider>
   );
