@@ -7477,6 +7477,7 @@ function MasSheet({open,onClose,tab,setTab}) {
   const C = React.useContext(ThemeCtx);
   if(!open) return null;
   const items=[
+    {id:"sourcing",    label:"Sourcing",   icon:"⚡", desc:"AI Copilot"},
     {id:"cotizador",  label:"Cotizador",  icon:"🧾", desc:"Nueva cotización"},
     {id:"cartera",    label:"Cartera",    icon:"💳", desc:"Por cobrar"},
     {id:"flota",      label:"Flota",      icon:"🚛", desc:"Control flota"},
@@ -7865,7 +7866,7 @@ function App() {
           ].map(t=>{
             const isMore = t.id==="__mas__";
             const badge = t.id==="tickets"&&abiertas>0?abiertas : t.id==="ops"&&p1Active>0?p1Active : isMore&&vencidos>0?vencidos : 0;
-            const moreActive = ["unidades","catalogo","proveedores","clientes","ajustes","cartera","cotizador","refacciones"].includes(tab);
+            const moreActive = ["unidades","catalogo","proveedores","clientes","ajustes","cartera","cotizador","refacciones","sourcing"].includes(tab);
             const active = isMore ? (moreActive||masOpen) : tab===t.id;
             return (
               <button key={t.id}
