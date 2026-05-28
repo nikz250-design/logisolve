@@ -96,12 +96,23 @@ function Bubble({ msg, onCreateTicket, C, accent }) {
             : (C._dark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)"),
           border: `1px solid ${isUser ? accent + "30" : C._dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)"}`,
         }}>
+          {msg.searching && (
+            <div style={{
+              fontSize: 10, color: accent, marginBottom: 6,
+              display: "flex", alignItems: "center", gap: 5, opacity: 0.8,
+            }}>
+              <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span>
+              {msg.searching}
+            </div>
+          )}
           <div style={{
             fontSize: 13, color: C.t1, lineHeight: 1.55,
             whiteSpace: "pre-wrap", wordBreak: "break-word",
           }}>
-            {msg.content}
-            {msg.streaming && (
+            {msg.content || (msg.streaming && !msg.searching ? (
+              <span style={{ color: C.t3, fontSize: 12 }}>Pensando…</span>
+            ) : null)}
+            {msg.streaming && msg.content && (
               <span style={{ display: "inline-block", width: 6, height: 12, marginLeft: 2,
                 background: accent, borderRadius: 1, animation: "pulse 0.8s ease infinite", verticalAlign: "text-bottom" }}/>
             )}
@@ -143,33 +154,13 @@ export default function MChat({ state, dispatch, C, toast }) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const buildContext = (currentMsg = "") => {
-    // Scan the full conversation + current message for unit references
-    const allText = (messages.map(m => m.content).join(" ") + " " + currentMsg).toLowerCase();
-
-    // Match by economico number or by marca/modelo keywords
-    const mentioned = units.filter(u => {
-      const eco = String(u.economico ?? "");
-      if (eco && allText.includes(eco)) return true;
-      const marca  = (u.marca  ?? "").toLowerCase();
-      const modelo = (u.modelo ?? "").toLowerCase();
-      // Only match meaningful tokens (>3 chars) to avoid false positives
-      return [marca, ...modelo.split(/[\s-]+/)].some(w => w.length > 3 && allText.includes(w));
-    });
-
-    // Mentioned units first, then fill up to 20 with others
-    const prioritized = [
-      ...mentioned,
-      ...units.filter(u => !mentioned.find(m => m.id === u.id)),
-    ].slice(0, 20);
-
-    return {
-      units:     prioritized.map(u => ({ id:u.id, marca:u.marca, modelo:u.modelo, anio:u.anio, km:u.km, economico:u.economico, placa:u.placa })),
-      parts:     parts.slice(0, 15).map(p => ({ nombre:p.nombre, oem:p.oem, aftermarket:p.aftermarket, ultimoPrecio:p.ultimoPrecio })),
-      suppliers: suppliers.slice(0, 6).map(s => ({ nombre:s.nombre, especialidad:s.especialidad, contacto:s.contacto })),
-      tickets:   tickets.slice(0, 5).map(t => ({ titulo:t.titulo, status:t.status, snap: t.snap ? { precioConIVA:t.snap.precioConIVA } : null })),
-    };
-  };
+  const buildFullContext = () => ({
+    units:     units.map(u => ({ id:u.id, eco:u.economico, marca:u.marca, modelo:u.modelo, anio:u.anio, placa:u.placa, km:u.km, statusOp:u.statusOp })),
+    parts:     parts.map(p => ({ nombre:p.nombre, oem:p.oem, aftermarket:p.aftermarket, ultimoPrecio:p.ultimoPrecio, notas:p.notas })),
+    suppliers: suppliers.map(s => ({ nombre:s.nombre, especialidad:s.especialidad, contacto:s.contacto })),
+    tickets:   tickets.map(t => ({ titulo:t.titulo, status:t.status, date:t.date, notes:t.notes, unitId:t.unitId, snap: t.snap ? { precioConIVA:t.snap.precioConIVA } : null })),
+    clients:   clients.map(c => ({ id:c.id, empresa:c.empresa })),
+  });
 
   const send = useCallback(async (text) => {
     const userMsg = text.trim();
@@ -188,13 +179,13 @@ export default function MChat({ state, dispatch, C, toast }) {
     setLoading(true);
 
     const history = [...messages, userEntry].map(m => ({ role: m.role, content: m.content }));
-    const context = buildContext(userMsg);
+    const fullContext = buildFullContext();
 
     try {
       const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history, context }),
+        body: JSON.stringify({ messages: history, fullContext }),
         signal: ctrl.signal,
       });
 
@@ -228,11 +219,15 @@ export default function MChat({ state, dispatch, C, toast }) {
 
           if (evt.type === "text") {
             setMessages(prev => prev.map(m =>
-              m.id === aiId ? { ...m, content: m.content + evt.delta } : m
+              m.id === aiId ? { ...m, content: m.content + evt.delta, searching: null } : m
+            ));
+          } else if (evt.type === "searching") {
+            setMessages(prev => prev.map(m =>
+              m.id === aiId ? { ...m, searching: evt.text } : m
             ));
           } else if (evt.type === "quote") {
             setMessages(prev => prev.map(m =>
-              m.id === aiId ? { ...m, quote: evt.data } : m
+              m.id === aiId ? { ...m, quote: evt.data, searching: null } : m
             ));
           } else if (evt.type === "done" || evt.type === "error") {
             setMessages(prev => prev.map(m =>
@@ -255,7 +250,7 @@ export default function MChat({ state, dispatch, C, toast }) {
       setLoading(false);
       abortRef.current = null;
     }
-  }, [messages, loading, units, parts, suppliers, tickets]);
+  }, [messages, loading, units, parts, suppliers, tickets, clients]);
 
   const createTicket = useCallback((quoteData) => {
     const now    = new Date();
