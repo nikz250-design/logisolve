@@ -781,12 +781,24 @@ export default function SourcingCopilot({ state, dispatch, C, toast }) {
     };
 
     try {
-      const res  = await fetch("/api/ai/sourcing", {
+      const res = await fetch("/api/ai/sourcing", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ needText: needText.trim(), context }),
         signal:  ctrl.signal,
       });
+
+      // Guard against HTML 404 pages from the Vite dev server (no API proxy)
+      const ct = res.headers.get("content-type") ?? "";
+      if (!ct.includes("json")) {
+        const msg = res.status === 404
+          ? "Ruta /api/ai/sourcing no encontrada. En dev ejecuta `vercel dev` en lugar de `vite`."
+          : `El servidor devolvió ${res.status} (${ct || "sin content-type"}) — se esperaba JSON.`;
+        setError(msg);
+        setStatus("error");
+        return;
+      }
+
       const data = await res.json();
       if (ctrl.signal.aborted) return;
 

@@ -12,11 +12,15 @@ const CLOSED = new Set(["cerrado", "cancelado", "cobrado"]);
 
 // ─── Calls the modules endpoint ──────────────────────────────
 async function callModule(moduleId, context) {
-  const res  = await fetch("/api/ai/modules", {
+  const res = await fetch("/api/ai/modules", {
     method:  "POST",
     headers: { "Content-Type": "application/json" },
     body:    JSON.stringify({ module: moduleId, context }),
   });
+  const ct = res.headers.get("content-type") ?? "";
+  if (!ct.includes("json")) {
+    return { ok: false, error: `API no disponible (${res.status})` };
+  }
   return res.json();
 }
 
