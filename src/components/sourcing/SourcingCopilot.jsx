@@ -1,6 +1,6 @@
 // SourcingCopilot — AI comprador técnico, layout limpio single-column.
 
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 
 // ─── Formatters ───────────────────────────────────────────────
 
@@ -8,6 +8,135 @@ const MXN = n => n == null ? "—" :
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(n);
 
 const urgencyColor = { critica: "#FF4444", alta: "#FF8800", media: "#FFA500", baja: null };
+
+// ─── Unit searcher ────────────────────────────────────────────
+
+function UnitSearcher({ units, value, onChange, C, accent, inputBg }) {
+  const [query,  setQuery]  = useState("");
+  const [open,   setOpen]   = useState(false);
+  const wrapRef             = useRef(null);
+
+  const selected = units.find(u => u.id === value) ?? null;
+
+  const label = u =>
+    [u.economico ? `Eco.${u.economico}` : null, u.marca, u.modelo, u.anio]
+      .filter(Boolean).join(" ");
+
+  const matches = query.trim()
+    ? units.filter(u => {
+        const q = query.toLowerCase();
+        return (
+          (u.economico ?? "").toLowerCase().includes(q) ||
+          (u.marca     ?? "").toLowerCase().includes(q) ||
+          (u.modelo    ?? "").toLowerCase().includes(q) ||
+          (u.placa     ?? "").toLowerCase().includes(q) ||
+          String(u.anio ?? "").includes(q)
+        );
+      }).slice(0, 8)
+    : units.slice(0, 8);
+
+  useEffect(() => {
+    const handler = e => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const select = u => {
+    onChange(u ? u.id : "");
+    setQuery("");
+    setOpen(false);
+  };
+
+  return (
+    <div ref={wrapRef} style={{ position: "relative" }}>
+      <div style={{ fontSize: 8, color: C.t3, marginBottom: 3, letterSpacing: 0.4 }}>UNIDAD</div>
+      <div
+        style={{
+          display: "flex", alignItems: "center", gap: 4,
+          background: inputBg, border: `1px solid ${open ? accent + "55" : C.border}`,
+          borderRadius: 6, padding: "4px 7px", cursor: "text",
+          transition: "border-color 0.15s",
+        }}
+        onClick={() => { setOpen(true); }}
+      >
+        {selected && !open ? (
+          <>
+            <span style={{ flex: 1, fontSize: 10, color: C.t1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {label(selected)}
+            </span>
+            <button
+              onClick={e => { e.stopPropagation(); select(null); }}
+              style={{ background: "none", border: "none", color: C.t3, fontSize: 11, cursor: "pointer", padding: "0 2px", lineHeight: 1 }}
+            >×</button>
+          </>
+        ) : (
+          <input
+            autoFocus={open}
+            value={query}
+            onChange={e => { setQuery(e.target.value); setOpen(true); }}
+            onFocus={() => setOpen(true)}
+            placeholder={selected ? label(selected) : "Buscar eco, marca, modelo…"}
+            style={{
+              flex: 1, background: "none", border: "none", outline: "none",
+              fontSize: 10, color: C.t1, fontFamily: "inherit",
+              padding: 0, minWidth: 0,
+            }}
+          />
+        )}
+      </div>
+
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 3px)", left: 0, right: 0, zIndex: 300,
+          background: C._dark ? "rgba(14,16,20,0.97)" : "#fff",
+          border: `1px solid ${accent}30`, borderRadius: 8,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.35)",
+          overflow: "hidden",
+        }}>
+          {/* Auto-detect option */}
+          <div
+            onClick={() => select(null)}
+            style={{
+              padding: "8px 10px", fontSize: 10, cursor: "pointer",
+              color: !value ? accent : C.t3,
+              background: !value ? accent + "12" : "transparent",
+              borderBottom: `1px solid ${C.border}`,
+            }}
+          >
+            Auto-detectar
+          </div>
+          {matches.length === 0 ? (
+            <div style={{ padding: "8px 10px", fontSize: 10, color: C.t3 }}>Sin resultados</div>
+          ) : (
+            matches.map(u => (
+              <div
+                key={u.id}
+                onClick={() => select(u)}
+                style={{
+                  padding: "8px 10px", cursor: "pointer",
+                  background: u.id === value ? accent + "14" : "transparent",
+                  borderBottom: `1px solid ${C.border}44`,
+                }}
+              >
+                <div style={{ fontSize: 10, fontWeight: 600, color: u.id === value ? accent : C.t1 }}>
+                  {u.economico ? <span style={{ color: accent, marginRight: 5 }}>Eco.{u.economico}</span> : null}
+                  {u.marca} {u.modelo} {u.anio ?? ""}
+                </div>
+                {(u.placa || u.km) && (
+                  <div style={{ fontSize: 8, color: C.t3, marginTop: 1 }}>
+                    {u.placa ? `Placa ${u.placa}` : ""}{u.placa && u.km ? " · " : ""}{u.km ? `${Number(u.km).toLocaleString()} km` : ""}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Micro components ─────────────────────────────────────────
 
@@ -564,21 +693,23 @@ export default function SourcingCopilot({ state, dispatch, C, toast }) {
 
         {/* Selectors */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
-          {[
-            ["UNIDAD", selectedUnit,   v => setSelectedUnit(v),   [{ id: "", label: "Auto-detectar" }, ...units.map(u => ({ id: u.id, label: `${u.marca} ${u.modelo} ${u.anio ?? ""}`.trim() }))]],
-            ["CLIENTE", selectedClient, v => setSelectedClient(v), [{ id: "", label: "Todos" }, ...clients.map(c => ({ id: c.id, label: c.empresa }))]],
-          ].map(([lbl, val, set, opts]) => (
-            <div key={lbl}>
-              <div style={{ fontSize: 8, color: C.t3, marginBottom: 3, letterSpacing: 0.4 }}>{lbl}</div>
-              <select value={val} onChange={e => set(e.target.value)} style={{
-                width: "100%", fontSize: 10, padding: "5px 8px", borderRadius: 6,
-                background: inputBg, border: `1px solid ${C.border}`,
-                color: C.t1, outline: "none",
-              }}>
-                {opts.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-              </select>
-            </div>
-          ))}
+          <UnitSearcher
+            units={units}
+            value={selectedUnit}
+            onChange={setSelectedUnit}
+            C={C} accent={accent} inputBg={inputBg}
+          />
+          <div>
+            <div style={{ fontSize: 8, color: C.t3, marginBottom: 3, letterSpacing: 0.4 }}>CLIENTE</div>
+            <select value={selectedClient} onChange={e => setSelectedClient(e.target.value)} style={{
+              width: "100%", fontSize: 10, padding: "5px 8px", borderRadius: 6,
+              background: inputBg, border: `1px solid ${C.border}`,
+              color: C.t1, outline: "none",
+            }}>
+              <option value="">Todos</option>
+              {clients.map(c => <option key={c.id} value={c.id}>{c.empresa}</option>)}
+            </select>
+          </div>
         </div>
 
         {/* Context chips + action */}
