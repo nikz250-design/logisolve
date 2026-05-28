@@ -134,11 +134,21 @@ REGLAS DE TRANSPARENCIA:
 - Prioriza operatividad sobre ahorro`;
 
 function buildPrompt(needText: string, ctx: any): string {
-  const units     = (ctx?.units         ?? []).slice(0, 8);
-  const parts     = (ctx?.parts         ?? []).slice(0, 10);
-  const suppliers = (ctx?.suppliers     ?? []).slice(0, 6);
-  const tickets   = (ctx?.recentTickets ?? []).slice(0, 5);
-  const client    = ctx?.client ?? null;
+  const units          = (ctx?.units         ?? []).slice(0, 8);
+  const parts          = (ctx?.parts         ?? []).slice(0, 10);
+  const suppliers      = (ctx?.suppliers     ?? []).slice(0, 6);
+  const tickets        = (ctx?.recentTickets ?? []).slice(0, 5);
+  const client         = ctx?.client ?? null;
+  const selectedUnitId = ctx?.selectedUnitId ?? null;
+
+  const selectedUnit = selectedUnitId
+    ? units.find((u: any) => u.id === selectedUnitId) ?? null
+    : null;
+
+  const selectedUnitLine = selectedUnit
+    ? `\n⚠ UNIDAD ESPECÍFICA (seleccionada por el operador — usa esta, confirmed:true):
+[${selectedUnit.id}] ${selectedUnit.marca} ${selectedUnit.modelo} ${selectedUnit.anio ?? ""} km:${selectedUnit.km ?? "?"} status:${selectedUnit.statusOp ?? "?"}\n`
+    : "";
 
   const unitLines = units.map((u: any) =>
     `• [${u.id}] ${u.marca} ${u.modelo} ${u.anio ?? ""} km:${u.km ?? "?"} status:${u.statusOp ?? "?"}`
@@ -161,7 +171,7 @@ function buildPrompt(needText: string, ctx: any): string {
     : "No especificado";
 
   return `NECESIDAD OPERATIVA: "${needText}"
-
+${selectedUnitLine}
 FLOTA ACTIVA:
 ${unitLines}
 

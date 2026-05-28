@@ -1,14 +1,11 @@
 // useStateEvents — watches app state for operational transitions and
-// fires AI calls automatically. No user interaction required.
+// fires AI calls on demand or for real-time events.
 //
-// Detected events:
-//   "ticket_delivered"  → WhatsApp message for client
-//   "ticket_saved"      → Margin suggestion on new ticket
+// Manual:   triggerMargin(ticket) — call from UI button
+// Auto:     ticket → "entregado" → WhatsApp draft for client
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import { resolveTicket } from "./resolvers.js";
-
-const CLOSED = new Set(["cerrado", "cancelado", "cobrado"]);
 
 // ─── Calls the modules endpoint ──────────────────────────────
 async function callModule(moduleId, context) {
@@ -24,12 +21,19 @@ async function callModule(moduleId, context) {
   return res.json();
 }
 
+function parseResult(data, fallback) {
+  if (!data.ok) return { ok: false, result: null, error: data.error };
+  const parsed = typeof data.result === "string"
+    ? (() => { try { return JSON.parse(data.result.replace(/```json\n?|\n?```/g, "")); } catch { return fallback(data.result); } })()
+    : data.result;
+  return { ok: true, result: parsed };
+}
+
 // ─── Hook ─────────────────────────────────────────────────────
 export function useStateEvents(state) {
   // Each insight: { id, type, ticket, status, result, error }
   const [insights, setInsights] = useState([]);
-  const prevStatusRef = useRef({});   // ticketId → status
-  const prevCountRef  = useRef(0);    // total tickets count
+  const prevStatusRef = useRef(null); // null = not yet initialized
 
   const dismiss = useCallback((id) => {
     setInsights(prev => prev.filter(i => i.id !== id));
@@ -50,36 +54,36 @@ export function useStateEvents(state) {
     ));
   }, []);
 
+  // ── Manual trigger: margin suggestion ────────────────────────
+  const triggerMargin = useCallback((ticket) => {
+    if (!ticket || !ticket.snap?.costoTotal) return;
+    const id  = `margin-${ticket.id}-${Date.now()}`;
+    const ctx = resolveTicket(state, ticket.id);
+
+    pushLoading(id, "margin", ticket);
+
+    callModule("recomendacion-margen", ctx)
+      .then(data => {
+        const { ok, result, error } = parseResult(data, raw => ({ raw }));
+        pushResult(id, ok ? result : null, ok ? null : error);
+      })
+      .catch(e => pushResult(id, null, e.message));
+  }, [state, pushLoading, pushResult]);
+
+  // ── Auto: detect ticket → "entregado" (WhatsApp draft) ───────
   useEffect(() => {
-    const tickets  = state.tickets ?? [];
-    const prevMap  = prevStatusRef.current;
-    const prevCount = prevCountRef.current;
+    const tickets = state.tickets ?? [];
 
-    // ── Detect new ticket saved ────────────────────────────────
-    if (tickets.length > prevCount) {
-      const newest = tickets[0]; // TKT_ADD prepends
-      if (newest && newest.snap?.costoTotal > 0) {
-        const id  = `margin-${newest.id}`;
-        const ctx = resolveTicket(state, newest.id);
-
-        pushLoading(id, "margin", newest);
-
-        callModule("recomendacion-margen", ctx)
-          .then(data => {
-            if (data.ok) {
-              const parsed = typeof data.result === "string"
-                ? (() => { try { return JSON.parse(data.result.replace(/```json\n?|\n?```/g, "")); } catch { return { raw: data.result }; } })()
-                : data.result;
-              pushResult(id, parsed, null);
-            } else {
-              pushResult(id, null, data.error);
-            }
-          })
-          .catch(e => pushResult(id, null, e.message));
-      }
+    // Initialize on first run — skip triggers, just record state
+    if (prevStatusRef.current === null) {
+      const map = {};
+      tickets.forEach(t => { map[t.id] = t.status; });
+      prevStatusRef.current = map;
+      return;
     }
 
-    // ── Detect ticket → "entregado" ───────────────────────────
+    const prevMap = prevStatusRef.current;
+
     tickets.forEach(ticket => {
       const prev = prevMap[ticket.id];
       if (prev && prev !== "entregado" && ticket.status === "entregado") {
@@ -90,14 +94,8 @@ export function useStateEvents(state) {
 
         callModule("whatsapp-cliente", ctx)
           .then(data => {
-            if (data.ok) {
-              const parsed = typeof data.result === "string"
-                ? (() => { try { return JSON.parse(data.result.replace(/```json\n?|\n?```/g, "")); } catch { return { mensaje: data.result }; } })()
-                : data.result;
-              pushResult(id, parsed, null);
-            } else {
-              pushResult(id, null, data.error);
-            }
+            const { ok, result, error } = parseResult(data, raw => ({ mensaje: raw }));
+            pushResult(id, ok ? result : null, ok ? null : error);
           })
           .catch(e => pushResult(id, null, e.message));
       }
@@ -107,9 +105,8 @@ export function useStateEvents(state) {
     const newMap = {};
     tickets.forEach(t => { newMap[t.id] = t.status; });
     prevStatusRef.current = newMap;
-    prevCountRef.current  = tickets.length;
 
   }, [state.tickets]); // eslint-disable-line
 
-  return { insights, dismiss };
+  return { insights, dismiss, triggerMargin };
 }

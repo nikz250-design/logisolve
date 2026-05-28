@@ -4972,7 +4972,7 @@ function MSel({label,value,onChange,options}) {
 }
 
 // ── MOps — Dashboard móvil ───────────────────────────────────────────────────
-function MOps({state,setTab}) {
+function MOps({state,setTab,triggerMargin}) {
   const C = React.useContext(ThemeCtx);
   const {tickets,clients} = state;
   const [period,setPeriod] = useState("week");
@@ -5153,9 +5153,9 @@ function MOps({state,setTab}) {
       )}
 
       <div style={{padding:"0 16px"}}>
-        {/* ── Period tabs ── */}
+        {/* ── Period tabs + IA button ── */}
         <div style={{display:"flex",gap:6,padding:"20px 0 20px",overflowX:"auto",
-          scrollbarWidth:"none",msOverflowStyle:"none"}}>
+          scrollbarWidth:"none",msOverflowStyle:"none",alignItems:"center"}}>
           {[["today","Hoy"],["week","7d"],["month","30d"],["3m","3M"]].map(([v,l])=>(
             <button key={v} onClick={()=>setPeriod(v)}
               className={period===v?"glass-pill-active":"glass-pill-inactive"}
@@ -5167,6 +5167,22 @@ function MOps({state,setTab}) {
               {l}
             </button>
           ))}
+          {triggerMargin&&(
+            <button
+              onClick={()=>{
+                const t=[...tickets].filter(t=>safeNumber(t.snap?.costoTotal)>0)
+                  .sort((a,b)=>b.date.localeCompare(a.date))[0];
+                if(t) triggerMargin(t);
+              }}
+              style={{
+                flexShrink:0,marginLeft:"auto",padding:"7px 13px",borderRadius:20,
+                background:"rgba(143,227,190,0.10)",border:"1px solid rgba(143,227,190,0.28)",
+                color:"#8FE3BE",fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:"0.04em",
+                display:"flex",alignItems:"center",gap:5,
+              }}>
+              ⚡ IA
+            </button>
+          )}
         </div>
 
         {/* ══ HERO CARD ══════════════════════════════════════ */}
@@ -7795,7 +7811,7 @@ export default function AppRoot(){
 function App() {
   const [state,dispatch]=useReducer(reducer,initialState);
   const {toasts,push:toast}=useToasts();
-  const { insights, dismiss: dismissInsight } = useStateEvents(state);
+  const { insights, dismiss: dismissInsight, triggerMargin } = useStateEvents(state);
   const [tab,setTab]=useState("ops");
   const [search,setSearch]=useState(false);
   const [loading,setLoading]=useState(true);
@@ -8136,7 +8152,7 @@ function App() {
       {/* Content */}
       <div style={{paddingBottom:mobileView?"calc(90px + env(safe-area-inset-bottom,0px))":0,
         WebkitOverflowScrolling:"touch"}}>
-        {tab==="ops"        &&(mobileView?<MOps       state={state} setTab={setTab}/>                                    :<CentroOps   state={state}/>)}
+        {tab==="ops"        &&(mobileView?<MOps       state={state} setTab={setTab} triggerMargin={triggerMargin}/>      :<CentroOps   state={state}/>)}
         {tab==="tickets"    &&(mobileView?<MPipeline  state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Tickets     state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete}/>)}
         {tab==="historial"  &&(mobileView?<MHistorial state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>:<Historial   state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>)}
         {tab==="cotizador"  &&(mobileView?<MCotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Cotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>)}

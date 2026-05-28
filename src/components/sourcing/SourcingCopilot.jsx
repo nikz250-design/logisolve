@@ -524,6 +524,7 @@ export default function SourcingCopilot({ state, dispatch, C, toast }) {
       .slice(0, 5);
 
     const context = {
+      selectedUnitId: selectedUnit || undefined,
       units: units.slice(0, 8).map(u => ({
         id: u.id, marca: u.marca, modelo: u.modelo, anio: u.anio,
         km: u.km, statusOp: u.statusOp, notas: u.notas,
