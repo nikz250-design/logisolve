@@ -6863,15 +6863,25 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
   const sfn = k => v => setEf(p=>({...p,[k]:v}));
 
   const openEdit = t => {
+    const s = t.snap || {};
     setEf({status:t.status,clientId:t.clientId||"",supplierId:t.supplierId||"",
            unitId:t.unitId||"",payType:t.payType||"contado",promesaPago:t.promesaPago||"",
-           notes:t.notes||""});
+           notes:t.notes||"",priority:t.priority||"P3",
+           costoIVA:String(safeNumber(s.costoTotal+(s.ivaAcred||0))||0),
+           precioIVA:String(safeNumber(s.precioConIVA)||0),
+           _iva:safeNumber(s.params?.iva,16), _isr:safeNumber(s.params?.isr,20)});
     setEditId(t.id);
     setExpandId(null);
   };
 
   const saveEdit = t => {
-    dispatch({type:"TKT_UPDATE",id:t.id,patch:{...ef}});
+    const newSnap = computeSnap({
+      costo:safeNumber(ef.costoIVA), compraConIVA:true,
+      manualPrice:safeNumber(ef.precioIVA), ventaConIVA:true, mode:"manual",
+      gasolina:0, otros:0, iva:ef._iva||16, isr:ef._isr||20,
+    });
+    const {costoIVA:_c,precioIVA:_p,_iva,_isr,...rest}=ef;
+    dispatch({type:"TKT_UPDATE",id:t.id,patch:{...rest,snap:newSnap}});
     toast("Actualizado","success");
     setEditId(null);
   };
@@ -7095,6 +7105,47 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                             <MField label="Promesa de pago" value={ef.promesaPago}
                               onChange={sfn("promesaPago")} placeholder="DD/MM/AAAA" color={A.amber}/>
                           )}
+                          {/* ── Costo / Precio ── */}
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+                            <div>
+                              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>Costo c/IVA ($)</div>
+                              <input type="number" inputMode="decimal" value={ef.costoIVA||""} onChange={e=>sfn("costoIVA")(e.target.value)}
+                                placeholder="0"
+                                style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.03)",
+                                  border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",
+                                  color:A.t1,fontSize:14,outline:"none",fontFamily:"inherit"}}/>
+                            </div>
+                            <div>
+                              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>Precio c/IVA ($)</div>
+                              <input type="number" inputMode="decimal" value={ef.precioIVA||""} onChange={e=>sfn("precioIVA")(e.target.value)}
+                                placeholder="0"
+                                style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.03)",
+                                  border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",
+                                  color:A.t1,fontSize:14,outline:"none",fontFamily:"inherit"}}/>
+                            </div>
+                          </div>
+                          {/* Live margin preview */}
+                          {(safeNumber(ef.costoIVA)>0||safeNumber(ef.precioIVA)>0)&&(()=>{
+                            const prev=computeSnap({costo:safeNumber(ef.costoIVA),compraConIVA:true,
+                              manualPrice:safeNumber(ef.precioIVA),ventaConIVA:true,mode:"manual",
+                              gasolina:0,otros:0,iva:ef._iva||16,isr:ef._isr||20});
+                            return (
+                              <div style={{display:"flex",gap:10,marginBottom:12,
+                                background:"rgba(255,255,255,0.03)",borderRadius:10,
+                                padding:"8px 12px",border:`1px solid ${C.border}`}}>
+                                {[
+                                  {l:"Util.",v:mxn(prev.uNeta),c:prev.uNeta>=0?A.lime:A.red},
+                                  {l:"Margen",v:fpct(prev.margenNetoPrecio),c:prev.margenNetoPrecio>=15?A.lime:A.amber},
+                                  {l:"Costo",v:mxn(prev.costoBase),c:A.t2},
+                                ].map(({l,v,c})=>(
+                                  <div key={l} style={{flex:1}}>
+                                    <div style={{fontSize:8,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:2}}>{l}</div>
+                                    <div style={{fontSize:12,fontWeight:700,color:c,fontVariantNumeric:"tabular-nums"}}>{v}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
                           <div style={{fontSize:9,color:A.t3,marginBottom:6,letterSpacing:"0.12em",textTransform:"uppercase"}}>
                             Notas
                           </div>
