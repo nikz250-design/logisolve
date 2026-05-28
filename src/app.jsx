@@ -7,6 +7,7 @@ import SourcingCopilot from "./components/sourcing/SourcingCopilot.jsx";
 // ── AutoInsight — insights IA automáticos sin interacción del usuario ────────
 import AutoInsight           from "./components/ai/AutoInsight.jsx";
 import { useStateEvents }    from "./ai/engine/useStateEvents.js";
+import MChat                 from "./components/ai/MChat.jsx";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // L1 — DESIGN TOKENS
@@ -7703,6 +7704,7 @@ function MasSheet({open,onClose,tab,setTab}) {
   const C = React.useContext(ThemeCtx);
   if(!open) return null;
   const items=[
+    {id:"chat",        label:"Chat IA",     icon:"💬", desc:"Asistente IA"},
     {id:"sourcing",    label:"Sourcing",   icon:"⚡", desc:"AI Copilot"},
     {id:"cotizador",  label:"Cotizador",  icon:"🧾", desc:"Nueva cotización"},
     {id:"cartera",    label:"Cartera",    icon:"💳", desc:"Por cobrar"},
@@ -7756,6 +7758,7 @@ const TABS = [
   {id:"historial",    label:"Historial"},
   {id:"cotizador",    label:"Cotizador"},
   {id:"refacciones",  label:"Refacciones"},
+  {id:"chat",         label:"💬 Chat IA"},
   {id:"sourcing",     label:"⚡ Sourcing"},
   {id:"flota",        label:"Flota"},
   {id:"unidades",     label:"Unidades"},
@@ -8092,7 +8095,7 @@ function App() {
           ].map(t=>{
             const isMore = t.id==="__mas__";
             const badge = t.id==="tickets"&&abiertas>0?abiertas : t.id==="ops"&&p1Active>0?p1Active : isMore&&vencidos>0?vencidos : 0;
-            const moreActive = ["unidades","catalogo","proveedores","clientes","ajustes","cartera","cotizador","refacciones","sourcing"].includes(tab);
+            const moreActive = ["unidades","catalogo","proveedores","clientes","ajustes","cartera","cotizador","refacciones","sourcing","chat"].includes(tab);
             const active = isMore ? (moreActive||masOpen) : tab===t.id;
             return (
               <button key={t.id}
@@ -8163,6 +8166,7 @@ function App() {
         {tab==="proveedores"&&(mobileView?<MProveedores state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Proveedores state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="clientes"   &&(mobileView?<MClientes   state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Clientes    state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="ajustes"    &&(mobileView?<MAjustes state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Ajustes state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
+        {tab==="chat"       &&<MChat state={state} dispatch={dispatchWithDelete} C={C} toast={toast}/>}
         {tab==="sourcing"   &&<SourcingCopilot state={state} dispatch={dispatchWithDelete} C={C} toast={toast}/>}
         {tab==="flota"      &&<FlotaModule darkMode={darkMode}/>}
       </div>
