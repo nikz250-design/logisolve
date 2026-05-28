@@ -5551,12 +5551,160 @@ function StatusFlowSheet({tkt, dispatch, toast, onClose}) {
   );
 }
 
+// ── MEditSheet — bottom sheet para editar ticket en mobile ────────────────────
+function MEditSheet({ticket, state, dispatch, toast, onClose}) {
+  const C = React.useContext(ThemeCtx);
+  const A = makeA(C);
+
+  const snap0 = ticket.snap || {};
+  const [titulo,    setTitulo]    = useState(ticket.titulo || "");
+  const [costoIVA,  setCostoIVA]  = useState(String(safeNumber(snap0.costoTotal + (snap0.ivaAcred||0)) || 0));
+  const [precioIVA, setPrecioIVA] = useState(String(safeNumber(snap0.precioConIVA) || 0));
+  const [notes,     setNotes]     = useState(ticket.notes || "");
+  const [priority,  setPriority]  = useState(ticket.priority || "P3");
+
+  const iva = safeNumber(snap0.params?.iva, 16);
+  const isr = safeNumber(snap0.params?.isr, 20);
+
+  const preview = useMemo(()=>{
+    const costo = safeNumber(costoIVA);
+    const precio = safeNumber(precioIVA);
+    if (!costo && !precio) return null;
+    return computeSnap({
+      costo, compraConIVA: true,
+      manualPrice: precio, ventaConIVA: true, mode: "manual",
+      gasolina: 0, otros: 0, iva, isr,
+    });
+  }, [costoIVA, precioIVA, iva, isr]);
+
+  const handleSave = () => {
+    const newSnap = computeSnap({
+      costo: safeNumber(costoIVA), compraConIVA: true,
+      manualPrice: safeNumber(precioIVA), ventaConIVA: true, mode: "manual",
+      gasolina: 0, otros: 0, iva, isr,
+    });
+    dispatch({type:"TKT_UPDATE", id: ticket.id, patch:{
+      titulo: titulo.trim() || ticket.titulo,
+      notes, priority, snap: newSnap,
+    }});
+    toast("Ticket actualizado","success");
+    onClose();
+  };
+
+  const inputStyle = {
+    width:"100%", boxSizing:"border-box",
+    background:C.bg2, border:`1px solid ${C.border}`,
+    borderRadius:12, padding:"12px 14px",
+    color:C.t1, fontSize:14, outline:"none",
+    fontFamily:"inherit",
+  };
+  const labelStyle = {fontSize:9, color:A.t3, letterSpacing:"0.13em", textTransform:"uppercase", marginBottom:5, display:"block"};
+
+  return (
+    <>
+      <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,0.55)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)"}}/>
+      <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:201,
+        background:"rgba(14,16,20,0.97)",backdropFilter:"blur(32px) saturate(1.8)",WebkitBackdropFilter:"blur(32px) saturate(1.8)",
+        borderRadius:"28px 28px 0 0",borderTop:`1px solid rgba(255,255,255,0.10)`,
+        padding:`16px 16px calc(20px + env(safe-area-inset-bottom,0px))`,
+        boxShadow:"0 -12px 60px rgba(0,0,0,0.7)",
+        maxHeight:"90vh",overflowY:"auto"}}>
+        {/* Handle */}
+        <div style={{display:"flex",justifyContent:"center",marginBottom:16}}>
+          <div style={{width:40,height:4,borderRadius:2,background:C.border}}/>
+        </div>
+        <div style={{fontSize:11,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:14}}>Editar ticket</div>
+
+        {/* Título */}
+        <div style={{marginBottom:14}}>
+          <label style={labelStyle}>Título</label>
+          <input value={titulo} onChange={e=>setTitulo(e.target.value)} style={inputStyle} placeholder="Descripción del trabajo"/>
+        </div>
+
+        {/* Costo / Precio */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+          <div>
+            <label style={labelStyle}>Costo c/IVA ($)</label>
+            <input type="number" inputMode="decimal" value={costoIVA} onChange={e=>setCostoIVA(e.target.value)} style={inputStyle} placeholder="0"/>
+          </div>
+          <div>
+            <label style={labelStyle}>Precio c/IVA ($)</label>
+            <input type="number" inputMode="decimal" value={precioIVA} onChange={e=>setPrecioIVA(e.target.value)} style={inputStyle} placeholder="0"/>
+          </div>
+        </div>
+
+        {/* Live preview */}
+        {preview&&(
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:14,
+            background:C.bg2,borderRadius:12,padding:"10px 14px",border:`1px solid ${C.border}`}}>
+            {[
+              {l:"Util. neta",  v:mxn(preview.uNeta),              c:preview.uNeta>=0?A.lime:A.red},
+              {l:"Margen",      v:fpct(preview.margenNetoPrecio),   c:preview.margenNetoPrecio>=15?A.lime:A.amber},
+              {l:"Costo base",  v:mxn(preview.costoBase),          c:A.t2},
+            ].map(({l,v,c})=>(
+              <div key={l}>
+                <div style={{fontSize:8,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:3}}>{l}</div>
+                <div style={{fontSize:13,fontWeight:700,color:c,fontVariantNumeric:"tabular-nums"}}>{v}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Notas */}
+        <div style={{marginBottom:14}}>
+          <label style={labelStyle}>Notas</label>
+          <textarea value={notes} onChange={e=>setNotes(e.target.value)}
+            rows={2} style={{...inputStyle, resize:"none"}} placeholder="Observaciones internas"/>
+        </div>
+
+        {/* Prioridad */}
+        <div style={{marginBottom:18}}>
+          <label style={labelStyle}>Prioridad</label>
+          <div style={{display:"flex",gap:6}}>
+            {["P1","P2","P3","P4"].map(p=>{
+              const active = priority===p;
+              const colors = {P1:C.p1,P2:C.p2,P3:C.p3,P4:C.p4};
+              const col = colors[p]||C.border;
+              return (
+                <button key={p} onClick={()=>setPriority(p)}
+                  style={{flex:1,padding:"9px 0",borderRadius:10,
+                    background:active?`${col}22`:"transparent",
+                    border:`1px solid ${active?col:C.border}`,
+                    color:active?col:A.t3,fontSize:12,fontWeight:700,cursor:"pointer"}}>
+                  {p}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={onClose}
+            style={{flex:1,padding:"13px",borderRadius:14,background:"transparent",
+              border:`1px solid ${C.border}`,color:A.t2,fontSize:13,cursor:"pointer",fontWeight:600}}>
+            Cancelar
+          </button>
+          <button onClick={handleSave}
+            style={{flex:2,padding:"13px",borderRadius:14,
+              background:"linear-gradient(135deg,rgba(60,207,170,0.25),rgba(60,207,170,0.12))",
+              border:"1px solid rgba(60,207,170,0.4)",color:A.mint,
+              fontSize:13,fontWeight:700,cursor:"pointer",letterSpacing:"0.04em"}}>
+            Guardar cambios
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── MPipeline — Pipeline móvil ───────────────────────────────────────────────
 function MPipeline({state,dispatch,toast}) {
   const C = React.useContext(ThemeCtx);
   const {tickets,clients,units} = state;
   const [filter,setFilter]       = useState("active");
   const [statusSheet,setStatusSheet] = useState(null);
+  const [editSheet,setEditSheet]  = useState(null);
   const [expandId,setExpandId]   = useState(null);
 
   // Accent palette — glassmorphism
@@ -5600,6 +5748,7 @@ function MPipeline({state,dispatch,toast}) {
   return (
     <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
       {statusSheet&&<StatusFlowSheet tkt={statusSheet} dispatch={dispatch} toast={toast} onClose={()=>setStatusSheet(null)}/>}
+      {editSheet&&<MEditSheet ticket={editSheet} state={state} dispatch={dispatch} toast={toast} onClose={()=>setEditSheet(null)}/>}
 
       <div style={{padding:"0 14px"}}>
         {/* Filter chips */}
@@ -5724,15 +5873,25 @@ function MPipeline({state,dispatch,toast}) {
                       borderRadius:10,marginBottom:12,border:`1px solid ${C.border}`}}>{t.notes}</div>}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <div style={{fontSize:8,color:A.t3,letterSpacing:"0.08em",textTransform:"uppercase"}}>{t.id}</div>
-                      <button onClick={e=>{e.stopPropagation();
-                        const c2=clients.find(c=>c.id===t.clientId);
-                        const u2=units.find(u=>u.id===t.unitId);
-                        generarCotizacionPDF(t,c2,u2,null).catch(()=>toast("Error PDF","error"));}}
-                        style={{padding:"7px 14px",borderRadius:10,background:"transparent",
-                          border:`1px solid ${C.border}`,color:A.t2,fontSize:10,
-                          fontWeight:600,cursor:"pointer",letterSpacing:"0.06em"}}>
-                        PDF ↗
-                      </button>
+                      <div style={{display:"flex",gap:7}}>
+                        <button onClick={e=>{e.stopPropagation();setEditSheet(t);}}
+                          style={{padding:"7px 14px",borderRadius:10,
+                            background:"rgba(60,207,170,0.10)",
+                            border:"1px solid rgba(60,207,170,0.3)",
+                            color:A.mint,fontSize:10,fontWeight:700,
+                            cursor:"pointer",letterSpacing:"0.06em"}}>
+                          Editar ✎
+                        </button>
+                        <button onClick={e=>{e.stopPropagation();
+                          const c2=clients.find(c=>c.id===t.clientId);
+                          const u2=units.find(u=>u.id===t.unitId);
+                          generarCotizacionPDF(t,c2,u2,null).catch(()=>toast("Error PDF","error"));}}
+                          style={{padding:"7px 14px",borderRadius:10,background:"transparent",
+                            border:`1px solid ${C.border}`,color:A.t2,fontSize:10,
+                            fontWeight:600,cursor:"pointer",letterSpacing:"0.06em"}}>
+                          PDF ↗
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
