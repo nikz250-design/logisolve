@@ -1,9 +1,6 @@
 import React, { useState, useReducer, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from "react";
 import FlotaModule from "./modules/flota/index.jsx";
 
-// ── AI Test Panel — siempre activo en esta rama (feature/ai-layer preview) ─
-import AITestPanel from "./components/experimental/AITestPanel.jsx";
-
 // ── Sourcing Copilot — AI contextual para sourcing de refacciones ────────────
 import SourcingCopilot from "./components/sourcing/SourcingCopilot.jsx";
 
@@ -7532,6 +7529,7 @@ const TABS = [
   {id:"historial",    label:"Historial"},
   {id:"cotizador",    label:"Cotizador"},
   {id:"refacciones",  label:"Refacciones"},
+  {id:"sourcing",     label:"⚡ Sourcing"},
   {id:"flota",        label:"Flota"},
   {id:"unidades",     label:"Unidades"},
   {id:"catalogo",     label:"Catalogo"},
@@ -7938,6 +7936,7 @@ function App() {
         {tab==="proveedores"&&(mobileView?<MProveedores state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Proveedores state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="clientes"   &&(mobileView?<MClientes   state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Clientes    state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="ajustes"    &&(mobileView?<MAjustes state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Ajustes state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
+        {tab==="sourcing"   &&<SourcingCopilot state={state} dispatch={dispatchWithDelete} C={C} toast={toast}/>}
         {tab==="flota"      &&<FlotaModule darkMode={darkMode}/>}
       </div>
 
@@ -7978,14 +7977,9 @@ function App() {
         .fade-enter{animation:fadeIn 200ms ease both}
       `}</style>
 
-      {/* ── AI Test Panel — siempre activo en feature/ai-layer preview ── */}
-      <AITestPanel />
-
       {/* ── AutoInsight — insights IA automáticos (WhatsApp, margen) ─────────────── */}
       <AutoInsight insights={insights} onDismiss={dismissInsight} C={C} />
 
-      {/* ── Sourcing Copilot — AI para sourcing de refacciones (feature/ai-layer) ── */}
-      <SourcingCopilot state={state} dispatch={dispatch} C={C} toast={toast} />
     </div>
     </ThemeCtx.Provider>
   );

@@ -409,7 +409,6 @@ function CreateTicketButton({ analysisResult, selectedUnit, selectedClient, disp
 // ─── Main component ───────────────────────────────────────────
 
 export default function SourcingCopilot({ state, dispatch, C, toast }) {
-  const [open,           setOpen]           = useState(false);
   const [needText,       setNeedText]       = useState("");
   const [selectedUnit,   setSelectedUnit]   = useState("");
   const [selectedClient, setSelectedClient] = useState("");
@@ -499,63 +498,23 @@ export default function SourcingCopilot({ state, dispatch, C, toast }) {
     setNeedText("");
   };
 
-  // ── FAB (closed state) ──────────────────────────────────────
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        style={{
-          position: "fixed", bottom: 280, right: 16, zIndex: 9100,
-          background: C._dark ? "rgba(8,24,16,0.95)" : "rgba(228,248,236,0.97)",
-          border: `1px solid ${accent}55`,
-          borderRadius: 22, padding: "8px 14px",
-          color: accent, fontSize: 11, fontWeight: 700, cursor: "pointer",
-          boxShadow: `0 4px 20px ${accent}20, 0 1px 4px rgba(0,0,0,0.25)`,
-          backdropFilter: "blur(12px)",
-          display: "flex", alignItems: "center", gap: 6,
-        }}
-      >
-        <span style={{ fontSize: 14 }}>⚡</span>
-        <span>Sourcing Copilot</span>
-      </button>
-    );
-  }
-
-  // ── Full panel ──────────────────────────────────────────────
+  // ── Page layout (lives in a tab, not a floating overlay) ────
   return (
     <div style={{
-      position: "fixed", top: 0, right: 0, bottom: 0, zIndex: 9100,
-      width: "min(380px, 100vw)",
-      background: C._dark ? "rgba(6,14,8,0.98)" : "rgba(246,254,249,0.99)",
-      borderLeft: `1px solid ${accent}28`,
+      maxWidth: 560, margin: "0 auto",
+      padding: "16px 14px",
       display: "flex", flexDirection: "column",
-      boxShadow: "-8px 0 40px rgba(0,0,0,0.35)",
-      backdropFilter: "blur(20px)",
+      minHeight: "calc(100vh - 120px)",
     }}>
 
       {/* ── Header ────────────────────────────────────────────── */}
-      <div style={{
-        padding: "12px 14px",
-        borderBottom: `1px solid ${accent}18`,
-        background: accent + "0a",
-        flexShrink: 0,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-              <span style={{ fontSize: 16 }}>⚡</span>
-              <span style={{ fontSize: 13, fontWeight: 800, color: accent }}>Sourcing Copilot</span>
-            </div>
-            <div style={{ fontSize: 9, color: C.t3, marginTop: 2, paddingLeft: 23 }}>
-              Comprador técnico senior · Refacciones flotilla México
-            </div>
-          </div>
-          <button
-            onClick={() => setOpen(false)}
-            style={{ background: "none", border: "none", color: C.t3, cursor: "pointer", fontSize: 18, lineHeight: 1 }}
-          >
-            ×
-          </button>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+          <span style={{ fontSize: 18 }}>⚡</span>
+          <span style={{ fontSize: 15, fontWeight: 800, color: accent }}>Sourcing Copilot</span>
+        </div>
+        <div style={{ fontSize: 10, color: C.t3, paddingLeft: 26 }}>
+          Comprador técnico senior · Refacciones flotilla México
         </div>
       </div>
 
