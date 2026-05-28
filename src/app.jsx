@@ -7,6 +7,10 @@ import AITestPanel from "./components/experimental/AITestPanel.jsx";
 // ── Sourcing Copilot — AI contextual para sourcing de refacciones ────────────
 import SourcingCopilot from "./components/sourcing/SourcingCopilot.jsx";
 
+// ── AutoInsight — insights IA automáticos sin interacción del usuario ────────
+import AutoInsight           from "./components/ai/AutoInsight.jsx";
+import { useStateEvents }    from "./ai/engine/useStateEvents.js";
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // L1 — DESIGN TOKENS
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -7582,6 +7586,7 @@ export default function AppRoot(){
 function App() {
   const [state,dispatch]=useReducer(reducer,initialState);
   const {toasts,push:toast}=useToasts();
+  const { insights, dismiss: dismissInsight } = useStateEvents(state);
   const [tab,setTab]=useState("ops");
   const [search,setSearch]=useState(false);
   const [loading,setLoading]=useState(true);
@@ -7975,6 +7980,9 @@ function App() {
 
       {/* ── AI Test Panel — siempre activo en feature/ai-layer preview ── */}
       <AITestPanel />
+
+      {/* ── AutoInsight — insights IA automáticos (WhatsApp, margen) ─────────────── */}
+      <AutoInsight insights={insights} onDismiss={dismissInsight} C={C} />
 
       {/* ── Sourcing Copilot — AI para sourcing de refacciones (feature/ai-layer) ── */}
       <SourcingCopilot state={state} dispatch={dispatch} C={C} toast={toast} />
