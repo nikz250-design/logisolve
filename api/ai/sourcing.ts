@@ -1,7 +1,7 @@
 // ============================================================
 // Logisolve AI — /api/ai/sourcing
-// Sourcing Copilot: interpreta necesidades operativas y
-// devuelve contexto de sourcing estructurado y accionable.
+// Streaming SSE endpoint — sends progress events + final result.
+// Uses claude-haiku-4-5 for speed (5-7x faster than sonnet).
 // Server-side only — ANTHROPIC_API_KEY nunca llega al frontend.
 // ============================================================
 
@@ -16,110 +16,76 @@ const CORS = {
 
 const SYSTEM_PROMPT = `Eres un comprador técnico senior con 15 años de experiencia en refacciones y flotillas de transporte de carga en México.
 
-Flotas en las que eres experto: Freightliner (M2 106, Cascadia, Century), Kenworth (T680, T800, W900), International (LT, MV, HV), Peterbilt (389, 579), Ford (F-350, F-450, Super Duty, Transit), Mercedes-Benz Actros, Scania R, Volvo FH, Hino 700.
+Flotas: Freightliner (M2 106, Cascadia, Century), Kenworth (T680, T800, W900), International (LT, MV, HV), Peterbilt (389, 579), Ford (F-350, F-450, Super Duty, Transit), Mercedes-Benz Actros, Scania R, Volvo FH, Hino 700.
 
-Sistemas que conoces a fondo: motor, transmisión, clutch/embrague, diferencial, sistema eléctrico, frenos, suspensión, dirección, enfriamiento, escape, neumáticos, hidráulico, carrocería.
+Sistemas: motor, transmisión, clutch/embrague, diferencial, eléctrico, frenos, suspensión, dirección, enfriamiento, escape, neumáticos, hidráulico, carrocería.
 
-Tu rol en cada análisis:
-1. Identificar la falla probable con precisión técnica
-2. Nombrar las piezas exactas (con OEM y aftermarket cuando los conoces)
-3. Sugerir proveedores basándote en el historial real del cliente
-4. Estimar costos SOLO cuando tienes base — siempre indica la fuente y confianza
-5. Detectar piezas relacionadas que suelen fallar en conjunto
-6. Priorizar operatividad de la unidad sobre ahorro
-
-REGLAS DE TRANSPARENCIA:
-- Si no puedes confirmar la unidad exacta, lo dices explícitamente
-- Los rangos de costo son ESTIMACIONES — jamás datos definitivos
-- Las suposiciones (assumptions) se listan siempre que las haces
-- Si el historial no tiene datos relevantes, lo dices: "sin datos históricos"
-- Confidence entre 0 y 1, basado en qué tan específica es la necesidad y el historial disponible
+REGLAS:
+- Si no confirmas la unidad exacta, dilo explícitamente
+- Costos son ESTIMACIONES — nunca datos definitivos
+- Lista suposiciones cuando las haces
+- Confidence entre 0 y 1
 
 Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto fuera del JSON.`;
 
 function buildPrompt(needText: string, ctx: any): string {
-  const units     = (ctx?.units     ?? []).slice(0, 12);
-  const parts     = (ctx?.parts     ?? []).slice(0, 15);
-  const suppliers = (ctx?.suppliers ?? []).slice(0, 8);
-  const tickets   = (ctx?.recentTickets ?? []).slice(0, 8);
+  // Trimmed limits to reduce input tokens and speed up response
+  const units     = (ctx?.units        ?? []).slice(0, 8);
+  const parts     = (ctx?.parts        ?? []).slice(0, 10);
+  const suppliers = (ctx?.suppliers    ?? []).slice(0, 6);
+  const tickets   = (ctx?.recentTickets ?? []).slice(0, 5);
   const client    = ctx?.client ?? null;
 
   const unitLines = units.map((u: any) =>
-    `  • [${u.id}] ${u.marca} ${u.modelo} ${u.anio} — km: ${u.km?.toLocaleString("es-MX") ?? "?"} | statusOp: ${u.statusOp} | notas: ${u.notas || "sin notas"}`
-  ).join("\n") || "  Sin unidades registradas";
+    `• [${u.id}] ${u.marca} ${u.modelo} ${u.anio} km:${u.km ?? "?"} status:${u.statusOp}`
+  ).join("\n") || "Sin unidades";
 
   const partLines = parts.map((p: any) =>
-    `  • ${p.nombre} | OEM: ${p.oem || "N/A"} | Aftermarket: ${p.aftermarket || "N/A"} | App: ${p.aplicacion} | Último precio: ${p.ultimoPrecio ? `$${p.ultimoPrecio}` : "sin precio"} | Proveedor: ${p.proveedor || "N/A"}`
-  ).join("\n") || "  Catálogo vacío";
+    `• ${p.nombre} OEM:${p.oem || "-"} AM:${p.aftermarket || "-"} $${p.ultimoPrecio || "?"}`
+  ).join("\n") || "Catálogo vacío";
 
   const supplierLines = suppliers.map((s: any) =>
-    `  • ${s.nombre} | Especialidad: ${s.especialidad} | Confiabilidad: ${s.confiabilidad ?? "?"}% | Contacto: ${s.contacto} | Horario: ${s.horario || "N/A"}`
-  ).join("\n") || "  Sin proveedores registrados";
+    `• ${s.nombre} | ${s.especialidad} | ${s.confiabilidad ?? "?"}% | ${s.contacto}`
+  ).join("\n") || "Sin proveedores";
 
   const ticketLines = tickets.map((t: any) =>
-    `  • ${t.titulo} | Status: ${t.status} | Precio: $${t.snap?.precioConIVA ?? 0} | Piezas: ${t.partRef || "N/A"} | Notas: ${t.notes || "sin notas"}`
-  ).join("\n") || "  Sin historial reciente";
+    `• ${t.titulo} [${t.status}]`
+  ).join("\n") || "Sin historial";
 
   const clientLine = client
-    ? `${client.empresa} | Categoría: ${client.category} | Score: ${client.score} | Crédito: ${client.creditDays} días`
+    ? `${client.empresa} cat:${client.category} score:${client.score} crédito:${client.creditDays}d`
     : "No especificado";
 
-  return `NECESIDAD OPERATIVA: "${needText}"
+  return `NECESIDAD: "${needText}"
 
-FLOTA ACTIVA (todas las unidades):
+FLOTA:
 ${unitLines}
 
 CLIENTE: ${clientLine}
 
-CATÁLOGO DE PIEZAS (historial de refacciones manejadas):
+CATÁLOGO:
 ${partLines}
 
-PROVEEDORES DISPONIBLES:
+PROVEEDORES:
 ${supplierLines}
 
-HISTORIAL DE TICKETS RECIENTES:
+HISTORIAL:
 ${ticketLines}
 
-Devuelve ÚNICAMENTE este objeto JSON, sin texto adicional:
-{
-  "interpretation": {
-    "unitDetected": { "confirmed": boolean, "marca": string, "modelo": string, "unitId": "id del array o null", "confidence": number },
-    "system": string,
-    "subsystem": string,
-    "faultProbable": string,
-    "symptoms": [string],
-    "urgency": "critica|alta|media|baja",
-    "criticality": "P1|P2|P3",
-    "assumptions": [string]
-  },
-  "partsNeeded": [{ "nombre": string, "oem": "string o null", "aftermarket": "string o null", "aplicacion": string, "urgente": boolean, "notas": string }],
-  "sourcing": {
-    "keywordsSearch": [string],
-    "supplierPriority": [{ "nombre": string, "razon": string, "contacto": string }],
-    "alternativas": [string],
-    "piezasRelacionadas": [{ "nombre": string, "razon": string }]
-  },
-  "costEstimate": { "min": number, "max": number, "confidence": "alta|media|baja|sin-datos", "basis": string, "includeInstall": boolean },
-  "nextSteps": [string],
-  "riesgos": [{ "descripcion": string, "nivel": "critico|alto|medio" }],
-  "confidence": number
-}`;
+JSON exacto a devolver (sin texto adicional):
+{"interpretation":{"unitDetected":{"confirmed":bool,"marca":"","modelo":"","unitId":null,"confidence":0},"system":"","subsystem":"","faultProbable":"","symptoms":[],"urgency":"alta","criticality":"P2","assumptions":[]},"partsNeeded":[{"nombre":"","oem":null,"aftermarket":null,"aplicacion":"","urgente":bool,"notas":""}],"sourcing":{"keywordsSearch":[],"supplierPriority":[{"nombre":"","razon":"","contacto":""}],"alternativas":[],"piezasRelacionadas":[{"nombre":"","razon":""}]},"costEstimate":{"min":0,"max":0,"confidence":"media","basis":"","includeInstall":bool},"nextSteps":[],"riesgos":[{"descripcion":"","nivel":"medio"}],"confidence":0}`;
 }
 
-// Robust JSON extractor — tries multiple strategies before giving up.
 function extractJSON(text: string): unknown | null {
-  // 1. Strip markdown fences and try direct parse
   const stripped = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
   try { return JSON.parse(stripped); } catch { /* continue */ }
 
-  // 2. Find outermost { ... } block
   const start = text.indexOf("{");
   const end   = text.lastIndexOf("}");
   if (start !== -1 && end > start) {
     try { return JSON.parse(text.slice(start, end + 1)); } catch { /* continue */ }
   }
 
-  // 3. Extract from code block content
   const fence = text.match(/```(?:json)?\s*([\s\S]+?)\s*```/);
   if (fence?.[1]) {
     try { return JSON.parse(fence[1]); } catch { /* continue */ }
@@ -133,55 +99,69 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST")   return res.status(405).json({ ok: false, error: "Method not allowed" });
 
+  const apiKey = (process.env.ANTHROPIC_API_KEY ?? "").trim();
+  if (!apiKey) return res.status(503).json({ ok: false, error: "ANTHROPIC_API_KEY missing" });
+
+  const { needText, context } = req.body ?? {};
+  if (!needText?.trim()) {
+    return res.status(400).json({ ok: false, error: "needText is required" });
+  }
+
+  // ── SSE streaming response ────────────────────────────────────
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("X-Accel-Buffering", "no");
+  Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
+
+  const send = (data: object) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  const t0 = Date.now();
+
   try {
-    const apiKey = (process.env.ANTHROPIC_API_KEY ?? "").trim();
-    if (!apiKey) return res.status(503).json({ ok: false, error: "ANTHROPIC_API_KEY missing" });
-
-    const { needText, context } = req.body ?? {};
-    if (!needText?.trim()) {
-      return res.status(400).json({ ok: false, error: "needText is required" });
-    }
-
     const client = new Anthropic({ apiKey });
-    const t0     = Date.now();
-
-    const userPrompt = buildPrompt(needText.trim(), context ?? {});
-
-    const message = await client.messages.create({
-      model:      "claude-sonnet-4-6",
-      max_tokens: 3000,
+    const stream = client.messages.stream({
+      model:      "claude-haiku-4-5",
+      max_tokens: 1500,
       system:     SYSTEM_PROMPT,
-      messages:   [{ role: "user", content: userPrompt }],
+      messages:   [{ role: "user", content: buildPrompt(needText.trim(), context ?? {}) }],
     });
 
-    const rawText = message.content
+    let chars = 0;
+    for await (const event of stream) {
+      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+        chars += event.delta.text.length;
+        send({ type: "progress", chars });
+      }
+    }
+
+    const msg     = await stream.finalMessage();
+    const rawText = msg.content
       .filter((c) => c.type === "text")
       .map((c) => (c as { type: "text"; text: string }).text)
       .join("");
 
     const parsed = extractJSON(rawText);
     if (!parsed) {
-      return res.status(200).json({
-        ok:          false,
-        error:       "El modelo no devolvió JSON válido",
-        rawText,
+      send({ type: "error", error: "El modelo no devolvió JSON válido", rawText });
+    } else {
+      send({
+        type:        "result",
+        result:      parsed,
+        model:       msg.model,
+        usage:       msg.usage,
         duration_ms: Date.now() - t0,
       });
     }
 
-    return res.status(200).json({
-      ok:          true,
-      result:      parsed,
-      model:       message.model,
-      usage:       message.usage,
-      duration_ms: Date.now() - t0,
-    });
-
   } catch (err: unknown) {
     const isApiError = err instanceof Anthropic.APIError;
-    return res.status(isApiError ? err.status : 500).json({
-      ok:    false,
+    send({
+      type:  "error",
       error: isApiError ? err.message : String(err),
     });
   }
+
+  res.end();
 }

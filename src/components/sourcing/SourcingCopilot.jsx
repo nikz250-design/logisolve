@@ -623,7 +623,7 @@ function InputPanel({ needText, setNeedText, selectedUnit, setSelectedUnit, sele
 // ─── Results panel ────────────────────────────────────────────
 
 function ResultsPanel({ status, result, error, activeTab, setActiveTab,
-  selectedUnit, selectedClient, dispatch, toast, C, accent }) {
+  selectedUnit, selectedClient, dispatch, toast, streamChars, C, accent }) {
 
   if (status === "loading") {
     return (
@@ -632,10 +632,18 @@ function ResultsPanel({ status, result, error, activeTab, setActiveTab,
         justifyContent: "center", gap: 10, minHeight: 240,
       }}>
         <div style={{ fontSize: 32, animation: "pulse 1.5s ease infinite" }}>⚡</div>
-        <div style={{ fontSize: 12, color: accent, fontWeight: 600 }}>Analizando necesidad operativa…</div>
-        <div style={{ fontSize: 9, color: C.t3, lineHeight: 1.6, textAlign: "center" }}>
-          Revisando historial de tickets<br />Identificando piezas y proveedores
+        <div style={{ fontSize: 12, color: accent, fontWeight: 600 }}>
+          {streamChars > 0 ? "Recibiendo análisis…" : "Consultando al Copilot…"}
         </div>
+        {streamChars > 0 ? (
+          <div style={{ fontSize: 10, color: C.t2, fontVariantNumeric: "tabular-nums" }}>
+            {streamChars.toLocaleString("es-MX")} caracteres recibidos
+          </div>
+        ) : (
+          <div style={{ fontSize: 9, color: C.t3, lineHeight: 1.6, textAlign: "center" }}>
+            Revisando historial · Identificando piezas y proveedores
+          </div>
+        )}
       </div>
     );
   }
@@ -739,6 +747,7 @@ export default function SourcingCopilot({ state, dispatch, C, toast }) {
   const [error,          setError]          = useState(null);
   const [meta,           setMeta]           = useState(null);
   const [activeTab,      setActiveTab]      = useState("interpretation");
+  const [streamChars,    setStreamChars]    = useState(0);
 
   const abortRef = useRef(null);
   const accent   = C._dark ? "#8FE3BE" : "#5CBF8A";
@@ -755,6 +764,7 @@ export default function SourcingCopilot({ state, dispatch, C, toast }) {
     setStatus("loading");
     setResult(null);
     setError(null);
+    setStreamChars(0);
 
     const client = clients.find(c => c.id === selectedClient) ?? clients[0] ?? null;
     const recentTickets = (state.tickets ?? [])
@@ -788,27 +798,62 @@ export default function SourcingCopilot({ state, dispatch, C, toast }) {
         signal:  ctrl.signal,
       });
 
-      // Guard against HTML 404 pages from the Vite dev server (no API proxy)
       const ct = res.headers.get("content-type") ?? "";
+
+      // ── SSE stream (new backend) ──────────────────────────────
+      if (ct.includes("text/event-stream")) {
+        const reader  = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (ctrl.signal.aborted) { reader.cancel(); return; }
+
+          buf += decoder.decode(value, { stream: true });
+          const parts = buf.split("\n\n");
+          buf = parts.pop() ?? "";
+
+          for (const part of parts) {
+            if (!part.startsWith("data: ")) continue;
+            let event;
+            try { event = JSON.parse(part.slice(6).trim()); } catch { continue; }
+
+            if (event.type === "progress") {
+              setStreamChars(event.chars);
+            } else if (event.type === "result") {
+              setResult(event.result);
+              setMeta({ duration_ms: event.duration_ms, model: event.model, usage: event.usage });
+              setStatus("ok");
+              setActiveTab("interpretation");
+            } else if (event.type === "error") {
+              setError(event.error ?? "Error del servidor");
+              setStatus("error");
+            }
+          }
+        }
+        return;
+      }
+
+      // ── Fallback: plain JSON response ─────────────────────────
       if (!ct.includes("json")) {
-        const msg = res.status === 404
-          ? "Ruta /api/ai/sourcing no encontrada. En dev ejecuta `vercel dev` en lugar de `vite`."
-          : `El servidor devolvió ${res.status} (${ct || "sin content-type"}) — se esperaba JSON.`;
-        setError(msg);
+        setError(res.status === 404
+          ? "Ruta /api/ai/sourcing no encontrada. En dev ejecuta `npm run dev:ai`."
+          : `Error ${res.status} — respuesta inesperada del servidor.`);
         setStatus("error");
         return;
       }
 
       const data = await res.json();
       if (ctrl.signal.aborted) return;
-
       if (data.ok && data.result) {
         setResult(data.result);
         setMeta({ duration_ms: data.duration_ms, model: data.model, usage: data.usage });
         setStatus("ok");
         setActiveTab("interpretation");
       } else {
-        setError(data.error ?? data.rawText ?? "Error desconocido");
+        setError(data.error ?? "Error desconocido");
         setStatus("error");
       }
     } catch (e) {
@@ -902,6 +947,7 @@ export default function SourcingCopilot({ state, dispatch, C, toast }) {
               selectedClient={selectedClient}
               dispatch={dispatch}
               toast={toast}
+              streamChars={streamChars}
               C={C}
               accent={accent}
             />
