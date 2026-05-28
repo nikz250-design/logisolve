@@ -80,61 +80,52 @@ ${supplierLines}
 HISTORIAL DE TICKETS RECIENTES:
 ${ticketLines}
 
-Analiza la necesidad operativa y devuelve este JSON exacto:
+Devuelve ÚNICAMENTE este objeto JSON, sin texto adicional:
 {
   "interpretation": {
-    "unitDetected": {
-      "confirmed": true,
-      "marca": "Freightliner",
-      "modelo": "M2 106",
-      "unitId": "UNI-00001 o null si no se confirma",
-      "confidence": 0.87
-    },
-    "system": "Clutch / Transmisión",
-    "subsystem": "horquilla de clutch",
-    "faultProbable": "descripción técnica precisa de la falla",
-    "symptoms": ["síntoma 1", "síntoma 2"],
+    "unitDetected": { "confirmed": boolean, "marca": string, "modelo": string, "unitId": "id del array o null", "confidence": number },
+    "system": string,
+    "subsystem": string,
+    "faultProbable": string,
+    "symptoms": [string],
     "urgency": "critica|alta|media|baja",
     "criticality": "P1|P2|P3",
-    "assumptions": ["suposición técnica 1"]
+    "assumptions": [string]
   },
-  "partsNeeded": [
-    {
-      "nombre": "Horquilla de clutch",
-      "oem": "A0002500370 o null",
-      "aftermarket": "FTE MHK0504 o null",
-      "aplicacion": "Freightliner M2 106 / DD5",
-      "urgente": true,
-      "notas": "verificar compatibilidad con transmisión Allison"
-    }
-  ],
+  "partsNeeded": [{ "nombre": string, "oem": "string o null", "aftermarket": "string o null", "aplicacion": string, "urgente": boolean, "notas": string }],
   "sourcing": {
-    "keywordsSearch": ["horquilla clutch M2 106", "fork clutch Detroit DD5"],
-    "supplierPriority": [
-      { "nombre": "Refaccionaria El Cerrito", "razon": "historial previo — misma pieza", "contacto": "56 20 35 00 60", "prioridad": "primera opción" }
-    ],
-    "alternativas": ["descripción de alternativa concreta"],
-    "piezasRelacionadas": [
-      { "nombre": "Cojinete de desembrague", "razon": "suele reemplazarse en conjunto con la horquilla" }
-    ]
+    "keywordsSearch": [string],
+    "supplierPriority": [{ "nombre": string, "razon": string, "contacto": string }],
+    "alternativas": [string],
+    "piezasRelacionadas": [{ "nombre": string, "razon": string }]
   },
-  "costEstimate": {
-    "min": 2500,
-    "max": 5000,
-    "confidence": "media",
-    "basis": "basado en op anterior TKT-20260512-001 a $2,720 o sin datos históricos",
-    "includeInstall": false,
-    "currency": "MXN"
-  },
-  "nextSteps": [
-    "Contactar El Cerrito — tienen historial con esta pieza",
-    "Confirmar si es horquilla o también disco de clutch"
-  ],
-  "riesgos": [
-    { "descripcion": "Unidad detenida en carretera — impacto operativo máximo", "nivel": "critico" }
-  ],
-  "confidence": 0.87
+  "costEstimate": { "min": number, "max": number, "confidence": "alta|media|baja|sin-datos", "basis": string, "includeInstall": boolean },
+  "nextSteps": [string],
+  "riesgos": [{ "descripcion": string, "nivel": "critico|alto|medio" }],
+  "confidence": number
 }`;
+}
+
+// Robust JSON extractor — tries multiple strategies before giving up.
+function extractJSON(text: string): unknown | null {
+  // 1. Strip markdown fences and try direct parse
+  const stripped = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+  try { return JSON.parse(stripped); } catch { /* continue */ }
+
+  // 2. Find outermost { ... } block
+  const start = text.indexOf("{");
+  const end   = text.lastIndexOf("}");
+  if (start !== -1 && end > start) {
+    try { return JSON.parse(text.slice(start, end + 1)); } catch { /* continue */ }
+  }
+
+  // 3. Extract from code block content
+  const fence = text.match(/```(?:json)?\s*([\s\S]+?)\s*```/);
+  if (fence?.[1]) {
+    try { return JSON.parse(fence[1]); } catch { /* continue */ }
+  }
+
+  return null;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -158,7 +149,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const message = await client.messages.create({
       model:      "claude-sonnet-4-6",
-      max_tokens: 1800,
+      max_tokens: 3000,
       system:     SYSTEM_PROMPT,
       messages:   [{ role: "user", content: userPrompt }],
     });
@@ -168,11 +159,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .map((c) => (c as { type: "text"; text: string }).text)
       .join("");
 
-    let parsed: unknown;
-    try {
-      const cleaned = rawText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      parsed = JSON.parse(cleaned);
-    } catch {
+    const parsed = extractJSON(rawText);
+    if (!parsed) {
       return res.status(200).json({
         ok:          false,
         error:       "El modelo no devolvió JSON válido",
