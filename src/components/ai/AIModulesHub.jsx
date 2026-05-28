@@ -320,22 +320,23 @@ export default function AIModulesHub({ state, tab, C, extra }) {
       <button
         onClick={() => setOpen(true)}
         style={{
-          position: "fixed", bottom: 24, left: 24,
-          zIndex: 8999,
-          width: 52, height: 52, borderRadius: "50%",
-          background: C._dark ? "rgba(143,227,190,0.15)" : "rgba(92,191,138,0.18)",
+          position: "fixed", bottom: 340, right: 16,
+          zIndex: 9050,
+          height: 40, borderRadius: 999,
+          padding: "0 14px 0 10px",
+          background: C._dark ? "rgba(22,24,28,0.90)" : "rgba(255,255,255,0.90)",
           backdropFilter: C.glass,
           WebkitBackdropFilter: C.glass,
-          border: `1px solid ${accent}50`,
-          boxShadow: `0 4px 20px ${accent}30, 0 0 0 0 ${accent}00`,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          cursor: "pointer", fontSize: 20,
-          transition: "transform 180ms, box-shadow 180ms",
+          border: `1px solid ${accent}60`,
+          boxShadow: `0 4px 20px ${accent}30`,
+          display: "flex", alignItems: "center", gap: 6,
+          cursor: "pointer",
           animation: "aiPulse 3s ease-in-out infinite",
         }}
-        title="Módulos IA de Logisolve"
       >
-        ✦
+        <span style={{ fontSize: 14, color: accent }}>✦</span>
+        <span style={{ fontSize: 11, fontWeight: 800, color: C.t1, letterSpacing: "0.04em", fontFamily: "monospace" }}>IA</span>
+        <span style={{ fontSize: 9, color: C.t3, background: C.bg3, borderRadius: 999, padding: "1px 6px", border: `1px solid ${C.border}` }}>10</span>
       </button>
 
       {/* ── Backdrop ───────────────────────────────────────── */}
