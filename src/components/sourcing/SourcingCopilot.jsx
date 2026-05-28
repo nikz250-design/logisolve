@@ -1,415 +1,303 @@
-// SourcingCopilot — AI-powered sourcing assistant integrated into the operational flow.
-// Senior technical buyer for fleet spare parts in Mexico.
-// Two-column desktop layout. Reads live state (units, clients, suppliers, parts, tickets).
+// SourcingCopilot — AI comprador técnico, layout limpio single-column.
 
 import React, { useState, useRef, useCallback } from "react";
 
-// ─── Formatters ──────────────────────────────────────────────
+// ─── Formatters ───────────────────────────────────────────────
 
-function mxn(n) {
-  if (!n && n !== 0) return "—";
-  return new Intl.NumberFormat("es-MX", {
-    style: "currency", currency: "MXN", maximumFractionDigits: 0,
-  }).format(n);
-}
+const MXN = n => n == null ? "—" :
+  new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(n);
 
-function confColor(v, accent) {
-  if (v >= 0.8) return accent;
-  if (v >= 0.55) return "#FFA500";
-  return "#FF6B6B";
-}
+const urgencyColor = { critica: "#FF4444", alta: "#FF8800", media: "#FFA500", baja: null };
 
-// ─── Primitives ───────────────────────────────────────────────
+// ─── Micro components ─────────────────────────────────────────
 
-function Chip({ children, color, small, onClick }) {
+function Tag({ label, color, C }) {
+  const col = color ?? C.t3;
   return (
-    <span
-      onClick={onClick}
-      style={{
-        display: "inline-block",
-        fontSize: small ? 8 : 9, fontWeight: 700,
-        padding: small ? "1px 4px" : "2px 6px",
-        borderRadius: 3, letterSpacing: 0.4, textTransform: "uppercase",
-        background: color + "22", color,
-        cursor: onClick ? "pointer" : "default",
-      }}
-    >
-      {children}
+    <span style={{
+      display: "inline-block", fontSize: 9, fontWeight: 700,
+      padding: "2px 6px", borderRadius: 4, letterSpacing: 0.4,
+      textTransform: "uppercase", background: col + "20", color: col,
+    }}>
+      {label}
     </span>
   );
 }
 
-function Section({ title, badge, badgeColor, children, C, accent }) {
-  return (
-    <div style={{ padding: "10px 0", borderBottom: `1px solid ${accent}12` }}>
-      <div style={{
-        display: "flex", alignItems: "center", gap: 6, marginBottom: 8,
-        fontSize: 9, fontWeight: 700, color: accent,
-        letterSpacing: 0.7, textTransform: "uppercase",
-      }}>
-        {title}
-        {badge && <Chip color={badgeColor ?? accent} small>{badge}</Chip>}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function ConfBar({ value, C, accent }) {
-  const pct = Math.round((value ?? 0) * 100);
-  const col = confColor(value, accent);
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-      <div style={{ flex: 1, height: 3, borderRadius: 2, background: accent + "18" }}>
-        <div style={{ width: `${pct}%`, height: "100%", borderRadius: 2, background: col, transition: "width 0.4s" }} />
-      </div>
-      <span style={{ fontSize: 9, color: col, fontWeight: 700, minWidth: 28, textAlign: "right" }}>{pct}%</span>
-    </div>
-  );
-}
-
-// ─── Quick examples ───────────────────────────────────────────
-
-const EXAMPLES = [
-  "M2 106 clutch duro posible horquilla",
-  "F-350 diferencial trasero ruido recurrente",
-  "Kenworth T680 falla eléctrica tablero",
-  "Scania R suspensión delantera golpe",
-  "Freightliner Cascadia frenos ABS luz encendida",
-];
-
-// ─── Context pills ────────────────────────────────────────────
-
-function ContextPills({ state, C, accent }) {
-  const u = (state.units    ?? []).length;
-  const s = (state.suppliers?? []).length;
-  const p = (state.parts    ?? []).length;
-  const t = (state.tickets  ?? []).length;
-
-  if (!u && !s && !p) return null;
-
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
-      {u > 0 && (
-        <span style={{ fontSize: 9, color: accent, background: accent + "15", padding: "2px 6px", borderRadius: 3, fontWeight: 600 }}>
-          {u} unidad{u !== 1 ? "es" : ""}
-        </span>
-      )}
-      {s > 0 && (
-        <span style={{ fontSize: 9, color: C.t3, background: C.border + "66", padding: "2px 6px", borderRadius: 3 }}>
-          {s} proveedor{s !== 1 ? "es" : ""}
-        </span>
-      )}
-      {p > 0 && (
-        <span style={{ fontSize: 9, color: C.t3, background: C.border + "66", padding: "2px 6px", borderRadius: 3 }}>
-          {p} piezas catálogo
-        </span>
-      )}
-      {t > 0 && (
-        <span style={{ fontSize: 9, color: C.t3, background: C.border + "66", padding: "2px 6px", borderRadius: 3 }}>
-          {t} tickets historial
-        </span>
-      )}
-    </div>
-  );
-}
-
-// ─── Summary card (top of results) ───────────────────────────
-
-function SummaryCard({ data, C, accent }) {
-  const interp = data.interpretation;
-  const urgColor = { critica: "#FF4444", alta: "#FF8800", media: "#FFA500", baja: accent }[interp?.urgency] ?? C.t2;
-
+function SectionHeader({ title, C, accent }) {
   return (
     <div style={{
-      padding: "10px 12px", borderRadius: 8, marginBottom: 10,
-      background: C._dark ? "rgba(143,227,190,0.06)" : "rgba(92,191,138,0.06)",
-      border: `1px solid ${accent}20`,
+      fontSize: 8, fontWeight: 700, color: accent,
+      letterSpacing: 0.8, textTransform: "uppercase",
+      marginBottom: 8,
     }}>
+      {title}
+    </div>
+  );
+}
+
+// ─── Result sections ──────────────────────────────────────────
+
+function FaultCard({ data, C, accent }) {
+  const { interpretation } = data;
+  const unit = interpretation?.unitDetected;
+  const uc   = urgencyColor[interpretation?.urgency] ?? accent;
+  const pct  = Math.round((data.confidence ?? 0) * 100);
+
+  return (
+    <div style={card(C, accent)}>
       {/* Fault */}
-      <div style={{ fontSize: 12, fontWeight: 700, color: C.t1, marginBottom: 5, lineHeight: 1.3 }}>
-        {interp?.faultProbable ?? "—"}
+      <div style={{ fontSize: 14, fontWeight: 800, color: C.t1, lineHeight: 1.35, marginBottom: 10 }}>
+        {interpretation?.faultProbable ?? "—"}
       </div>
 
-      {/* Row: unit + criticality + urgency */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 6 }}>
-        {interp?.unitDetected?.confirmed && (
-          <Chip color={accent} small>{interp.unitDetected.marca} {interp.unitDetected.modelo}</Chip>
+      {/* Tags row */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 10 }}>
+        {unit?.confirmed && (
+          <Tag label={`${unit.marca} ${unit.modelo}`} color={accent} C={C} />
         )}
-        <Chip color={urgColor} small>{interp?.urgency ?? "?"}</Chip>
-        <Chip
-          color={interp?.criticality === "P1" ? "#FF4444" : interp?.criticality === "P2" ? "#FFA500" : accent}
-          small
-        >
-          {interp?.criticality ?? "P?"}
-        </Chip>
-        {interp?.system && (
-          <Chip color={C.t3} small>{interp.system}</Chip>
+        {interpretation?.urgency && (
+          <Tag label={interpretation.urgency} color={uc} C={C} />
         )}
+        {interpretation?.criticality && (
+          <Tag
+            label={interpretation.criticality}
+            color={interpretation.criticality === "P1" ? "#FF4444" : interpretation.criticality === "P2" ? "#FFA500" : accent}
+            C={C}
+          />
+        )}
+        {interpretation?.system && <Tag label={interpretation.system} C={C} />}
+        {interpretation?.subsystem && <Tag label={interpretation.subsystem} C={C} />}
       </div>
 
-      {/* Global confidence */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ fontSize: 8, color: C.t3, letterSpacing: 0.4 }}>CONFIANZA GLOBAL</span>
-        <div style={{ flex: 1 }}>
-          <ConfBar value={data.confidence ?? 0} C={C} accent={accent} />
+      {/* Confidence bar */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: interpretation?.assumptions?.length ? 10 : 0 }}>
+        <span style={{ fontSize: 8, color: C.t3, letterSpacing: 0.4, whiteSpace: "nowrap" }}>CONFIANZA</span>
+        <div style={{ flex: 1, height: 4, borderRadius: 2, background: accent + "18" }}>
+          <div style={{
+            width: `${pct}%`, height: "100%", borderRadius: 2,
+            background: pct >= 80 ? accent : pct >= 55 ? "#FFA500" : "#FF6B6B",
+            transition: "width 0.6s ease",
+          }} />
         </div>
+        <span style={{ fontSize: 9, fontWeight: 700, color: pct >= 80 ? accent : pct >= 55 ? "#FFA500" : "#FF6B6B", minWidth: 28 }}>
+          {pct}%
+        </span>
+      </div>
+
+      {/* Assumptions */}
+      {interpretation?.assumptions?.length > 0 && (
+        <div style={{
+          marginTop: 10, padding: "6px 9px", borderRadius: 5,
+          background: "#FFA50011", border: "1px solid #FFA50033",
+          fontSize: 9, color: "#FFA500", lineHeight: 1.5,
+        }}>
+          <strong>Suposiciones:</strong> {interpretation.assumptions.join(" · ")}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PartsCard({ parts, C, accent }) {
+  if (!parts?.length) return null;
+  return (
+    <div style={card(C, accent)}>
+      <SectionHeader title={`Piezas necesarias · ${parts.length}`} C={C} accent={accent} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+        {parts.map((p, i) => (
+          <div key={i} style={{
+            padding: "8px 10px", borderRadius: 7,
+            background: p.urgente
+              ? (C._dark ? "rgba(255,68,68,0.08)" : "rgba(255,68,68,0.05)")
+              : (C._dark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"),
+            border: `1px solid ${p.urgente ? "#FF444420" : accent + "14"}`,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.t1, flex: 1 }}>{p.nombre}</span>
+              {p.urgente && <Tag label="urgente" color="#FF4444" C={C} />}
+            </div>
+            {(p.oem || p.aftermarket) && (
+              <div style={{ display: "flex", gap: 12, marginBottom: p.notas ? 4 : 0 }}>
+                {p.oem && (
+                  <span style={{ fontSize: 9, color: C.t3 }}>
+                    OEM <span style={{ color: C.t2, fontFamily: "monospace" }}>{p.oem}</span>
+                  </span>
+                )}
+                {p.aftermarket && (
+                  <span style={{ fontSize: 9, color: C.t3 }}>
+                    AM <span style={{ color: C.t2, fontFamily: "monospace" }}>{p.aftermarket}</span>
+                  </span>
+                )}
+              </div>
+            )}
+            {p.aplicacion && <div style={{ fontSize: 8, color: C.t3 }}>{p.aplicacion}</div>}
+            {p.notas && (
+              <div style={{ fontSize: 9, color: "#FFA500", marginTop: 4, lineHeight: 1.4 }}>⚠ {p.notas}</div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-// ─── Interpretation panel ─────────────────────────────────────
-
-function InterpretationPanel({ data, C, accent }) {
-  const { interpretation, partsNeeded } = data;
-  const unit = interpretation?.unitDetected;
+function SourcingCard({ sourcing, C, accent }) {
+  if (!sourcing) return null;
+  const { supplierPriority, keywordsSearch, piezasRelacionadas, alternativas } = sourcing;
 
   return (
-    <>
-      <Section title="Unidad y sistema" C={C} accent={accent}>
-        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
-          <span style={{ fontSize: 16 }}>🚛</span>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: unit?.confirmed ? C.t1 : "#FFA500" }}>
-              {unit?.confirmed ? `${unit.marca} ${unit.modelo}` : "Unidad no confirmada"}
-            </div>
-            <ConfBar value={unit?.confidence ?? 0} C={C} accent={accent} />
-          </div>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 8 }}>
-          <div>
-            <div style={{ fontSize: 8, color: C.t3, marginBottom: 2, letterSpacing: 0.4 }}>SISTEMA</div>
-            <div style={{ fontSize: 10, color: C.t1, fontWeight: 600 }}>{interpretation?.system ?? "—"}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 8, color: C.t3, marginBottom: 2, letterSpacing: 0.4 }}>SUBSISTEMA</div>
-            <div style={{ fontSize: 10, color: C.t1, fontWeight: 600 }}>{interpretation?.subsystem ?? "—"}</div>
-          </div>
-        </div>
-
-        {/* Symptoms */}
-        {interpretation?.symptoms?.length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
-            {interpretation.symptoms.map((s, i) => (
-              <Chip key={i} color={C.t3} small>{s}</Chip>
+    <div style={card(C, accent)}>
+      {/* Suppliers */}
+      {supplierPriority?.length > 0 && (
+        <>
+          <SectionHeader title="Proveedores sugeridos" C={C} accent={accent} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+            {supplierPriority.map((s, i) => (
+              <div key={i} style={{
+                padding: "8px 10px", borderRadius: 7,
+                background: i === 0 ? accent + "0e" : (C._dark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)"),
+                border: `1px solid ${i === 0 ? accent + "25" : accent + "0a"}`,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: C.t1 }}>{s.nombre}</span>
+                  {i === 0 && <Tag label="1ª opción" color={accent} C={C} />}
+                </div>
+                {s.razon && <div style={{ fontSize: 9, color: C.t2, lineHeight: 1.4 }}>{s.razon}</div>}
+                {s.contacto && (
+                  <div style={{ fontSize: 9, color: accent, marginTop: 3, fontFamily: "monospace" }}>
+                    📞 {s.contacto}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
-        )}
-
-        {/* Assumptions */}
-        {interpretation?.assumptions?.length > 0 && (
-          <div style={{
-            padding: "6px 8px", borderRadius: 4,
-            background: "#FFA50011", border: "1px solid #FFA50033",
-            fontSize: 9, color: "#FFA500", lineHeight: 1.5,
-          }}>
-            <strong>Suposiciones:</strong>{" "}
-            {interpretation.assumptions.join(" · ")}
-          </div>
-        )}
-      </Section>
-
-      {partsNeeded?.length > 0 && (
-        <Section title="Piezas necesarias" badge={`${partsNeeded.length}`} C={C} accent={accent}>
-          {partsNeeded.map((p, i) => (
-            <div key={i} style={{
-              padding: "8px 10px", borderRadius: 7, marginBottom: 6,
-              background: p.urgente
-                ? (C._dark ? "rgba(255,68,68,0.08)" : "rgba(255,68,68,0.05)")
-                : (C._dark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"),
-              border: `1px solid ${p.urgente ? "#FF444422" : accent + "15"}`,
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 3 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: C.t1 }}>{p.nombre}</span>
-                {p.urgente && <Chip color="#FF4444" small>urgente</Chip>}
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: p.notas ? 4 : 0 }}>
-                {p.oem && (
-                  <div>
-                    <span style={{ fontSize: 8, color: C.t3 }}>OEM </span>
-                    <span style={{ fontSize: 9, color: C.t2, fontFamily: "monospace" }}>{p.oem}</span>
-                  </div>
-                )}
-                {p.aftermarket && (
-                  <div>
-                    <span style={{ fontSize: 8, color: C.t3 }}>AM </span>
-                    <span style={{ fontSize: 9, color: C.t2, fontFamily: "monospace" }}>{p.aftermarket}</span>
-                  </div>
-                )}
-              </div>
-              {p.aplicacion && (
-                <div style={{ fontSize: 8, color: C.t3, marginTop: 2 }}>{p.aplicacion}</div>
-              )}
-              {p.notas && (
-                <div style={{ fontSize: 9, color: "#FFA500", marginTop: 4, lineHeight: 1.4 }}>
-                  ⚠ {p.notas}
-                </div>
-              )}
-            </div>
-          ))}
-        </Section>
-      )}
-    </>
-  );
-}
-
-// ─── Sourcing panel ───────────────────────────────────────────
-
-function SourcingPanel({ data, C, accent }) {
-  const { sourcing, costEstimate } = data;
-
-  return (
-    <>
-      {sourcing?.supplierPriority?.length > 0 && (
-        <Section title="Proveedores sugeridos" C={C} accent={accent}>
-          {sourcing.supplierPriority.map((s, i) => (
-            <div key={i} style={{
-              padding: "8px 10px", borderRadius: 7, marginBottom: 5,
-              background: i === 0
-                ? (accent + "10")
-                : (C._dark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)"),
-              border: `1px solid ${i === 0 ? accent + "28" : accent + "0e"}`,
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
-                <span style={{ fontSize: 9, color: C.t3, minWidth: 14 }}>{i + 1}.</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: C.t1 }}>{s.nombre}</span>
-                {i === 0 && <Chip color={accent} small>primera opción</Chip>}
-              </div>
-              <div style={{ fontSize: 9, color: C.t2, marginLeft: 19, lineHeight: 1.5 }}>{s.razon}</div>
-              {s.contacto && (
-                <div style={{ fontSize: 9, color: accent, marginLeft: 19, marginTop: 3, fontFamily: "monospace" }}>
-                  📞 {s.contacto}
-                </div>
-              )}
-            </div>
-          ))}
-        </Section>
+        </>
       )}
 
-      {sourcing?.keywordsSearch?.length > 0 && (
-        <Section title="Keywords de búsqueda" C={C} accent={accent}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-            {sourcing.keywordsSearch.map((kw, i) => (
+      {/* Keywords */}
+      {keywordsSearch?.length > 0 && (
+        <>
+          <SectionHeader title="Búsqueda rápida" C={C} accent={accent} />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: piezasRelacionadas?.length ? 12 : 0 }}>
+            {keywordsSearch.map((kw, i) => (
               <span key={i} style={{
                 fontSize: 9, padding: "3px 8px", borderRadius: 4,
                 background: C._dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
-                color: C.t1, fontFamily: "monospace",
-                cursor: "pointer", userSelect: "all",
+                color: C.t2, fontFamily: "monospace", userSelect: "all", cursor: "pointer",
               }}>
                 {kw}
               </span>
             ))}
           </div>
-        </Section>
+        </>
       )}
 
-      {sourcing?.piezasRelacionadas?.length > 0 && (
-        <Section title="Piezas relacionadas" C={C} accent={accent}>
-          {sourcing.piezasRelacionadas.map((p, i) => (
-            <div key={i} style={{ marginBottom: 5, paddingLeft: 8 }}>
-              <span style={{ fontSize: 10, color: C.t1 }}>• {p.nombre}</span>
-              {p.razon && (
-                <div style={{ fontSize: 9, color: C.t3, marginTop: 1 }}>{p.razon}</div>
-              )}
-            </div>
-          ))}
-        </Section>
-      )}
-
-      {sourcing?.alternativas?.length > 0 && (
-        <Section title="Alternativas" C={C} accent={accent}>
-          {sourcing.alternativas.map((a, i) => (
-            <div key={i} style={{ fontSize: 9, color: C.t2, marginBottom: 3, paddingLeft: 8 }}>• {a}</div>
-          ))}
-        </Section>
-      )}
-
-      {costEstimate && (
-        <Section title="Estimación de costo" badge="estimado" badgeColor="#FFA500" C={C} accent={accent}>
-          <div style={{
-            padding: "10px 12px", borderRadius: 7,
-            background: "#FFA50010", border: "1px solid #FFA50028",
-          }}>
-            <div style={{ fontSize: 17, fontWeight: 800, color: C.t1, marginBottom: 4 }}>
-              {mxn(costEstimate.min)} – {mxn(costEstimate.max)}
-            </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
-              <Chip color="#FFA500" small>confianza {costEstimate.confidence}</Chip>
-              {costEstimate.includeInstall && <Chip color={C.t3} small>incluye M.O.</Chip>}
-            </div>
-            {costEstimate.basis && (
-              <div style={{ fontSize: 9, color: C.t3, lineHeight: 1.4 }}>{costEstimate.basis}</div>
-            )}
+      {/* Related parts */}
+      {piezasRelacionadas?.length > 0 && (
+        <>
+          <SectionHeader title="Revisar también" C={C} accent={accent} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {piezasRelacionadas.map((p, i) => (
+              <div key={i}>
+                <span style={{ fontSize: 10, color: C.t1 }}>• {p.nombre}</span>
+                {p.razon && <span style={{ fontSize: 9, color: C.t3 }}> — {p.razon}</span>}
+              </div>
+            ))}
           </div>
-        </Section>
+        </>
       )}
-    </>
+
+      {/* Alternatives */}
+      {alternativas?.length > 0 && (
+        <>
+          <SectionHeader title="Alternativas" C={C} accent={accent} />
+          {alternativas.map((a, i) => (
+            <div key={i} style={{ fontSize: 9, color: C.t2, marginBottom: 3 }}>• {a}</div>
+          ))}
+        </>
+      )}
+    </div>
   );
 }
 
-// ─── Risks + next steps panel ─────────────────────────────────
+function CostCard({ costEstimate, C, accent }) {
+  if (!costEstimate) return null;
+  return (
+    <div style={{ ...card(C, accent), background: C._dark ? "rgba(255,165,0,0.05)" : "rgba(255,165,0,0.04)", borderColor: "#FFA50025" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 6 }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: C.t1 }}>
+          {MXN(costEstimate.min)} – {MXN(costEstimate.max)}
+        </div>
+        <Tag label={`confianza ${costEstimate.confidence}`} color="#FFA500" C={C} />
+        {costEstimate.includeInstall && <Tag label="incl. M.O." C={C} />}
+      </div>
+      {costEstimate.basis && (
+        <div style={{ fontSize: 9, color: C.t3, lineHeight: 1.5 }}>{costEstimate.basis}</div>
+      )}
+    </div>
+  );
+}
 
-function RisksPanel({ data, C, accent }) {
+function RisksCard({ riesgos, nextSteps, C, accent }) {
   const riskColor = { critico: "#FF4444", alto: "#FF8800", medio: "#FFA500" };
+  if (!riesgos?.length && !nextSteps?.length) return null;
 
   return (
-    <>
-      {data.riesgos?.length > 0 && (
-        <Section title="Riesgos detectados" badge={`${data.riesgos.length}`} badgeColor="#FF4444" C={C} accent={accent}>
-          {data.riesgos.map((r, i) => (
-            <div key={i} style={{
-              display: "flex", gap: 7, alignItems: "flex-start",
-              padding: "6px 8px", marginBottom: 4, borderRadius: 5,
-              background: (riskColor[r.nivel] ?? C.t3) + "10",
-            }}>
-              <span style={{ fontSize: 10, color: riskColor[r.nivel] ?? C.t3, marginTop: 1 }}>⚠</span>
-              <span style={{ fontSize: 9, color: C.t1, lineHeight: 1.45, flex: 1 }}>{r.descripcion}</span>
-              <Chip color={riskColor[r.nivel] ?? C.t3} small>{r.nivel}</Chip>
-            </div>
-          ))}
-        </Section>
+    <div style={card(C, accent)}>
+      {riesgos?.length > 0 && (
+        <>
+          <SectionHeader title="Riesgos" C={C} accent={accent} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: nextSteps?.length ? 12 : 0 }}>
+            {riesgos.map((r, i) => (
+              <div key={i} style={{
+                display: "flex", gap: 7, alignItems: "flex-start",
+                padding: "6px 8px", borderRadius: 5,
+                background: (riskColor[r.nivel] ?? C.t3) + "10",
+              }}>
+                <span style={{ fontSize: 10, color: riskColor[r.nivel] ?? C.t3 }}>⚠</span>
+                <span style={{ fontSize: 9, color: C.t1, lineHeight: 1.45, flex: 1 }}>{r.descripcion}</span>
+                <Tag label={r.nivel} color={riskColor[r.nivel]} C={C} />
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
-      {data.nextSteps?.length > 0 && (
-        <Section title="Próximos pasos" C={C} accent={accent}>
-          {data.nextSteps.map((step, i) => (
-            <div key={i} style={{ display: "flex", gap: 7, marginBottom: 6, alignItems: "flex-start" }}>
+      {nextSteps?.length > 0 && (
+        <>
+          <SectionHeader title="Próximos pasos" C={C} accent={accent} />
+          {nextSteps.map((step, i) => (
+            <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6 }}>
               <span style={{ fontSize: 10, color: accent, fontWeight: 700, minWidth: 16 }}>{i + 1}.</span>
               <span style={{ fontSize: 10, color: C.t1, lineHeight: 1.5 }}>{step}</span>
             </div>
           ))}
-        </Section>
+        </>
       )}
-    </>
+    </div>
   );
 }
 
 // ─── Create ticket button ─────────────────────────────────────
 
-function CreateTicketButton({ analysisResult, selectedUnit, selectedClient, dispatch, toast, C, accent }) {
+function CreateTicketBtn({ result, selectedUnit, selectedClient, dispatch, toast, C, accent }) {
   const create = () => {
-    if (!analysisResult) return;
-    const interp = analysisResult.interpretation;
-    const part   = analysisResult.partsNeeded?.[0];
-
-    const nowStr = new Date().toLocaleDateString("es-MX", {
-      day: "2-digit", month: "2-digit", year: "numeric",
-    }).replace(/\//g, "/");
+    const interp = result.interpretation;
+    const part   = result.partsNeeded?.[0];
+    const now    = new Date();
+    const nowStr = now.toLocaleDateString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric" });
+    const id     = `TKT-${now.toISOString().replace(/\D/g, "").slice(0, 12)}-AI`;
 
     const titulo = part?.nombre
       ? `${part.nombre} — ${interp?.unitDetected?.marca ?? ""} ${interp?.unitDetected?.modelo ?? ""}`.trim()
       : interp?.faultProbable ?? "Refacción sin especificar";
 
-    const id = `TKT-${new Date().toISOString().replace(/\D/g, "").slice(0, 12)}-AI`;
-
     dispatch({
       type: "TKT_ADD",
       t: {
         id, titulo,
-        opId:        "general",
-        opShort:     "REF-G",
+        opId: "general", opShort: "REF-G",
         priority:    interp?.criticality ?? "P2",
         clientId:    selectedClient ?? "",
         supplierId:  "",
@@ -418,24 +306,20 @@ function CreateTicketButton({ analysisResult, selectedUnit, selectedClient, disp
         date:        nowStr,
         status:      "recibido",
         payType:     "credit",
-        promesaPago: "",
-        cobrado:     false,
-        mods:        interp?.urgency === "critica" || interp?.urgency === "alta" ? ["urgency"] : [],
-        prob:        "medium",
-        horasOp:     0,
+        promesaPago: "", cobrado: false,
+        mods:        ["critica", "alta"].includes(interp?.urgency) ? ["urgency"] : [],
+        prob:        "medium", horasOp: 0,
         notes: [
           interp?.faultProbable,
           part?.notas,
-          analysisResult.riesgos?.[0]?.descripcion,
-          `[Copilot ${Math.round((analysisResult.confidence ?? 0) * 100)}%]`,
+          result.riesgos?.[0]?.descripcion,
+          `[Copilot ${Math.round((result.confidence ?? 0) * 100)}%]`,
         ].filter(Boolean).join(" | "),
-        snap:     null,
-        timeline: [{ ts: new Date().toISOString(), evento: "Creado desde Sourcing Copilot", actor: "IA" }],
-        history:  [],
-        _fromCopilot: true,
+        snap: null,
+        timeline: [{ ts: now.toISOString(), evento: "Creado desde Sourcing Copilot", actor: "IA" }],
+        history: [], _fromCopilot: true,
       },
     });
-
     toast?.("✓ Ticket creado desde Sourcing Copilot");
   };
 
@@ -443,10 +327,10 @@ function CreateTicketButton({ analysisResult, selectedUnit, selectedClient, disp
     <button
       onClick={create}
       style={{
-        width: "100%", padding: "10px 0", borderRadius: 8,
+        width: "100%", padding: "11px 0", borderRadius: 8,
         background: accent, color: "#071209",
         fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer",
-        letterSpacing: 0.3, marginTop: 8,
+        letterSpacing: 0.2,
       }}
     >
       + Crear ticket desde este análisis
@@ -454,287 +338,27 @@ function CreateTicketButton({ analysisResult, selectedUnit, selectedClient, disp
   );
 }
 
-// ─── Input panel ──────────────────────────────────────────────
+// ─── Shared card style ────────────────────────────────────────
 
-function InputPanel({ needText, setNeedText, selectedUnit, setSelectedUnit, selectedClient, setSelectedClient,
-  status, analyze, reset, result, meta, state, units, clients, C, accent }) {
-
-  const inputBg   = C._dark ? "rgba(0,0,0,0.3)"   : "rgba(0,0,0,0.04)";
-  const inputBorder = needText ? accent + "55" : C.border;
-
-  return (
-    <div style={{
-      display: "flex", flexDirection: "column", gap: 10,
-      padding: "14px 16px",
-      background: C._dark ? "rgba(0,0,0,0.18)" : "rgba(0,0,0,0.02)",
-      borderRadius: 10,
-      border: `1px solid ${accent}14`,
-    }}>
-
-      {/* Label */}
-      <div style={{ fontSize: 9, color: C.t3, letterSpacing: 0.5, fontWeight: 700, textTransform: "uppercase" }}>
-        Describe la necesidad operativa
-      </div>
-
-      {/* Textarea */}
-      <textarea
-        value={needText}
-        onChange={e => setNeedText(e.target.value)}
-        onKeyDown={e => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) analyze();
-        }}
-        placeholder={"M2 106 clutch duro posible horquilla\nF-350 diferencial trasero ruido\nKenworth T680 falla tablero eléctrico"}
-        rows={4}
-        style={{
-          width: "100%", boxSizing: "border-box",
-          resize: "vertical", fontSize: 12, lineHeight: 1.5,
-          padding: "9px 11px", borderRadius: 8,
-          background: inputBg,
-          border: `1px solid ${inputBorder}`,
-          color: C.t1, outline: "none", fontFamily: "inherit",
-          transition: "border-color 0.15s",
-        }}
-      />
-
-      {/* Quick examples */}
-      <div>
-        <div style={{ fontSize: 8, color: C.t3, marginBottom: 5, letterSpacing: 0.4 }}>EJEMPLOS RÁPIDOS</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-          {EXAMPLES.map((ex, i) => (
-            <button
-              key={i}
-              onClick={() => setNeedText(ex)}
-              style={{
-                fontSize: 9, padding: "3px 7px", borderRadius: 4,
-                background: needText === ex ? accent + "20" : (C._dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"),
-                color: needText === ex ? accent : C.t3,
-                border: `1px solid ${needText === ex ? accent + "40" : "transparent"}`,
-                cursor: "pointer",
-              }}
-            >
-              {ex}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Selectors */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        <div>
-          <div style={{ fontSize: 8, color: C.t3, marginBottom: 3, letterSpacing: 0.4 }}>UNIDAD</div>
-          <select
-            value={selectedUnit}
-            onChange={e => setSelectedUnit(e.target.value)}
-            style={{
-              width: "100%", fontSize: 10, padding: "5px 8px", borderRadius: 6,
-              background: C._dark ? "rgba(0,0,0,0.3)" : "rgba(255,255,255,0.8)",
-              border: `1px solid ${C.border}`,
-              color: C.t1, outline: "none",
-            }}
-          >
-            <option value="">Auto-detectar</option>
-            {units.map(u => (
-              <option key={u.id} value={u.id}>
-                {u.marca} {u.modelo} {u.anio}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <div style={{ fontSize: 8, color: C.t3, marginBottom: 3, letterSpacing: 0.4 }}>CLIENTE</div>
-          <select
-            value={selectedClient}
-            onChange={e => setSelectedClient(e.target.value)}
-            style={{
-              width: "100%", fontSize: 10, padding: "5px 8px", borderRadius: 6,
-              background: C._dark ? "rgba(0,0,0,0.3)" : "rgba(255,255,255,0.8)",
-              border: `1px solid ${C.border}`,
-              color: C.t1, outline: "none",
-            }}
-          >
-            <option value="">Todos los clientes</option>
-            {clients.map(c => (
-              <option key={c.id} value={c.id}>{c.empresa}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Context pills */}
-      <ContextPills state={state} C={C} accent={accent} />
-
-      {/* Actions */}
-      <div style={{ display: "flex", gap: 7 }}>
-        <button
-          onClick={analyze}
-          disabled={!needText.trim() || status === "loading"}
-          style={{
-            flex: 1, padding: "9px 0", borderRadius: 8,
-            background: !needText.trim() || status === "loading"
-              ? (C._dark ? "rgba(143,227,190,0.08)" : "rgba(92,191,138,0.12)")
-              : accent,
-            color: !needText.trim() || status === "loading" ? C.t3 : "#071209",
-            fontSize: 12, fontWeight: 700, border: "none",
-            cursor: !needText.trim() || status === "loading" ? "default" : "pointer",
-            transition: "all 0.12s",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-          }}
-        >
-          {status === "loading" ? (
-            <>
-              <span style={{ display: "inline-block", animation: "spin 1s linear infinite" }}>⟳</span>
-              Analizando…
-            </>
-          ) : "▶ Analizar"}
-        </button>
-
-        {result && (
-          <button
-            onClick={reset}
-            style={{
-              padding: "9px 14px", borderRadius: 8,
-              background: "transparent",
-              border: `1px solid ${C.border}`,
-              color: C.t3, fontSize: 10, cursor: "pointer",
-            }}
-          >
-            ↺ Nuevo
-          </button>
-        )}
-      </div>
-
-      {/* Keyboard hint */}
-      {needText.trim() && status === "idle" && (
-        <div style={{ fontSize: 8, color: C.t3, textAlign: "right" }}>
-          ⌘Enter / Ctrl+Enter para analizar
-        </div>
-      )}
-
-      {/* Meta */}
-      {meta && status === "ok" && (
-        <div style={{ fontSize: 8, color: C.t3, textAlign: "right" }}>
-          {meta.duration_ms}ms · {(meta.model ?? "").replace("claude-", "").split("-").slice(0, 2).join("-")} · {meta.usage?.input_tokens ?? 0}↑ {meta.usage?.output_tokens ?? 0}↓ tok
-        </div>
-      )}
-    </div>
-  );
+function card(C, accent) {
+  return {
+    padding: "14px 16px",
+    borderRadius: 10,
+    background: C._dark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.65)",
+    border: `1px solid ${accent}14`,
+    marginBottom: 8,
+  };
 }
 
-// ─── Results panel ────────────────────────────────────────────
+// ─── Examples ────────────────────────────────────────────────
 
-function ResultsPanel({ status, result, error, activeTab, setActiveTab,
-  selectedUnit, selectedClient, dispatch, toast, streamChars, C, accent }) {
-
-  if (status === "loading") {
-    return (
-      <div style={{
-        flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
-        justifyContent: "center", gap: 10, minHeight: 240,
-      }}>
-        <div style={{ fontSize: 32, animation: "pulse 1.5s ease infinite" }}>⚡</div>
-        <div style={{ fontSize: 12, color: accent, fontWeight: 600 }}>
-          {streamChars > 0 ? "Recibiendo análisis…" : "Consultando al Copilot…"}
-        </div>
-        {streamChars > 0 ? (
-          <div style={{ fontSize: 10, color: C.t2, fontVariantNumeric: "tabular-nums" }}>
-            {streamChars.toLocaleString("es-MX")} caracteres recibidos
-          </div>
-        ) : (
-          <div style={{ fontSize: 9, color: C.t3, lineHeight: 1.6, textAlign: "center" }}>
-            Revisando historial · Identificando piezas y proveedores
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (status === "error") {
-    return (
-      <div style={{ padding: 14 }}>
-        <div style={{
-          padding: "12px 14px", borderRadius: 8,
-          background: "#FF444411", border: "1px solid #FF444433",
-          fontSize: 10, color: "#FF6B6B", lineHeight: 1.5,
-        }}>
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>Error al analizar</div>
-          {error}
-        </div>
-      </div>
-    );
-  }
-
-  if (status === "ok" && result) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-        {/* Summary */}
-        <div style={{ padding: "12px 16px 0" }}>
-          <SummaryCard data={result} C={C} accent={accent} />
-        </div>
-
-        {/* Tab bar */}
-        <div style={{
-          display: "flex",
-          borderBottom: `1px solid ${accent}14`,
-          background: C._dark ? "rgba(0,0,0,0.15)" : "rgba(0,0,0,0.02)",
-          flexShrink: 0,
-        }}>
-          {[
-            ["interpretation", "Interpretación"],
-            ["sourcing",       "Sourcing"],
-            ["risks",          "Riesgos"],
-          ].map(([k, lbl]) => (
-            <button
-              key={k}
-              onClick={() => setActiveTab(k)}
-              style={{
-                flex: 1, padding: "8px 0", fontSize: 10, fontWeight: 700,
-                background: "transparent", border: "none",
-                color: activeTab === k ? accent : C.t3,
-                borderBottom: activeTab === k ? `2px solid ${accent}` : "2px solid transparent",
-                cursor: "pointer", transition: "all 0.1s",
-                letterSpacing: 0.3,
-              }}
-            >
-              {lbl}
-            </button>
-          ))}
-        </div>
-
-        {/* Tab content */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "0 16px" }}>
-          {activeTab === "interpretation" && <InterpretationPanel data={result} C={C} accent={accent} />}
-          {activeTab === "sourcing"       && <SourcingPanel       data={result} C={C} accent={accent} />}
-          {activeTab === "risks"          && <RisksPanel          data={result} C={C} accent={accent} />}
-
-          <CreateTicketButton
-            analysisResult={result}
-            selectedUnit={selectedUnit}
-            selectedClient={selectedClient}
-            dispatch={dispatch}
-            toast={toast}
-            C={C}
-            accent={accent}
-          />
-          <div style={{ height: 16 }} />
-        </div>
-      </div>
-    );
-  }
-
-  // Empty / idle
-  return (
-    <div style={{
-      flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
-      justifyContent: "center", gap: 10, padding: 24, textAlign: "center", minHeight: 240,
-    }}>
-      <div style={{ fontSize: 36, opacity: 0.18 }}>⚡</div>
-      <div style={{ fontSize: 12, color: C.t2, lineHeight: 1.65, maxWidth: 280 }}>
-        Describe la necesidad en lenguaje natural.<br />
-        El Copilot identifica la falla, las piezas necesarias y te recomienda a quién llamar.
-      </div>
-    </div>
-  );
-}
+const EXAMPLES = [
+  "M2 106 clutch duro posible horquilla",
+  "F-350 diferencial trasero ruido",
+  "Kenworth T680 falla tablero eléctrico",
+  "Scania R suspensión delantera golpe",
+  "Cascadia frenos ABS luz encendida",
+];
 
 // ─── Main component ───────────────────────────────────────────
 
@@ -746,14 +370,13 @@ export default function SourcingCopilot({ state, dispatch, C, toast }) {
   const [result,         setResult]         = useState(null);
   const [error,          setError]          = useState(null);
   const [meta,           setMeta]           = useState(null);
-  const [activeTab,      setActiveTab]      = useState("interpretation");
   const [streamChars,    setStreamChars]    = useState(0);
 
-  const abortRef = useRef(null);
-  const accent   = C._dark ? "#8FE3BE" : "#5CBF8A";
-
-  const units   = state.units   ?? [];
-  const clients = state.clients ?? [];
+  const abortRef  = useRef(null);
+  const resultRef = useRef(null);
+  const accent    = C._dark ? "#8FE3BE" : "#5CBF8A";
+  const units     = state.units   ?? [];
+  const clients   = state.clients ?? [];
 
   const analyze = useCallback(async () => {
     if (!needText.trim()) return;
@@ -766,22 +389,20 @@ export default function SourcingCopilot({ state, dispatch, C, toast }) {
     setError(null);
     setStreamChars(0);
 
-    const client = clients.find(c => c.id === selectedClient) ?? clients[0] ?? null;
+    const client       = clients.find(c => c.id === selectedClient) ?? null;
     const recentTickets = (state.tickets ?? [])
       .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
-      .slice(0, 8);
+      .slice(0, 5);
 
     const context = {
-      units: units.map(u => ({
+      units: units.slice(0, 8).map(u => ({
         id: u.id, marca: u.marca, modelo: u.modelo, anio: u.anio,
         km: u.km, statusOp: u.statusOp, notas: u.notas,
-        label: u.placa || u.economico || (u.vin ?? "").slice(-6) || u.id,
       })),
-      parts:         (state.parts     ?? []).slice(0, 15),
-      suppliers:     (state.suppliers ?? []).slice(0, 8),
+      parts:         (state.parts     ?? []).slice(0, 10),
+      suppliers:     (state.suppliers ?? []).slice(0, 6),
       recentTickets: recentTickets.map(t => ({
-        titulo: t.titulo, status: t.status, partRef: t.partRef,
-        notes: t.notes,
+        titulo: t.titulo, status: t.status, partRef: t.partRef, notes: t.notes,
         snap: t.snap ? { precioConIVA: t.snap.precioConIVA } : null,
       })),
       client: client ? {
@@ -792,15 +413,15 @@ export default function SourcingCopilot({ state, dispatch, C, toast }) {
 
     try {
       const res = await fetch("/api/ai/sourcing", {
-        method:  "POST",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ needText: needText.trim(), context }),
-        signal:  ctrl.signal,
+        body: JSON.stringify({ needText: needText.trim(), context }),
+        signal: ctrl.signal,
       });
 
       const ct = res.headers.get("content-type") ?? "";
 
-      // ── SSE stream (new backend) ──────────────────────────────
+      // ── SSE streaming ─────────────────────────────────────────
       if (ct.includes("text/event-stream")) {
         const reader  = res.body.getReader();
         const decoder = new TextDecoder();
@@ -817,18 +438,18 @@ export default function SourcingCopilot({ state, dispatch, C, toast }) {
 
           for (const part of parts) {
             if (!part.startsWith("data: ")) continue;
-            let event;
-            try { event = JSON.parse(part.slice(6).trim()); } catch { continue; }
+            let evt;
+            try { evt = JSON.parse(part.slice(6).trim()); } catch { continue; }
 
-            if (event.type === "progress") {
-              setStreamChars(event.chars);
-            } else if (event.type === "result") {
-              setResult(event.result);
-              setMeta({ duration_ms: event.duration_ms, model: event.model, usage: event.usage });
+            if (evt.type === "progress") {
+              setStreamChars(evt.chars);
+            } else if (evt.type === "result") {
+              setResult(evt.result);
+              setMeta({ duration_ms: evt.duration_ms, model: evt.model, usage: evt.usage });
               setStatus("ok");
-              setActiveTab("interpretation");
-            } else if (event.type === "error") {
-              setError(event.error ?? "Error del servidor");
+              setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+            } else if (evt.type === "error") {
+              setError(evt.error ?? "Error del servidor");
               setStatus("error");
             }
           }
@@ -836,11 +457,13 @@ export default function SourcingCopilot({ state, dispatch, C, toast }) {
         return;
       }
 
-      // ── Fallback: plain JSON response ─────────────────────────
+      // ── Plain JSON (fallback / error pre-stream) ──────────────
       if (!ct.includes("json")) {
-        setError(res.status === 404
-          ? "Ruta /api/ai/sourcing no encontrada. En dev ejecuta `npm run dev:ai`."
-          : `Error ${res.status} — respuesta inesperada del servidor.`);
+        setError(
+          res.status === 404
+            ? "API no disponible — ejecuta `npm run dev:ai` (vercel dev) o despliega en Vercel con ANTHROPIC_API_KEY configurada."
+            : `Error ${res.status}: el servidor no devolvió JSON ni SSE.`
+        );
         setStatus("error");
         return;
       }
@@ -851,14 +474,18 @@ export default function SourcingCopilot({ state, dispatch, C, toast }) {
         setResult(data.result);
         setMeta({ duration_ms: data.duration_ms, model: data.model, usage: data.usage });
         setStatus("ok");
-        setActiveTab("interpretation");
       } else {
         setError(data.error ?? "Error desconocido");
         setStatus("error");
       }
+
     } catch (e) {
       if (e.name === "AbortError") return;
-      setError(e.message ?? "Error de red");
+      setError(
+        e.message === "Failed to fetch" || e.message?.includes("NetworkError") || e.message?.includes("pattern")
+          ? "Sin conexión al servidor — ¿está corriendo `npm run dev:ai`?"
+          : (e.message ?? "Error de red")
+      );
       setStatus("error");
     } finally {
       abortRef.current = null;
@@ -870,90 +497,199 @@ export default function SourcingCopilot({ state, dispatch, C, toast }) {
     setResult(null);
     setError(null);
     setNeedText("");
+    setStreamChars(0);
   };
 
-  // ── Two-column desktop layout ────────────────────────────────
-  return (
-    <div style={{
-      maxWidth: 1100, margin: "0 auto",
-      padding: "16px 14px",
-      minHeight: "calc(100vh - 60px)",
-    }}>
+  const inputBg = C._dark ? "rgba(0,0,0,0.28)" : "rgba(255,255,255,0.7)";
 
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-        <span style={{ fontSize: 20 }}>⚡</span>
+  return (
+    <div style={{ maxWidth: 680, margin: "0 auto", padding: "20px 16px 80px" }}>
+
+      {/* ── Header ──────────────────────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+        <div style={{
+          width: 36, height: 36, borderRadius: 10,
+          background: accent + "18",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 18,
+        }}>⚡</div>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: accent, letterSpacing: -0.2 }}>
-            Sourcing Copilot
-          </div>
-          <div style={{ fontSize: 9, color: C.t3 }}>
-            Comprador técnico senior · Refacciones flotilla México
-          </div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: accent }}>Sourcing Copilot</div>
+          <div style={{ fontSize: 9, color: C.t3 }}>Comprador técnico · Flotilla México</div>
         </div>
         <span style={{
-          marginLeft: "auto",
-          fontSize: 8, padding: "2px 7px", borderRadius: 4,
-          background: accent + "15", color: accent,
-          fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase",
+          marginLeft: "auto", fontSize: 8, padding: "2px 7px", borderRadius: 4,
+          background: accent + "18", color: accent, fontWeight: 700, letterSpacing: 0.6,
         }}>IA</span>
       </div>
 
-      {/* Two-column grid */}
+      {/* ── Input card ──────────────────────────────────────────── */}
       <div style={{
-        display: "grid",
-        gridTemplateColumns: status === "idle" ? "1fr" : "380px 1fr",
-        gap: 14,
-        alignItems: "start",
-        transition: "grid-template-columns 0.25s ease",
+        padding: "14px 16px", borderRadius: 12,
+        background: C._dark ? "rgba(0,0,0,0.22)" : "rgba(255,255,255,0.55)",
+        border: `1px solid ${needText ? accent + "44" : accent + "16"}`,
+        marginBottom: 10,
+        transition: "border-color 0.15s",
       }}>
-
-        {/* Left: input */}
-        <InputPanel
-          needText={needText}
-          setNeedText={setNeedText}
-          selectedUnit={selectedUnit}
-          setSelectedUnit={setSelectedUnit}
-          selectedClient={selectedClient}
-          setSelectedClient={setSelectedClient}
-          status={status}
-          analyze={analyze}
-          reset={reset}
-          result={result}
-          meta={meta}
-          state={state}
-          units={units}
-          clients={clients}
-          C={C}
-          accent={accent}
+        <textarea
+          value={needText}
+          onChange={e => setNeedText(e.target.value)}
+          onKeyDown={e => (e.metaKey || e.ctrlKey) && e.key === "Enter" && analyze()}
+          placeholder={"Describe la falla o necesidad\nEj: M2 106 clutch duro posible horquilla"}
+          rows={3}
+          style={{
+            width: "100%", boxSizing: "border-box",
+            resize: "none", fontSize: 13, lineHeight: 1.55,
+            padding: "8px 10px", borderRadius: 7,
+            background: inputBg,
+            border: `1px solid ${C.border}`,
+            color: C.t1, outline: "none", fontFamily: "inherit",
+          }}
         />
 
-        {/* Right: results */}
-        {status !== "idle" && (
-          <div style={{
-            background: C._dark ? "rgba(0,0,0,0.18)" : "rgba(0,0,0,0.02)",
-            borderRadius: 10,
-            border: `1px solid ${accent}14`,
-            minHeight: 320,
-            overflow: "hidden",
-          }}>
-            <ResultsPanel
-              status={status}
-              result={result}
-              error={error}
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-              selectedUnit={selectedUnit}
-              selectedClient={selectedClient}
-              dispatch={dispatch}
-              toast={toast}
-              streamChars={streamChars}
-              C={C}
-              accent={accent}
-            />
+        {/* Examples */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
+          {EXAMPLES.map((ex, i) => (
+            <button key={i} onClick={() => setNeedText(ex)} style={{
+              fontSize: 9, padding: "3px 7px", borderRadius: 4,
+              background: needText === ex ? accent + "22" : (C._dark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)"),
+              color: needText === ex ? accent : C.t3,
+              border: `1px solid ${needText === ex ? accent + "44" : "transparent"}`,
+              cursor: "pointer",
+            }}>
+              {ex}
+            </button>
+          ))}
+        </div>
+
+        {/* Selectors */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
+          {[
+            ["UNIDAD", selectedUnit,   v => setSelectedUnit(v),   [{ id: "", label: "Auto-detectar" }, ...units.map(u => ({ id: u.id, label: `${u.marca} ${u.modelo} ${u.anio ?? ""}`.trim() }))]],
+            ["CLIENTE", selectedClient, v => setSelectedClient(v), [{ id: "", label: "Todos" }, ...clients.map(c => ({ id: c.id, label: c.empresa }))]],
+          ].map(([lbl, val, set, opts]) => (
+            <div key={lbl}>
+              <div style={{ fontSize: 8, color: C.t3, marginBottom: 3, letterSpacing: 0.4 }}>{lbl}</div>
+              <select value={val} onChange={e => set(e.target.value)} style={{
+                width: "100%", fontSize: 10, padding: "5px 8px", borderRadius: 6,
+                background: inputBg, border: `1px solid ${C.border}`,
+                color: C.t1, outline: "none",
+              }}>
+                {opts.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+              </select>
+            </div>
+          ))}
+        </div>
+
+        {/* Context chips + action */}
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+          {[
+            [units.length, "unidad"],
+            [(state.suppliers ?? []).length, "proveedor"],
+            [(state.parts ?? []).length, "pieza"],
+          ].filter(([n]) => n > 0).map(([n, label]) => (
+            <span key={label} style={{
+              fontSize: 8, padding: "2px 6px", borderRadius: 3,
+              background: accent + "12", color: accent, fontWeight: 600,
+            }}>
+              {n} {label}{n !== 1 ? "s" : ""}
+            </span>
+          ))}
+
+          <div style={{ flex: 1 }} />
+
+          {result && (
+            <button onClick={reset} style={{
+              fontSize: 10, padding: "5px 10px", borderRadius: 6,
+              background: "transparent", border: `1px solid ${C.border}`,
+              color: C.t3, cursor: "pointer",
+            }}>
+              ↺ Nueva consulta
+            </button>
+          )}
+
+          <button
+            onClick={analyze}
+            disabled={!needText.trim() || status === "loading"}
+            style={{
+              padding: "7px 18px", borderRadius: 7,
+              background: !needText.trim() || status === "loading" ? accent + "22" : accent,
+              color: !needText.trim() || status === "loading" ? C.t3 : "#071209",
+              fontSize: 11, fontWeight: 700, border: "none",
+              cursor: !needText.trim() || status === "loading" ? "default" : "pointer",
+              display: "flex", alignItems: "center", gap: 6,
+            }}
+          >
+            {status === "loading" ? (
+              <>
+                <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span>
+                {streamChars > 0 ? `${streamChars} chars…` : "Analizando…"}
+              </>
+            ) : "▶ Analizar"}
+          </button>
+        </div>
+
+        {/* Meta */}
+        {meta && status === "ok" && (
+          <div style={{ fontSize: 8, color: C.t3, marginTop: 6, textAlign: "right" }}>
+            {meta.duration_ms}ms · {(meta.model ?? "").replace("claude-","").split("-").slice(0,2).join("-")} · {meta.usage?.input_tokens ?? 0}↑ {meta.usage?.output_tokens ?? 0}↓ tok
           </div>
         )}
       </div>
+
+      {/* ── Loading ──────────────────────────────────────────────── */}
+      {status === "loading" && (
+        <div style={{
+          padding: "32px 20px", textAlign: "center",
+          background: C._dark ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.4)",
+          borderRadius: 12, border: `1px solid ${accent}12`,
+        }}>
+          <div style={{ fontSize: 28, marginBottom: 10, animation: "pulse 1.5s ease infinite" }}>⚡</div>
+          <div style={{ fontSize: 12, color: accent, fontWeight: 600, marginBottom: 4 }}>
+            {streamChars > 0 ? "Recibiendo análisis…" : "Consultando al Copilot…"}
+          </div>
+          {streamChars > 0 && (
+            <div style={{ fontSize: 10, color: C.t2 }}>
+              {streamChars.toLocaleString("es-MX")} caracteres recibidos
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Error ────────────────────────────────────────────────── */}
+      {status === "error" && (
+        <div style={{
+          padding: "14px 16px", borderRadius: 10,
+          background: "#FF444410", border: "1px solid #FF444430",
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#FF6B6B", marginBottom: 5 }}>
+            Error al analizar
+          </div>
+          <div style={{ fontSize: 10, color: "#FF8888", lineHeight: 1.55 }}>{error}</div>
+        </div>
+      )}
+
+      {/* ── Results ──────────────────────────────────────────────── */}
+      {status === "ok" && result && (
+        <div ref={resultRef}>
+          <FaultCard    data={result}                            C={C} accent={accent} />
+          <PartsCard    parts={result.partsNeeded}               C={C} accent={accent} />
+          <SourcingCard sourcing={result.sourcing}               C={C} accent={accent} />
+          <CostCard     costEstimate={result.costEstimate}       C={C} accent={accent} />
+          <RisksCard    riesgos={result.riesgos}
+                        nextSteps={result.nextSteps}             C={C} accent={accent} />
+
+          <CreateTicketBtn
+            result={result}
+            selectedUnit={selectedUnit}
+            selectedClient={selectedClient}
+            dispatch={dispatch}
+            toast={toast}
+            C={C}
+            accent={accent}
+          />
+        </div>
+      )}
     </div>
   );
 }
