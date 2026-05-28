@@ -50,6 +50,12 @@ const SYSTEM = `Eres un asistente de operaciones para flotillas de transporte de
 
 Tienes acceso al catálogo de refacciones, unidades de la flota, proveedores y tickets recientes del usuario.
 
+CÓMO IDENTIFICAR UNIDADES:
+- El campo "eco:" es el NÚMERO ECONÓMICO de la unidad (ej: eco:1594 significa "la unidad 1594")
+- Cuando el usuario diga "la 1594", "eco 1594", "unidad 1594" → busca eco:1594 en la flota
+- El ID interno (UNI-XXXXX) es solo para el sistema, el usuario usa el número económico
+- Si el contexto incluye la unidad, úsala directamente — no digas que no la tienes
+
 Puedes:
 - Buscar piezas compatibles según unidad y falla
 - Comparar OEM vs aftermarket con números de parte
@@ -70,7 +76,7 @@ function buildContext(ctx: any): string {
   const tickets   = (ctx?.tickets   ?? []).slice(0,  5);
 
   const uLines = units.map((u: any) =>
-    `• [${u.id}] ${u.marca} ${u.modelo} ${u.anio ?? ""} eco:${u.economico ?? "-"} km:${u.km ?? "?"}`
+    `• eco:${u.economico ?? "-"} [${u.id}] ${u.marca} ${u.modelo} ${u.anio ?? ""} placa:${u.placa ?? "-"} km:${u.km ?? "?"}`
   ).join("\n") || "Sin unidades";
 
   const pLines = parts.map((p: any) =>

@@ -143,12 +143,33 @@ export default function MChat({ state, dispatch, C, toast }) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const buildContext = () => ({
-    units:     units.slice(0, 10).map(u => ({ id:u.id, marca:u.marca, modelo:u.modelo, anio:u.anio, km:u.km, economico:u.economico })),
-    parts:     parts.slice(0, 15).map(p => ({ nombre:p.nombre, oem:p.oem, aftermarket:p.aftermarket, ultimoPrecio:p.ultimoPrecio })),
-    suppliers: suppliers.slice(0, 6).map(s => ({ nombre:s.nombre, especialidad:s.especialidad, contacto:s.contacto })),
-    tickets:   tickets.slice(0, 5).map(t => ({ titulo:t.titulo, status:t.status, snap: t.snap ? { precioConIVA:t.snap.precioConIVA } : null })),
-  });
+  const buildContext = (currentMsg = "") => {
+    // Scan the full conversation + current message for unit references
+    const allText = (messages.map(m => m.content).join(" ") + " " + currentMsg).toLowerCase();
+
+    // Match by economico number or by marca/modelo keywords
+    const mentioned = units.filter(u => {
+      const eco = String(u.economico ?? "");
+      if (eco && allText.includes(eco)) return true;
+      const marca  = (u.marca  ?? "").toLowerCase();
+      const modelo = (u.modelo ?? "").toLowerCase();
+      // Only match meaningful tokens (>3 chars) to avoid false positives
+      return [marca, ...modelo.split(/[\s-]+/)].some(w => w.length > 3 && allText.includes(w));
+    });
+
+    // Mentioned units first, then fill up to 20 with others
+    const prioritized = [
+      ...mentioned,
+      ...units.filter(u => !mentioned.find(m => m.id === u.id)),
+    ].slice(0, 20);
+
+    return {
+      units:     prioritized.map(u => ({ id:u.id, marca:u.marca, modelo:u.modelo, anio:u.anio, km:u.km, economico:u.economico, placa:u.placa })),
+      parts:     parts.slice(0, 15).map(p => ({ nombre:p.nombre, oem:p.oem, aftermarket:p.aftermarket, ultimoPrecio:p.ultimoPrecio })),
+      suppliers: suppliers.slice(0, 6).map(s => ({ nombre:s.nombre, especialidad:s.especialidad, contacto:s.contacto })),
+      tickets:   tickets.slice(0, 5).map(t => ({ titulo:t.titulo, status:t.status, snap: t.snap ? { precioConIVA:t.snap.precioConIVA } : null })),
+    };
+  };
 
   const send = useCallback(async (text) => {
     const userMsg = text.trim();
@@ -167,12 +188,13 @@ export default function MChat({ state, dispatch, C, toast }) {
     setLoading(true);
 
     const history = [...messages, userEntry].map(m => ({ role: m.role, content: m.content }));
+    const context = buildContext(userMsg);
 
     try {
       const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history, context: buildContext() }),
+        body: JSON.stringify({ messages: history, context }),
         signal: ctrl.signal,
       });
 
