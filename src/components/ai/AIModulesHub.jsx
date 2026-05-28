@@ -320,7 +320,7 @@ export default function AIModulesHub({ state, tab, C, extra }) {
       <button
         onClick={() => setOpen(true)}
         style={{
-          position: "fixed", bottom: 24, right: 24,
+          position: "fixed", bottom: 24, left: 24,
           zIndex: 8999,
           width: 52, height: 52, borderRadius: "50%",
           background: C._dark ? "rgba(143,227,190,0.15)" : "rgba(92,191,138,0.18)",
