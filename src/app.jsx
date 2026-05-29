@@ -524,7 +524,7 @@ const sel_operados   = (ts) => sel_active(ts).filter(t=>OPERADO_SET.has(t.status
 const sel_cobrados   = (ts) => sel_active(ts).filter(t=>CASH_SET.has(t.status));
 
 // Cartera: delivered/invoiced but not yet paid — business rule lives here
-const sel_cartera    = (ts) => sel_active(ts).filter(t=>CARTERA_SET.has(t.status)&&!t.cobrado);
+const sel_cartera    = (ts) => sel_active(ts).filter(t=>CARTERA_SET.has(t.status));
 
 // Vencidos: cartera past the promesa de pago date
 const sel_vencidos   = (ts) => sel_cartera(ts).filter(t=>{
@@ -1755,7 +1755,7 @@ function CentroOps({state}) {
 
   // Aging cartera — only entregado/facturado credit tickets with past promesaPago
   const aging = useMemo(()=>{
-    const pend=tickets.filter(t=>CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t.cobrado&&!t._deleted&&t.promesaPago);
+    const pend=tickets.filter(t=>CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t._deleted&&t.promesaPago);
     const bucket=(mn,mx)=>pend.filter(t=>{const d=parseDateMX(t.promesaPago);if(!d)return false;const ms=Date.now()-d.getTime();return ms>=mn*86400000&&(mx==null||ms<mx*86400000);}).reduce((s,t)=>s+(t.snap?.precioConIVA||0),0);
     return{a30:bucket(0,30),a60:bucket(30,60),mas60:bucket(60,null)};
   },[tickets]);
@@ -6608,7 +6608,8 @@ function MCartera({state,dispatch,toast}) {
   const A = makeA(C);
 
   const creditTkts = useMemo(()=>tickets.filter(t=>!t._deleted&&t.payType==="credit"&&t.status!=="cancelado"),[tickets]);
-  const pendientes = useMemo(()=>creditTkts.filter(t=>!t.cobrado&&CARTERA_SET.has(t.status)),[creditTkts]);
+  // Use status as source of truth — ignore cobrado flag (may be stale in DB)
+  const pendientes = useMemo(()=>creditTkts.filter(t=>CARTERA_SET.has(t.status)),[creditTkts]);
   const cobradas   = useMemo(()=>creditTkts.filter(t=>t.status==="cobrado"),[creditTkts]);
   const cerradas   = useMemo(()=>creditTkts.filter(t=>t.status==="cerrado"),[creditTkts]);
   const totalPend  = useMemo(()=>pendientes.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[pendientes]);
