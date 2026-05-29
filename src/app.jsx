@@ -228,8 +228,17 @@ async function sbFetch(path, opts={}) {
 }
 
 async function loadTable(table) {
-  const rows = await sbFetch(`/${table}?select=id,data&order=created_at.asc`);
-  return Array.isArray(rows) && rows.length>0 ? rows.map(r=>r.data) : null;
+  const PAGE = 1000;
+  let all = [];
+  let offset = 0;
+  while (true) {
+    const rows = await sbFetch(`/${table}?select=id,data&order=created_at.asc&limit=${PAGE}&offset=${offset}`);
+    if (!Array.isArray(rows) || rows.length === 0) break;
+    all = all.concat(rows);
+    if (rows.length < PAGE) break;
+    offset += PAGE;
+  }
+  return all.length > 0 ? all.map(r => r.data) : null;
 }
 
 async function upsertRow(table, id, data) {
@@ -662,8 +671,15 @@ function loadFromStorage() {
   } catch { return null; }
 }
 function saveToStorage(s) {
-  try { localStorage.setItem(STORAGE_KEY,JSON.stringify({version:STORAGE_VER,savedAt:nowISO(),data:{tickets:s.tickets,clients:s.clients,suppliers:s.suppliers,units:s.units,parts:s.parts}})); }
-  catch(e){ console.warn("storage:",e); }
+  const payload = {version:STORAGE_VER,savedAt:nowISO(),data:{tickets:s.tickets,clients:s.clients,suppliers:s.suppliers,units:s.units,parts:s.parts}};
+  try { localStorage.setItem(STORAGE_KEY,JSON.stringify(payload)); }
+  catch(e) {
+    // Quota exceeded (flota grande) — guardar sin unidades; Supabase es la fuente primaria
+    try {
+      const slim = {...payload, data:{...payload.data, units:[]}};
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
+    } catch { console.warn("storage:",e); }
+  }
 }
 
 function reducer(state,action) {
