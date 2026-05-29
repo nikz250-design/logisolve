@@ -5003,7 +5003,7 @@ function MSel({label,value,onChange,options}) {
 function MOps({state,setTab,triggerMargin}) {
   const C = React.useContext(ThemeCtx);
   const {tickets,clients} = state;
-  const [period,setPeriod] = useState("week");
+  const [period,setPeriod] = useState("month");
 
   // ── Accent palette — Black/white monochrome
   const A = makeA(C);
@@ -5033,6 +5033,10 @@ function MOps({state,setTab,triggerMargin}) {
   const carteraMonto = useMemo(()=>sumSnap(carteraTkts,"precioConIVA"),[carteraTkts]);
   const pipeline     = useMemo(()=>sel_open(tickets),[tickets]);
   const p1Active     = useMemo(()=>pipeline.filter(t=>t.priority==="P1"),[pipeline]);
+  // "Acción requerida" = P1 stuck in early stages (not yet sourced/purchased)
+  const EARLY_STAGES = new Set(["recibido","validando","sourcing","cotizado"]);
+  const p1Bloqueados = useMemo(()=>p1Active.filter(t=>EARLY_STAGES.has(t.status)),[p1Active]);
+  const p1EnProceso  = useMemo(()=>p1Active.filter(t=>!EARLY_STAGES.has(t.status)),[p1Active]);
   const p2Active     = useMemo(()=>pipeline.filter(t=>t.priority==="P2"),[pipeline]);
   const vencidos     = useMemo(()=>sel_vencidos(tickets),[tickets]);
 
@@ -5059,13 +5063,14 @@ function MOps({state,setTab,triggerMargin}) {
 
   // ── Operational status ────────────────────────────────────────────────────
   const opsStatus = useMemo(()=>{
-    if(p1Active.length>0) return {msg:`${p1Active.length} unidad${p1Active.length>1?"es":""} detenida${p1Active.length>1?"s":""}`,level:"critical"};
+    if(p1Bloqueados.length>0) return {msg:`${p1Bloqueados.length} P1 requiere${p1Bloqueados.length>1?"n":""} acción`,level:"critical"};
     if(vencidos.length>0) return {msg:`${vencidos.length} cobro${vencidos.length>1?"s":""} vencido${vencidos.length>1?"s":""}`,level:"warning"};
+    if(p1EnProceso.length>0) return {msg:`${p1EnProceso.length} P1 en progreso`,level:"warning"};
     if(operados.length===0) return {msg:"Sin operaciones en este período",level:"idle"};
     if(margen>=25) return {msg:"Margen saludable · Todo operando",level:"good"};
     if(margen>=15) return {msg:"Rentabilidad estable",level:"ok"};
     return {msg:"Margen bajo — revisar precios",level:"warn"};
-  },[p1Active,vencidos,operados,margen]);
+  },[p1Bloqueados,p1EnProceso,vencidos,operados,margen]);
 
   const sc = {
     critical:{dot:A.red,   text:A.red},
@@ -5107,45 +5112,52 @@ function MOps({state,setTab,triggerMargin}) {
     <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
 
       {/* ══ ALERT BANNER — breaks layout, appears FIRST ══════════════════════ */}
-      {(p1Active.length>0||vencidos.length>0)&&(
+      {(p1Bloqueados.length>0||p1EnProceso.length>0||vencidos.length>0)&&(
         <div style={{
-          background: p1Active.length>0
+          background: p1Bloqueados.length>0
             ? "rgba(239,68,68,0.08)"
-            : "rgba(245,158,11,0.08)",
-          borderBottom: `1px solid ${p1Active.length>0?"rgba(239,68,68,0.2)":"rgba(245,158,11,0.2)"}`,
+            : "rgba(245,158,11,0.06)",
+          borderBottom: `1px solid ${p1Bloqueados.length>0?"rgba(239,68,68,0.2)":"rgba(245,158,11,0.15)"}`,
           padding:"20px 20px 16px",
         }}>
-          {p1Active.length>0&&(
-            <div style={{marginBottom:vencidos.length>0?18:0}}>
+          {p1Bloqueados.length>0&&(
+            <div style={{marginBottom:(p1EnProceso.length>0||vencidos.length>0)?18:0}}>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
-                <div style={{width:7,height:7,borderRadius:"50%",background:A.red,
-                  boxShadow:"none",flexShrink:0}}/>
+                <div style={{width:7,height:7,borderRadius:"50%",background:A.red,flexShrink:0}}/>
                 <span style={{fontSize:10,fontWeight:800,color:A.red,letterSpacing:"0.16em",textTransform:"uppercase"}}>
                   Acción requerida
                 </span>
               </div>
-              {p1Active.slice(0,2).map((t,i)=>(
+              {p1Bloqueados.slice(0,2).map((t,i)=>(
                 <div key={t.id} onClick={()=>setTab("tickets")}
                   style={{display:"flex",alignItems:"center",gap:12,padding:"11px 0",
                     cursor:"pointer",borderTop:i>0?`1px solid rgba(232,72,72,0.12)`:"none"}}>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:14,fontWeight:600,color:A.t1,overflow:"hidden",
-                      textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>
-                      {t.titulo}
-                    </div>
-                    <div style={{fontSize:11,color:A.red}}>
-                      Unidad detenida · {TICKET_META[t.status]?.label||t.status}
-                    </div>
+                      textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>{t.titulo}</div>
+                    <div style={{fontSize:11,color:A.red}}>Pendiente acción · {TICKET_META[t.status]?.label||t.status}</div>
                   </div>
                   <div style={{fontSize:20,color:A.red,opacity:0.65,flexShrink:0}}>›</div>
                 </div>
               ))}
-              {p1Active.length>2&&(
-                <div onClick={()=>setTab("tickets")}
-                  style={{fontSize:11,color:A.red,marginTop:8,cursor:"pointer",opacity:0.8}}>
-                  +{p1Active.length-2} más →
+              {p1Bloqueados.length>2&&(
+                <div onClick={()=>setTab("tickets")} style={{fontSize:11,color:A.red,marginTop:8,cursor:"pointer",opacity:0.8}}>
+                  +{p1Bloqueados.length-2} más →
                 </div>
               )}
+            </div>
+          )}
+          {p1EnProceso.length>0&&(
+            <div style={{marginBottom:vencidos.length>0?18:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                <div style={{width:6,height:6,borderRadius:"50%",background:A.amber,flexShrink:0}}/>
+                <span style={{fontSize:10,fontWeight:700,color:A.amber,letterSpacing:"0.14em",textTransform:"uppercase"}}>
+                  P1 en progreso
+                </span>
+              </div>
+              <div style={{fontSize:11,color:A.t3}}>
+                {p1EnProceso.length} operación{p1EnProceso.length>1?"es":""} — {p1EnProceso.map(t=>TICKET_META[t.status]?.label||t.status).join(", ")}
+              </div>
             </div>
           )}
           {vencidos.length>0&&(
@@ -5404,6 +5416,44 @@ function MOps({state,setTab,triggerMargin}) {
           </div>
         </div>
 
+        {/* ══ SALUD FINANCIERA ══════════════════════════════════════════════════ */}
+        {operados.length>0&&(
+          <div className="glass-card" style={{padding:"22px 24px",marginBottom:12}}>
+            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:18}}>
+              Salud financiera · {pLabel}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:16}}>
+              {[
+                {label:"Facturado",    value:mxn(totalFact),   color:A.t1},
+                {label:"Util. neta",   value:mxn(totalNeta),   color:A.lime},
+                {label:"Carga fiscal", value:mxn(cargaFiscal), color:A.amber},
+                {label:"ROI",          value:fpct(roi),        color:roi>=30?A.lime:roi>=15?A.mint:A.amber},
+                {label:"Markup prom.", value:fpct(markupProm), color:A.t2},
+                {label:"Margen neto",  value:fpct(margen),     color:margen>=25?A.lime:margen>=15?A.mint:A.amber},
+              ].map(({label,value,color})=>(
+                <div key={label}>
+                  <div style={{fontSize:9,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:5}}>{label}</div>
+                  <div style={{fontSize:18,fontWeight:800,color,fontVariantNumeric:"tabular-nums"}}>{value}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{height:1,background:C.border,marginBottom:14}}/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+              {[
+                {label:"Cartera",   value:mxn(carteraMonto), color:vencidos.length>0?A.amber:A.t2},
+                {label:"Cash",      value:mxn(cashTotal),    color:A.lime},
+                {label:"Forecast",  value:mxn(forecastMonto),color:A.t3},
+              ].map(({label,value,color})=>(
+                <div key={label} style={{textAlign:"center",padding:"10px 6px",
+                  background:C._dark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.03)",borderRadius:10}}>
+                  <div style={{fontSize:8,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:5}}>{label}</div>
+                  <div style={{fontSize:13,fontWeight:700,color,fontVariantNumeric:"tabular-nums"}}>{value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ══ CLIENTE LÍDER ═════════════════════════════════════════════════════ */}
         {(()=>{
           const map={};
@@ -5444,7 +5494,7 @@ function MOps({state,setTab,triggerMargin}) {
         })()}
 
         {/* ── Sin datos empty state ── */}
-        {operados.length===0&&!p1Active.length&&!vencidos.length&&(
+        {operados.length===0&&!p1Active.length&&!vencidos.length&&!p1EnProceso.length&&(
           <div style={{textAlign:"center",padding:"48px 20px"}}>
             <div style={{fontSize:11,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
               Sin operaciones en {pLabel.toLowerCase()}
@@ -8274,7 +8324,7 @@ function App() {
         select option{background:${C.bgSolid};color:${C.t1}}
         *{box-sizing:border-box}
         button{transition:opacity 120ms ease,background 120ms ease,border-color 120ms ease;-webkit-tap-highlight-color:transparent}
-        button:active{opacity:.75;transform:scale(.97)}
+        button:active{opacity:.8;}
         ::-webkit-scrollbar{width:4px;height:4px}
         ::-webkit-scrollbar-track{background:transparent}
         ::-webkit-scrollbar-thumb{background:${darkMode?"rgba(255,255,255,0.10)":"rgba(0,0,0,0.12)"};border-radius:4px}
