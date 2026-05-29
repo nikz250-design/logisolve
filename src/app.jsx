@@ -5792,6 +5792,7 @@ function MPipeline({state,dispatch,toast}) {
     ["entregado","Entregado",cntOf("entregado"), A.mint],
     ["facturado","Facturado",cntOf("facturado"), A.cyan],
     ["cobrado",  "Cobrado",  cntOf("cobrado"),   A.lime],
+    ["cerrado",  "Cerrado",  cntOf("cerrado"),   A.t2],
     ["cancelado","Cancelado",cntOf("cancelado"),  C.red],
     ["all",      "Todos",    active.length, null],
   ];
@@ -6827,7 +6828,7 @@ function MCartera({state,dispatch,toast}) {
         {cobradas.length>0&&(
           <div>
             <div style={{fontSize:9,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:10}}>
-              Cobrado · {cobradas.length} ops · {mxn(totalCob)}
+              Cobrado / Cerrado · {cobradas.length} ops · {mxn(totalCob)}
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
               {cobradas.slice(0,5).map(t=>{
