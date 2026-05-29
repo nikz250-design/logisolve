@@ -7112,7 +7112,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
 
         {/* Grouped by day */}
         {grouped.map(([date,dayTickets])=>{
-          const dayFact=dayTickets.filter(t=>OPERADO_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
+          const dayFact=dayTickets.filter(t=>t.status!=="cancelado").reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
           const dayNeta=dayTickets.filter(t=>OPERADO_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0);
           return (
             <div key={date} style={{marginBottom:20}}>
@@ -7124,7 +7124,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                 </div>
                 {dayFact>0&&(
                   <div style={{fontSize:10,color:A.t3,fontVariantNumeric:"tabular-nums"}}>
-                    {mxn(dayFact)} · util {mxn(dayNeta)}
+                    {mxn(dayFact)}{dayNeta>0&&<span style={{color:A.lime}}> · {mxn(dayNeta)}</span>}
                   </div>
                 )}
               </div>
