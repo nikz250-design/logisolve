@@ -160,6 +160,28 @@ export default function MChat({ state, dispatch, C, toast }) {
     suppliers: suppliers.map(s => ({ nombre:s.nombre, especialidad:s.especialidad, contacto:s.contacto })),
     tickets:   tickets.map(t => ({ titulo:t.titulo, status:t.status, date:t.date, notes:t.notes, unitId:t.unitId, snap: t.snap ? { precioConIVA:t.snap.precioConIVA } : null })),
     clients:   clients.map(c => ({ id:c.id, empresa:c.empresa })),
+    cotizadorConfig: {
+      tiposOp: [
+        { id:"consumable", label:"Consumible",    margenBase:[20,35],  cap:80  },
+        { id:"general",    label:"Ref. General",  margenBase:[25,40],  cap:100 },
+        { id:"tech",       label:"Serv. Tecnico", margenBase:[35,60],  cap:120 },
+        { id:"heavy",      label:"Ref. Pesada",   margenBase:[35,70],  cap:140 },
+        { id:"logistics",  label:"Logistica",     margenBase:[15,30],  cap:60  },
+        { id:"rescue",     label:"Rescate",       margenBase:[60,150], cap:220 },
+      ],
+      prioridades: [
+        { id:"P1", label:"Unidad detenida",        bonusMargen:40 },
+        { id:"P2", label:"Operacion comprometida", bonusMargen:20 },
+        { id:"P3", label:"Preventivo urgente",     bonusMargen:0  },
+        { id:"P4", label:"Solicitud normal",       bonusMargen:0  },
+      ],
+      modificadores: [
+        { id:"urgency",  label:"Urgencia/ent. inmediata", pct:20 },
+        { id:"offhours", label:"Fuera de horario",         pct:20 },
+        { id:"rare",     label:"Pieza dificil/rara",       pct:25 },
+      ],
+      impuestos: { iva:16, isr:20 },
+    },
   });
 
   const send = useCallback(async (text) => {
