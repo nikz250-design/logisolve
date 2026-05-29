@@ -7023,19 +7023,33 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
            notes:t.notes||"",priority:t.priority||"P3",
            costoIVA:String(safeNumber(s.costoTotal+(s.ivaAcred||0))||0),
            precioIVA:String(safeNumber(s.precioConIVA)||0),
-           _iva:safeNumber(s.params?.iva,16), _isr:safeNumber(s.params?.isr,20)});
+           _iva:safeNumber(s.params?.iva,16), _isr:safeNumber(s.params?.isr,20),
+           quoteMode:false,
+           opType:t.opId||"consumable",
+           activeMods:[...(t.mods||[])],
+    });
     setEditId(t.id);
     setExpandId(null);
   };
 
   const saveEdit = t => {
-    const newSnap = computeSnap({
-      costo:safeNumber(ef.costoIVA), compraConIVA:true,
-      manualPrice:safeNumber(ef.precioIVA), ventaConIVA:true, mode:"manual",
-      gasolina:0, otros:0, iva:ef._iva||16, isr:ef._isr||20,
-    });
-    const {costoIVA:_c,precioIVA:_p,_iva,_isr,...rest}=ef;
-    dispatch({type:"TKT_UPDATE",id:t.id,patch:{...rest,snap:newSnap}});
+    const iva = ef._iva||16; const isr = ef._isr||20;
+    let newSnap;
+    if(ef.quoteMode) {
+      const mgn = effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
+      newSnap = computeSnap({costo:safeNumber(ef.costoIVA),compraConIVA:true,
+        mode:"auto",margin:mgn,gasolina:0,otros:0,iva,isr});
+    } else {
+      newSnap = computeSnap({costo:safeNumber(ef.costoIVA),compraConIVA:true,
+        manualPrice:safeNumber(ef.precioIVA),ventaConIVA:true,mode:"manual",
+        gasolina:0,otros:0,iva,isr});
+    }
+    const opMeta = OP_TYPES.find(o=>o.id===(ef.opType||"consumable"))||OP_TYPES[0];
+    const {costoIVA:_c,precioIVA:_p,_iva:_iv,_isr:_is,quoteMode:_q,opType:_ot,activeMods:_am,...rest}=ef;
+    dispatch({type:"TKT_UPDATE",id:t.id,patch:{
+      ...rest,snap:newSnap,
+      opId:ef.opType||"consumable",opShort:opMeta.short,mods:ef.activeMods||[],
+    }});
     toast("Actualizado","success");
     setEditId(null);
   };
@@ -7260,7 +7274,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                               onChange={sfn("promesaPago")} placeholder="DD/MM/AAAA" color={A.amber}/>
                           )}
                           {/* ── Costo / Precio ── */}
-                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
                             <div>
                               <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>Costo c/IVA ($)</div>
                               <input type="number" inputMode="decimal" value={ef.costoIVA||""} onChange={e=>sfn("costoIVA")(e.target.value)}
@@ -7270,28 +7284,112 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                                   color:A.t1,fontSize:14,outline:"none",fontFamily:"inherit"}}/>
                             </div>
                             <div>
-                              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>Precio c/IVA ($)</div>
-                              <input type="number" inputMode="decimal" value={ef.precioIVA||""} onChange={e=>sfn("precioIVA")(e.target.value)}
-                                placeholder="0"
-                                style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.03)",
-                                  border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",
-                                  color:A.t1,fontSize:14,outline:"none",fontFamily:"inherit"}}/>
+                              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>
+                                {ef.quoteMode?"Precio calc.":"Precio c/IVA ($)"}
+                              </div>
+                              {ef.quoteMode?(()=>{
+                                const mgn=effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
+                                const calc=safeNumber(ef.costoIVA)>0?computeSnap({costo:safeNumber(ef.costoIVA),compraConIVA:true,mode:"auto",margin:mgn,gasolina:0,otros:0,iva:ef._iva||16,isr:ef._isr||20}).precioConIVA:0;
+                                return <div style={{width:"100%",boxSizing:"border-box",background:"rgba(43,181,160,0.06)",
+                                  border:`1px solid ${C.blue}44`,borderRadius:10,padding:"10px 12px",
+                                  color:A.lime,fontSize:14,fontWeight:700,fontVariantNumeric:"tabular-nums",
+                                  display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                                  <span>{calc>0?mxn(calc):"—"}</span>
+                                  <span style={{fontSize:9,color:A.t3}}>{mgn}%</span>
+                                </div>;
+                              })():(
+                                <input type="number" inputMode="decimal" value={ef.precioIVA||""} onChange={e=>sfn("precioIVA")(e.target.value)}
+                                  placeholder="0"
+                                  style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.03)",
+                                    border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",
+                                    color:A.t1,fontSize:14,outline:"none",fontFamily:"inherit"}}/>
+                              )}
                             </div>
                           </div>
-                          {/* Live margin preview */}
-                          {(safeNumber(ef.costoIVA)>0||safeNumber(ef.precioIVA)>0)&&(()=>{
+                          {/* ── Modo: Manual / Cotizador ── */}
+                          <div style={{display:"flex",gap:6,marginBottom:12}}>
+                            {[{v:false,l:"Manual"},{v:true,l:"⚙ Cotizador"}].map(({v,l})=>(
+                              <button key={String(v)} onClick={()=>sfn("quoteMode")(v)}
+                                style={{flex:1,padding:"7px 10px",borderRadius:8,fontSize:10,fontWeight:700,
+                                  background:ef.quoteMode===v?"rgba(43,181,160,0.12)":"rgba(255,255,255,0.03)",
+                                  border:`1px solid ${ef.quoteMode===v?C.blue+"55":C.border}`,
+                                  color:ef.quoteMode===v?A.lime:A.t3,cursor:"pointer",
+                                  textTransform:"uppercase",letterSpacing:"0.06em"}}>
+                                {l}
+                              </button>
+                            ))}
+                          </div>
+                          {/* ── Cotizador selectors ── */}
+                          {ef.quoteMode&&(<>
+                            {/* Tipo de operación */}
+                            <div style={{marginBottom:10}}>
+                              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:6}}>Tipo de operación</div>
+                              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:5}}>
+                                {OP_TYPES.map(op=>{const sel=ef.opType===op.id;return(
+                                  <button key={op.id} onClick={()=>sfn("opType")(op.id)}
+                                    style={{padding:"6px 4px",borderRadius:8,textAlign:"center",lineHeight:1.3,cursor:"pointer",
+                                      background:sel?"rgba(43,181,160,0.12)":"rgba(255,255,255,0.03)",
+                                      border:`1px solid ${sel?C.blue+"55":C.border}`,color:sel?A.lime:A.t2}}>
+                                    <div style={{fontSize:9,fontWeight:sel?700:500}}>{op.label}</div>
+                                    <div style={{fontSize:8,color:A.t3}}>{op.baseMin}-{op.baseMax}%</div>
+                                  </button>
+                                );})}
+                              </div>
+                            </div>
+                            {/* Prioridad */}
+                            <div style={{marginBottom:10}}>
+                              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:6}}>Prioridad</div>
+                              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5}}>
+                                {["P1","P2","P3","P4"].map(p=>{
+                                  const pc=prC[p]; const sel=ef.priority===p;
+                                  const bonus=PRIORITY[p].marginBonus;
+                                  return(
+                                    <button key={p} onClick={()=>sfn("priority")(p)}
+                                      style={{padding:"7px 4px",borderRadius:8,textAlign:"center",lineHeight:1.3,cursor:"pointer",
+                                        background:sel?pc.dim:"rgba(255,255,255,0.03)",
+                                        border:`1px solid ${sel?pc.dot+"66":C.border}`,
+                                        color:sel?pc.dot:A.t3,fontSize:10,fontWeight:sel?800:500}}>
+                                      <div>{p}</div>
+                                      {bonus>0&&<div style={{fontSize:7,color:pc.dot}}>+{bonus}%</div>}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            {/* Modificadores */}
+                            <div style={{marginBottom:12}}>
+                              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:6}}>Modificadores</div>
+                              {MODIFIERS.map(m=>{const on=(ef.activeMods||[]).includes(m.id);return(
+                                <div key={m.id} onClick={()=>{
+                                  const cur=ef.activeMods||[];
+                                  sfn("activeMods")(on?cur.filter(x=>x!==m.id):[...cur,m.id]);
+                                }} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                                  padding:"8px 12px",borderRadius:8,marginBottom:5,cursor:"pointer",
+                                  background:on?"rgba(43,181,160,0.08)":"rgba(255,255,255,0.02)",
+                                  border:`1px solid ${on?C.blue+"44":C.border}`}}>
+                                  <span style={{fontSize:11,color:on?A.t1:A.t2}}>{m.label}</span>
+                                  <span style={{fontSize:10,fontWeight:700,color:on?A.lime:A.t3}}>+{m.pct}%</span>
+                                </div>
+                              );})}
+                            </div>
+                          </>)}
+                          {/* Live preview */}
+                          {safeNumber(ef.costoIVA)>0&&(()=>{
+                            const mgn=ef.quoteMode?effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27):null;
                             const prev=computeSnap({costo:safeNumber(ef.costoIVA),compraConIVA:true,
-                              manualPrice:safeNumber(ef.precioIVA),ventaConIVA:true,mode:"manual",
+                              ...(ef.quoteMode?{mode:"auto",margin:mgn}:{mode:"manual",manualPrice:safeNumber(ef.precioIVA),ventaConIVA:true}),
                               gasolina:0,otros:0,iva:ef._iva||16,isr:ef._isr||20});
+                            const items=[
+                              {l:"Util.",v:mxn(prev.uNeta),c:prev.uNeta>=0?A.lime:A.red},
+                              {l:"Margen",v:fpct(prev.margenNetoPrecio),c:prev.margenNetoPrecio>=15?A.lime:A.amber},
+                              {l:"Costo",v:mxn(prev.costoBase),c:A.t2},
+                              ...(ef.quoteMode?[{l:"Mgn ef.",v:mgn+"%",c:A.lime}]:[]),
+                            ];
                             return (
                               <div style={{display:"flex",gap:10,marginBottom:12,
                                 background:"rgba(255,255,255,0.03)",borderRadius:10,
                                 padding:"8px 12px",border:`1px solid ${C.border}`}}>
-                                {[
-                                  {l:"Util.",v:mxn(prev.uNeta),c:prev.uNeta>=0?A.lime:A.red},
-                                  {l:"Margen",v:fpct(prev.margenNetoPrecio),c:prev.margenNetoPrecio>=15?A.lime:A.amber},
-                                  {l:"Costo",v:mxn(prev.costoBase),c:A.t2},
-                                ].map(({l,v,c})=>(
+                                {items.map(({l,v,c})=>(
                                   <div key={l} style={{flex:1}}>
                                     <div style={{fontSize:8,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:2}}>{l}</div>
                                     <div style={{fontSize:12,fontWeight:700,color:c,fontVariantNumeric:"tabular-nums"}}>{v}</div>
