@@ -6609,7 +6609,8 @@ function MCartera({state,dispatch,toast}) {
 
   const creditTkts = useMemo(()=>tickets.filter(t=>!t._deleted&&t.payType==="credit"&&t.status!=="cancelado"),[tickets]);
   const pendientes = useMemo(()=>creditTkts.filter(t=>!t.cobrado&&CARTERA_SET.has(t.status)),[creditTkts]);
-  const cobradas   = useMemo(()=>creditTkts.filter(t=>t.cobrado),[creditTkts]);
+  const cobradas   = useMemo(()=>creditTkts.filter(t=>t.status==="cobrado"),[creditTkts]);
+  const cerradas   = useMemo(()=>creditTkts.filter(t=>t.status==="cerrado"),[creditTkts]);
   const totalPend  = useMemo(()=>pendientes.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[pendientes]);
   const totalCob   = useMemo(()=>cobradas.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[cobradas]);
 
@@ -6831,14 +6832,14 @@ function MCartera({state,dispatch,toast}) {
           </div>
         )}
 
-        {/* Historial cobrado */}
+        {/* Cobrado */}
         {cobradas.length>0&&(
-          <div>
-            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:10}}>
-              Cobrado / Cerrado · {cobradas.length} ops · {mxn(totalCob)}
+          <div style={{marginBottom:16}}>
+            <div style={{fontSize:9,color:A.lime,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:10}}>
+              Cobrado · {cobradas.length} ops · {mxn(cobradas.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0))}
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {cobradas.slice(0,5).map(t=>{
+              {cobradas.slice(0,10).map(t=>{
                 const cl=clients.find(c=>c.id===t.clientId);
                 return (
                   <div key={t.id} className="glass-card-sm" style={{padding:"12px 16px",
@@ -6849,6 +6850,33 @@ function MCartera({state,dispatch,toast}) {
                       <div style={{fontSize:10,color:A.t3,marginTop:2}}>{cl?.empresa||""} · {t.date}</div>
                     </div>
                     <div style={{fontSize:14,fontWeight:800,color:A.mint,fontVariantNumeric:"tabular-nums",
+                      marginLeft:12,flexShrink:0}}>
+                      {mxn(t.snap?.precioConIVA||0)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {/* Cerrado/Archivado — separado del cobrado */}
+        {cerradas.length>0&&(
+          <div>
+            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:10}}>
+              Archivado · {cerradas.length} ops · {mxn(cerradas.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0))}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {cerradas.slice(0,5).map(t=>{
+                const cl=clients.find(c=>c.id===t.clientId);
+                return (
+                  <div key={t.id} className="glass-card-sm" style={{padding:"12px 16px",
+                    display:"flex",justifyContent:"space-between",alignItems:"center",opacity:0.6}}>
+                    <div style={{minWidth:0,flex:1}}>
+                      <div style={{fontSize:12,fontWeight:600,color:A.t2,overflow:"hidden",
+                        textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                      <div style={{fontSize:10,color:A.t3,marginTop:2}}>{cl?.empresa||""} · {t.date}</div>
+                    </div>
+                    <div style={{fontSize:14,fontWeight:800,color:A.t3,fontVariantNumeric:"tabular-nums",
                       marginLeft:12,flexShrink:0}}>
                       {mxn(t.snap?.precioConIVA||0)}
                     </div>
