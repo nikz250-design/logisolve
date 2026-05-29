@@ -5762,30 +5762,39 @@ function MPipeline({state,dispatch,toast}) {
   const active   = useMemo(()=>tickets.filter(t=>!t._deleted),[tickets]);
   const filtered = useMemo(()=>{
     let arr=active;
-    if(filter==="active") arr=arr.filter(t=>!CLOSED_SET.has(t.status));
-    else if(filter==="p1") arr=arr.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status));
+    if(filter==="active")   arr=arr.filter(t=>!CLOSED_SET.has(t.status));
+    else if(filter==="p1")  arr=arr.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status));
     else if(filter==="venc") arr=arr.filter(t=>{
       if(!t.promesaPago||t.cobrado) return false;
       const d=parseDateMX(t.promesaPago); return d&&new Date()>d;
     });
+    else if(filter!=="all") arr=arr.filter(t=>t.status===filter);
     const pOrd={P1:0,P2:1,P3:2,P4:3};
     const sOrd=["recibido","validando","sourcing","cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado","cancelado"];
     return [...arr].sort((a,b)=>{
-      if(sortBy==="status")   return sOrd.indexOf(a.status)-sOrd.indexOf(b.status);
-      if(sortBy==="cartera")  return (b.snap?.precioConIVA||0)-(a.snap?.precioConIVA||0);
-      if(sortBy==="date")     return b.date.localeCompare(a.date);
-      // default: priority
-      const pd=(pOrd[a.priority]||3)-(pOrd[b.priority]||3);
+      if(sortBy==="status")  return sOrd.indexOf(a.status)-sOrd.indexOf(b.status);
+      if(sortBy==="cartera") return (b.snap?.precioConIVA||0)-(a.snap?.precioConIVA||0);
+      if(sortBy==="date")    return b.date.localeCompare(a.date);
+      // priority: fix — use ?? not || (P1=0 is falsy)
+      const pd=(pOrd[a.priority]??3)-(pOrd[b.priority]??3);
       return pd!==0?pd:b.date.localeCompare(a.date);
     });
   },[active,filter,sortBy]);
 
-  const counts = useMemo(()=>({
-    active: active.filter(t=>!CLOSED_SET.has(t.status)).length,
-    p1:     active.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status)).length,
-    venc:   active.filter(t=>{if(!t.promesaPago||t.cobrado) return false; const d=parseDateMX(t.promesaPago); return d&&new Date()>d;}).length,
-    all:    active.length,
-  }),[active]);
+  const SORT_OPTS=[["priority","↕ Prioridad"],["date","↕ Fecha"],["cartera","↕ Monto"],["status","↕ Estado"]];
+  const sortLabel = SORT_OPTS.find(s=>s[0]===sortBy)?.[1] ?? "↕";
+
+  const cntOf = st => active.filter(t=>t.status===st).length;
+  const CHIPS=[
+    ["active","Activos", active.filter(t=>!CLOSED_SET.has(t.status)).length, null],
+    ["p1",   "P1 🔴",   active.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status)).length, C.p1],
+    ["venc", "Vencidos",active.filter(t=>{if(!t.promesaPago||t.cobrado)return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}).length, "#e07c00"],
+    ["entregado","Entregado",cntOf("entregado"), A.mint],
+    ["facturado","Facturado",cntOf("facturado"), A.cyan],
+    ["cobrado",  "Cobrado",  cntOf("cobrado"),   A.lime],
+    ["cancelado","Cancelado",cntOf("cancelado"),  C.red],
+    ["all",      "Todos",    active.length, null],
+  ];
 
   return (
     <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
@@ -5793,46 +5802,48 @@ function MPipeline({state,dispatch,toast}) {
       {editSheet&&<MEditSheet ticket={editSheet} state={state} dispatch={dispatch} toast={toast} onClose={()=>setEditSheet(null)}/>}
 
       <div style={{padding:"0 14px"}}>
-        {/* Filter chips */}
-        <div style={{display:"flex",gap:6,padding:"18px 0 16px",overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
-          {[["active","Activos",counts.active],["p1","P1",counts.p1],["venc","Vencidos",counts.venc],["all","Todos",counts.all]].map(([v,l,c])=>(
-            <button key={v} onClick={()=>setFilter(v)}
-              className={filter===v?"glass-pill-active":"glass-pill-inactive"}
-              style={{
-                flexShrink:0,display:"flex",alignItems:"center",gap:6,
-                padding:"7px 16px",borderRadius:20,fontSize:11,fontWeight:700,
-                color:filter===v ? A.pillColor : A.t3,
-                cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.18s",whiteSpace:"nowrap",
-              }}>
-              {l}
-              {c>0&&<span style={{fontSize:10,fontWeight:800,
-                background:filter===v?A.limeDim:C.bg3,
-                color:filter===v?A.lime:A.t3,borderRadius:9,padding:"1px 6px",
-                border:`1px solid ${filter===v?A.pillBorder:A.pillBorderInactive}`}}>{c}</span>}
-            </button>
-          ))}
-        </div>
-
-        {/* Sort chips */}
-        <div style={{display:"flex",gap:5,paddingBottom:12,overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
-          <span style={{fontSize:9,color:A.t3,alignSelf:"center",flexShrink:0,letterSpacing:"0.06em"}}>ORDEN:</span>
-          {[["priority","Prioridad"],["status","Estado"],["cartera","Monto ↓"],["date","Fecha"]].map(([v,l])=>(
-            <button key={v} onClick={()=>setSortBy(v)}
-              style={{
-                flexShrink:0,padding:"4px 10px",borderRadius:12,fontSize:10,fontWeight:700,
-                background:sortBy===v?A.limeDim:"transparent",
-                border:`1px solid ${sortBy===v?A.lime:A.pillBorderInactive}`,
-                color:sortBy===v?A.lime:A.t3,cursor:"pointer",transition:"all 0.15s",
-              }}>{l}</button>
-          ))}
+        {/* Filter + sort — single row */}
+        <div style={{display:"flex",alignItems:"center",gap:6,padding:"18px 0 14px",overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
+          {CHIPS.map(([v,l,c,ac])=>{
+            const on=filter===v;
+            const dotColor=ac||(on?A.lime:null);
+            return (
+              <button key={v} onClick={()=>setFilter(v)}
+                style={{
+                  flexShrink:0,display:"flex",alignItems:"center",gap:5,
+                  padding:"7px 13px",borderRadius:20,fontSize:11,fontWeight:700,whiteSpace:"nowrap",
+                  background:on?(ac?ac+"22":A.limeDim):"transparent",
+                  border:`1px solid ${on?(ac||A.lime):A.pillBorderInactive}`,
+                  color:on?(ac||A.lime):A.t3,
+                  cursor:"pointer",transition:"all 0.15s",
+                }}>
+                {l}
+                {c>0&&<span style={{
+                  fontSize:9,fontWeight:800,borderRadius:9,padding:"1px 5px",
+                  background:on?(ac?ac+"33":A.limeDim):C.bg3,
+                  color:on?(ac||A.lime):A.t3,
+                  border:`1px solid ${on?(ac||A.lime)+"50":A.pillBorderInactive}`,
+                }}>{c}</span>}
+              </button>
+            );
+          })}
+          {/* Sort toggle — at end */}
+          <button onClick={()=>{
+            const idx=SORT_OPTS.findIndex(s=>s[0]===sortBy);
+            setSortBy(SORT_OPTS[(idx+1)%SORT_OPTS.length][0]);
+          }} style={{
+            flexShrink:0,padding:"7px 11px",borderRadius:20,fontSize:10,fontWeight:700,
+            background:"transparent",border:`1px solid ${A.pillBorderInactive}`,
+            color:A.t3,cursor:"pointer",whiteSpace:"nowrap",transition:"all 0.15s",
+          }}>{sortLabel}</button>
         </div>
 
         {filtered.length===0&&(
           <div style={{textAlign:"center",padding:"48px 20px"}}>
             <div style={{fontSize:11,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
-              {filter==="active"?"Pipeline vacío":filter==="p1"?"Sin P1 activos":filter==="venc"?"Sin vencidos":"Sin tickets"}
+              Sin tickets
             </div>
-            <div style={{fontSize:13,color:A.t3}}>{filter==="active"?"Crea una cotización para comenzar":"Ajusta el filtro"}</div>
+            <div style={{fontSize:13,color:A.t3}}>Ajusta el filtro</div>
           </div>
         )}
 
