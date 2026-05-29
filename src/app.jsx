@@ -688,8 +688,15 @@ function reducer(state,action) {
     case "TKT_ADD":    return {...state,tickets:[action.t,...state.tickets]};
     case "TKT_UPDATE": {
       const patch = {...action.patch};
-      // Sync cobrado when status changes via edit (e.g. reverting cobrado→entregado)
-      if (patch.status !== undefined) patch.cobrado = PAID_SET.has(patch.status);
+      // Sync cobrado when status changes via edit
+      // "cobrado" status → cobrado=true
+      // "cerrado" → keep existing value (cerrado = archived, not necessarily paid)
+      // any other status → cobrado=false
+      if (patch.status !== undefined) {
+        if (patch.status === "cobrado") patch.cobrado = true;
+        else if (patch.status !== "cerrado") patch.cobrado = false;
+        // cerrado: leave cobrado as-is (don't override)
+      }
       return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,...patch,history:[...(t.history||[]),mkEvent("edited",{fields:Object.keys(action.patch)})]})};
     }    case "TKT_STATUS": {
       const {id,to}=action;
@@ -6602,7 +6609,7 @@ function MCartera({state,dispatch,toast}) {
 
   const creditTkts = useMemo(()=>tickets.filter(t=>!t._deleted&&t.payType==="credit"&&t.status!=="cancelado"),[tickets]);
   const pendientes = useMemo(()=>creditTkts.filter(t=>!t.cobrado&&CARTERA_SET.has(t.status)),[creditTkts]);
-  const cobradas   = useMemo(()=>creditTkts.filter(t=>t.cobrado||PAID_SET.has(t.status)),[creditTkts]);
+  const cobradas   = useMemo(()=>creditTkts.filter(t=>t.cobrado),[creditTkts]);
   const totalPend  = useMemo(()=>pendientes.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[pendientes]);
   const totalCob   = useMemo(()=>cobradas.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[cobradas]);
 
