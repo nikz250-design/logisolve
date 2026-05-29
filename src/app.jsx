@@ -686,8 +686,12 @@ function reducer(state,action) {
   switch(action.type) {
     // TICKETS
     case "TKT_ADD":    return {...state,tickets:[action.t,...state.tickets]};
-    case "TKT_UPDATE": return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,...action.patch,history:[...(t.history||[]),mkEvent("edited",{fields:Object.keys(action.patch)})]})};
-    case "TKT_STATUS": {
+    case "TKT_UPDATE": {
+      const patch = {...action.patch};
+      // Sync cobrado when status changes via edit (e.g. reverting cobrado→entregado)
+      if (patch.status !== undefined) patch.cobrado = PAID_SET.has(patch.status);
+      return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,...patch,history:[...(t.history||[]),mkEvent("edited",{fields:Object.keys(action.patch)})]})};
+    }    case "TKT_STATUS": {
       const {id,to}=action;
       return {...state,tickets:state.tickets.map(t=>{
         if(t.id!==id) return t;
@@ -5736,6 +5740,7 @@ function MPipeline({state,dispatch,toast}) {
   const C = React.useContext(ThemeCtx);
   const {tickets,clients,units} = state;
   const [filter,setFilter]       = useState("active");
+  const [sortBy,setSortBy]       = useState("priority");
   const [statusSheet,setStatusSheet] = useState(null);
   const [editSheet,setEditSheet]  = useState(null);
   const [expandId,setExpandId]   = useState(null);
@@ -5764,12 +5769,16 @@ function MPipeline({state,dispatch,toast}) {
       const d=parseDateMX(t.promesaPago); return d&&new Date()>d;
     });
     const pOrd={P1:0,P2:1,P3:2,P4:3};
+    const sOrd=["recibido","validando","sourcing","cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado","cancelado"];
     return [...arr].sort((a,b)=>{
+      if(sortBy==="status")   return sOrd.indexOf(a.status)-sOrd.indexOf(b.status);
+      if(sortBy==="cartera")  return (b.snap?.precioConIVA||0)-(a.snap?.precioConIVA||0);
+      if(sortBy==="date")     return b.date.localeCompare(a.date);
+      // default: priority
       const pd=(pOrd[a.priority]||3)-(pOrd[b.priority]||3);
-      if(pd!==0) return pd;
-      return b.date.localeCompare(a.date);
+      return pd!==0?pd:b.date.localeCompare(a.date);
     });
-  },[active,filter]);
+  },[active,filter,sortBy]);
 
   const counts = useMemo(()=>({
     active: active.filter(t=>!CLOSED_SET.has(t.status)).length,
@@ -5801,6 +5810,20 @@ function MPipeline({state,dispatch,toast}) {
                 color:filter===v?A.lime:A.t3,borderRadius:9,padding:"1px 6px",
                 border:`1px solid ${filter===v?A.pillBorder:A.pillBorderInactive}`}}>{c}</span>}
             </button>
+          ))}
+        </div>
+
+        {/* Sort chips */}
+        <div style={{display:"flex",gap:5,paddingBottom:12,overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
+          <span style={{fontSize:9,color:A.t3,alignSelf:"center",flexShrink:0,letterSpacing:"0.06em"}}>ORDEN:</span>
+          {[["priority","Prioridad"],["status","Estado"],["cartera","Monto ↓"],["date","Fecha"]].map(([v,l])=>(
+            <button key={v} onClick={()=>setSortBy(v)}
+              style={{
+                flexShrink:0,padding:"4px 10px",borderRadius:12,fontSize:10,fontWeight:700,
+                background:sortBy===v?A.limeDim:"transparent",
+                border:`1px solid ${sortBy===v?A.lime:A.pillBorderInactive}`,
+                color:sortBy===v?A.lime:A.t3,cursor:"pointer",transition:"all 0.15s",
+              }}>{l}</button>
           ))}
         </div>
 
