@@ -1,7830 +1,1520 @@
-import React, { useState, useReducer, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from "react";
-import FlotaModule from "./modules/flota/index.jsx";
+// ── Logisolve v2 — Greenfield ─────────────────────────────────────────────────
+// Entidad principal: OPERACIÓN (no ticket, no cotización)
+// Modelo: resolución de necesidades operativas de flotilla
+// Aislado de producción — storage: LOGI_V2_EXP
+// ─────────────────────────────────────────────────────────────────────────────
+import React, {
+  useState, useReducer, useCallback, useMemo, useEffect, useRef, useContext,
+  createContext,
+} from "react";
 
-// ── Sourcing Copilot — AI contextual para sourcing de refacciones ────────────
-import SourcingCopilot from "./components/sourcing/SourcingCopilot.jsx";
+// ─────────────────────────────────────────────────────────────────────────────
+// CONSTANTS
+// ─────────────────────────────────────────────────────────────────────────────
 
-// ── AutoInsight — insights IA automáticos sin interacción del usuario ────────
-import AutoInsight           from "./components/ai/AutoInsight.jsx";
-import { useStateEvents }    from "./ai/engine/useStateEvents.js";
-import MChat                 from "./components/ai/MChat.jsx";
+const STORAGE_KEY = "LOGI_V2_EXP";
+const APP_VERSION = "2.0.0-greenfield";
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// L1 — DESIGN TOKENS
-// ═══════════════════════════════════════════════════════════════════════════════
-const C_DARK = {
-  _dark:true,
-  // ── Surface system — glassmorphism dark
-  bg0:"#0D0F12",
-  bg1:"rgba(22,24,28,0.62)",
-  bg2:"rgba(16,18,22,0.94)",
-  bg3:"rgba(28,32,40,0.74)",
-  bg4:"rgba(38,44,54,0.88)",
-  bgSolid:"#111418",
-  border:"rgba(255,255,255,0.07)",
-  borderHi:"rgba(255,255,255,0.13)",
-  blue:"#8FE3BE",  blueHi:"#BFE8D3", blueDim:"rgba(143,227,190,0.12)",
-  cyan:"#8FE3BE",  cyanDim:"rgba(143,227,190,0.09)",
-  green:"#8FE3BE", greenDim:"rgba(143,227,190,0.12)",
-  red:"#FF7A7A",   redDim:"rgba(255,122,122,0.12)",
-  yellow:"#F5C842",yellowDim:"rgba(245,200,66,0.12)",
-  orange:"#F97316",amber:"#F5C842",
-  purple:"#A78BFA",purpleDim:"rgba(167,139,250,0.1)",
-  t1:"#F5F5F7", t2:"#B6BBC4", t3:"#7E848E", t4:"#556070",
-  p1:"#FF7A7A", p1dim:"rgba(255,122,122,0.12)", p1dot:"#FF7A7A",
-  p2:"#F5C842", p2dim:"rgba(245,200,66,0.12)",  p2dot:"#F5C842",
-  p3:"#8FE3BE", p3dim:"rgba(143,227,190,0.12)", p3dot:"#8FE3BE",
-  p4:"#7E848E", p4dim:"rgba(126,132,142,0.10)", p4dot:"#7E848E",
-  glass:"blur(28px) saturate(1.6)",
+const URGENCIA = {
+  critica: { label: "Crítica",  color: "#FF3B30", dim: "rgba(255,59,48,0.15)",  sla_hrs: 4,   orden: 0 },
+  alta:    { label: "Alta",     color: "#FF9500", dim: "rgba(255,149,0,0.15)",  sla_hrs: 24,  orden: 1 },
+  media:   { label: "Media",    color: "#FFD60A", dim: "rgba(255,214,10,0.12)", sla_hrs: 72,  orden: 2 },
+  normal:  { label: "Normal",   color: "#30D158", dim: "rgba(48,209,88,0.12)",  sla_hrs: 168, orden: 3 },
 };
-const C_LIGHT = {
-  _dark:false,
-  // ── Surface system — Apple liquid glass / VisionOS light
-  bg0:"#F5F4F0",
-  bg1:"rgba(255,255,255,0.32)",
-  bg2:"rgba(255,255,255,0.80)",
-  bg3:"rgba(255,255,255,0.18)",
-  bg4:"rgba(255,255,255,0.55)",
-  bgSolid:"#F5F4F0",
-  border:"rgba(0,0,0,0.06)",
-  borderHi:"rgba(0,0,0,0.10)",
-  // Accent — soft mint pastel (glow/tint only, not for text)
-  blue:"#9FE0BE",  blueHi:"#BFE8D3", blueDim:"rgba(159,224,190,0.22)",
-  cyan:"#9FE0BE",  cyanDim:"rgba(159,224,190,0.16)",
-  green:"#9FE0BE", greenDim:"rgba(159,224,190,0.22)",
-  red:"#E05555",   redDim:"rgba(224,85,85,0.12)",
-  yellow:"#C8860A",yellowDim:"rgba(200,134,10,0.12)",
-  orange:"#C06620",amber:"#C8860A",
-  purple:"#9B8DD0",purpleDim:"rgba(155,141,208,0.12)",
-  // Typography — warm dark, never pure black
-  t1:"#161616", t2:"#6E6E73", t3:"#A1A1A6", t4:"#C8C8CC",
-  p1:"#E05555", p1dim:"rgba(224,85,85,0.10)", p1dot:"#E05555",
-  p2:"#C8860A", p2dim:"rgba(200,134,10,0.10)", p2dot:"#C8860A",
-  p3:"#5CBF8A", p3dim:"rgba(92,191,138,0.15)", p3dot:"#5CBF8A",
-  p4:"#A1A1A6", p4dim:"rgba(161,161,166,0.10)", p4dot:"#A1A1A6",
-  glass:"blur(44px) saturate(2.8) brightness(1.02)",
+
+const TIPO_OP = {
+  emergencia:  { label: "Emergencia",  icon: "🚨", color: "#FF3B30" },
+  preventivo:  { label: "Preventivo",  icon: "🔧", color: "#30D158" },
+  programado:  { label: "Programado",  icon: "📅", color: "#0A84FF" },
+  servicio:    { label: "Servicio",    icon: "⚙️", color: "#BF5AF2" },
 };
-// Module-level alias for backwards-compat (PRIORITY, UNIT_STATUS etc.)
-const C = C_DARK;
 
-// Theme context — provides active palette to all components
-const ThemeCtx = React.createContext(C_DARK);
+const ESTADOS = [
+  "nuevo","diagnostico","sourcing","cotizado",
+  "autorizado","preparando","en_ruta","resuelto","cobrado","cerrado",
+];
+const TERMINAL = new Set(["cobrado","cerrado","cancelado"]);
+const ACTIVOS   = new Set(["nuevo","diagnostico","sourcing","cotizado","autorizado","preparando","en_ruta"]);
+const RESUELTOS = new Set(["resuelto","cobrado","cerrado"]);
+const COBRABLES = new Set(["resuelto"]);
 
-// Mobile A palette derived from active theme
-function makeA(C) {
-  return {
-    // ── Accent greens
-    lime:       C._dark ? C.green : "#2A9768",
-    limeFill:   C._dark ? C.green : "#9FE0BE",
-    limeDim:    C.greenDim,
-    limeMid:    C._dark ? "rgba(143,227,190,0.18)" : "rgba(255,255,255,0.82)",
-    mint:       C._dark ? C.blue : "#2A9768",
-    mintDim:    C.blueDim,
-    amber:      C.yellow,
-    amberDim:   C.yellowDim,
-    red:        C.red,
-    redDim:     C.redDim,
-    // ── Liquid glass card surfaces
-    // Light: very transparent + strong blur so background colors refract through
-    card:       C._dark ? "rgba(22,24,28,0.62)" : "rgba(255,255,255,0.22)",
-    cardHi:     C._dark ? "rgba(32,35,42,0.75)" : "rgba(255,255,255,0.42)",
-    blur:       C.glass,
-    // Multi-layer shadow: white border ring + soft ambient + inner highlight
-    shadow:     C._dark
-      ? "0 8px 32px rgba(0,0,0,0.44), 0 1px 0 rgba(255,255,255,0.06) inset"
-      : "0 0 0 1px rgba(255,255,255,0.75), 0 12px 40px rgba(0,0,0,0.04), 0 2px 0 rgba(255,255,255,1) inset, 0 -1px 0 rgba(255,255,255,0.20) inset",
-    shadowSm:   C._dark
-      ? "0 4px 16px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.04) inset"
-      : "0 0 0 1px rgba(255,255,255,0.70), 0 6px 20px rgba(0,0,0,0.03), 0 1.5px 0 rgba(255,255,255,1) inset",
-    // ── Active pill / filter chip
-    pillBg:             C._dark ? "rgba(143,227,190,0.18)" : "rgba(255,255,255,0.90)",
-    pillBorder:         C._dark ? C.green                  : "rgba(255,255,255,0.80)",
-    pillColor:          C._dark ? C.green                  : C.t1,
-    pillShadow:         C._dark ? "none"                   : "0 4px 12px rgba(0,0,0,0.06)",
-    // ── Inactive pill border — more visible than the generic card border
-    pillBorderInactive: C._dark ? "rgba(255,255,255,0.28)" : "rgba(0,0,0,0.12)",
-    t1: C.t1, t2: C.t2, t3: C.t3, r: 24,
-  };
+const ESTADO_META = {
+  nuevo:       { label: "Nuevo",       dot: "#6B9EC8", paso: 0 },
+  diagnostico: { label: "Diagnóstico", dot: "#C8C050", paso: 1 },
+  sourcing:    { label: "Sourcing",    dot: "#7AA0E0", paso: 2 },
+  cotizado:    { label: "Cotizado",    dot: "#8FC855", paso: 3 },
+  autorizado:  { label: "Autorizado",  dot: "#50C878", paso: 4 },
+  preparando:  { label: "Preparando",  dot: "#34C759", paso: 5 },
+  en_ruta:     { label: "En ruta",     dot: "#0A84FF", paso: 6 },
+  resuelto:    { label: "Resuelto",    dot: "#30D158", paso: 7 },
+  cobrado:     { label: "Cobrado",     dot: "#32D74B", paso: 8 },
+  cerrado:     { label: "Cerrado",     dot: "#636366", paso: 9 },
+  cancelado:   { label: "Cancelado",   dot: "#FF3B30", paso: -1 },
+};
+
+const SISTEMAS = {
+  motor: "Motor", transmision: "Transmisión", frenos: "Frenos",
+  suspension: "Suspensión", electrico: "Eléctrico", neumatico: "Neumático",
+  carroceria: "Carrocería", hidraulico: "Hidráulico", enfriamiento: "Enfriamiento", otro: "Otro",
+};
+
+const TIPO_LINEA = {
+  refaccion:   { label: "Refacción",    icon: "🔩" },
+  servicio:    { label: "Servicio",     icon: "🔧" },
+  mano_obra:   { label: "Mano de obra", icon: "👷" },
+  consumible:  { label: "Consumible",   icon: "🧴" },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THEME
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ThemeCtx = createContext(null);
+
+const THEME = {
+  bg0:   "#070909",
+  bg1:   "rgba(255,255,255,0.04)",
+  bg2:   "rgba(255,255,255,0.07)",
+  border:"rgba(255,255,255,0.09)",
+  glass: "blur(20px) saturate(1.8)",
+  t1:    "#F0F4F8",
+  t2:    "#8A9AA8",
+  t3:    "#4A5A68",
+  blue:  "#0A84FF",
+  lime:  "#2BB5A0",
+  amber: "#FFD60A",
+  red:   "#FF3B30",
+  green: "#30D158",
+  r:     12,
+  shadow:"0 4px 24px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06)",
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTILITIES
+// ─────────────────────────────────────────────────────────────────────────────
+
+const genId = (prefix = "OP") => `${prefix}-${Date.now().toString(36).toUpperCase()}`;
+const nowISO = () => new Date().toISOString();
+const safeN = (v, d = 0) => { const n = parseFloat(v); return isFinite(n) ? n : d; };
+const mxn = v => new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(safeN(v));
+const pct  = v => `${safeN(v).toFixed(1)}%`;
+
+function slaStatus(op) {
+  if (!op.sla_inicio || TERMINAL.has(op.estado)) return null;
+  const u = URGENCIA[op.urgencia] || URGENCIA.normal;
+  const inicio = new Date(op.sla_inicio);
+  const limite = new Date(inicio.getTime() + u.sla_hrs * 3600000);
+  const now = new Date();
+  const restMs = limite - now;
+  const totalMs = u.sla_hrs * 3600000;
+  const pctUsado = Math.min(100, ((totalMs - restMs) / totalMs) * 100);
+  const restHrs = restMs / 3600000;
+  const vencido = restMs < 0;
+  return { limite, restHrs, pctUsado, vencido, totalHrs: u.sla_hrs };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// L2 — DOMAIN CONSTANTS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const PRIORITY = {
-  P1: { id:"P1", label:"Unidad detenida",         short:"P1", color:C.p1, dim:C.p1dim, dot:C.p1dot, marginBonus:40 },
-  P2: { id:"P2", label:"Operacion comprometida",  short:"P2", color:C.p2, dim:C.p2dim, dot:C.p2dot, marginBonus:20 },
-  P3: { id:"P3", label:"Preventivo urgente",      short:"P3", color:C.p3, dim:C.p3dim, dot:C.p3dot, marginBonus:0  },
-  P4: { id:"P4", label:"Solicitud normal",        short:"P4", color:C.p4, dim:C.p4dim, dot:C.p4dot, marginBonus:0  },
-};
-
-const OP_TYPES = [
-  { id:"consumable", label:"Consumible",    short:"CONS",  baseMin:20, baseMax:35,  cap:80  },
-  { id:"general",    label:"Ref. General",  short:"REF-G", baseMin:25, baseMax:40,  cap:100 },
-  { id:"tech",       label:"Serv. Tecnico", short:"SERV",  baseMin:35, baseMax:60,  cap:120 },
-  { id:"heavy",      label:"Ref. Pesada",   short:"REF-P", baseMin:35, baseMax:70,  cap:140 },
-  { id:"logistics",  label:"Logistica",     short:"LOG",   baseMin:15, baseMax:30,  cap:60  },
-  { id:"rescue",     label:"Rescate",       short:"RESC",  baseMin:60, baseMax:150, cap:220 },
-];
-
-const MODIFIERS = [
-  { id:"urgency",  label:"Urgencia / ent. inmediata", pct:20 },
-  { id:"offhours", label:"Fuera de horario",           pct:20 },
-  { id:"rare",     label:"Pieza dificil / rara",       pct:25 },
-  { id:"credit",   label:"Credito",                    pct:10 },
-];
-
-// Ticket pipeline — operational states
-const TICKET_PIPELINE = [
-  "recibido","validando","sourcing","cotizado","autorizado",
-  "comprado","transito","entregado","facturado","cobrado","cerrado",
-];
-const TICKET_META = {
-  recibido:   { label:"Recibido",        color:"rgba(74,106,138,0.18)",  dot:"#6B9EC8" },
-  validando:  { label:"Validando",       color:"rgba(200,180,50,0.14)",  dot:"#C8C050" },
-  sourcing:   { label:"Sourcing",        color:"rgba(74,112,192,0.18)",  dot:"#7AA0E0" },
-  cotizado:   { label:"Cotizado",        color:"rgba(112,160,64,0.18)",  dot:"#8FC855" },
-  autorizado: { label:"Autorizado",      color:"rgba(48,160,80,0.18)",   dot:"#50C878" },
-  comprado:   { label:"Comprado",        color:"rgba(48,128,90,0.18)",   dot:"#50A888" },
-  transito:   { label:"En Transito",     color:"rgba(112,160,48,0.18)",  dot:"#90C848" },
-  entregado:  { label:"Entregado",       color:"rgba(48,192,128,0.18)",  dot:"#8FE3BE" },
-  facturado:  { label:"Facturado",       color:"rgba(167,139,250,0.14)", dot:"#A78BFA" },
-  cobrado:    { label:"Cobrado",         color:"rgba(48,192,48,0.18)",   dot:"#50D070" },
-  cerrado:    { label:"Cerrado",         color:"rgba(126,132,142,0.14)", dot:"#8A9AA4" },
-  cancelado:  { label:"Cancelado",       color:"rgba(255,122,122,0.14)", dot:"#FF7A7A" },
-};
-const TICKET_ALL = [...TICKET_PIPELINE, "cancelado"];
-
-const TICKET_TRANSITIONS = {
-  recibido:   ["validando","sourcing","cancelado"],
-  validando:  ["sourcing","cotizado","cancelado"],
-  sourcing:   ["cotizado","cancelado"],
-  cotizado:   ["autorizado","cancelado"],
-  autorizado: ["comprado","cancelado"],
-  comprado:   ["transito","cancelado"],
-  transito:   ["entregado","cancelado"],
-  entregado:  ["facturado","cancelado"],
-  facturado:  ["cobrado","cancelado"],
-  cobrado:    ["cerrado"],
-  cerrado:    [],
-  cancelado:  [],
-};
-
-// ── FINANCIAL STATUS SETS — 4-layer architecture ─────────────────────────────
-// Layer 1: OPERADO — trabajo ya ejecutado (genera utilidad operativa)
-const OPERADO_SET   = new Set(["entregado","facturado","cobrado","cerrado"]);
-// Layer 2: CASH — dinero ya recibido
-const CASH_SET      = new Set(["cobrado","cerrado"]);
-// Layer 3: CARTERA — entregado/facturado pero no cobrado
-const CARTERA_SET   = new Set(["entregado","facturado"]);
-// Layer 4: FORECAST — pipeline probable, NO contamina revenue
-const FORECAST_SET  = new Set(["cotizado","autorizado"]);
-// Operational pipeline (en proceso, aún no entregado)
-const PIPELINE_SET  = new Set(["recibido","validando","sourcing","comprado","transito"]);
-// Closed states
-const CLOSED_SET    = new Set(["cerrado","cancelado","cobrado"]);
-const PAID_SET      = new Set(["cobrado","cerrado"]);
-// Legacy alias — kept for backward compat
-const REVENUE_SET   = OPERADO_SET;
-
-const PROB = [
-  { id:"high",   label:"Alta",  pct:90 },
-  { id:"medium", label:"Media", pct:60 },
-  { id:"low",    label:"Baja",  pct:30 },
-];
-
-// Unit operational status
-const UNIT_STATUS = {
-  operativa:  { label:"Operativa",  color:C.green, dot:"#30C060" },
-  detenida:   { label:"Detenida",   color:C.red,   dot:"#C03030" },
-  preventivo: { label:"Preventivo", color:C.yellow,dot:"#C09020" },
-  taller:     { label:"En taller",  color:C.orange,dot:"#C07020" },
-};
-
-const STORAGE_KEY = "logisolve_v5";
-const STORAGE_VER = 6;
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// SUPABASE CLIENT
-// ═══════════════════════════════════════════════════════════════════════════════
-const SB_URL = "https://ecxqxspphoehmkvlmbtv.supabase.co";
-const SB_KEY = "sb_publishable_xTPWFkPZaNN4jAeuFifVaw_yXvQvdfC";
-
-async function sbFetch(path, opts={}) {
-  try {
-    const res = await fetch(`${SB_URL}/rest/v1${path}`, {
-      ...opts,
-      headers: {
-        "apikey": SB_KEY,
-        "Authorization": `Bearer ${SB_KEY}`,
-        "Content-Type": "application/json",
-        "Prefer": opts.method==="POST"?"resolution=merge-duplicates,return=minimal":"return=minimal",
-        ...(opts.headers||{}),
-      },
-    });
-    const txt = await res.text();
-    return txt ? JSON.parse(txt) : null;
-  } catch(e) { console.warn("sbFetch:",e); return null; }
+function fmtSLA(restHrs) {
+  if (restHrs < 0) return `${Math.abs(restHrs).toFixed(1)}h vencida`;
+  if (restHrs < 1) return `${Math.round(restHrs * 60)}min`;
+  if (restHrs < 24) return `${restHrs.toFixed(1)}h`;
+  return `${Math.ceil(restHrs / 24)}d`;
 }
 
-async function loadTable(table) {
-  const PAGE = 1000;
-  let all = [];
-  let offset = 0;
-  while (true) {
-    const rows = await sbFetch(`/${table}?select=id,data&order=created_at.asc&limit=${PAGE}&offset=${offset}`);
-    if (!Array.isArray(rows) || rows.length === 0) break;
-    all = all.concat(rows);
-    if (rows.length < PAGE) break;
-    offset += PAGE;
-  }
-  return all.length > 0 ? all.map(r => r.data) : null;
-}
-
-async function upsertRow(table, id, data) {
-  await sbFetch(`/${table}`, {
-    method:"POST",
-    body: JSON.stringify({id, data}),
+function snapOp(lineas, iva = 16, isr = 20) {
+  const ivaR = iva / 100; const isrR = isr / 100;
+  let costo = 0, precio_sin_iva = 0;
+  (lineas || []).forEach(l => {
+    const qty = safeN(l.cantidad, 1);
+    const c = safeN(l.costo_unitario);
+    const p = safeN(l.precio_unitario);
+    const costoBase = l.costo_con_iva ? c / (1 + ivaR) : c;
+    costo += costoBase * qty;
+    precio_sin_iva += p * qty;
   });
+  const precio_con_iva = precio_sin_iva * (1 + ivaR);
+  const u_bruta = precio_sin_iva - costo;
+  const isr_amt = u_bruta > 0 ? u_bruta * isrR : 0;
+  const u_neta = u_bruta - isr_amt;
+  const margen = precio_sin_iva > 0 ? (u_neta / precio_sin_iva) * 100 : 0;
+  return { costo, precio_sin_iva, precio_con_iva, u_bruta, u_neta, margen, iva, isr };
 }
 
-async function deleteRow(table, id) {
-  await sbFetch(`/${table}?id=eq.${encodeURIComponent(id)}`, { method:"DELETE" });
+function opCodigo(id, date) {
+  const d = date ? new Date(date) : new Date();
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yy = String(d.getFullYear()).slice(2);
+  const seq = id.slice(-4).toUpperCase();
+  return `OP-${yy}${mm}${dd}-${seq}`;
 }
 
-async function loadAllFromSupabase() {
-  const [tickets,clients,suppliers,units,parts] = await Promise.all([
-    loadTable("tickets"), loadTable("clients"), loadTable("suppliers"),
-    loadTable("units"),   loadTable("parts"),
-  ]);
-  // CRITICAL: never fall back to seed data silently.
-  // If Supabase returns null for a table, keep current state (handled upstream).
-  if (!tickets && !clients && !suppliers && !units && !parts) return null;
-  const result = {};
-  if (Array.isArray(tickets))   result.tickets   = tickets;
-  if (Array.isArray(clients))   result.clients   = clients;
-  if (Array.isArray(suppliers)) result.suppliers = suppliers;
-  if (Array.isArray(units))     result.units     = units;
-  if (Array.isArray(parts))     result.parts     = parts;
-  return result;
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// SEED DATA
+// ─────────────────────────────────────────────────────────────────────────────
 
-async function seedIfEmpty() {
-  const existing = await loadTable("tickets");
-  if (existing) return; // already has data
-  await Promise.all([
-    ...initialState.tickets.map(t=>upsertRow("tickets",t.id,t)),
-    ...initialState.clients.map(c=>upsertRow("clients",c.id,c)),
-    ...initialState.suppliers.map(s=>upsertRow("suppliers",s.id,s)),
-    ...initialState.units.map(u=>upsertRow("units",u.id,u)),
-    ...initialState.parts.map(p=>upsertRow("parts",p.id,p)),
-  ]);
-}
+const now = nowISO();
+const yesterday = new Date(Date.now() - 86400000).toISOString();
+const twoDaysAgo = new Date(Date.now() - 172800000).toISOString();
 
+const SEED_CLIENTES = [
+  { id: "CLI-001", empresa: "Logis Express SAPI", contacto: "Ing. Ramírez", tel: "+52 55 1234 5678", rfc: "LEX010101AAA", credito_dias: 30, categoria: "A" },
+  { id: "CLI-002", empresa: "Transportes Norteño SA", contacto: "Luis Herrera", tel: "+52 55 9876 5432", rfc: "TNS020202BBB", credito_dias: 15, categoria: "B" },
+];
 
-// ── HOOKS ────────────────────────────────────────────────────────────────────
-function useDebounce(value, delay) {
-  const [dVal, setDVal] = useState(value);
-  useEffect(()=>{
-    const t = setTimeout(()=>setDVal(value), delay);
-    return ()=>clearTimeout(t);
-  },[value, delay]);
-  return dVal;
-}
+const SEED_UNIDADES = [
+  { id: "UNI-001", economico: "45", marca: "Freightliner", modelo: "M2 106", anio: 2019, vin: "3ALACWDT4KDBK1234", placa: "XYZ-123", km: 187500, clienteId: "CLI-001", estado_op: "detenida" },
+  { id: "UNI-002", economico: "12", marca: "Kenworth",     modelo: "T370",   anio: 2021, vin: "2NKHHM7X4MM123456", placa: "ABC-789", km: 95200,  clienteId: "CLI-001", estado_op: "operativa" },
+  { id: "UNI-003", economico: "8",  marca: "Ford",         modelo: "F-350",  anio: 2020, vin: "1FT8W3BT1LEA45678", placa: "DEF-456", km: 142800, clienteId: "CLI-002", estado_op: "preventivo" },
+  { id: "UNI-004", economico: "31", marca: "International",modelo: "LT",     anio: 2022, vin: "3HSDJAPR9NN789012", placa: "GHI-012", km: 68300,  clienteId: "CLI-002", estado_op: "operativa" },
+];
 
-// ── SAFE HELPERS ─────────────────────────────────────────────────────────────
-const safeNumber = (v, fallback=0) => {
-  const n = typeof v==="string" ? parseFloat(v.replace(/,/g,"")) : Number(v);
-  return (isFinite(n) && !isNaN(n)) ? n : fallback;
-};
-const safeStr = (v) => (v==null ? "" : String(v));
-const safeLower = (v) => safeStr(v).toLowerCase();
-const safeArr = (v) => (Array.isArray(v) ? v : []);
-const genId = (prefix) => {
-  const uuid = (typeof crypto!=="undefined"&&crypto.randomUUID)
-    ? crypto.randomUUID().replace(/-/g,"").slice(0,8).toUpperCase()
-    : Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,6).toUpperCase();
-  return `${prefix}-${uuid}`;
-};
+const SEED_PROVEEDORES = [
+  { id: "PRV-001", nombre: "El Cerrito Refacciones", especialidad: "Motor/Transmisión", entrega_hrs: 2, score: 92, tel: "+52 55 5555 0001" },
+  { id: "PRV-002", nombre: "Autopartes Casillas",    especialidad: "Suspensión/Frenos", entrega_hrs: 4, score: 87, tel: "+52 55 5555 0002" },
+  { id: "PRV-003", nombre: "Refacciones del Norte",  especialidad: "Eléctrico/General", entrega_hrs: 3, score: 79, tel: "+52 55 5555 0003" },
+];
 
-// ── OPERATIONAL LOG — lightweight in-memory ring buffer ──────────────────────
-const opLog = (() => {
-  const buf = [];
-  return {
-    push: (type, data={}) => {
-      buf.push({type, data, ts: Date.now()});
-      if (buf.length > 200) buf.shift();
-      if (process.env.NODE_ENV !== "production") console.debug("[opLog]", type, data);
+const SEED_OPS = [
+  {
+    id: genId(), estado: "sourcing", urgencia: "critica", tipo: "emergencia",
+    titulo: "Falla de distribución — Freightliner Eco. 45",
+    diagnostico: {
+      falla_reportada: "Motor no arranca, posible falla en cadena de distribución",
+      sistema_afectado: "motor", causa_probable: "Cadena de distribución desgastada, tensor hidráulico fallido",
+      confianza: 0.88,
     },
-    all: () => [...buf],
-  };
-})();
-
-// ── PENDING QUEUE — offline sync deferred operations ─────────────────────────
-const pendingQueue = (() => {
-  let q = [];
-  return {
-    push:  (item) => { q.push(item); },
-    peek:  ()     => [...q],
-    flush: ()     => { const out=[...q]; q=[]; return out; },
-    clear: ()     => { q=[]; },
-  };
-})();
-
-// ═══════════════════════════════════════════════════════════════════════════════
-function computeSnap(p) {
-  const { costo=0, gasolina=0, otros=0, iva=16, isr=20,
-          compraConIVA=true, ventaConIVA=true, mode="auto", margin=0, manualPrice=0 } = p;
-  const ivaR = safeNumber(iva,16)/100, isrR = safeNumber(isr,20)/100;
-  const c0 = safeNumber(costo), g0 = safeNumber(gasolina), o0 = safeNumber(otros);
-  const costoBase  = compraConIVA ? c0/(1+ivaR) : c0;
-  const ivaAcred   = compraConIVA ? c0-costoBase : costoBase*ivaR;
-  const gastos     = g0+o0;
-  const costoTotal = costoBase+gastos;
-  let precioSinIVA;
-  if (mode==="manual") {
-    const raw = safeNumber(manualPrice);
-    precioSinIVA = ventaConIVA ? raw/(1+ivaR) : raw;
-  } else {
-    precioSinIVA = costoTotal*(1+safeNumber(margin)/100);
-  }
-  // Always calculate markup from real values — never copy margin input
-  const markupSobre      = costoTotal>0 ? ((precioSinIVA-costoTotal)/costoTotal)*100 : 0;
-  const ivaTraslad       = precioSinIVA*ivaR;
-  const precioConIVA     = ventaConIVA ? precioSinIVA+ivaTraslad : precioSinIVA;
-  const ivaNeto          = ivaTraslad-ivaAcred;
-  const uBruta           = precioSinIVA-costoTotal;
-  const isrAmt           = Math.max(uBruta*isrR,0);
-  const uNeta            = uBruta-isrAmt;
-  const margenNetoPrecio = precioSinIVA>0 ? (uNeta/precioSinIVA)*100 : 0;
-  // Fiscal metrics
-  const cargaFiscal      = ivaNeto+isrAmt;
-  const eficienciaFiscal = uBruta>0 ? (uNeta/uBruta)*100 : 0;
-  const costoFiscalPct   = precioSinIVA>0 ? (cargaFiscal/precioSinIVA)*100 : 0;
-  // Operative alerts
-  const alertas = [];
-  if (margenNetoPrecio>0 && margenNetoPrecio<15)  alertas.push("margen_critico");
-  if (ivaNeto>uNeta)                               alertas.push("carga_fiscal_alta");
-  if (markupSobre>0 && markupSobre<25)             alertas.push("markup_bajo");
-  return {
-    costoBase,ivaAcred,gastos,costoTotal,
-    precioSinIVA,ivaTraslad,precioConIVA,
-    ivaNeto,uBruta,isr:isrAmt,uNeta,
-    markupSobre,margenNetoPrecio,
-    cargaFiscal,eficienciaFiscal,costoFiscalPct,
-    alertas,
-    params:{iva,isr}
-  };
-}
-
-function effectiveMargin(opId, priority, mods, custom, customVal) {
-  const op  = OP_TYPES.find(o=>o.id===opId)||OP_TYPES[0];
-  const pr  = PRIORITY[priority]||PRIORITY.P3;
-  const base = Math.round((op.baseMin+op.baseMax)/2) + pr.marginBonus;
-  if (custom) return Math.min(customVal, op.cap);
-  const modSum = mods.reduce((s,id)=>{ const m=MODIFIERS.find(m=>m.id===id); return s+(m?m.pct:0); },0);
-  return Math.min(base+modSum, op.cap);
-}
-
-// ── MIGRACIÓN DE LÍNEAS — compatibilidad total con tickets viejos ─────────────
-function migrateLinea(l, fallbackSnap, ivaR=0.16) {
-  if (!l) return null;
-  return {
-    titulo:       safeStr(l.titulo) || safeStr(l.title) || "Sin descripción",
-    partRef:      safeStr(l.partRef),
-    qty:          safeNumber(l.qty, 1) || 1,
-    costoUnit:    safeNumber(l.costoUnit, (l.snap?.costoBase||0)*(1+ivaR)),
-    gasolina:     safeNumber(l.gasolina, l.snap?.gastos||0),
-    otros:        safeNumber(l.otros, 0),
-    mode:         l.mode || "manual",
-    manualPrice:  safeStr(l.manualPrice || (l.snap?.precioConIVA||0).toFixed(2)),
-    customMgn:    !!l.customMgn,
-    customVal:    safeNumber(l.customVal, 27),
-    descripcionPDF: safeStr(l.descripcionPDF),
-    snap:         l.snap || fallbackSnap,
-  };
-}
-
-// ── HELPER CENTRALIZADO DE TOTALES ───────────────────────────────────────────
-// ── FINANCIAL HELPERS — always above calculateTicketTotals ────────────────────
-const calcMarkup = (precioSinIVA, costoTotal) =>
-  safeNumber(costoTotal) > 0
-    ? ((safeNumber(precioSinIVA) - safeNumber(costoTotal)) / safeNumber(costoTotal)) * 100
-    : 0;
-
-// Resolves unit price vs line total unambiguously — prevents double multiplication.
-// After Fase 2, lines have explicit unitPrice/lineTotal.
-// Legacy lines only have snap.precioConIVA which is always unit price (qty was 1).
-function resolveLineFinancials(ml, fallbackSnap, qty) {
-  const lsnap = ml.snap || fallbackSnap || {};
-  const q = Math.max(safeNumber(qty, 1), 1);
-  // Prefer explicit fields (post-Fase2 saves)
-  const unitPrice = safeNumber(
-    ml.unitPrice ?? lsnap.unitPrice ?? lsnap.precioUnitario ?? lsnap.precioConIVA
-  );
-  const unitSinIVA = safeNumber(
-    ml.unitSinIVA ?? lsnap.unitSinIVA ?? lsnap.precioSinIVA
-  );
-  // If explicit lineTotal exists, use it — don't multiply again
-  const lineTotal        = ml.lineTotal != null ? safeNumber(ml.lineTotal) : unitPrice * q;
-  const lineTotalSinIVA  = ml.lineTotalSinIVA != null ? safeNumber(ml.lineTotalSinIVA) : unitSinIVA * q;
-  return { unitPrice, lineTotal, unitSinIVA, lineTotalSinIVA, qty: q };
-}
-
-function calculateTicketTotals(ticket) {
-  if (!ticket) return null;
-  const snap   = ticket.snap || {};
-  const lineas = safeArr(ticket.lineas);
-  const iva    = safeNumber(snap.params?.iva, 16);
-  const isr    = safeNumber(snap.params?.isr, 20);
-
-  if (lineas.length === 0) {
-    // Legacy ticket — snap is the source of truth
-    return {
-      lineas: [],
-      subtotal:    safeNumber(snap.precioSinIVA),
-      ivaAmt:      safeNumber(snap.ivaTraslad),
-      total:       safeNumber(snap.precioConIVA),
-      costoTotal:  safeNumber(snap.costoTotal),
-      uNeta:       safeNumber(snap.uNeta),
-      uBruta:      safeNumber(snap.uBruta),
-      isrAmt:      safeNumber(snap.isr),
-      ivaNeto:     safeNumber(snap.ivaNeto),
-      markupSobre: calcMarkup(snap.precioSinIVA, snap.costoTotal),
-      margenNeto:  safeNumber(snap.margenNetoPrecio),
-      ivaPct: iva, isrPct: isr,
-    };
-  }
-
-  const ivaR = iva / 100;
-  let subtotal=0, ivaAmt=0, total=0, costoTotal=0, uNeta=0, uBruta=0, isrAmt=0, ivaNeto=0;
-
-  const lineasCalc = lineas.map(l => {
-    const ml  = migrateLinea(l, snap, ivaR);
-    const qty = safeNumber(ml.qty, 1) || 1;
-    const lsnap = ml.snap || snap || {};
-
-    // Defensive validation (qty is always ≥1 via safeNumber guard above)
-
-    const fin = resolveLineFinancials(ml, snap, qty);
-
-    const lineIVA    = safeNumber(lsnap.ivaTraslad) * qty;
-    const lineCosto  = safeNumber(lsnap.costoTotal) * qty;
-    const lineUNeta  = safeNumber(lsnap.uNeta) * qty;
-    const lineUBruta = safeNumber(lsnap.uBruta) * qty;
-    const lineISR    = safeNumber(lsnap.isr) * qty;
-    const lineIVANeto= safeNumber(lsnap.ivaNeto) * qty;
-
-    subtotal   += fin.lineTotalSinIVA;
-    ivaAmt     += lineIVA;
-    total      += fin.lineTotal;
-    costoTotal += lineCosto;
-    uNeta      += lineUNeta;
-    uBruta     += lineUBruta;
-    isrAmt     += lineISR;
-    ivaNeto    += lineIVANeto;
-
-    return {
-      ...ml,
-      unitPrice: fin.unitPrice, lineTotal: fin.lineTotal,
-      unitSinIVA: fin.unitSinIVA, lineTotalSinIVA: fin.lineTotalSinIVA,
-      lineIVA, lineCosto, lineUNeta,
-    };
-  });
-
-  const markupSobre = costoTotal > 0 ? ((subtotal - costoTotal) / costoTotal) * 100 : 0;
-  const margenNeto  = subtotal > 0 ? (uNeta / subtotal) * 100 : 0;
-
-  return {
-    lineas: lineasCalc,
-    subtotal, ivaAmt, total,
-    costoTotal, uNeta, uBruta, isrAmt, ivaNeto,
-    markupSobre, margenNeto, ivaPct: iva, isrPct: isr,
-  };
-}
-
-function utilidadPonderada(uNeta, probId) {
-  const p = PROB.find(x=>x.id===probId)||PROB[0];
-  return uNeta*(p.pct/100);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// L3.5 — SHARED SELECTORS (single source of truth for derived ticket data)
-// All components MUST use these instead of inline filter logic.
-// Changing a business rule here updates all views simultaneously.
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// Active non-deleted tickets
-const sel_active     = (ts) => ts.filter(t=>!t._deleted);
-
-// Operado: work already done (entregado/facturado/cobrado/cerrado)
-const sel_operados   = (ts) => sel_active(ts).filter(t=>OPERADO_SET.has(t.status));
-
-// Cash: money actually received
-const sel_cobrados   = (ts) => sel_active(ts).filter(t=>CASH_SET.has(t.status));
-
-// Cartera: delivered/invoiced but not yet paid — business rule lives here
-const sel_cartera    = (ts) => sel_active(ts).filter(t=>CARTERA_SET.has(t.status));
-
-// Vencidos: cartera past the promesa de pago date
-const sel_vencidos   = (ts) => sel_cartera(ts).filter(t=>{
-  if(!t.promesaPago) return false;
-  const d=parseDateMX(t.promesaPago); return d&&new Date()>d;
-});
-
-// Forecast: probable but not yet done (cotizado/autorizado)
-const sel_forecast   = (ts) => sel_active(ts).filter(t=>FORECAST_SET.has(t.status));
-
-// Open pipeline (not closed, not cancelled)
-const sel_open       = (ts) => sel_active(ts).filter(t=>!CLOSED_SET.has(t.status));
-
-// Sum a snap field over a ticket array
-const sumSnap        = (ts, key) => ts.reduce((s,t)=>s+safeNumber(t.snap?.[key]),0);
-
-// Period filter — from parseDateMX of t.date
-const sel_inRange    = (ts, from, to) => ts.filter(t=>{
-  const d=parseDateMX(t.date); return d&&d>=from&&d<=to;
-});
-
-// Build period range object
-const buildRange = (period) => {
-  const now=new Date(); const from=new Date(now);
-  if     (period==="today") from.setHours(0,0,0,0);
-  else if(period==="week")  from.setDate(now.getDate()-7);
-  else if(period==="month") from.setDate(now.getDate()-30);
-  else if(period==="3m")    from.setDate(now.getDate()-90);
-  else                      from.setFullYear(2000); // "all"
-  return {from,to:now};
-};
-const mxn   = n => new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2}).format(n||0);
-const fpct  = n => ((n||0).toFixed(1))+"%";
-const clamp = (v,mn,mx) => Math.min(Math.max(v,mn),mx);
-const todayMX = () => new Date().toLocaleDateString("es-MX",{day:"2-digit",month:"2-digit",year:"numeric"});
-const nowISO  = () => new Date().toISOString();
-const fmtTS   = ts => { try { return new Date(ts).toLocaleString("es-MX",{hour12:false,day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}); } catch { return ts; } };
-const margenColor = v => v>=20?C.green:v>=10?C.yellow:C.red;
-
-function parseDateMX(s) {
-  if (!s) return null;
-  const p = s.split("/");
-  if (p.length!==3) return null;
-  const dt = new Date(`${p[2]}-${p[1]}-${p[0]}`);
-  return isNaN(dt.getTime())?null:dt;
-}
-function daysFromNow(s) {
-  const d=parseDateMX(s); if(!d) return null;
-  return Math.round((Date.now()-d.getTime())/(1000*60*60*24));
-}
-function canTransition(from,to) { return (TICKET_TRANSITIONS[from]||[]).includes(to); }
-function mkEvent(type,detail={}) { return {type,ts:nowISO(),...detail}; }
-
-let _seq=8;
-function mkTicketId(dateStr) {
-  const p=(dateStr||"").replace(/\//g,"-").split("-");
-  let y,m,d;
-  if(p.length===3){p[0].length===4?([y,m,d]=p):([d,m,y]=p);}
-  else{const n=new Date();y=n.getFullYear();m=String(n.getMonth()+1).padStart(2,"0");d=String(n.getDate()).padStart(2,"0");}
-  return `TKT-${y}${String(m).padStart(2,"0")}${String(d).padStart(2,"0")}-${String(_seq++).padStart(3,"0")}`;
-}
-function mkUnitId() { return genId("UNI"); }
-function mkPartId() { return `PRT-${Date.now().toString().slice(-5)}`; }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// L5 — SEED DATA
-// ═══════════════════════════════════════════════════════════════════════════════
-const S1 = { costoBase:2344.83,ivaAcred:375.17,gastos:230,costoTotal:2574.83,precioSinIVA:4568.97,ivaTraslad:731.03,precioConIVA:5300,ivaNeto:355.86,uBruta:1994.14,isr:398.83,uNeta:1595.31,markupSobre:77.45,margenNetoPrecio:34.92,params:{iva:16,isr:20}};
-const S2 = { costoBase:2181.03,ivaAcred:348.97,gastos:230,costoTotal:2411.03,precioSinIVA:4396.55,ivaTraslad:703.45,precioConIVA:5100,ivaNeto:354.48,uBruta:1985.52,isr:397.10,uNeta:1588.41,markupSobre:82.35,margenNetoPrecio:36.13,params:{iva:16,isr:20}};
-const S3 = { costoBase:612.93,ivaAcred:98.07,gastos:230,costoTotal:842.93,precioSinIVA:1853.45,ivaTraslad:296.55,precioConIVA:2150,ivaNeto:198.48,uBruta:1010.52,isr:202.10,uNeta:808.41,markupSobre:119.88,margenNetoPrecio:43.62,params:{iva:16,isr:20}};
-const S4 = { costoBase:129.31,ivaAcred:20.69,gastos:230,costoTotal:359.31,precioSinIVA:560.34,ivaTraslad:89.66,precioConIVA:650,ivaNeto:68.97,uBruta:201.03,isr:40.21,uNeta:160.83,markupSobre:55.95,margenNetoPrecio:28.70,params:{iva:16,isr:20}};
-const S5 = { costoBase:2941.38,ivaAcred:470.62,gastos:230,costoTotal:3171.38,precioSinIVA:6017.24,ivaTraslad:962.76,precioConIVA:6980,ivaNeto:492.14,uBruta:2845.86,isr:569.17,uNeta:2276.69,markupSobre:89.74,margenNetoPrecio:37.84,params:{iva:16,isr:20}};
-const S6 = { costoBase:5948.28,ivaAcred:951.72,gastos:230,costoTotal:6178.28,precioSinIVA:8526.02,ivaTraslad:1364.16,precioConIVA:9890.18,ivaNeto:412.44,uBruta:2347.74,isr:469.55,uNeta:1878.19,markupSobre:38.00,margenNetoPrecio:22.03,params:{iva:16,isr:20}};
-const S7 = { costoBase:1724.14,ivaAcred:275.86,gastos:230,costoTotal:1954.14,precioSinIVA:3514.66,ivaTraslad:562.34,precioConIVA:4077,ivaNeto:286.48,uBruta:1560.52,isr:312.10,uNeta:1248.41,markupSobre:79.86,margenNetoPrecio:35.52,params:{iva:16,isr:20}};
-
-const mk = (e,to)=>[mkEvent("created"),mkEvent("status_changed",{to})];
-
-const SEED_TICKETS = [
-  {id:"TKT-20260512-001",titulo:"Horquilla clutch Freightliner M2 106",opId:"rescue",opShort:"RESC",priority:"P1",clientId:"CLI-00001",supplierId:"PRV-00001",unitId:"UNI-00001",partRef:"",date:"12/05/2026",status:"entregado",payType:"credit",promesaPago:"26/05/2026",cobrado:false,mods:["urgency","offhours"],prob:"high",horasOp:3,notes:"Unidad varada en carretera Cuautitlan-Huehuetoca",snap:S1,timeline:[{ts:"2026-05-12T08:02:00Z",evento:"Solicitud recibida",actor:"Logis Express"},{ts:"2026-05-12T08:15:00Z",evento:"VIN validado — Freightliner M2 106",actor:"Sistema"},{ts:"2026-05-12T08:41:00Z",evento:"Proveedor localizado — El Cerrito",actor:"Operador"},{ts:"2026-05-12T09:10:00Z",evento:"Pago confirmado",actor:"Logis Express"},{ts:"2026-05-12T10:30:00Z",evento:"En ruta al punto de entrega",actor:"El Cerrito"},{ts:"2026-05-12T11:55:00Z",evento:"Entregado. Unidad recuperada.",actor:"Operador"}],history:mk("created","entregado")},
-  {id:"TKT-20260513-001",titulo:"Kit Primer Sayer automotriz",opId:"consumable",opShort:"CONS",priority:"P3",clientId:"CLI-00001",supplierId:"",unitId:"",partRef:"",date:"13/05/2026",status:"entregado",payType:"credit",promesaPago:"27/05/2026",cobrado:false,mods:[],prob:"high",horasOp:1,notes:"",snap:S2,timeline:[{ts:"2026-05-13T09:00:00Z",evento:"Solicitud recibida",actor:"Logis Express"},{ts:"2026-05-13T10:20:00Z",evento:"Entregado",actor:"Operador"}],history:mk("created","entregado")},
-  {id:"TKT-20260513-002",titulo:"3 baleros 6206 ZZ C3 / Reten dif. Ford F350 2012",opId:"consumable",opShort:"CONS",priority:"P2",clientId:"CLI-00001",supplierId:"PRV-00002",unitId:"UNI-00003",partRef:"6206ZZC3",date:"13/05/2026",status:"entregado",payType:"credit",promesaPago:"27/05/2026",cobrado:false,mods:["rare"],prob:"high",horasOp:2,notes:"Pieza escasa en plaza — se consiguio con Autopartes Casillas Tepotzotlan",snap:S3,timeline:[{ts:"2026-05-13T10:00:00Z",evento:"Solicitud recibida",actor:"Logis Express"},{ts:"2026-05-13T10:45:00Z",evento:"Pieza localizada — Autopartes Casillas",actor:"Operador"},{ts:"2026-05-13T13:00:00Z",evento:"Entregado",actor:"Operador"}],history:mk("created","entregado")},
-  {id:"TKT-20260513-003",titulo:"Empaque / junta de candelero Eaton",opId:"consumable",opShort:"CONS",priority:"P3",clientId:"CLI-00001",supplierId:"PRV-00001",unitId:"",partRef:"",date:"13/05/2026",status:"entregado",payType:"credit",promesaPago:"27/05/2026",cobrado:false,mods:[],prob:"high",horasOp:1,notes:"",snap:S4,timeline:[{ts:"2026-05-13T11:00:00Z",evento:"Solicitud recibida",actor:"Logis Express"},{ts:"2026-05-13T12:30:00Z",evento:"Entregado",actor:"Operador"}],history:mk("created","entregado")},
-  {id:"TKT-20260514-001",titulo:"Horquilla clutch Freightliner M2 106 (2a op.)",opId:"heavy",opShort:"REF-P",priority:"P1",clientId:"CLI-00001",supplierId:"PRV-00001",unitId:"UNI-00001",partRef:"",date:"14/05/2026",status:"entregado",payType:"credit",promesaPago:"29/05/2026",cobrado:false,mods:["urgency"],prob:"high",horasOp:2.5,notes:"Segunda unidad de flota con falla identica",snap:S5,timeline:[{ts:"2026-05-14T07:30:00Z",evento:"Solicitud recibida",actor:"Logis Express"},{ts:"2026-05-14T07:45:00Z",evento:"Diagnostico confirmado — misma pieza",actor:"Operador"},{ts:"2026-05-14T08:00:00Z",evento:"Proveedor contactado — stock disponible",actor:"Operador"},{ts:"2026-05-14T09:30:00Z",evento:"Entregado",actor:"Operador"}],history:mk("created","entregado")},
-  {id:"TKT-20260514-002",titulo:"Juego de faros delanteros Ford F350 2014",opId:"general",opShort:"REF-G",priority:"P3",clientId:"CLI-00001",supplierId:"PRV-00002",unitId:"UNI-00002",partRef:"",date:"14/05/2026",status:"entregado",payType:"credit",promesaPago:"30/05/2026",cobrado:false,mods:[],prob:"high",horasOp:1.5,notes:"Surtido por Autopartes Casillas Tepotzotlan",snap:S6,timeline:[{ts:"2026-05-14T10:00:00Z",evento:"Solicitud recibida",actor:"Logis Express"},{ts:"2026-05-14T10:30:00Z",evento:"Autopartes Casillas — stock confirmado",actor:"Operador"},{ts:"2026-05-14T12:00:00Z",evento:"Entregado",actor:"Operador"}],history:mk("created","entregado")},
-  {id:"TKT-20260514-003",titulo:"Multiple de escape Ford F350 Super Duty",opId:"general",opShort:"REF-G",priority:"P2",clientId:"CLI-00001",supplierId:"",unitId:"UNI-00004",partRef:"",date:"14/05/2026",status:"entregado",payType:"credit",promesaPago:"30/05/2026",cobrado:false,mods:["offhours"],prob:"high",horasOp:2,notes:"Solicitud recibida fuera de horario",snap:S7,timeline:[{ts:"2026-05-14T19:30:00Z",evento:"Solicitud recibida (fuera de horario)",actor:"Logis Express"},{ts:"2026-05-14T20:15:00Z",evento:"Proveedor nocturno localizado",actor:"Operador"},{ts:"2026-05-14T22:00:00Z",evento:"Entregado",actor:"Operador"}],history:mk("created","entregado")},
-];
-
-const SEED_CLIENTS = [{
-  id:"CLI-00001", empresa:"Logis Express", contacto:"", tel:"", correo:"", rfc:"",
-  direccion:"Manzana 006", ciudad:"Cuautitlán Izcalli", estado:"Estado de México",
-  creditDays:15, category:"A", score:80,
-  unidades:["UNI-00001","UNI-00002","UNI-00003","UNI-00004"],
-}];
-
-const SEED_SUPPLIERS = [
-  {
-    id:"PRV-00001", nombre:"Refaccionaria Diesel El Cerrito", categoria:"heavy",
-    especialidad:"Refacciones diesel, clutch, motor, transmision",
-    entregaDias:1, confiabilidad:90, contacto:"56 20 35 00 60",
-    correo:"refaccionaria.diesel@homail.com", horario:"Lun-Sab 07:00-20:00",
-    cobertura:"CDMX, Edomex", scoreOp:88, incidencias:0,
+    clienteId: "CLI-001", unidadId: "UNI-001", proveedorId: null,
+    lineas: [
+      { id: genId("L"), descripcion: "Cadena de distribución", tipo: "refaccion", oem: "N/A", cantidad: 1, costo_unitario: 2800, precio_unitario: 3780, costo_con_iva: true, estado: "buscando" },
+      { id: genId("L"), descripcion: "Tensor hidráulico", tipo: "refaccion", oem: "N/A", cantidad: 1, costo_unitario: 750, precio_unitario: 1050, costo_con_iva: true, estado: "buscando" },
+    ],
+    sla_inicio: new Date(Date.now() - 7200000).toISOString(),
+    pago: { tipo: "credito", promesa: null, cobrado: false },
+    notas: "Unidad varada en carretera Cuautitlán-Huehuetoca. Cliente reporta sonido metálico antes de la falla.",
+    eventos: [{ ts: new Date(Date.now() - 7200000).toISOString(), tipo: "creado", actor: "Sistema", detalle: "Operación registrada" }],
+    ai_sugerencia: "Proveedor recomendado: El Cerrito. Tiene stock confirmado de cadena compatible M2 106. Tiempo estimado: 2-3 hrs.",
+    createdAt: new Date(Date.now() - 7200000).toISOString(),
+    _deleted: false,
   },
   {
-    id:"PRV-00002", nombre:"Autopartes Casillas", categoria:"general",
-    especialidad:"Autopartes multimarca — Ford, VW, Chevrolet, Hyundai, Nissan, Audi, Toyota, Mercedes, Honda",
-    entregaDias:1, confiabilidad:87, contacto:"55 4327 4660 / 55 5876 9400 / 55 5876 3539",
-    correo:"", horario:"",
-    cobertura:"Tepotzotlan, Edomex — Arcos del Sitio",
-    scoreOp:82, incidencias:0,
+    id: genId(), estado: "cotizado", urgencia: "alta", tipo: "preventivo",
+    titulo: "Balatas y discos delantera — Ford F-350 Eco. 8",
+    diagnostico: {
+      falla_reportada: "Balatas desgastadas al límite, ruido al frenar",
+      sistema_afectado: "frenos", causa_probable: "Desgaste normal por kilometraje. Requiere cambio preventivo.",
+      confianza: 0.95,
+    },
+    clienteId: "CLI-002", unidadId: "UNI-003", proveedorId: "PRV-002",
+    lineas: [
+      { id: genId("L"), descripcion: "Balatas delanteras (juego)", tipo: "refaccion", oem: "FMSI D1421", cantidad: 1, costo_unitario: 1200, precio_unitario: 1680, costo_con_iva: true, estado: "confirmado" },
+      { id: genId("L"), descripcion: "Discos delanteros (par)", tipo: "refaccion", oem: "Motorcraft BRR-64", cantidad: 1, costo_unitario: 2100, precio_unitario: 2940, costo_con_iva: true, estado: "confirmado" },
+      { id: genId("L"), descripcion: "Mano de obra instalación", tipo: "mano_obra", oem: null, cantidad: 1, costo_unitario: 800, precio_unitario: 1100, costo_con_iva: false, estado: "confirmado" },
+    ],
+    sla_inicio: yesterday,
+    pago: { tipo: "contado", promesa: null, cobrado: false },
+    notas: "Preventivo programado. Cliente pide entrega mañana por la mañana.",
+    eventos: [
+      { ts: yesterday, tipo: "creado", actor: "Sistema", detalle: "Operación registrada" },
+      { ts: new Date(Date.now() - 3600000).toISOString(), tipo: "estado", actor: "Operador", detalle: "Cotización enviada al cliente" },
+    ],
+    ai_sugerencia: "Margen efectivo 39%. Autopartes Casillas confirma entrega en 4 hrs. Cotización lista para enviar.",
+    createdAt: yesterday,
+    _deleted: false,
+  },
+  {
+    id: genId(), estado: "resuelto", urgencia: "normal", tipo: "programado",
+    titulo: "Cambio de aceite motor + filtros — Kenworth T370 Eco. 12",
+    diagnostico: {
+      falla_reportada: "Servicio programado por kilometraje",
+      sistema_afectado: "motor", causa_probable: "Mantenimiento preventivo por km",
+      confianza: 1.0,
+    },
+    clienteId: "CLI-001", unidadId: "UNI-002", proveedorId: "PRV-001",
+    lineas: [
+      { id: genId("L"), descripcion: "Aceite 15W-40 (10 lts)", tipo: "consumible", oem: null, cantidad: 10, costo_unitario: 85, precio_unitario: 115, costo_con_iva: true, estado: "entregado" },
+      { id: genId("L"), descripcion: "Filtro aceite",          tipo: "refaccion",  oem: null, cantidad: 1,  costo_unitario: 280, precio_unitario: 390, costo_con_iva: true, estado: "entregado" },
+      { id: genId("L"), descripcion: "Filtro combustible",     tipo: "refaccion",  oem: null, cantidad: 1,  costo_unitario: 320, precio_unitario: 445, costo_con_iva: true, estado: "entregado" },
+    ],
+    sla_inicio: twoDaysAgo,
+    pago: { tipo: "credito", promesa: new Date(Date.now() + 864000000).toISOString().slice(0,10), cobrado: false },
+    notas: "",
+    eventos: [
+      { ts: twoDaysAgo, tipo: "creado", actor: "Sistema", detalle: "Operación registrada" },
+      { ts: new Date(Date.now() - 86400000).toISOString(), tipo: "estado", actor: "Operador", detalle: "Resuelto — piezas instaladas" },
+    ],
+    ai_sugerencia: null,
+    createdAt: twoDaysAgo,
+    _deleted: false,
   },
 ];
 
-const SEED_UNITS = [
-  {id:"UNI-00001",vin:"3AKJHHDR9JSJU1234",marca:"Freightliner",modelo:"M2 106",anio:2019,motor:"Detroit DD5",transmision:"Allison 2100",config:"6x2",clientId:"CLI-00001",statusOp:"operativa",km:284000,notas:"Historial de falla en clutch — revisar en 50k km",placa:"",economico:""},
-  {id:"UNI-00002",vin:"1FDWF36P14EB12345",marca:"Ford",modelo:"F-350 Super Duty",anio:2014,motor:"6.7L Power Stroke V8",transmision:"TorqShift 6A",config:"4x2",clientId:"CLI-00001",statusOp:"operativa",km:198000,notas:"",placa:"",economico:""},
-  {id:"UNI-00003",vin:"1FDWF36P04EB67890",marca:"Ford",modelo:"F-350 Super Duty",anio:2012,motor:"6.7L Power Stroke V8",transmision:"TorqShift 6A",config:"4x2",clientId:"CLI-00001",statusOp:"preventivo",km:312000,notas:"Diferencial con desgaste — programar revision",placa:"",economico:""},
-  {id:"UNI-00004",vin:"1FDWF36P09EB55555",marca:"Ford",modelo:"F-350 Super Duty",anio:2016,motor:"6.7L Power Stroke V8",transmision:"TorqShift 6A",config:"4x2",clientId:"CLI-00001",statusOp:"operativa",km:156000,notas:"",placa:"",economico:""},
-];
-
-const SEED_PARTS = [
-  {id:"PRT-00001",nombre:"Horquilla de clutch",oem:"A0002500370",aftermarket:"FTE MHK0504",aplicacion:"Freightliner M2 106 / DD5 / Detroit",notas:"Revisar compatibilidad con transmision Allison",proveedor:"Refaccionaria Diesel El Cerrito",ultimoPrecio:2720,ultimaFecha:"12/05/2026"},
-  {id:"PRT-00002",nombre:"Balero 6206 ZZ C3",oem:"6206ZZC3",aftermarket:"SKF 6206-2Z/C3",aplicacion:"Ford F-350 / diferencial trasero",notas:"Usar siempre C3 (holgura mayor para alta temperatura)",proveedor:"",ultimoPrecio:711,ultimaFecha:"13/05/2026"},
-  {id:"PRT-00003",nombre:"Reten de diferencial",oem:"F81Z-4676-AA",aftermarket:"National 710561",aplicacion:"Ford F-350 Super Duty 2012 / trasero",notas:"",proveedor:"",ultimoPrecio:0,ultimaFecha:""},
-  {id:"PRT-00004",nombre:"Empaque candelero Eaton",oem:"S-14753",aftermarket:"",aplicacion:"Eaton Fuller / transmisiones 10 velocidades",notas:"Solo original — no hay aftermarket confiable",proveedor:"Refaccionaria Diesel El Cerrito",ultimoPrecio:150,ultimaFecha:"13/05/2026"},
-];
-
-const initialState = {
-  tickets:   SEED_TICKETS,
-  clients:   SEED_CLIENTS,
-  suppliers: SEED_SUPPLIERS,
-  units:     SEED_UNITS,
-  parts:     SEED_PARTS,
+const INITIAL_STATE = {
+  operaciones: SEED_OPS,
+  clientes: SEED_CLIENTES,
+  unidades: SEED_UNIDADES,
+  proveedores: SEED_PROVEEDORES,
+  version: APP_VERSION,
 };
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// L6 — STORE
-// ═══════════════════════════════════════════════════════════════════════════════
-function loadFromStorage() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const p = JSON.parse(raw);
-    return p.version===STORAGE_VER ? p.data : null;
-  } catch { return null; }
-}
-function saveToStorage(s) {
-  const payload = {version:STORAGE_VER,savedAt:nowISO(),data:{tickets:s.tickets,clients:s.clients,suppliers:s.suppliers,units:s.units,parts:s.parts}};
-  try { localStorage.setItem(STORAGE_KEY,JSON.stringify(payload)); }
-  catch(e) {
-    // Quota exceeded (flota grande) — guardar sin unidades; Supabase es la fuente primaria
-    try {
-      const slim = {...payload, data:{...payload.data, units:[]}};
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
-    } catch { console.warn("storage:",e); }
-  }
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// REDUCER
+// ─────────────────────────────────────────────────────────────────────────────
 
-function reducer(state,action) {
-  switch(action.type) {
-    // TICKETS
-    case "TKT_ADD":    return {...state,tickets:[action.t,...state.tickets]};
-    case "TKT_UPDATE": {
-      const patch = {...action.patch};
-      // Sync cobrado when status changes via edit
-      // "cobrado" status → cobrado=true
-      // "cerrado" → keep existing value (cerrado = archived, not necessarily paid)
-      // any other status → cobrado=false
-      if (patch.status !== undefined) {
-        if (patch.status === "cobrado") patch.cobrado = true;
-        else if (patch.status !== "cerrado") patch.cobrado = false;
-        // cerrado: leave cobrado as-is (don't override)
-      }
-      return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,...patch,history:[...(t.history||[]),mkEvent("edited",{fields:Object.keys(action.patch)})]})};
-    }    case "TKT_STATUS": {
-      const {id,to}=action;
-      return {...state,tickets:state.tickets.map(t=>{
-        if(t.id!==id) return t;
-        if(!canTransition(t.status,to)) return t;
-        const tlEvent = {ts:nowISO(),evento:"Estado: "+TICKET_META[to].label,actor:"Operador"};
-        return {...t,status:to,cobrado:PAID_SET.has(to),timeline:[...(t.timeline||[]),tlEvent],history:[...(t.history||[]),mkEvent("status_changed",{from:t.status,to})]};
-      })};
+function reducer(state, action) {
+  switch (action.type) {
+
+    case "OP_CREATE": {
+      const op = { ...action.op, id: genId(), createdAt: nowISO(), _deleted: false };
+      if (!op.sla_inicio) op.sla_inicio = nowISO();
+      op.eventos = [{ ts: nowISO(), tipo: "creado", actor: "Operador", detalle: "Operación registrada" }];
+      return { ...state, operaciones: [...state.operaciones, op] };
     }
-    case "TKT_DELETE":   return {...state,tickets:state.tickets.filter(t=>t.id!==action.id)};
-    case "TKT_SOFT_DEL": return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,_deleted:true,_deletedAt:nowISO()})};
-    case "TKT_RESTORE":  return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,_deleted:false,_deletedAt:null})};
-    case "TKT_COBRADO": return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,cobrado:true,status:"cobrado",timeline:[...(t.timeline||[]),{ts:nowISO(),evento:"Cobrado",actor:"Operador"}],history:[...(t.history||[]),mkEvent("cobrado")]})};
-    case "TKT_TIMELINE": return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,timeline:[...(t.timeline||[]),{ts:nowISO(),evento:action.evento,actor:action.actor||"Operador"}]})};
-    // CLIENTS
-    case "CLI_ADD":    return {...state,clients:[...state.clients,action.c]};
-    case "CLI_UPDATE": return {...state,clients:state.clients.map(c=>c.id===action.id?{...c,...action.patch}:c)};
-    case "CLI_DELETE": return {...state,clients:state.clients.filter(c=>c.id!==action.id)};
-    // SUPPLIERS
-    case "SUP_ADD":    return {...state,suppliers:[...state.suppliers,action.s]};
-    case "SUP_UPDATE": return {...state,suppliers:state.suppliers.map(s=>s.id===action.id?{...s,...action.patch}:s)};
-    case "SUP_DELETE": return {...state,suppliers:state.suppliers.filter(s=>s.id!==action.id)};
-    // UNITS
-    case "UNIT_ADD":      return {...state,units:[...state.units,action.u]};
-    case "UNIT_UPDATE":   return {...state,units:state.units.map(u=>u.id===action.id?{...u,...action.patch}:u)};
-    case "UNIT_DELETE":   return {...state,units:state.units.filter(u=>u.id!==action.id)};
-    case "UNITS_CLEAR":   return {...state, units: []};
-    case "UNITS_REPLACE": {
-      // Deduplicate by id first, then vin, then economico to prevent ghost units
-      const incoming = safeArr(action.units);
-      const seen = new Set();
-      const deduped = incoming.filter(u => {
-        const key = u.id || u.vin || u.economico;
-        if (!key || seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-      return {...state, units: deduped};
-    }
-    // PARTS
-    case "PART_ADD":    return {...state,parts:[...state.parts,action.p]};
-    case "PART_UPDATE": return {...state,parts:state.parts.map(p=>p.id===action.id?{...p,...action.patch}:p)};
-    case "PART_DELETE": return {...state,parts:state.parts.filter(p=>p.id!==action.id)};
-    // PERSISTENCE
-    case "IMPORT": {
-      const d = action.data;
-      // Only replace a table if the incoming data is a real non-empty array.
-      // Never overwrite production data with empty or null from a partial Supabase failure.
-      const merge = (incoming, current) =>
-        Array.isArray(incoming) && incoming.length > 0 ? incoming : current;
+
+    case "OP_UPDATE": {
       return {
-        tickets:   merge(d.tickets,   state.tickets),
-        clients:   merge(d.clients,   state.clients),
-        suppliers: merge(d.suppliers, state.suppliers),
-        units:     merge(d.units,     state.units),
-        parts:     merge(d.parts,     state.parts),
+        ...state,
+        operaciones: state.operaciones.map(op =>
+          op.id !== action.id ? op : { ...op, ...action.patch }
+        ),
       };
     }
-    case "RESET": return {...initialState};
-    case "NOOP":  return state; // trigger effects without mutation
+
+    case "OP_AVANZAR": {
+      const op = state.operaciones.find(o => o.id === action.id);
+      if (!op) return state;
+      const idx = ESTADOS.indexOf(op.estado);
+      const nextEstado = ESTADOS[idx + 1];
+      if (!nextEstado) return state;
+      const evento = { ts: nowISO(), tipo: "estado", actor: "Operador", detalle: `→ ${ESTADO_META[nextEstado].label}` };
+      return {
+        ...state,
+        operaciones: state.operaciones.map(o =>
+          o.id !== action.id ? o : { ...o, estado: nextEstado, eventos: [...(o.eventos || []), evento] }
+        ),
+      };
+    }
+
+    case "OP_CANCELAR": {
+      const ev = { ts: nowISO(), tipo: "cancelado", actor: "Operador", detalle: action.motivo || "Cancelada" };
+      return {
+        ...state,
+        operaciones: state.operaciones.map(o =>
+          o.id !== action.id ? o : { ...o, estado: "cancelado", eventos: [...(o.eventos || []), ev] }
+        ),
+      };
+    }
+
+    case "OP_COBRAR": {
+      const ev = { ts: nowISO(), tipo: "cobrado", actor: "Operador", detalle: "Pago recibido" };
+      return {
+        ...state,
+        operaciones: state.operaciones.map(o =>
+          o.id !== action.id ? o : {
+            ...o, estado: "cobrado",
+            pago: { ...o.pago, cobrado: true, fecha_cobro: nowISO() },
+            eventos: [...(o.eventos || []), ev],
+          }
+        ),
+      };
+    }
+
+    case "OP_ADD_LINEA": {
+      return {
+        ...state,
+        operaciones: state.operaciones.map(o =>
+          o.id !== action.id ? o : { ...o, lineas: [...(o.lineas || []), { ...action.linea, id: genId("L") }] }
+        ),
+      };
+    }
+
+    case "OP_UPDATE_LINEA": {
+      return {
+        ...state,
+        operaciones: state.operaciones.map(o =>
+          o.id !== action.opId ? o : {
+            ...o,
+            lineas: (o.lineas || []).map(l => l.id !== action.lineaId ? l : { ...l, ...action.patch }),
+          }
+        ),
+      };
+    }
+
+    case "OP_DELETE_LINEA": {
+      return {
+        ...state,
+        operaciones: state.operaciones.map(o =>
+          o.id !== action.opId ? o : { ...o, lineas: (o.lineas || []).filter(l => l.id !== action.lineaId) }
+        ),
+      };
+    }
+
+    case "OP_DELETE": {
+      return { ...state, operaciones: state.operaciones.filter(o => o.id !== action.id) };
+    }
+
+    case "CLI_ADD":    return { ...state, clientes: [...state.clientes, action.c] };
+    case "CLI_UPDATE": return { ...state, clientes: state.clientes.map(c => c.id !== action.id ? c : { ...c, ...action.patch }) };
+
+    case "UNI_ADD":    return { ...state, unidades: [...state.unidades, action.u] };
+    case "UNI_UPDATE": return { ...state, unidades: state.unidades.map(u => u.id !== action.id ? u : { ...u, ...action.patch }) };
+
+    case "PRV_ADD":    return { ...state, proveedores: [...state.proveedores, action.p] };
+    case "PRV_UPDATE": return { ...state, proveedores: state.proveedores.map(p => p.id !== action.id ? p : { ...p, ...action.patch }) };
+
     default: return state;
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// L7 — TOAST HOOK
-// ═══════════════════════════════════════════════════════════════════════════════
-function useToasts() {
-  const [toasts,setToasts] = useState([]);
-  const push = useCallback((msg,type="info")=>{
-    const id = genId("T");
-    setToasts(p=>[...p,{id,msg,type}]);
-    setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),3000);
-  },[]);
-  return {toasts,push};
+// ─────────────────────────────────────────────────────────────────────────────
+// STORAGE
+// ─────────────────────────────────────────────────────────────────────────────
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    if (d.version !== APP_VERSION) return null;
+    return d.data || null;
+  } catch { return null; }
 }
 
-// ── buildCotizacionHTML — genera HTML del documento (usado en preview y download) ─
-function buildCotizacionHTML(tkt, cl, un, supp) {
-  const totals = calculateTicketTotals(tkt);
-  const folio  = tkt.id.replace("TKT","COT");
-  const fechaLarga=(()=>{
-    const p=tkt.date.split("/"); if(p.length!==3) return tkt.date;
-    const m=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-    return `${parseInt(p[0])} de ${m[parseInt(p[1])-1]} de ${p[2]}`;
-  })();
-  const formaPago = tkt.payType==="credit"
-    ? "Crédito"+(tkt.promesaPago?` — Fecha límite: ${tkt.promesaPago}`:"")
-    : "Contado / Transferencia bancaria";
-  const entrega = supp&&supp.entregaDias
-    ? `${supp.entregaDias} día${supp.entregaDias>1?"s":""} hábiles`
-    : "24-48 hrs hábiles";
-  const unidadStr = un
-    ? `${un.economico?"Eco. "+un.economico+" · ":""}${un.marca} ${un.modelo} ${un.anio}`
-    : "";
-  const clDirParts=[]; if(cl?.direccion)clDirParts.push(cl.direccion); if(cl?.ciudad)clDirParts.push(cl.ciudad); if(cl?.estado)clDirParts.push(cl.estado);
-  const clLine = cl ? cl.empresa+(clDirParts.length?" · "+clDirParts.join(", "):"") : "—";
-  const fmtMXN = n=>safeNumber(n).toLocaleString("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2});
-  const notaLine = tkt.notes?`<li>${tkt.notes}</li>`:"";
-  const conceptos = tkt.lineas&&tkt.lineas.length>0
-    ? tkt.lineas
-    : [{titulo:tkt.titulo,partRef:tkt.partRef||"",snap:tkt.snap,qty:1,descripcionPDF:""}];
-  const filas = conceptos.map((c,i)=>{
-    const ml=migrateLinea(c,tkt.snap); const qty=safeNumber(ml.qty,1)||1;
-    const fin=resolveLineFinancials(ml,tkt.snap,qty);
-    const desc=ml.descripcionPDF||"Atención correctiva para continuidad operativa de unidad en CEDIS SMO. Incluye integración de componente compatible, validación operativa y seguimiento logístico.";
-    const unTag=unidadStr&&i===0?`<br><br><strong>Unidad:</strong> ${unidadStr}`:"";
-    const refTag=ml.partRef?`<br><br><strong>Clave:</strong> ${ml.partRef}`:"";
-    return `<tr><td>${String(i+1).padStart(2,"0")}</td><td>${ml.titulo||"Sin descripcion"}</td><td>${desc}${unTag}${refTag}</td><td class="money">${fmtMXN(fin.lineTotal)}</td></tr>`;
-  }).join("");
-  if(!filas.trim()) return null;
-  const body=`<style>*{box-sizing:border-box;margin:0;padding:0}.page{width:794px;background:#fff;padding:50px;font-family:Arial,Helvetica,sans-serif;color:#111;font-size:14px;line-height:1.5}.top-header{border:1px solid #dcdcdc;padding:20px;display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0}.brand h1{font-size:28px;font-weight:800;margin:0}.brand p{font-size:10px;color:#666;font-weight:700;margin-top:4px}.issuer{text-align:right;font-size:11px;line-height:1.6}.hero{background:#000;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:20px;margin-top:14px}.hero-title{font-size:22px;font-weight:800}.hero-meta{text-align:right}.hero-meta .folio{font-size:18px;font-weight:800}.hero-meta .date{font-size:13px;font-weight:700}.meta-table{width:100%;border-collapse:collapse;margin-top:14px}.meta-table td{border:1px solid #e3e3e3;padding:10px 12px;font-size:11px}.meta-table td:first-child{width:100px;background:#fafafa;font-weight:700}.section-title{margin-top:22px;margin-bottom:10px;font-size:13px;font-weight:800}.detail-table{width:100%;border-collapse:collapse}.detail-table th{background:#000;color:#fff;padding:10px 12px;text-align:left;font-size:10px}.detail-table td{border:1px solid #e5e5e5;padding:12px;vertical-align:top;font-size:11px;line-height:1.6}.money{text-align:right;white-space:nowrap;font-weight:700}.totals{width:300px;margin-left:auto;margin-top:16px;border-collapse:collapse}.totals td{border:1px solid #e3e3e3;padding:10px 12px;font-size:11px}.totals td:last-child{text-align:right;font-weight:700}.grand-total td{background:#000;color:#fff;font-weight:800}.block{margin-top:22px}.block h3{font-size:13px;font-weight:800;margin-bottom:8px}.block ul{padding-left:16px}.block li{margin-bottom:5px;font-size:11px;line-height:1.6}.footer{margin-top:28px;border-top:1px solid #e5e5e5;padding-top:10px;display:flex;justify-content:space-between;font-size:10px;color:#444}</style><div class="page"><div class="top-header"><div class="brand"><h1>LOGISOLVE</h1><p>Logistics &middot; Supply &middot; Solutions</p></div><div class="issuer"><strong>Alejandro Saucedo</strong><br>RFC: SAME9612277T9<br>Tel. 5562321807<br>contacto@logisolve.mx</div></div><div class="hero"><div class="hero-title">COTIZACI&Oacute;N</div><div class="hero-meta"><div>No.</div><div class="folio">${folio}</div><div class="date">Fecha: ${tkt.date.replace(/\//g," / ")}</div></div></div><table class="meta-table"><tr><td>Cliente</td><td>${clLine}</td></tr><tr><td>Vigencia</td><td>3 d&iacute;as naturales</td></tr><tr><td>Atenci&oacute;n</td><td>&Aacute;rea de Compras / Operaciones</td></tr></table><div class="section-title">DETALLE DEL CONCEPTO</div><table class="detail-table"><thead><tr><th style="width:36px">No.</th><th style="width:160px">Concepto</th><th>Descripci&oacute;n t&eacute;cnica / operativa</th><th style="width:110px;text-align:right">Importe</th></tr></thead><tbody>${filas}</tbody></table><table class="totals"><tr><td>Subtotal</td><td>${fmtMXN(totals.subtotal)} MXN</td></tr><tr><td>IVA (${totals.ivaPct}%)</td><td>${fmtMXN(totals.ivaAmt)} MXN</td></tr><tr class="grand-total"><td>TOTAL &middot; IVA INCLUIDO</td><td>${fmtMXN(totals.total)} MXN</td></tr></table><div class="block"><h3>ALCANCE DEL SERVICIO</h3><ul><li>Integraci&oacute;n y coordinaci&oacute;n de componente requerido para continuidad operativa.</li><li>Validaci&oacute;n y coordinaci&oacute;n operativa.</li><li>Entrega directa en CEDIS SMO.</li><li>Seguimiento y trazabilidad log&iacute;stica.</li></ul></div><div class="block"><h3>CONDICIONES COMERCIALES</h3><ul><li>Precio IVA incluido en el total.</li><li>Forma de pago: ${formaPago}.</li><li>Entrega conforme a disponibilidad confirmada al momento de autorizaci&oacute;n.</li><li>Precios sujetos a cambio y disponibilidad al momento de confirmar.</li><li>Vigencia: 3 d&iacute;as naturales a partir de la fecha de emisi&oacute;n.</li>${notaLine}</ul></div><div class="block"><h3>OBSERVACIONES</h3><ul><li>Tiempo estimado de entrega: ${entrega}, sujeto a disponibilidad.</li><li>La validaci&oacute;n t&eacute;cnica final de compatibilidad corresponde al cliente.</li><li>La garant&iacute;a aplica conforme a pol&iacute;ticas del fabricante o proveedor.</li></ul></div><div class="footer"><div>Quedo atento para cualquier duda o confirmaci&oacute;n.</div><div>LogiSolve &middot; ${fechaLarga}</div></div></div>`;
-  return {folio, body};
+function saveState(state) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: APP_VERSION, ts: nowISO(), data: state }));
+  } catch (e) { console.warn("storage:", e); }
 }
 
-// ── PDFPreviewModal — preview nativo para iPhone/Safari ──────────────────────
-function PDFPreviewModal({tkt,cl,un,supp,onClose}) {
-  const C = React.useContext(ThemeCtx);
-  const frameRef=useRef(null);
-  const [ready,setReady]=useState(false);
-  const result=useMemo(()=>buildCotizacionHTML(tkt,cl,un,supp),[tkt]);
-  const htmlDoc=useMemo(()=>{
-    if(!result) return null;
-    return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=794px"><style>body{margin:0;background:#f0f0f0;display:flex;justify-content:center;min-height:100vh;}@media print{body{background:white;margin:0;}}</style></head><body>${result.body}</body></html>`;
-  },[result]);
+// ─────────────────────────────────────────────────────────────────────────────
+// UI PRIMITIVES
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const handlePrint=()=>{
-    if(!htmlDoc) return;
-    try{
-      const blob=new Blob([htmlDoc],{type:"text/html;charset=utf-8"});
-      const url=URL.createObjectURL(blob);
-      const w=window.open(url,"_blank");
-      if(w){
-        w.addEventListener("load",()=>{w.focus();w.print();setTimeout(()=>URL.revokeObjectURL(url),60000);});
-      } else {
-        URL.revokeObjectURL(url);
-        frameRef.current?.contentWindow?.print();
-      }
-    }catch(e){frameRef.current?.contentWindow?.print();}
-  };
-  const handleShare=()=>{
-    if(navigator.share){
-      navigator.share({title:`Cotización ${tkt.id}`,text:`${tkt.titulo||""}\nTotal: ${mxn(tkt.snap?.precioConIVA||0)}\n${tkt.id}`}).catch(()=>{});
-    } else { handlePrint(); }
-  };
+const C = THEME;
 
-  if(!htmlDoc) return (
-    <div style={{position:"fixed",inset:0,zIndex:700,background:C.bg0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
-      <div style={{fontSize:13,color:C.red}}>No se pudo generar el documento</div>
-      <button onClick={onClose} style={{padding:"12px 24px",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,color:C.t1,fontSize:14,cursor:"pointer"}}>Cerrar</button>
-    </div>
-  );
-
+function Pill({ label, color, dim, small }) {
   return (
-    <div style={{position:"fixed",inset:0,zIndex:700,background:C.bg0,display:"flex",flexDirection:"column"}}>
-      {/* Header */}
-      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderBottom:`1px solid ${C.border}`,
-        padding:`calc(env(safe-area-inset-top,44px) + 10px) 16px 12px`,
-        display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
-        <button onClick={onClose} style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:10,
-          color:C.t1,padding:"10px 14px",cursor:"pointer",fontSize:14,minWidth:44,minHeight:44,lineHeight:1}}>←</button>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:11,color:C.cyan,fontWeight:700,fontFamily:"'Courier New',monospace"}}>{result.folio}</div>
-          <div style={{fontSize:11,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(tkt.titulo||"").substring(0,44)}</div>
-        </div>
-        {typeof navigator!=="undefined"&&navigator.share&&(
-          <button onClick={handleShare} style={{background:C.bg0,border:`1px solid ${C.border}`,borderRadius:10,
-            color:C.t1,padding:"10px 14px",cursor:"pointer",fontSize:13,minWidth:44,minHeight:44,fontWeight:600}}>↑</button>
-        )}
-        <button onClick={handlePrint} style={{background:C.blue,border:`1px solid ${C.blueHi}`,borderRadius:10,
-          color:C.t1,padding:"10px 16px",cursor:"pointer",fontSize:13,fontWeight:700,minHeight:44,whiteSpace:"nowrap"}}>↓ PDF</button>
-      </div>
-      {/* Loading */}
-      {!ready&&(
-        <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12}}>
-          <div style={{width:32,height:32,borderRadius:16,border:`3px solid ${C.border}`,borderTopColor:C.cyan,animation:"spin 0.8s linear infinite"}}/>
-          <div style={{fontSize:12,color:C.t3}}>Generando vista previa...</div>
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 4,
+      padding: small ? "2px 7px" : "3px 9px",
+      borderRadius: 20, fontSize: small ? 9 : 10, fontWeight: 700,
+      background: dim || `${color}18`, color: color,
+      letterSpacing: "0.04em",
+    }}>{label}</span>
+  );
+}
+
+function Card({ children, style, onClick }) {
+  return (
+    <div onClick={onClick} style={{
+      background: C.bg1, border: `1px solid ${C.border}`,
+      borderRadius: C.r, padding: "14px 16px",
+      boxShadow: C.shadow, cursor: onClick ? "pointer" : undefined,
+      ...style,
+    }}>{children}</div>
+  );
+}
+
+function Label({ children }) {
+  return (
+    <div style={{
+      fontSize: 8, color: C.t3, letterSpacing: "0.14em",
+      textTransform: "uppercase", marginBottom: 5, fontWeight: 700,
+    }}>{children}</div>
+  );
+}
+
+function Btn({ label, onClick, variant = "default", full, small, disabled, icon }) {
+  const variants = {
+    default:  { bg: C.bg2,  border: C.border,         color: C.t2  },
+    primary:  { bg: `${C.lime}18`, border: `${C.lime}44`, color: C.lime },
+    danger:   { bg: `${C.red}12`,  border: `${C.red}33`,  color: C.red  },
+    ghost:    { bg: "transparent", border: "transparent",  color: C.t3  },
+    blue:     { bg: `${C.blue}18`, border: `${C.blue}44`, color: C.blue },
+  };
+  const v = variants[variant] || variants.default;
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+      width: full ? "100%" : undefined,
+      padding: small ? "6px 12px" : "10px 16px",
+      background: v.bg, border: `1px solid ${v.border}`,
+      borderRadius: 10, color: v.color,
+      fontSize: small ? 11 : 13, fontWeight: 700, cursor: disabled ? "not-allowed" : "pointer",
+      opacity: disabled ? 0.5 : 1, letterSpacing: "0.02em",
+      fontFamily: "inherit",
+    }}>{icon && <span>{icon}</span>}{label}</button>
+  );
+}
+
+function Input({ label, value, onChange, placeholder, type = "text", rows, prefix }) {
+  const baseStyle = {
+    width: "100%", boxSizing: "border-box",
+    background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`,
+    borderRadius: 10, padding: "10px 12px", color: C.t1,
+    fontSize: 14, outline: "none", fontFamily: "inherit", resize: "vertical",
+  };
+  return (
+    <div style={{ marginBottom: 12 }}>
+      {label && <Label>{label}</Label>}
+      {rows ? (
+        <textarea value={value} onChange={e => onChange(e.target.value)}
+          placeholder={placeholder} rows={rows} style={baseStyle} />
+      ) : (
+        <div style={{ position: "relative" }}>
+          {prefix && <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: C.t3, fontSize: 13 }}>{prefix}</span>}
+          <input type={type} value={value} onChange={e => onChange(e.target.value)}
+            placeholder={placeholder}
+            style={{ ...baseStyle, paddingLeft: prefix ? 28 : 12 }} />
         </div>
       )}
-      {/* Preview */}
-      <iframe ref={frameRef} srcDoc={htmlDoc} onLoad={()=>setReady(true)}
-        style={{flex:1,border:"none",display:ready?"block":"none",background:"white"}}
-        title="Vista previa cotización"
-        sandbox="allow-same-origin allow-scripts allow-modals allow-popups allow-forms"/>
     </div>
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// PDF GENERATOR — formato oficial Logisolve
-// ═══════════════════════════════════════════════════════════════════════════════
-function generarCotizacionPDF(tkt, cl, un, supp) {
-  const totals = calculateTicketTotals(tkt);
-  const folio = tkt.id.replace("TKT", "COT");
-
-  const fechaLarga = (()=>{
-    const p = tkt.date.split("/");
-    if (p.length !== 3) return tkt.date;
-    const meses = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-    return `${parseInt(p[0])} de ${meses[parseInt(p[1])-1]} de ${p[2]}`;
-  })();
-
-  const formaPago =
-    tkt.payType === "credit"
-      ? "Cr\u00e9dito" + (tkt.promesaPago ? ` \u2014 Fecha l\u00edmite: ${tkt.promesaPago}` : "")
-      : "Contado / Transferencia bancaria";
-
-  const entrega =
-    supp && supp.entregaDias
-      ? `${supp.entregaDias} d\u00eda${supp.entregaDias > 1 ? "s" : ""} h\u00e1biles`
-      : "24-48 hrs h\u00e1biles";
-
-  const unidadStr = un
-    ? `${un.economico ? "Eco. " + un.economico + " \u00b7 " : ""}${un.marca} ${un.modelo} ${un.anio}`
-    : "";
-
-  const clDirParts = [];
-  if (cl?.direccion) clDirParts.push(cl.direccion);
-  if (cl?.ciudad)    clDirParts.push(cl.ciudad);
-  if (cl?.estado)    clDirParts.push(cl.estado);
-
-  const clLine = cl
-    ? cl.empresa + (clDirParts.length ? " \u00b7 " + clDirParts.join(", ") : "")
-    : "\u2014";
-
-  const fmtMXN = (n) =>
-    safeNumber(n).toLocaleString("es-MX", { style:"currency", currency:"MXN", minimumFractionDigits:2 });
-
-  const notaLine = tkt.notes ? `<li>${tkt.notes}</li>` : "";
-
-  const conceptos =
-    tkt.lineas && tkt.lineas.length > 0
-      ? tkt.lineas
-      : [{ titulo:tkt.titulo, partRef:tkt.partRef||"", snap:tkt.snap, qty:1, descripcionPDF:"" }];
-
-  const filas = conceptos.map((c,i) => {
-    const ml      = migrateLinea(c, tkt.snap);
-    const qty     = safeNumber(ml.qty, 1) || 1;
-    const fin     = resolveLineFinancials(ml, tkt.snap, qty);
-    const desc    = ml.descripcionPDF ||
-      "Atenci\u00f3n correctiva para continuidad operativa de unidad en CEDIS SMO. Incluye integraci\u00f3n de componente compatible, validaci\u00f3n operativa y seguimiento log\u00edstico.";
-    const unTag   = unidadStr && i === 0 ? `<br><br><strong>Unidad:</strong> ${unidadStr}` : "";
-    const refTag  = ml.partRef ? `<br><br><strong>Clave:</strong> ${ml.partRef}` : "";
-    return `<tr>
-      <td>${String(i+1).padStart(2,"0")}</td>
-      <td>${ml.titulo||"Sin descripcion"}</td>
-      <td>${desc}${unTag}${refTag}</td>
-      <td class="money">${fmtMXN(fin.lineTotal)}</td>
-    </tr>`;
-  }).join("");
-
-  // Validación defensiva
-  if (!filas.trim()) {
-    console.warn("[PDF] filas vacías, abortando");
-    return;
-  }
-
-  // HTML del contenido — SIN <html><head><body>, solo estilos + .page
-  const innerHTML = `
-    <style>
-      *{box-sizing:border-box;margin:0;padding:0}
-      .page{width:794px;background:#fff;padding:34px 44px 28px;font-family:-apple-system,Helvetica Neue,Arial,sans-serif;color:#1a1a1a;font-size:11px;line-height:1.45}
-      /* ── HEADER ── */
-      .top-header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:2px solid #0a0a0a;margin-bottom:0}
-      .brand h1{font-size:26px;font-weight:900;margin:0;letter-spacing:-0.02em;color:#0a0a0a}
-      .brand p{font-size:9px;color:#888;font-weight:500;margin-top:3px;letter-spacing:0.06em}
-      .issuer{text-align:right;font-size:10px;line-height:1.55;color:#444}
-      .issuer strong{color:#0a0a0a;font-size:11px}
-      /* ── HERO BAR ── */
-      .hero{background:#0a0a0a;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:14px 18px;margin-top:14px;border-radius:4px}
-      .hero-title{font-size:18px;font-weight:900;letter-spacing:0.05em}
-      .hero-meta{text-align:right}
-      .hero-meta .lbl{font-size:9px;color:rgba(255,255,255,0.6);letter-spacing:0.04em;font-weight:500}
-      .hero-meta .folio{font-size:16px;font-weight:800;letter-spacing:0.02em}
-      .hero-meta .date{font-size:10px;color:rgba(255,255,255,0.75);font-weight:500}
-      /* ── META TABLE ── */
-      .meta-table{width:100%;border-collapse:collapse;margin-top:12px}
-      .meta-table td{border:1px solid #e8e8e8;padding:7px 11px;font-size:10px;color:#1a1a1a}
-      .meta-table td:first-child{width:84px;background:#f5f5f5;font-weight:700;color:#555;font-size:9px;letter-spacing:0.04em;text-transform:uppercase}
-      /* ── DETAIL TABLE ── */
-      .section-title{margin-top:16px;margin-bottom:8px;font-size:10px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#555}
-      .detail-table{width:100%;border-collapse:collapse}
-      .detail-table th{background:#0a0a0a;color:#fff;padding:8px 10px;text-align:left;font-size:9px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase}
-      .detail-table td{border:1px solid #e8e8e8;padding:9px 10px;vertical-align:top;font-size:10px;line-height:1.45;color:#1a1a1a}
-      .money{text-align:right;white-space:nowrap;font-weight:700}
-      /* ── TOTALS ── */
-      .totals{width:270px;margin-left:auto;margin-top:10px;border-collapse:collapse}
-      .totals td{border:1px solid #e8e8e8;padding:7px 11px;font-size:10px}
-      .totals td:last-child{text-align:right;font-weight:700}
-      .grand-total td{background:#0a0a0a;color:#fff;font-weight:800;font-size:11px}
-      /* ── STACKED SECTIONS ── */
-      .blocks-row{margin-top:16px;padding-top:14px;border-top:1px solid #e8e8e8}
-      .block{margin-bottom:14px}
-      .block h3{font-size:10px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;color:#1a1a1a;margin-bottom:6px}
-      .block ul{list-style:none;padding:0}
-      .block li{font-size:9.5px;line-height:1.5;color:#444;margin-bottom:3px;padding-left:12px;position:relative}
-      .block li::before{content:"·";position:absolute;left:2px;color:#aaa}
-      /* ── FOOTER ── */
-      .footer{margin-top:14px;padding-top:8px;border-top:1px solid #e8e8e8;display:flex;justify-content:space-between;font-size:8.5px;color:#999;letter-spacing:0.02em}
-    </style>
-    <div class="page">
-      <div class="top-header">
-        <div class="brand">
-          <h1>LOGISOLVE</h1>
-          <p>Logistics &middot; Supply &middot; Solutions</p>
-        </div>
-        <div class="issuer">
-          <strong>Alejandro Saucedo</strong><br>
-          RFC: SAME9612277T9<br>
-          Tel. 5562321807
-        </div>
-      </div>
-      <div class="hero">
-        <div class="hero-title">COTIZACI&Oacute;N</div>
-        <div class="hero-meta">
-          <div class="lbl">No.</div>
-          <div class="folio">${folio}</div>
-          <div class="date">Fecha: ${tkt.date.replace(/\//g," / ")}</div>
-        </div>
-      </div>
-      <table class="meta-table">
-        <tr><td>Cliente</td><td>${clLine}</td></tr>
-        <tr><td>Vigencia</td><td>3 d&iacute;as naturales</td></tr>
-        <tr><td>Atenci&oacute;n</td><td>&Aacute;rea de Compras / Operaciones</td></tr>
-      </table>
-      <div class="section-title">Detalle del concepto</div>
-      <table class="detail-table">
-        <thead><tr>
-          <th style="width:32px">No.</th>
-          <th style="width:150px">Concepto</th>
-          <th>Descripci&oacute;n t&eacute;cnica / operativa</th>
-          <th style="width:100px;text-align:right">Importe</th>
-        </tr></thead>
-        <tbody>${filas}</tbody>
-      </table>
-      <table class="totals">
-        <tr><td>Subtotal</td><td>${fmtMXN(totals.subtotal)} MXN</td></tr>
-        <tr><td>IVA (${totals.ivaPct}%)</td><td>${fmtMXN(totals.ivaAmt)} MXN</td></tr>
-        <tr class="grand-total"><td>Total &middot; IVA incluido</td><td>${fmtMXN(totals.total)} MXN</td></tr>
-      </table>
-      <div class="blocks-row">
-        <div class="block">
-          <h3>Alcance del servicio</h3>
-          <ul>
-            <li>Integraci&oacute;n y coordinaci&oacute;n de componente requerido para continuidad operativa.</li>
-            <li>Validaci&oacute;n y coordinaci&oacute;n operativa.</li>
-            <li>Entrega directa en CEDIS SMO.</li>
-            <li>Seguimiento y trazabilidad log&iacute;stica.</li>
-          </ul>
-        </div>
-        <div class="block">
-          <h3>Condiciones comerciales</h3>
-          <ul>
-            <li>Precio IVA incluido en el total.</li>
-            <li>Forma de pago: ${formaPago}.</li>
-            <li>Entrega conforme a disponibilidad confirmada al momento de autorizaci&oacute;n.</li>
-            <li>Precios sujetos a cambio y disponibilidad al momento de confirmar.</li>
-            <li>Vigencia: 3 d&iacute;as naturales a partir de la fecha de emisi&oacute;n.</li>
-            ${notaLine}
-          </ul>
-        </div>
-        <div class="block">
-          <h3>Observaciones</h3>
-          <ul>
-            <li>Tiempo estimado de entrega: ${entrega}, sujeto a disponibilidad.</li>
-            <li>La validaci&oacute;n t&eacute;cnica final de compatibilidad corresponde al cliente.</li>
-            <li>La garant&iacute;a aplica conforme a pol&iacute;ticas del fabricante o proveedor.</li>
-          </ul>
-        </div>
-      </div>
-      <div class="footer">
-        <div>Quedo atento para cualquier duda o confirmaci&oacute;n.</div>
-        <div>LogiSolve &middot; ${fechaLarga}</div>
-      </div>
-    </div>`;
-
-  // Contenedor: position:absolute en (0,0), visible, sin z-index negativo
-  const container = document.createElement("div");
-  container.style.cssText = "position:absolute;top:0;left:0;width:794px;background:white;opacity:1;pointer-events:none;";
-  container.innerHTML = innerHTML;
-  document.body.appendChild(container);
-
-  const generate = () => {
-    // Validate DOM has content before proceeding
-    const text = container.innerText || "";
-    if (!text.trim()) {
-      console.warn("[PDF] contenedor vacío, abortando");
-      container.remove();
-      return;
-    }
-
-    // eslint-disable-next-line no-undef
-    html2pdf()
-      .set({
-        margin: 0,
-        filename: `${folio}.pdf`,
-        image: { type:"jpeg", quality:0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: "#ffffff",
-          logging: false,
-          scrollX: 0,
-          scrollY: 0,
-        },
-        jsPDF: { unit:"mm", format:"a4", orientation:"portrait" },
-      })
-      .from(container.querySelector('.page')||container.firstElementChild)
-      .save()
-      .finally(() => { container.remove(); });
-  };
-
-  // doble rAF — garantiza que el DOM esté pintado
-  const go = () => requestAnimationFrame(() => requestAnimationFrame(generate));
-
-  if (typeof html2pdf !== "undefined") {
-    go();
-  } else {
-    const script = document.createElement("script");
-    script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-    script.onload = go;
-    script.onerror = () => {
-      container.remove();
-      alert("No se pudo cargar html2pdf.js. Verifica tu conexi\u00f3n.");
-    };
-    document.head.appendChild(script);
-  }
-}
-// Modal de confirmacion PDF
-function PDFConfirm({tkt,cl,un,supp,onClose}) {
-  const C = React.useContext(ThemeCtx);
+function Sel({ label, value, onChange, options }) {
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{background:C.bg2,border:`1px solid ${C.borderHi}`,borderRadius:6,padding:22,maxWidth:340,width:"90%"}}>
-        <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:10}}>
-          <span style={{fontSize:14,color:C.green}}>✓</span>
-          <div style={{fontSize:11,color:C.green,fontWeight:700}}>Ticket registrado</div>
-        </div>
-        <div style={{fontSize:10,color:C.t2,marginBottom:3,lineHeight:1.5,fontFamily:"'Courier New',monospace"}}>{tkt.id}</div>
-        <div style={{fontSize:10,color:C.t3,marginBottom:14,lineHeight:1.4}}>{tkt.titulo.substring(0,70)}</div>
-        <div style={{height:1,background:C.border,marginBottom:14}}/>
-        <div style={{fontSize:10,color:C.t2,marginBottom:12}}>¿Generar cotización PDF ahora?</div>
-        <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>{generarCotizacionPDF(tkt,cl,un,supp);onClose();}}
-            style={{flex:1,padding:"9px",background:C.blue,border:"none",borderRadius:4,color:C.t1,fontSize:11,fontWeight:700,cursor:"pointer"}}>
-            Generar PDF
-          </button>
-          <button onClick={onClose}
-            style={{padding:"9px 14px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:4,color:C.t2,fontSize:11,cursor:"pointer"}}>
-            Después
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// L8 — UI PRIMITIVES
-// ═══════════════════════════════════════════════════════════════════════════════
-const Logo = React.memo(function Logo() {
-  const C = React.useContext(ThemeCtx);
-  return (
-    <div style={{display:"flex",alignItems:"center",gap:10}}>
-      <svg width="22" height="22" viewBox="0 0 28 28">
-        <line x1="2" y1="14" x2="26" y2="14" stroke={C.blue} strokeWidth="1.5"/>
-        <line x1="8" y1="14" x2="8" y2="8"   stroke={C.cyanDim} strokeWidth="1"/>
-        <line x1="8" y1="8"  x2="17" y2="8"  stroke={C.cyanDim} strokeWidth="1"/>
-        <line x1="17" y1="14" x2="17" y2="20" stroke={C.cyanDim} strokeWidth="1"/>
-        <line x1="8"  y1="20" x2="17" y2="20" stroke={C.cyanDim} strokeWidth="1"/>
-        <circle cx="2"  cy="14" r="2"   fill={C.blue}/>
-        <circle cx="8"  cy="14" r="1.4" fill={C.blue}/>
-        <circle cx="17" cy="14" r="1.4" fill={C.blue}/>
-        <circle cx="26" cy="14" r="2.2" fill={C.cyan}/>
-        <circle cx="8"  cy="8"  r="1.2" fill={C.cyanDim}/>
-        <circle cx="17" cy="8"  r="1.2" fill={C.orange}/>
-        <circle cx="8"  cy="20" r="1.1" fill={C.cyanDim}/>
-        <circle cx="17" cy="20" r="1.2" fill={C.cyanDim}/>
-      </svg>
-      <div>
-        <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.12em",color:C.t1,fontFamily:"'Courier New',monospace",lineHeight:1}}>
-          LOGI<span style={{color:C.orange}}>SOLVE</span>
-          <span style={{fontSize:7,color:C.t3,marginLeft:5}}>v5</span>
-        </div>
-        <div style={{fontSize:6,color:C.t3,letterSpacing:"0.2em",marginTop:2}}>SUPPLY · OPS · TRANSPORT</div>
-      </div>
-    </div>
-  );
-})
-
-const PriorityBadge = React.memo(function PriorityBadge({pid,small}) {
-  const p=PRIORITY[pid]||PRIORITY.P4;
-  return (
-    <span style={{display:"inline-flex",alignItems:"center",gap:3,padding:small?"2px 5px":"3px 8px",borderRadius:2,background:p.dim,border:`1px solid ${p.color}66`,fontSize:small?7:8,color:p.dot,fontWeight:700,letterSpacing:"0.05em",whiteSpace:"nowrap",fontFamily:"'Courier New',monospace"}}>
-      {p.short} <span style={{fontWeight:400,opacity:.7,fontSize:small?6:7}}>{p.label}</span>
-    </span>
-  );
-})
-
-const StatusBadge = React.memo(function StatusBadge({sid,meta,small}) {
-  const s=meta[sid]||(meta.recibido||Object.values(meta)[0]);
-  return (
-    <span style={{display:"inline-flex",alignItems:"center",gap:3,padding:small?"2px 5px":"3px 7px",borderRadius:2,background:s.color+"33",border:`1px solid ${s.color}55`,fontSize:small?7:8,color:s.dot,fontWeight:600,whiteSpace:"nowrap"}}>
-      <span style={{width:4,height:4,borderRadius:"50%",background:s.dot,flexShrink:0}}/>
-      {s.label}
-    </span>
-  );
-})
-
-const KPI = React.memo(function KPI({label,value,color,sub,accent,alert}) {
-  return (
-    <div style={{background:accent?C.blueDim:alert?C.redDim:C.bg2,border:`1px solid ${accent?C.blue:alert?C.red+"55":C.border}`,borderRadius:3,padding:"8px 10px",minWidth:0,overflow:"hidden"}}>
-      <div style={{fontSize:7,color:C.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
-      <div style={{fontSize:13,fontWeight:800,color:color||C.t1,fontFamily:"'Courier New',monospace",lineHeight:1.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{value}</div>
-      {sub&&<div style={{fontSize:7,color:C.t3,marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sub}</div>}
-    </div>
-  );
-})
-
-function Field({label,value,onChange,prefix="$",suffix,hint,hi,min=0,step=1,type="text",disabled,placeholder,rows}) {
-  const st={flex:1,background:"transparent",border:"none",outline:"none",color:hi?C.cyan:disabled?C.t3:C.t1,fontSize:hi?13:11,fontWeight:hi?700:400,padding:"7px 0",fontFamily:"'Courier New',monospace"};
-  return (
-    <div style={{marginBottom:7}}>
-      {label&&<div style={{fontSize:7,color:hi?C.cyan:C.t3,letterSpacing:"0.14em",marginBottom:3,textTransform:"uppercase"}}>{label}</div>}
-      <div style={{display:"flex",alignItems:rows?"flex-start":"center",background:disabled?C.bg3:C.bg0,border:`1px solid ${hi?C.blueHi:C.border}`,borderRadius:3,overflow:"hidden"}}>
-        {prefix&&<span style={{padding:"0 6px",color:hi?C.cyan:C.t3,fontSize:10,fontFamily:"'Courier New',monospace",flexShrink:0,paddingTop:rows?8:0}}>{prefix}</span>}
-        {rows?(
-          <textarea rows={rows} value={String(value)} disabled={disabled} placeholder={placeholder||""}
-            onChange={e=>onChange(e.target.value)} style={{...st,resize:"vertical",paddingTop:7}}/>
-        ):(
-          <input type={type} value={value} min={type==="number"?min:undefined} step={type==="number"?step:undefined} disabled={disabled} placeholder={placeholder||""}
-            onChange={e=>{const v=e.target.value;onChange(v);}} style={st}/>
-        )}
-        {suffix&&<span style={{padding:"0 6px",color:C.t3,fontSize:10,flexShrink:0}}>{suffix}</span>}
-      </div>
-      {hint&&<div style={{fontSize:7,color:C.t3,marginTop:2}}>{hint}</div>}
-    </div>
-  );
-}
-
-function Sel({label,value,onChange,options}) {
-  const C = React.useContext(ThemeCtx);
-  return (
-    <div style={{marginBottom:7}}>
-      {label&&<div style={{fontSize:7,color:C.t3,letterSpacing:"0.14em",marginBottom:3,textTransform:"uppercase"}}>{label}</div>}
-      <select value={value} onChange={e=>onChange(e.target.value)}
-        style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"6px 7px",color:C.t1,fontSize:11,outline:"none",fontFamily:"'Courier New',monospace",cursor:"pointer"}}>
-        {options.map(o=><option key={o.value} value={o.value} style={{background:C.bg1}}>{o.label}</option>)}
+    <div style={{ marginBottom: 12 }}>
+      {label && <Label>{label}</Label>}
+      <select value={value} onChange={e => onChange(e.target.value)} style={{
+        width: "100%", boxSizing: "border-box",
+        background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`,
+        borderRadius: 10, padding: "10px 12px", color: C.t1,
+        fontSize: 14, outline: "none", fontFamily: "inherit",
+      }}>
+        {options.map(o => <option key={o.value} value={o.value} style={{ background: "#1a2030" }}>{o.label}</option>)}
       </select>
     </div>
   );
 }
 
-const Toggle = React.memo(function Toggle({label,value,onChange}) {
+function SLABar({ op }) {
+  const sla = slaStatus(op);
+  if (!sla) return null;
+  const u = URGENCIA[op.urgencia];
+  const barColor = sla.vencido ? C.red : sla.pctUsado > 80 ? C.amber : u?.color || C.lime;
   return (
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:`1px solid ${C.bg4}`}}>
-      <span style={{fontSize:10,color:C.t2}}>{label}</span>
-      <div onClick={()=>onChange(!value)} style={{width:28,height:15,borderRadius:8,cursor:"pointer",position:"relative",background:value?C.blue:C.bg4,border:`1px solid ${value?C.blueHi:C.border}`,flexShrink:0}}>
-        <div style={{position:"absolute",top:2,left:value?12:2,width:9,height:9,borderRadius:"50%",background:value?C.t1:C.t3,transition:"left .15s"}}/>
+    <div style={{ marginTop: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+        <span style={{ fontSize: 9, color: sla.vencido ? C.red : C.t3, fontWeight: sla.vencido ? 700 : 400 }}>
+          {sla.vencido ? "⚠ SLA VENCIDO" : "SLA"}
+        </span>
+        <span style={{ fontSize: 10, fontWeight: 700, color: barColor, fontVariantNumeric: "tabular-nums" }}>
+          {fmtSLA(sla.restHrs)}
+        </span>
       </div>
-    </div>
-  );
-})
-
-const SHdr = React.memo(function SHdr({title,right}) {
-  const C = React.useContext(ThemeCtx);
-  return (
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 10px",background:C.bg3,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderBottom:`1px solid ${C.border}`}}>
-      <div style={{fontSize:7,color:C.t3,letterSpacing:"0.2em",fontWeight:700}}>{title}</div>
-      {right&&<div style={{fontSize:9,color:C.t2}}>{right}</div>}
-    </div>
-  );
-})
-
-const MiniBar = React.memo(function MiniBar({value,max,color}) {
-  const C = React.useContext(ThemeCtx);
-  return (
-    <div style={{height:3,background:C.bg4,borderRadius:2,overflow:"hidden",marginTop:3}}>
-      <div style={{height:"100%",width:`${clamp((value/Math.max(max,1))*100,0,100)}%`,background:color||C.cyan}}/>
-    </div>
-  );
-})
-
-const EmptyState = React.memo(function EmptyState({icon,title,sub}) {
-  const C = React.useContext(ThemeCtx);
-  return (
-    <div style={{textAlign:"center",padding:"32px 16px",color:C.t3}}>
-      <div style={{fontSize:24,marginBottom:6,opacity:.4}}>{icon}</div>
-      <div style={{fontSize:11,color:C.t2,marginBottom:3}}>{title}</div>
-      {sub&&<div style={{fontSize:9,color:C.t3}}>{sub}</div>}
-    </div>
-  );
-})
-
-const Confirm = React.memo(function Confirm({msg,onConfirm,onCancel}) {
-  const C = React.useContext(ThemeCtx);
-  return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{background:"rgba(16,18,22,0.92)",backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",border:`1px solid ${C.borderHi}`,borderRadius:20,padding:22,maxWidth:320,width:"90%",boxShadow:"0 16px 60px rgba(0,0,0,0.6)"}}>
-        <div style={{fontSize:12,color:C.t1,marginBottom:16,lineHeight:1.6}}>{msg}</div>
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-          <button onClick={onCancel}  style={{padding:"7px 16px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:10,color:C.t2,fontSize:11,cursor:"pointer"}}>Cancelar</button>
-          <button onClick={onConfirm} style={{padding:"7px 16px",background:C.red,border:"none",borderRadius:10,color:"#0D0F12",fontSize:11,fontWeight:700,cursor:"pointer"}}>Confirmar</button>
-        </div>
-      </div>
-    </div>
-  );
-})
-
-const Toasts = React.memo(function Toasts({items}) {
-  const C = React.useContext(ThemeCtx);
-  if(!items.length) return null;
-  const s=t=>t==="success"
-    ?{border:`1px solid rgba(143,227,190,0.30)`,color:"#8FE3BE",background:"rgba(14,24,20,0.92)"}
-    :t==="error"
-    ?{border:`1px solid rgba(255,122,122,0.30)`,color:"#FF7A7A",background:"rgba(24,12,12,0.92)"}
-    :{border:`1px solid ${C.border}`,color:C.t2,background:"rgba(14,16,20,0.92)"};
-  return (
-    <div style={{position:"fixed",bottom:"calc(90px + env(safe-area-inset-bottom,0px) + 8px)",right:12,zIndex:999,display:"flex",flexDirection:"column",gap:6,maxWidth:"calc(100vw - 24px)"}}>
-      {items.map(t=>(
-        <div key={t.id} style={{borderRadius:14,padding:"10px 16px",fontSize:11,fontFamily:"'Courier New',monospace",maxWidth:300,...s(t.type),boxShadow:"0 6px 24px rgba(0,0,0,.5)",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)"}}>
-          {t.msg}
-        </div>
-      ))}
-    </div>
-  );
-})
-
-function SearchPalette({state,onNavigate,onClose}) {
-  const C = React.useContext(ThemeCtx);
-  const [q,setQ]=useState("");
-  const ref=useRef();
-  useEffect(()=>{ref.current?.focus();},[]);
-  useEffect(()=>{const h=e=>{if(e.key==="Escape")onClose();};window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);},[onClose]);
-  const results=useMemo(()=>{
-    if(!q.trim()) return [];
-    const lq=q.toLowerCase(); const r=[];
-    state.tickets.forEach(t=>{if(safeLower(t.titulo).includes(lq)||safeLower(t.id).includes(lq))r.push({type:"ticket",label:t.titulo,sub:t.id,tab:"tickets"});});
-    state.clients.forEach(c=>{if(safeLower(c.empresa).includes(lq))r.push({type:"client",label:c.empresa,sub:c.id,tab:"clientes"});});
-    state.suppliers.forEach(s=>{if(safeLower(s.nombre).includes(lq))r.push({type:"supplier",label:s.nombre,sub:s.id,tab:"proveedores"});});
-    state.units.forEach(u=>{if(safeLower(u.marca).includes(lq)||safeLower(u.modelo).includes(lq)||safeLower(u.vin).includes(lq))r.push({type:"unit",label:`${u.marca} ${u.modelo} ${u.anio}`,sub:u.vin,tab:"unidades"});});
-    state.parts.forEach(p=>{if(safeLower(p.nombre).includes(lq)||safeLower(p.oem).includes(lq))r.push({type:"part",label:p.nombre,sub:p.oem,tab:"catalogo"});});
-    return r.slice(0,14);
-  },[q,state]);
-  const tl={ticket:"Ticket",client:"Cliente",supplier:"Prov.",unit:"Unidad",part:"Parte"};
-  return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",zIndex:600,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:70}} onClick={onClose}>
-      <div style={{width:"90%",maxWidth:520,background:"rgba(16,18,22,0.92)",backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",border:`1px solid ${C.borderHi}`,borderRadius:16,overflow:"hidden"}} onClick={e=>e.stopPropagation()}>
-        <div style={{display:"flex",alignItems:"center",gap:7,padding:"7px 11px",borderBottom:`1px solid ${C.border}`}}>
-          <span style={{color:C.t3,fontSize:11}}>&#9906;</span>
-          <input ref={ref} value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar ticket, unidad, parte, cliente, proveedor..."
-            style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:11,fontFamily:"'Courier New',monospace"}}/>
-          <span style={{fontSize:7,color:C.t3,border:`1px solid ${C.border}`,borderRadius:2,padding:"1px 4px"}}>ESC</span>
-        </div>
-        {results.length===0&&q.length>0&&<EmptyState icon="&#128269;" title="Sin resultados"/>}
-        {results.length===0&&q.length===0&&<div style={{padding:"10px 12px",fontSize:9,color:C.t3}}>Busca en tickets, unidades, partes, clientes y proveedores.</div>}
-        {results.map((r,i)=>(
-          <div key={i} onClick={()=>{onNavigate(r.tab);onClose();}}
-            style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 12px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",background:C.bg1}}>
-            <div>
-              <div style={{fontSize:10,color:C.t1}}>{r.label}</div>
-              <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace"}}>{r.sub}</div>
-            </div>
-            <span style={{fontSize:7,color:C.t3,border:`1px solid ${C.border}`,borderRadius:2,padding:"1px 5px"}}>{tl[r.type]}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── CLIENT PICKER (búsqueda por empresa, RFC, contacto) ─────────────────────
-function ClientPicker({clients, value, onChange, placeholder="Buscar cliente...", mobile=false}) {
-  const C = React.useContext(ThemeCtx);
-  const [q, setQ] = useState("");
-  const [open, setOpen] = useState(false);
-  const ref = useRef();
-
-  const selected = clients.find(c => c.id === value);
-  const displayLabel = selected ? selected.empresa : "";
-
-  useEffect(() => {
-    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", h);
-    document.addEventListener("touchstart", h, {passive:true});
-    return () => { document.removeEventListener("mousedown", h); document.removeEventListener("touchstart", h); };
-  }, []);
-
-  const results = useMemo(() => {
-    if (!q.trim()) return clients.slice(0, 60);
-    const lq = q.toLowerCase();
-    return clients.filter(c =>
-      safeLower(c.empresa).includes(lq) ||
-      safeLower(c.rfc||"").includes(lq) ||
-      safeLower(c.contacto||"").includes(lq)
-    );
-  }, [q, clients]);
-
-  const triggerPad  = mobile ? "12px 14px" : "6px 8px";
-  const triggerFont = mobile ? 16 : 10;
-  const labelFont   = mobile ? 10 : 7;
-  const dropFont    = mobile ? 13 : 9;
-  const dropHeight  = mobile ? 280 : 220;
-  const itemPad     = mobile ? "10px 12px" : "6px 9px";
-
-  return (
-    <div ref={ref} style={{position:"relative", marginBottom: mobile ? 10 : 7}}>
-      <div style={{fontSize:labelFont,color:C.t3,letterSpacing:"0.14em",marginBottom: mobile ? 5 : 3,textTransform:"uppercase"}}>{mobile ? "Cliente" : "CLIENTE"}</div>
-      <div
-        onClick={() => { setOpen(o => !o); setQ(""); }}
-        style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:C.bg0,border:`1px solid ${open?C.blueHi:C.border}`,borderRadius: mobile ? 6 : 3,padding:triggerPad,cursor:"pointer",minHeight: mobile ? 46 : 28}}
-      >
-        {value ? (
-          <div style={{minWidth:0,flex:1}}>
-            <div style={{fontSize:triggerFont,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayLabel}</div>
-            {selected?.rfc && <div style={{fontSize: mobile ? 11 : 7,color:C.t3,marginTop:2,fontFamily:"'Courier New',monospace"}}>{selected.rfc}</div>}
-          </div>
-        ) : (
-          <span style={{fontSize:triggerFont,color:C.t3}}>{placeholder}</span>
-        )}
-        <div style={{display:"flex",gap:5,alignItems:"center",flexShrink:0,marginLeft:6}}>
-          {value && <span onClick={e=>{e.stopPropagation();onChange("");}} style={{fontSize: mobile ? 18 : 10,color:C.red,cursor:"pointer",padding:"0 3px",lineHeight:1}}>×</span>}
-          <span style={{fontSize: mobile ? 10 : 8,color:C.t3}}>{open?"▲":"▼"}</span>
-        </div>
-      </div>
-      {open && (
-        <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:300,background:C.bg2,border:`1px solid ${C.blueHi}`,borderRadius: mobile ? 6 : 3,boxShadow:"0 4px 20px rgba(0,0,0,.6)",maxHeight:dropHeight,display:"flex",flexDirection:"column"}}>
-          <div style={{padding: mobile ? "10px 12px" : "5px 8px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
-            <input
-              autoFocus
-              value={q}
-              onChange={e => setQ(e.target.value)}
-              placeholder="Empresa, RFC, contacto..."
-              style={{width:"100%",background:"transparent",border:"none",outline:"none",color:C.t1,fontSize: mobile ? 16 : 10,fontFamily:"inherit"}}
-            />
-          </div>
-          <div style={{overflowY:"auto",WebkitOverflowScrolling:"touch",flex:1}}>
-            {results.length === 0 ? (
-              <div style={{padding:itemPad,color:C.t3,fontSize:dropFont}}>Sin resultados</div>
-            ) : results.map(c => (
-              <div key={c.id}
-                onClick={() => { onChange(c.id); setOpen(false); setQ(""); }}
-                style={{padding:itemPad,cursor:"pointer",borderBottom:`1px solid ${C.border}`,background:c.id===value?C.blueDim:"transparent"}}>
-                <div style={{fontSize:dropFont,color:c.id===value?C.cyan:C.t1,fontWeight:c.id===value?700:400}}>{c.empresa}</div>
-                {c.rfc && <div style={{fontSize: mobile ? 11 : 7,color:C.t3,fontFamily:"'Courier New',monospace"}}>{c.rfc}</div>}
-              </div>
-            ))}
-          </div>
-          {value && (
-            <div style={{padding: mobile ? "10px 12px" : "5px 8px",borderTop:`1px solid ${C.border}`,flexShrink:0}}>
-              <div onClick={() => { onChange(""); setOpen(false); }} style={{fontSize:dropFont,color:C.red,cursor:"pointer"}}>× Quitar cliente</div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── SUPPLIER PICKER (búsqueda por nombre, especialidad) ──────────────────────
-function SupplierPicker({suppliers, value, onChange, placeholder="Buscar proveedor...", mobile=false}) {
-  const C = React.useContext(ThemeCtx);
-  const [q, setQ] = useState("");
-  const [open, setOpen] = useState(false);
-  const ref = useRef();
-
-  const selected = suppliers.find(s => s.id === value);
-
-  useEffect(() => {
-    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", h);
-    document.addEventListener("touchstart", h, {passive:true});
-    return () => { document.removeEventListener("mousedown", h); document.removeEventListener("touchstart", h); };
-  }, []);
-
-  const results = useMemo(() => {
-    if (!q.trim()) return suppliers.slice(0, 60);
-    const lq = q.toLowerCase();
-    return suppliers.filter(s =>
-      safeLower(s.nombre).includes(lq) ||
-      safeLower(s.especialidad||"").includes(lq) ||
-      safeLower(s.cobertura||"").includes(lq)
-    );
-  }, [q, suppliers]);
-
-  const triggerPad  = mobile ? "12px 14px" : "6px 8px";
-  const triggerFont = mobile ? 16 : 10;
-  const labelFont   = mobile ? 10 : 7;
-  const dropFont    = mobile ? 13 : 9;
-  const dropHeight  = mobile ? 260 : 200;
-  const itemPad     = mobile ? "10px 12px" : "6px 9px";
-
-  return (
-    <div ref={ref} style={{position:"relative", marginBottom: mobile ? 10 : 7}}>
-      <div style={{fontSize:labelFont,color:C.t3,letterSpacing:"0.14em",marginBottom: mobile ? 5 : 3,textTransform:"uppercase"}}>{mobile ? "Proveedor" : "PROVEEDOR"}</div>
-      <div
-        onClick={() => { setOpen(o => !o); setQ(""); }}
-        style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:C.bg0,border:`1px solid ${open?C.blueHi:C.border}`,borderRadius: mobile ? 6 : 3,padding:triggerPad,cursor:"pointer",minHeight: mobile ? 46 : 28}}
-      >
-        {value ? (
-          <div style={{minWidth:0,flex:1}}>
-            <div style={{fontSize:triggerFont,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selected?.nombre||value}</div>
-            {selected?.especialidad && <div style={{fontSize: mobile ? 11 : 7,color:C.t3,marginTop:2}}>{selected.especialidad}</div>}
-          </div>
-        ) : (
-          <span style={{fontSize:triggerFont,color:C.t3}}>{placeholder}</span>
-        )}
-        <div style={{display:"flex",gap:5,alignItems:"center",flexShrink:0,marginLeft:6}}>
-          {value && <span onClick={e=>{e.stopPropagation();onChange("");}} style={{fontSize: mobile ? 18 : 10,color:C.red,cursor:"pointer",padding:"0 3px",lineHeight:1}}>×</span>}
-          <span style={{fontSize: mobile ? 10 : 8,color:C.t3}}>{open?"▲":"▼"}</span>
-        </div>
-      </div>
-      {open && (
-        <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:300,background:C.bg2,border:`1px solid ${C.blueHi}`,borderRadius: mobile ? 6 : 3,boxShadow:"0 4px 20px rgba(0,0,0,.6)",maxHeight:dropHeight,display:"flex",flexDirection:"column"}}>
-          <div style={{padding: mobile ? "10px 12px" : "5px 8px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
-            <input
-              autoFocus
-              value={q}
-              onChange={e => setQ(e.target.value)}
-              placeholder="Nombre, especialidad..."
-              style={{width:"100%",background:"transparent",border:"none",outline:"none",color:C.t1,fontSize: mobile ? 16 : 10,fontFamily:"inherit"}}
-            />
-          </div>
-          <div style={{overflowY:"auto",WebkitOverflowScrolling:"touch",flex:1}}>
-            {results.length === 0 ? (
-              <div style={{padding:itemPad,color:C.t3,fontSize:dropFont}}>Sin resultados</div>
-            ) : results.map(s => (
-              <div key={s.id}
-                onClick={() => { onChange(s.id); setOpen(false); setQ(""); }}
-                style={{padding:itemPad,cursor:"pointer",borderBottom:`1px solid ${C.border}`,background:s.id===value?C.blueDim:"transparent"}}>
-                <div style={{fontSize:dropFont,color:s.id===value?C.cyan:C.t1,fontWeight:s.id===value?700:400}}>{s.nombre}</div>
-                {s.especialidad && <div style={{fontSize: mobile ? 11 : 7,color:C.t3}}>{s.especialidad}</div>}
-              </div>
-            ))}
-          </div>
-          {value && (
-            <div style={{padding: mobile ? "10px 12px" : "5px 8px",borderTop:`1px solid ${C.border}`,flexShrink:0}}>
-              <div onClick={() => { onChange(""); setOpen(false); }} style={{fontSize:dropFont,color:C.red,cursor:"pointer"}}>× Quitar proveedor</div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── UNIT PICKER (búsqueda por económico, placa, marca, modelo) ──────────────
-function UnitPicker({units, value, onChange, placeholder="Buscar por eco, placa, marca...", mobile=false}) {
-  const C = React.useContext(ThemeCtx);
-  const [q, setQ] = useState("");
-  const [open, setOpen] = useState(false);
-  const ref = useRef();
-
-  const selected = units.find(u => u.id === value);
-  const displayLabel = selected
-    ? `${selected.economico ? "Eco." + selected.economico + " · " : ""}${selected.marca} ${selected.modelo} ${selected.anio}`
-    : "";
-
-  useEffect(() => {
-    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", h);
-    document.addEventListener("touchstart", h, {passive:true});
-    return () => { document.removeEventListener("mousedown", h); document.removeEventListener("touchstart", h); };
-  }, []);
-
-  const results = useMemo(() => {
-    if (!q.trim()) return units.slice(0, 80);
-    const lq = q.toLowerCase();
-    return units.filter(u =>
-      (u.economico && safeLower(u.economico).includes(lq)) ||
-      (u.placa && safeLower(u.placa).includes(lq)) ||
-      safeLower(u.marca).includes(lq) ||
-      safeLower(u.modelo).includes(lq) ||
-      safeLower(u.vin).includes(lq)
-    );
-  }, [q, units]);
-
-  const triggerPad  = mobile ? "12px 14px" : "6px 8px";
-  const triggerFont = mobile ? 15 : 10;
-  const labelFont   = mobile ? 10 : 7;
-  const dropFont    = mobile ? 13 : 9;
-  const dropSubFont = mobile ? 11 : 7;
-  const dropHeight  = mobile ? 320 : 260;
-  const itemPad     = mobile ? "10px 12px" : "6px 9px";
-
-  return (
-    <div ref={ref} style={{position:"relative",marginBottom: mobile ? 10 : 7}}>
-      <div style={{fontSize:labelFont,color:C.t3,letterSpacing:"0.14em",marginBottom: mobile ? 5 : 3,textTransform:"uppercase"}}>{mobile ? "Unidad" : "UNIDAD"}</div>
-      <div
-        onClick={() => { setOpen(o => !o); setQ(""); }}
-        style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:C.bg0,border:`1px solid ${open?C.blueHi:C.border}`,borderRadius: mobile ? 6 : 3,padding:triggerPad,cursor:"pointer",minHeight: mobile ? 46 : 32}}
-      >
-        {value ? (
-          <div style={{minWidth:0,flex:1}}>
-            <div style={{fontSize:triggerFont,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'Courier New',monospace"}}>{displayLabel}</div>
-            {selected?.placa && <div style={{fontSize:dropSubFont,color:C.t3,marginTop:2}}>Placa {selected.placa}</div>}
-          </div>
-        ) : (
-          <span style={{fontSize:triggerFont,color:C.t3}}>{placeholder}</span>
-        )}
-        <div style={{display:"flex",gap:5,alignItems:"center",flexShrink:0,marginLeft:6}}>
-          {value && <span onClick={e=>{e.stopPropagation();onChange("");}} style={{fontSize: mobile ? 18 : 10,color:C.red,cursor:"pointer",padding:"0 3px",lineHeight:1}}>×</span>}
-          <span style={{fontSize: mobile ? 10 : 8,color:C.t3}}>{open?"▲":"▼"}</span>
-        </div>
-      </div>
-      {open && (
-        <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:300,background:C.bg2,border:`1px solid ${C.blueHi}`,borderRadius: mobile ? 6 : 3,boxShadow:"0 4px 20px rgba(0,0,0,.6)",maxHeight:dropHeight,display:"flex",flexDirection:"column"}}>
-          <div style={{padding: mobile ? "10px 12px" : "5px 8px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
-            <input
-              autoFocus
-              value={q}
-              onChange={e => setQ(e.target.value)}
-              placeholder="Eco., placa, marca, modelo..."
-              style={{width:"100%",background:"transparent",border:"none",outline:"none",color:C.t1,fontSize: mobile ? 15 : 10,fontFamily:"'Courier New',monospace"}}
-            />
-          </div>
-          <div style={{overflowY:"auto",flex:1}}>
-            <div
-              onClick={() => { onChange(""); setOpen(false); }}
-              style={{padding:itemPad,borderBottom:`1px solid ${C.border}`,cursor:"pointer",fontSize:dropFont,color:C.t3}}
-            >
-              — Sin unidad —
-            </div>
-            {results.length === 0 && <div style={{padding:itemPad,fontSize:dropFont,color:C.t3}}>Sin resultados</div>}
-            {results.map(u => (
-              <div
-                key={u.id}
-                onClick={() => { onChange(u.id); setOpen(false); setQ(""); }}
-                style={{padding:itemPad,borderBottom:`1px solid ${C.border}`,cursor:"pointer",background:u.id===value?C.blueDim:"transparent",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}
-              >
-                <div style={{minWidth:0,flex:1}}>
-                  <div style={{display:"flex",gap:5,alignItems:"center"}}>
-                    {u.economico && <span style={{fontSize: mobile ? 13 : 9,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",flexShrink:0}}>Eco.{u.economico}</span>}
-                    <span style={{fontSize: mobile ? 13 : 9,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.marca} {u.modelo} {u.anio}</span>
-                  </div>
-                  <div style={{fontSize:dropSubFont,color:C.t3,fontFamily:"'Courier New',monospace",marginTop:2}}>
-                    {u.placa && <span>Placa {u.placa} · </span>}
-                    <span>{u.vin.slice(-8)}</span>
-                  </div>
-                </div>
-                <StatusBadge sid={u.statusOp} meta={UNIT_STATUS} small/>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── TIMELINE COMPONENT ───────────────────────────────────────────────────────
-const Timeline = React.memo(function Timeline({events}) {
-  if(!events||!events.length) return <div style={{padding:"8px 12px",fontSize:9,color:C.t3}}>Sin eventos registrados.</div>;
-  return (
-    <div style={{padding:"6px 12px"}}>
-      {events.map((ev,i)=>(
-        <div key={i} style={{display:"flex",gap:10,marginBottom:i<events.length-1?8:0}}>
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",flexShrink:0}}>
-            <div style={{width:8,height:8,borderRadius:"50%",background:C.cyan,border:`1px solid ${C.cyanDim}`,flexShrink:0,marginTop:2}}/>
-            {i<events.length-1&&<div style={{width:1,flex:1,background:C.border,minHeight:12,marginTop:2}}/>}
-          </div>
-          <div style={{paddingBottom:i<events.length-1?8:0,minWidth:0}}>
-            <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:1}}>{fmtTS(ev.ts)}</div>
-            <div style={{fontSize:10,color:C.t1,lineHeight:1.3}}>{ev.evento}</div>
-            {ev.actor&&<div style={{fontSize:8,color:C.t2,marginTop:1}}>{ev.actor}</div>}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-})
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// L9 — MODULES
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// ── CENTRO DE OPERACIONES (Dashboard) ────────────────────────────────────────
-function CentroOps({state}) {
-  const C = React.useContext(ThemeCtx);
-  const {tickets,clients,suppliers,units} = state;
-  // Use shared selectors — business rules defined once in L3.5
-  const active   = useMemo(()=>sel_active(tickets),[tickets]);
-  const operados = useMemo(()=>sel_operados(tickets),[tickets]);
-  const revenueOp   = useMemo(()=>sumSnap(operados,"precioConIVA"),[operados]);
-  const utilidadOp  = useMemo(()=>sumSnap(operados,"uNeta"),[operados]);
-  const uBrutaOp    = useMemo(()=>sumSnap(operados,"uBruta"),[operados]);
-  const costoOp     = useMemo(()=>sumSnap(operados,"costoTotal"),[operados]);
-  const costoProducto = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.costoBase)*(1+safeNumber(t.snap?.params?.iva,16)/100),0),[operados]);
-  const gastosOp    = useMemo(()=>sumSnap(operados,"gastos"),[operados]);
-  const totalInv    = costoProducto;
-  const ivaNetoOp   = useMemo(()=>sumSnap(operados,"ivaNeto"),[operados]);
-  const isrOp       = useMemo(()=>sumSnap(operados,"isr"),[operados]);
-  const cargaFiscal = ivaNetoOp + isrOp;
-  const margenOp    = revenueOp>0?(utilidadOp/revenueOp)*100:0;
-  const eficienciaFiscal = uBrutaOp>0?(utilidadOp/uBrutaOp)*100:0;
-  const roi         = totalInv>0?(utilidadOp/totalInv)*100:0;
-  const markupProm  = useMemo(()=>{const v=operados.filter(t=>safeNumber(t.snap?.costoTotal)>0);return v.length>0?v.reduce((s,t)=>s+calcMarkup((t.snap?.precioSinIVA||0),(t.snap?.costoTotal||0)),0)/v.length:0;},[operados]);
-
-  // ── LAYER 2: CASH — solo cobrado/cerrado ───────────────────────────────────
-  const cobrados    = useMemo(()=>sel_cobrados(tickets),[tickets]);
-  const cashTotal   = useMemo(()=>sumSnap(cobrados,"precioConIVA"),[cobrados]);
-  const cashNeta    = useMemo(()=>sumSnap(cobrados,"uNeta"),[cobrados]);
-
-  // ── LAYER 3: CARTERA — shared selector (business rule defined once) ─────────
-  const cartera     = useMemo(()=>sel_cartera(tickets),[tickets]);
-  const carteraMonto= useMemo(()=>sumSnap(cartera,"precioConIVA"),[cartera]);
-  const cxp         = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)&&!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap?.costoTotal),0),[active]);
-  const flujoOp     = carteraMonto - cargaFiscal - cxp;
-  const vencidos    = useMemo(()=>sel_vencidos(tickets),[tickets]);
-
-  // ── LAYER 4: FORECAST — cotizado+autorizado ────────────────────────────────
-  const forecastTkts= useMemo(()=>sel_forecast(tickets),[tickets]);
-  const forecastMonto=useMemo(()=>sumSnap(forecastTkts,"precioConIVA"),[forecastTkts]);
-  const forecastUtil= useMemo(()=>forecastTkts.reduce((s,t)=>s+utilidadPonderada(safeNumber(t.snap?.uNeta),t.prob),0),[forecastTkts]);
-  const cotizados   = useMemo(()=>forecastTkts.filter(t=>t.status==="cotizado"),[forecastTkts]);
-  const autorizados = useMemo(()=>forecastTkts.filter(t=>t.status==="autorizado"),[forecastTkts]);
-
-  // ── OPERATIONAL ────────────────────────────────────────────────────────────
-  const totalHoras  = useMemo(()=>active.reduce((s,t)=>s+safeNumber(t.horasOp),0),[active]);
-  const uPorHora    = totalHoras>0?utilidadOp/totalHoras:0;
-  const uPH         = uPorHora;
-  const p1Active    = useMemo(()=>active.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status)),[active]);
-
-  // By category — only operados
-  const byOp = useMemo(()=>OP_TYPES.map(op=>{
-    const sub=operados.filter(t=>t.opId===op.id);
-    return{label:op.label,short:op.short,count:sub.length,neta:sub.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0),fact:sub.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0)};
-  }).sort((a,b)=>b.neta-a.neta),[operados]);
-  const maxByOp = Math.max(...byOp.map(o=>o.neta),1);
-
-  // Top clientes — only operados
-  const topClients = useMemo(()=>clients.map(c=>{
-    const co=operados.filter(t=>t.clientId===c.id);
-    return{label:c.empresa,neta:co.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0),fact:co.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),count:co.length};
-  }).filter(c=>c.count>0).sort((a,b)=>b.neta-a.neta).slice(0,5),[operados,clients]);
-  const maxClient = Math.max(...topClients.map(c=>c.neta),1);
-
-  // Legacy aliases for existing UI code below
-  const realizados = operados;
-  const totalFact  = revenueOp;
-  const totalNeta  = utilidadOp;
-  const rentabilidadProm = margenOp;
-  const ivaNetoTotal = ivaNetoOp;
-  const isrTotal = isrOp;
-  const cargaFiscalTotal = cargaFiscal;
-  const carteraPend = carteraMonto;
-  const forecast = forecastUtil;
-  const eficienciaFiscalGlobal = eficienciaFiscal;
-  const utilidadBrutaTotal = uBrutaOp;
-  // Additional derived vars used in UI
-  const pctNeta    = revenueOp > 0 ? (utilidadOp / revenueOp) * 100 : 0;
-  const abiertas   = useMemo(()=>active.filter(t=>!CLOSED_SET.has(t.status)),[active]);
-  const cobradas   = useMemo(()=>active.filter(t=>PAID_SET.has(t.status)),[active]);
-  const conversion = active.length > 0 ? (cobradas.length / active.length) * 100 : 0;
-
-  // Aging cartera — only entregado/facturado credit tickets with past promesaPago
-  const aging = useMemo(()=>{
-    const pend=tickets.filter(t=>CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t._deleted&&t.promesaPago);
-    const bucket=(mn,mx)=>pend.filter(t=>{const d=parseDateMX(t.promesaPago);if(!d)return false;const ms=Date.now()-d.getTime();return ms>=mn*86400000&&(mx==null||ms<mx*86400000);}).reduce((s,t)=>s+(t.snap?.precioConIVA||0),0);
-    return{a30:bucket(0,30),a60:bucket(30,60),mas60:bucket(60,null)};
-  },[tickets]);
-
-  // Top proveedores — only operados (exclude cancelled, _deleted)
-  const topSupp = useMemo(()=>suppliers.map(s=>{
-    const so=operados.filter(t=>t.supplierId===s.id);
-    return{label:s.nombre,neta:so.reduce((acc,t)=>acc+(t.snap?.uNeta||0),0),count:so.length};
-  }).filter(s=>s.count>0).sort((a,b)=>b.neta-a.neta).slice(0,4),[operados,suppliers]);
-
-  // Eficiencia
-  const eficientes = useMemo(()=>tickets.filter(t=>t.horasOp>0).map(t=>({titulo:t.titulo,uPH:(t.snap?.uNeta||0)/t.horasOp,uNeta:t.snap?.uNeta||0,horas:t.horasOp})).sort((a,b)=>b.uPH-a.uPH).slice(0,4),[tickets]);
-
-  return (
-    <div style={{padding:"10px 13px",maxWidth:1300,margin:"0 auto"}}>
-
-      {/* Alertas */}
-      {(p1Active.length>0||vencidos.length>0)&&(
-        <div style={{marginBottom:8,display:"flex",flexDirection:"column",gap:4}}>
-          {p1Active.length>0&&(
-            <div style={{background:C.p1dim,border:`1px solid ${C.p1}55`,borderRadius:3,padding:"5px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{fontSize:9,color:C.p1dot,fontWeight:700}}>P1 ACTIVO — {p1Active.length} ticket{p1Active.length>1?"s":""} / unidad detenida</span>
-              <span style={{fontSize:8,color:C.p1dot}}>{p1Active.map(t=>t.id).join(" / ")}</span>
-            </div>
-          )}
-          {vencidos.length>0&&(
-            <div style={{background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:3,padding:"5px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{fontSize:9,color:"#C04040",fontWeight:700}}>CARTERA VENCIDA — {vencidos.length} op. / {mxn(vencidos.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0))}</span>
-              <span style={{fontSize:8,color:"#C04040"}}>{vencidos.map(t=>t.id).join(" / ")}</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* KPI fila 1 */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:5}}>
-        <KPI label="Realizado (entregado+)"   value={mxn(totalFact)}   color={C.cyan}   accent/>
-        <KPI label="Utilidad neta"     value={mxn(totalNeta)}   color={totalNeta>=0?C.green:C.red} sub={fpct(pctNeta)+" del facturado"}/>
-        <KPI label="Cartera pendiente" value={mxn(carteraPend)} color={C.yellow} alert={vencidos.length>0} sub={vencidos.length>0?vencidos.length+" vencida"+(vencidos.length>1?"s":""):""}/>
-        <KPI label="Forecast"          value={mxn(forecast)}    color={C.cyan}   sub="Hasta estado Transito"/>
-      </div>
-
-      {/* KPI fila 2 */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:8}}>
-        <KPI label="Tickets abiertos" value={String(abiertas.length)} color={C.t1}/>
-        <KPI label="Conversion"       value={fpct(conversion)}        color={conversion>=60?C.green:C.yellow} sub="cierre / total"/>
-        <KPI label="Rentabilidad neta"     value={fpct(rentabilidadProm)}        color={margenColor(rentabilidadProm)} sub="neto s/precio"/>
-        <KPI label="Util / hora"      value={totalHoras>0?mxn(uPorHora):"---"} color={C.cyan} sub={totalHoras>0?totalHoras.toFixed(1)+"h registradas":""}/>
-      </div>
-
-      {/* 3 columnas principales */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7,marginBottom:7}}>
-
-        {/* Col 1: Por categoria */}
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
-          <SHdr title="UTILIDAD POR CATEGORIA"/>
-          {byOp.filter(o=>o.count>0).length===0
-            ?<EmptyState icon="&#128202;" title="Sin datos"/>
-            :byOp.filter(o=>o.count>0).map(op=>(
-              <div key={op.short} style={{padding:"5px 11px",borderBottom:`1px solid ${C.border}`}}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:1}}>
-                  <span style={{fontSize:9,color:C.t2}}>{op.label} <span style={{fontSize:7,color:C.t3}}>({op.count})</span></span>
-                  <span style={{fontSize:9,fontWeight:700,color:op.neta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(op.neta)}</span>
-                </div>
-                <MiniBar value={op.neta} max={maxByOp} color={C.cyanDim}/>
-                <div style={{fontSize:7,color:C.t3,marginTop:1}}>Fact: {mxn(op.fact)}</div>
-              </div>
-            ))
-          }
-        </div>
-
-        {/* Col 2: Top clientes + Aging */}
-        <div style={{display:"flex",flexDirection:"column",gap:7}}>
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
-            <SHdr title="TOP CLIENTES — UTILIDAD"/>
-            {topClients.length===0
-              ?<EmptyState icon="&#127970;" title="Vincula clientes a tickets"/>
-              :topClients.map((c,i)=>(
-                <div key={i} style={{padding:"5px 11px",borderBottom:`1px solid ${C.border}`}}>
-                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:1}}>
-                    <span style={{fontSize:9,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"60%"}}>{c.label}</span>
-                    <span style={{fontSize:9,fontWeight:700,color:c.neta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(c.neta)}</span>
-                  </div>
-                  <MiniBar value={c.neta} max={maxClient} color={C.greenDim}/>
-                </div>
-              ))
-            }
-          </div>
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
-            <SHdr title="AGING CARTERA"/>
-            {[["< 30 dias",aging.a30,C.green],["30-60 dias",aging.a60,C.yellow],["> 60 dias",aging.mas60,C.red]].map(([lbl,val,col],i)=>(
-              <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 11px",borderBottom:`1px solid ${C.border}`}}>
-                <span style={{fontSize:9,color:C.t2}}>{lbl}</span>
-                <span style={{fontSize:9,fontWeight:700,color:col,fontFamily:"'Courier New',monospace"}}>{mxn(val)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Col 3: Top proveedores + Eficiencia */}
-        <div style={{display:"flex",flexDirection:"column",gap:7}}>
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
-            <SHdr title="TOP PROVEEDORES"/>
-            {topSupp.length===0
-              ?<EmptyState icon="&#127981;" title="Vincula proveedores a tickets"/>
-              :topSupp.map((s,i)=>(
-                <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 11px",borderBottom:`1px solid ${C.border}`}}>
-                  <div style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"65%"}}>
-                    <div style={{fontSize:9,color:C.t2}}>{s.label}</div>
-                    <div style={{fontSize:7,color:C.t3}}>{s.count} ops</div>
-                  </div>
-                  <span style={{fontSize:9,fontWeight:700,color:s.neta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(s.neta)}</span>
-                </div>
-              ))
-            }
-          </div>
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
-            <SHdr title="EFICIENCIA — UTIL/HORA"/>
-            {eficientes.length===0
-              ?<EmptyState icon="&#9201;" title="Registra horas en tickets"/>
-              :eficientes.map((e,i)=>(
-                <div key={i} style={{padding:"5px 11px",borderBottom:`1px solid ${C.border}`}}>
-                  <div style={{display:"flex",justifyContent:"space-between"}}>
-                    <span style={{fontSize:8,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"65%"}}>{e.titulo}</span>
-                    <span style={{fontSize:9,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(e.uPH)}/h</span>
-                  </div>
-                  <div style={{fontSize:7,color:C.t3,marginTop:1}}>{mxn(e.uNeta)} · {e.horas}h</div>
-                </div>
-              ))
-            }
-          </div>
-        </div>
-      </div>
-
-      {/* Pipeline strip — ancho completo */}
-      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:7}}>
-        <SHdr title="DISTRIBUCION PIPELINE"/>
-        <div style={{display:"grid",gridTemplateColumns:`repeat(${TICKET_ALL.length},1fr)`}}>
-          {TICKET_ALL.map(sid=>{
-            const s=TICKET_META[sid];
-            const count=tickets.filter(t=>t.status===sid).length;
-            return (
-              <div key={sid} style={{padding:"7px 3px",textAlign:"center",borderRight:`1px solid ${C.border}`}}>
-                <div style={{fontSize:15,fontWeight:800,color:count>0?s.dot:C.t3,fontFamily:"'Courier New',monospace",lineHeight:1}}>{count}</div>
-                <div style={{fontSize:6,color:C.t3,marginTop:2,lineHeight:1.3}}>{s.label}</div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Resumen financiero — 3 bloques separados */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7,marginBottom:7}}>
-
-        {/* BLOQUE 1 — OPERACIÓN */}
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
-          <SHdr title="OPERACIÓN REALIZADA"/>
-          <div style={{fontSize:7,color:C.t3,marginBottom:6}}>Entregado · Facturado · Cobrado · {operados.length} tickets</div>
-          {[
-            ["Revenue operado",   mxn(revenueOp),  C.cyan],
-            ["Costo producto",    mxn(costoProducto), C.t2],
-            ["Gastos operativos", mxn(gastosOp),   C.t2],
-            ["Costo total",       mxn(costoOp),    C.t2],
-            ["Utilidad operativa",mxn(utilidadOp), utilidadOp>=0?C.green:C.red],
-            ["Margen neto",       fpct(margenOp),  margenColor(margenOp)],
-            ["Markup promedio",   fpct(markupProm),C.blueHi],
-            ["ROI operativo",     fpct(roi),        roi>=25?C.green:C.yellow],
-            ["IVA neto SAT",      mxn(ivaNetoOp),  C.yellow],
-            ["ISR estimado",      mxn(isrOp),       C.yellow],
-            ["Carga fiscal",      mxn(cargaFiscal), C.red],
-            ["Eficiencia fiscal", fpct(eficienciaFiscal),eficienciaFiscal>=75?C.green:C.yellow],
-          ].map(([lbl,val,col],i)=>(
-            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:`1px solid ${C.border}`}}>
-              <span style={{fontSize:8,color:C.t3}}>{lbl}</span>
-              <span style={{fontSize:10,fontWeight:800,color:col,fontFamily:"'Courier New',monospace"}}>{val}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* BLOQUE 2 — COBRANZA */}
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
-          <SHdr title="COBRANZA"/>
-          <div style={{fontSize:7,color:C.t3,marginBottom:6}}>Cash recibido vs cartera pendiente</div>
-          {[
-            ["Cash cobrado",     mxn(cashTotal),    C.green],
-            ["Util. sobre cobrado",mxn(cashNeta),   C.green],
-            ["Cartera pendiente",mxn(carteraMonto), C.yellow],
-            ["Vencidas",         String(vencidos.length)+" tickets", vencidos.length>0?C.red:C.t3],
-            ["CxP proveedores",  mxn(cxp),          C.t2],
-            ["Flujo operativo",  mxn(flujoOp),      flujoOp>=0?C.green:C.red],
-          ].map(([lbl,val,col],i)=>(
-            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:`1px solid ${C.border}`}}>
-              <span style={{fontSize:8,color:C.t3}}>{lbl}</span>
-              <span style={{fontSize:10,fontWeight:800,color:col,fontFamily:"'Courier New',monospace"}}>{val}</span>
-            </div>
-          ))}
-          <div style={{marginTop:8,fontSize:7,color:C.t3}}>DESGLOSE CARTERA</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4,marginTop:4}}>
-            <KPI label="Por cobrar" value={String(cartera.length)} sub="tickets"/>
-            <KPI label="Cobrados" value={String(cobrados.length)} sub="tickets"/>
-          </div>
-        </div>
-
-        {/* BLOQUE 3 — FORECAST */}
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
-          <SHdr title="FORECAST / PIPELINE"/>
-          <div style={{fontSize:7,color:C.t3,marginBottom:6}}>Cotizado + Autorizado — NO contamina revenue</div>
-          {[
-            ["Cotizados",        String(cotizados.length)+" tickets",  C.t2],
-            ["Autorizados",      String(autorizados.length)+" tickets",C.cyan],
-            ["Revenue forecast", mxn(forecastMonto),                   C.cyan],
-            ["Util. forecast",   mxn(forecastUtil),                    C.blueHi],
-          ].map(([lbl,val,col],i)=>(
-            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:`1px solid ${C.border}`}}>
-              <span style={{fontSize:8,color:C.t3}}>{lbl}</span>
-              <span style={{fontSize:10,fontWeight:800,color:col,fontFamily:"'Courier New',monospace"}}>{val}</span>
-            </div>
-          ))}
-          <div style={{marginTop:8}}>
-            <KPI label="P1 abiertos" value={String(p1Active.length)} color={p1Active.length>0?C.red:C.t3}/>
-          </div>
-        </div>
-      </div>
-
-      {/* Fila inferior: categorías + prioridades */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:7}}>
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
-          <SHdr title="RESUMEN RÁPIDO"/>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5,marginTop:8}}>
-            {[["Revenue op.",mxn(revenueOp),C.cyan],["Cash cobrado",mxn(cashTotal),C.green],["Cartera",mxn(carteraMonto),C.yellow],["Util. operativa",mxn(utilidadOp),utilidadOp>=0?C.green:C.red],["Forecast",mxn(forecastMonto),C.t2]].map(([lbl,val,col],i)=>(
-              <div key={i} style={{padding:"5px 8px",background:C.bg2,borderRadius:3,border:`1px solid ${C.border}`}}>
-                <div style={{fontSize:7,color:C.t3,marginBottom:2}}>{lbl}</div>
-                <div style={{fontSize:12,fontWeight:800,color:col,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{val}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Prioridades */}
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",minWidth:220}}>
-          <SHdr title="PRIORIDADES"/>
-          {Object.values(PRIORITY).map(pr=>{
-            const count=tickets.filter(t=>t.priority===pr.id).length;
-            const open=tickets.filter(t=>t.priority===pr.id&&!CLOSED_SET.has(t.status)).length;
-            return (
-              <div key={pr.id} style={{display:"flex",gap:8,padding:"6px 12px",borderBottom:`1px solid ${C.border}`,alignItems:"center"}}>
-                <PriorityBadge pid={pr.id} small/>
-                <div style={{fontSize:9,color:C.t2,whiteSpace:"nowrap"}}>{count} total</div>
-                <div style={{fontSize:9,fontWeight:700,color:open>0?pr.dot:C.t3,fontFamily:"'Courier New',monospace",marginLeft:"auto"}}>{open} abiertos</div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── TICKETS (pipeline operativo) ─────────────────────────────────────────────
-function Tickets({state,dispatch,toast,scheduleHardDelete}) {
-  const C = React.useContext(ThemeCtx);
-  const {tickets,clients,suppliers,units} = state;
-  const [fStatus, setFStatus] = useState("all");
-  const [fPrio,   setFPrio]   = useState("all");
-  const [search,  setSearch]  = useState("");
-  const [expId,   setExpId]   = useState(null);
-  const [confirm, setConfirm] = useState(null);
-  const [tlInput, setTlInput] = useState({evento:"",actor:"Operador"});
-  const dSearch = useDebounce(search, 250);
-
-  const filtered = useMemo(()=>tickets.filter(t=>{
-    if(fStatus!=="all"&&t.status!==fStatus) return false;
-    if(fPrio!=="all"&&t.priority!==fPrio)   return false;
-    if(dSearch){const lq=safeLower(dSearch);if(!safeLower(t.titulo).includes(lq)&&!safeLower(t.id).includes(lq))return false;}
-    return true;
-  }),[tickets,fStatus,fPrio,dSearch]);
-
-  const moveStatus=(id,to)=>{
-    const t=tickets.find(t=>t.id===id);
-    if(!t||!canTransition(t.status,to)){toast("Transicion no permitida","error");return;}
-    dispatch({type:"TKT_STATUS",id,to});
-    toast(TICKET_META[to].label,"info");
-  };
-
-  const addTlEvent=(id)=>{
-    if(!tlInput.evento.trim()) return;
-    dispatch({type:"TKT_TIMELINE",id,evento:tlInput.evento,actor:tlInput.actor});
-    setTlInput({evento:"",actor:"Operador"});
-    toast("Evento registrado","success");
-  };
-
-  return (
-    <div style={{padding:"10px 13px",maxWidth:1200,margin:"0 auto"}}>
-      {confirm&&<Confirm msg={"Eliminar ticket: "+confirm.titulo+"?"} onConfirm={()=>{
-        const id=confirm.id;
-        dispatch({type:"TKT_SOFT_DEL",id});
-        scheduleHardDelete(id);
-        toast("Ticket a papelera — restaurable","info");
-        setConfirm(null);setExpId(null);
-      }} onCancel={()=>setConfirm(null)}/>}
-
-      {/* Filtros */}
-      <div style={{display:"flex",gap:5,marginBottom:7,flexWrap:"wrap",alignItems:"center"}}>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar ticket o ID..."
-          style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 8px",color:C.t1,fontSize:10,outline:"none",width:180,fontFamily:"'Courier New',monospace"}}/>
-        <select value={fPrio} onChange={e=>setFPrio(e.target.value)} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t1,fontSize:10,outline:"none",cursor:"pointer"}}>
-          <option value="all">Todas las prioridades</option>
-          {Object.values(PRIORITY).map(p=><option key={p.id} value={p.id} style={{background:C.bg1}}>{p.id} — {p.label}</option>)}
-        </select>
-        <select value={fStatus} onChange={e=>setFStatus(e.target.value)} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t1,fontSize:10,outline:"none",cursor:"pointer"}}>
-          <option value="all">Todos los estados</option>
-          {TICKET_ALL.map(id=><option key={id} value={id} style={{background:C.bg1}}>{TICKET_META[id].label}</option>)}
-        </select>
-        <span style={{fontSize:8,color:C.t3}}>{filtered.length} resultado{filtered.length!==1?"s":""}</span>
-      </div>
-
-      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
-        <div style={{display:"grid",gridTemplateColumns:"24px 1.8fr 0.5fr 0.7fr 0.7fr 0.8fr 0.7fr 0.6fr 22px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:4}}>
-          <span/>
-          <span>ID / TITULO</span><span>TIPO</span><span>PRIORIDAD</span><span>ESTADO</span>
-          <span>PRECIO</span><span>UTIL.</span><span>PAGO</span><span/>
-        </div>
-        {filtered.length===0&&<EmptyState icon="&#128203;" title="Sin tickets" sub="Registra un nuevo ticket desde el Cotizador"/>}
-        {filtered.map((t,i)=>{
-          const exp=expId===t.id;
-          const cl=clients.find(c=>c.id===t.clientId);
-          const un=units.find(u=>u.id===t.unitId);
-          const allowed=TICKET_TRANSITIONS[t.status]||[];
-          const venc=t.promesaPago&&!t.cobrado&&parseDateMX(t.promesaPago)&&new Date()>parseDateMX(t.promesaPago);
-          const pr=PRIORITY[t.priority]||PRIORITY.P4;
-          return (
-            <div key={t.id} style={{borderBottom:`1px solid ${C.border}`}}>
-              <div onClick={()=>setExpId(exp?null:t.id)}
-                style={{display:"grid",gridTemplateColumns:"24px 1.8fr 0.5fr 0.7fr 0.7fr 0.8fr 0.7fr 0.6fr 22px",padding:"6px 9px",background:exp?C.blueDim:i%2===0?C.bg1:C.bg2,cursor:"pointer",gap:4,alignItems:"center",borderLeft:`3px solid ${pr.dot}`}}>
-                <div/>
-                <div style={{minWidth:0}}>
-                  <div style={{fontSize:8,fontWeight:700,color:C.t1,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.id}</div>
-                  <div style={{fontSize:9,color:C.cyan,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
-                  <div style={{fontSize:7,color:C.t3}}>{t.date}{cl?" · "+cl.empresa:""}{un?" · "+un.marca+" "+un.modelo:""}</div>
-                </div>
-                <div style={{fontSize:8,color:C.t2,fontFamily:"'Courier New',monospace"}}>{t.opShort}</div>
-                <PriorityBadge pid={t.priority} small/>
-                <StatusBadge sid={t.status} meta={TICKET_META} small/>
-                <div style={{fontSize:9,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{mxn(t.snap?.precioConIVA||0)}</div>
-                <div style={{fontSize:9,fontWeight:700,color:(t.snap?.uNeta||0)>=0?C.green:C.red,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{mxn(t.snap?.uNeta||0)}</div>
-                <div>
-                  <div style={{fontSize:7,color:t.payType==="credit"?C.yellow:C.t3}}>{t.payType==="credit"?"CRED":"CONT"}</div>
-                  {venc&&<div style={{fontSize:7,color:C.red,fontWeight:700}}>VENC</div>}
-                </div>
-                <div style={{fontSize:9,color:C.t3,textAlign:"center"}}>{exp?"^":"v"}</div>
-              </div>
-
-              {exp&&(
-                <div style={{background:C.bg0,borderTop:`1px solid ${C.border}`}}>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0}}>
-                    {/* Timeline */}
-                    <div style={{borderRight:`1px solid ${C.border}`}}>
-                      <SHdr title="TIMELINE OPERATIVO"/>
-                      <Timeline events={t.timeline||[]}/>
-                      {/* Agregar evento */}
-                      <div style={{padding:"6px 10px",borderTop:`1px solid ${C.border}`,display:"flex",gap:5}}>
-                        <input value={tlInput.evento} onChange={e=>setTlInput(p=>({...p,evento:e.target.value}))} placeholder="Nuevo evento..."
-                          style={{flex:1,background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t1,fontSize:9,outline:"none",fontFamily:"inherit"}}/>
-                        <input value={tlInput.actor} onChange={e=>setTlInput(p=>({...p,actor:e.target.value}))} placeholder="Actor"
-                          style={{width:80,background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t2,fontSize:9,outline:"none",fontFamily:"inherit"}}/>
-                        <button onClick={()=>addTlEvent(t.id)} style={{padding:"4px 9px",background:C.blue,border:"none",borderRadius:3,color:C.t1,fontSize:9,cursor:"pointer",fontWeight:600}}>+</button>
-                      </div>
-                    </div>
-                    {/* Detalles + acciones */}
-                    <div>
-                      <SHdr title="DETALLE FINANCIERO"/>
-                      <div style={{padding:"6px 10px"}}>
-                        {[["Costo total",mxn(t.snap?.costoTotal||0),C.t1],["Markup",fpct(calcMarkup(t.snap?.precioSinIVA||0,t.snap?.costoTotal||0)),C.blueHi],["Precio c/IVA",mxn(t.snap?.precioConIVA||0),C.cyan],["IVA neto SAT",mxn(t.snap?.ivaNeto||0),C.yellow],["Util. bruta",mxn(t.snap?.uBruta||0),C.t1],["ISR",mxn(t.snap?.isr||0),C.yellow],["Util. neta",mxn(t.snap?.uNeta||0),(t.snap?.uNeta||0)>=0?C.green:C.red],["Margen neto",fpct(t.snap?.margenNetoPrecio||0),margenColor(t.snap?.margenNetoPrecio||0)]].map(([lbl,val,col],j)=>(
-                          <div key={j} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",borderBottom:`1px solid ${C.border}`}}>
-                            <span style={{fontSize:8,color:C.t2}}>{lbl}</span>
-                            <span style={{fontSize:9,fontWeight:600,color:col,fontFamily:"'Courier New',monospace"}}>{val}</span>
-                          </div>
-                        ))}
-                        {t.notes&&<div style={{marginTop:5,fontSize:8,color:C.t3,fontStyle:"italic",lineHeight:1.4}}>"{t.notes}"</div>}
-                        {t.promesaPago&&<div style={{marginTop:4,fontSize:8,color:venc?C.red:C.yellow}}>Promesa: {t.promesaPago}{venc?" (VENCIDA)":""}</div>}
-                      </div>
-                      <SHdr title="MOVER A ESTADO"/>
-                      <div style={{padding:"6px 10px",display:"flex",gap:3,flexWrap:"wrap",alignItems:"center"}}>
-                        {allowed.map(to=>{const s=TICKET_META[to];return(
-                          <button key={to} onClick={e=>{e.stopPropagation();moveStatus(t.id,to);}}
-                            style={{padding:"2px 7px",borderRadius:2,border:`1px solid ${s.dot}44`,background:s.color+"22",color:s.dot,fontSize:7,cursor:"pointer",fontWeight:600}}>
-                            {s.label}
-                          </button>
-                        );})}
-                        {allowed.length===0&&<span style={{fontSize:8,color:C.t3}}>Estado final</span>}
-                      </div>
-                      <div style={{padding:"4px 10px 8px",display:"flex",gap:5}}>
-                        {t.payType==="credit"&&!t.cobrado&&(
-                          <button onClick={()=>{dispatch({type:"TKT_COBRADO",id:t.id});toast("Marcado como cobrado","success");}}
-                            style={{padding:"3px 10px",background:C.greenDim,border:`1px solid ${C.green}44`,borderRadius:3,color:C.green,fontSize:9,cursor:"pointer",fontWeight:600}}>
-                            Cobrado
-                          </button>
-                        )}
-                        <button onClick={e=>{e.stopPropagation();const cl=clients.find(c=>c.id===t.clientId);const un=units.find(u=>u.id===t.unitId);const supp=suppliers.find(s=>s.id===t.supplierId);generarCotizacionPDF(t,cl,un,supp);}}
-                          style={{padding:"3px 10px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,fontSize:9,cursor:"pointer",fontWeight:600}}>
-                          Cotizacion PDF
-                        </button>
-                        <button onClick={e=>{e.stopPropagation();setConfirm(t);}}
-                          style={{padding:"3px 8px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:3,color:C.red,fontSize:8,cursor:"pointer",fontWeight:700,marginLeft:"auto"}}>
-                          x Eliminar
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ── COTIZADOR ────────────────────────────────────────────────────────────────
-const emptyLine = (opType, priority, activeMods) => {
-  const mg = effectiveMargin(opType||"consumable", priority||"P3", activeMods||[], false, 27);
-  return {
-    key:         genId("TOAST"),
-    titulo:      "",
-    partRef:     "",
-    qty:         1,
-    costoUnit:   0,
-    gasolina:    0,
-    otros:       0,
-    mode:        "auto",
-    manualPrice: "0",
-    customMgn:   false,
-    customVal:   mg,
-  };
-};
-
-function Cotizador({state,dispatch,toast}) {
-  const C = React.useContext(ThemeCtx);
-  const {clients,suppliers,units} = state;
-
-  // Ticket-level fields
-  const [opType,    setOpType]    = useState("consumable");
-  const [priority,  setPriority]  = useState("P3");
-  const [activeMods,setActiveMods]= useState([]);
-  const [customMgn, setCustomMgn] = useState(false);
-  const [customVal, setCustomVal] = useState(27);
-  const [fecha,     setFecha]     = useState(todayMX());
-  const [clientId,  setClientId]  = useState("");
-  const [supplierId,setSupplierId]= useState("");
-  const [unitId,    setUnitId]    = useState("");
-  const [status,    setStatus]    = useState("recibido");
-  const [payType,   setPayType]   = useState("contado");
-  const [promesa,   setPromesa]   = useState("");
-  const [prob,      setProb]      = useState("high");
-  const [horasOp,   setHorasOp]   = useState(0);
-  const [notes,     setNotes]     = useState("");
-  const [iva,       setIva]       = useState(16);
-  const [isr,       setIsr]       = useState(20);
-  const [cIVA,      setCIVA]      = useState(true);
-  const [vIVA,      setVIVA]      = useState(true);
-  // Multi-line
-  const [lineas,    setLineas]    = useState([emptyLine("consumable","P3",[])]);
-  const [pdfPending, setPdfPending] = useState(null); // {tkt,cl,un,supp}
-  const [catalogSearch, setCatalogSearch] = useState(null); // idx of line being searched
-  const opMeta = useMemo(()=>OP_TYPES.find(o=>o.id===opType)||OP_TYPES[0],[opType]);
-  const pr     = useMemo(()=>PRIORITY[priority]||PRIORITY.P3,[priority]);
-
-  // Shared margin from ticket-level modifiers (applied to all lines in Auto mode)
-  const sharedMargin = useMemo(()=>effectiveMargin(opType,priority,activeMods,customMgn,customVal),[opType,priority,activeMods,customMgn,customVal]);
-  const capped = useMemo(()=>{
-    const op=opMeta; const base=Math.round((op.baseMin+op.baseMax)/2)+pr.marginBonus;
-    const raw=base+activeMods.reduce((s,id)=>{const m=MODIFIERS.find(m=>m.id===id);return s+(m?m.pct:0);},0);
-    return !customMgn&&raw>op.cap;
-  },[opMeta,pr,activeMods,customMgn]);
-
-  const toggleMod = useCallback(id=>setActiveMods(p=>p.includes(id)?p.filter(x=>x!==id):p.length>=4?p:[...p,id]),[]);
-
-  // Each line uses sharedMargin unless it has its own customMgn
-  const lineSnaps = useMemo(()=>lineas.map(l=>{
-    const mg      = l.customMgn ? Math.min(safeNumber(l.customVal), opMeta.cap) : sharedMargin;
-    const qty     = l._qtyRaw!==undefined ? (parseInt(l._qtyRaw)||1) : (safeNumber(l.qty,1)||1);
-    const costoU  = l._costoUnitRaw!==undefined ? safeNumber(l._costoUnitRaw) : safeNumber(l.costoUnit);
-    const gasol   = l._gasolinaRaw!==undefined  ? safeNumber(l._gasolinaRaw)  : safeNumber(l.gasolina);
-    const otros_  = l._otrosRaw!==undefined      ? safeNumber(l._otrosRaw)     : safeNumber(l.otros);
-    const costo   = costoU * qty;
-    return computeSnap({costo,gasolina:gasol,otros:otros_,iva,isr,
-      compraConIVA:cIVA,ventaConIVA:vIVA,mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
-  }),[lineas,sharedMargin,opMeta,iva,isr,cIVA,vIVA]);
-
-  const totalSnap = useMemo(()=>{
-    const sum=k=>lineSnaps.reduce((s,sn)=>s+safeNumber(sn[k]),0);
-    const precioSinIVA=sum("precioSinIVA"), uNeta=sum("uNeta");
-    return {
-      precioConIVA:sum("precioConIVA"),precioSinIVA,
-      costoTotal:sum("costoTotal"),costoBase:sum("costoBase"),gastos:sum("gastos"),
-      uNeta,uBruta:sum("uBruta"),isr:sum("isr"),
-      ivaTraslad:sum("ivaTraslad"),ivaAcred:sum("ivaAcred"),ivaNeto:sum("ivaNeto"),
-      markupSobre:sum("costoTotal")>0?((precioSinIVA-sum("costoTotal"))/sum("costoTotal"))*100:0,
-      margenNetoPrecio:precioSinIVA>0?(uNeta/precioSinIVA)*100:0,
-      params:{iva,isr},
-    };
-  },[lineSnaps,iva,isr]);
-
-  const aggMargen = totalSnap.precioSinIVA>0?(totalSnap.uNeta/totalSnap.precioSinIVA)*100:0;
-  const mColor    = margenColor(aggMargen);
-  const uEsp      = totalSnap.uNeta*(PROB.find(p=>p.id===prob)?.pct||90)/100;
-  const uPH       = horasOp>0?totalSnap.uNeta/horasOp:null;
-
-  const updateLinea = useCallback((idx,patch)=>setLineas(p=>p.map((l,i)=>i===idx?{...l,...patch}:l)),[]);
-  const removeLinea = useCallback(idx=>setLineas(p=>p.filter((_,i)=>i!==idx)),[]);
-  const addLinea    = useCallback(()=>setLineas(p=>[...p,emptyLine(opType,priority,activeMods)]),[opType,priority,activeMods]);
-
-  // Reset custom margin when opType/priority changes (state update during render — safe pattern)
-  const [lastOpKey, setLastOpKey] = useState(()=>opType+priority);
-  const curOpKey = opType+priority;
-  if(lastOpKey!==curOpKey){setLastOpKey(curOpKey);setCustomMgn(false);setActiveMods([]);}
-
-  const [isSaving, setIsSaving] = useState(false);
-  const save = useCallback(()=>{
-    if(isSaving) return; // double-click guard
-    const titulo = lineas.map(l=>l.titulo.trim()||"Sin descripcion").join(" / ");
-    if(!titulo||titulo==="Sin descripcion") { toast("Agrega al menos un concepto","error"); return; }
-    setIsSaving(true);
-    const cl   = clients.find(c=>c.id===clientId);
-    const un   = units.find(u=>u.id===unitId);
-    const supp = suppliers.find(s=>s.id===supplierId);
-    const lineasConSnap = lineas.map((l,i)=>({
-      titulo:l.titulo||"Sin descripcion", partRef:l.partRef||"",
-      qty:safeNumber(l.qty,1)||1, costoUnit:safeNumber(l.costoUnit),
-      gasolina:safeNumber(l.gasolina), otros:safeNumber(l.otros),
-      mode:l.mode||"manual", manualPrice:l.manualPrice||"0",
-      descripcionPDF:l.descripcionPDF||"",
-      snap:lineSnaps[i],
-    }));
-    const snapAgregado = {
-      ...totalSnap,
-      markupSobre:      totalSnap.costoTotal>0?((totalSnap.precioSinIVA-totalSnap.costoTotal)/totalSnap.costoTotal)*100:0,
-      margenNetoPrecio: aggMargen,
-    };
-    const tkt = {
-      id:mkTicketId(fecha), titulo, opId:opType, opShort:opMeta.short, priority,
-      clientId, supplierId, unitId,
-      partRef:lineas.map(l=>l.partRef).filter(Boolean).join(", "),
-      date:fecha, status, payType,
-      promesaPago:payType==="credit"?promesa:null,
-      cobrado:PAID_SET.has(status),
-      mods:[...activeMods], prob, horasOp:safeNumber(horasOp), notes,
-      mode:lineas.length>1?"multilinea":"auto",
-      lineas:lineasConSnap,
-      snap:snapAgregado,
-      timeline:[{ts:nowISO(),evento:"Ticket creado",actor:"Operador"}],
-      history:[mkEvent("created",{titulo,status,priority})],
-    };
-    dispatch({type:"TKT_ADD",t:tkt});
-
-    // ── Catálogo auto-sync silencioso ───────────────────────────────────
-    lineas.forEach(l=>{
-      if(!l.titulo||!l.titulo.trim()) return;
-      const nomNorm=(l.titulo||"").trim().toLowerCase();
-      const oem=(l.partRef||"").trim();
-      const exists=state.parts.find(p=>
-        (oem&&(oem===p.oem||oem===p.aftermarket))||
-        p.nombre.toLowerCase()===nomNorm||
-        (nomNorm.length>6&&p.nombre.toLowerCase().startsWith(nomNorm.slice(0,Math.floor(nomNorm.length*0.75))))
-      );
-      if(!exists&&(safeNumber(l.costoUnit)>0||oem)){
-        dispatch({type:"PART_ADD",p:{
-          id:mkPartId(),nombre:l.titulo.trim(),oem,aftermarket:"",
-          aplicacion:un?`${un.marca} ${un.modelo} ${un.anio||""}`.trim():"",
-          notas:`Auto: ${todayMX()}`,proveedor:supp?.nombre||"",
-          ultimoPrecio:safeNumber(l.costoUnit),ultimaFecha:fecha,frecuencia:1,
-        }});
-      } else if(exists){
-        const patch={frecuencia:(exists.frecuencia||1)+1};
-        if(safeNumber(l.costoUnit)>0) patch.ultimoPrecio=safeNumber(l.costoUnit);
-        if(fecha) patch.ultimaFecha=fecha;
-        if(supp?.nombre) patch.proveedor=supp.nombre;
-        dispatch({type:"PART_UPDATE",id:exists.id,patch});
-      }
-    });
-    // ───────────────────────────────────────────────────────────────────
-
-    opLog.push("TKT_CREATED", {id:tkt.id, titulo});
-    toast("Ticket registrado: "+tkt.id,"success");
-    setPdfPending({tkt,cl,un,supp});
-    setLineas([emptyLine(opType,priority,[])]);
-    setNotes(""); setHorasOp(0);
-    setTimeout(()=>setIsSaving(false), 1500); // reset after 1.5s
-  },[isSaving,lineas,lineSnaps,totalSnap,aggMargen,fecha,opType,opMeta,priority,clientId,supplierId,unitId,status,payType,promesa,activeMods,prob,horasOp,notes,dispatch,toast,clients,units,suppliers]);
-
-  // ── RENDER ──────────────────────────────────────────────────────────────────
-  const [catalogQ, setCatalogQ] = useState("");
-  const catalogResults = useMemo(()=>{
-    if(catalogSearch===null) return [];
-    const q=(catalogQ||"").toLowerCase().trim();
-    if(!q) return state.parts.slice(0,12);
-    return state.parts.filter(p=>
-      p.nombre.toLowerCase().includes(q)||
-      (p.oem||"").toLowerCase().includes(q)||
-      (p.aftermarket||"").toLowerCase().includes(q)||
-      (p.aplicacion||"").toLowerCase().includes(q)
-    ).slice(0,12);
-  },[catalogQ,catalogSearch,state.parts]);
-
-  const selectFromCatalog = useCallback((p)=>{
-    const idx = catalogSearch;
-    updateLinea(idx,{
-      titulo:   p.nombre,
-      partRef:  p.oem||p.aftermarket||"",
-      costoUnit: p.ultimoPrecio||0,
-      manualPrice: String(p.ultimoPrecio||0),
-    });
-    setCatalogSearch(null);
-    setCatalogQ("");
-  },[catalogSearch,updateLinea]);
-
-  return (
-    <div style={{padding:"10px 13px",maxWidth:1200,margin:"0 auto"}}>
-      {pdfPending&&<PDFConfirm {...pdfPending} onClose={()=>setPdfPending(null)}/>}
-
-      {/* Modal busqueda en catalogo */}
-      {catalogSearch!==null&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}
-          onClick={()=>{setCatalogSearch(null);setCatalogQ("");}}>
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.borderHi}`,borderRadius:5,width:"90%",maxWidth:520,overflow:"hidden"}}
-            onClick={e=>e.stopPropagation()}>
-            <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderBottom:`1px solid ${C.border}`,background:C.bg2}}>
-              <span style={{fontSize:9,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>CATALOGO — LINEA {String(catalogSearch+1).padStart(2,"0")}</span>
-              <input autoFocus value={catalogQ} onChange={e=>setCatalogQ(e.target.value)}
-                placeholder="Buscar por nombre, OEM, aplicacion..."
-                style={{flex:1,background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 8px",color:C.t1,fontSize:10,outline:"none",fontFamily:"'Courier New',monospace"}}/>
-              <button onClick={()=>{setCatalogSearch(null);setCatalogQ("");}}
-                style={{padding:"3px 8px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t3,fontSize:10,cursor:"pointer"}}>x</button>
-            </div>
-            {state.parts.length===0&&(
-              <div style={{padding:"20px",textAlign:"center",color:C.t3,fontSize:9}}>Sin partes en el catalogo. Registra partes en el modulo Catalogo.</div>
-            )}
-            {catalogResults.map((p,i)=>(
-              <div key={p.id} onClick={()=>selectFromCatalog(p)}
-                style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 12px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",background:i%2===0?C.bg1:C.bg0}}>
-                <div style={{minWidth:0,flex:1,marginRight:10}}>
-                  <div style={{fontSize:10,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
-                  <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace"}}>
-                    {p.oem&&<span style={{color:C.cyan}}>{p.oem}</span>}
-                    {p.oem&&p.aplicacion&&" · "}
-                    {p.aplicacion&&<span>{p.aplicacion}</span>}
-                  </div>
-                </div>
-                <div style={{textAlign:"right",flexShrink:0}}>
-                  {p.ultimoPrecio>0&&<div style={{fontSize:10,fontWeight:700,color:C.yellow,fontFamily:"'Courier New',monospace"}}>{mxn(p.ultimoPrecio)}</div>}
-                  <div style={{fontSize:7,color:C.t3}}>{p.ultimaPrecio||p.ultimaFecha||""}</div>
-                </div>
-              </div>
-            ))}
-            {catalogResults.length===0&&catalogQ&&(
-              <div style={{padding:"16px",textAlign:"center",color:C.t3,fontSize:9}}>Sin resultados para "{catalogQ}"</div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Prioridad */}
-      <div style={{marginBottom:8}}>
-        <div style={{fontSize:7,color:C.t3,letterSpacing:"0.18em",marginBottom:4}}>PRIORIDAD OPERATIVA</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4}}>
-          {Object.values(PRIORITY).map(p=>{
-            const active=priority===p.id;
-            return (
-              <div key={p.id} onClick={()=>setPriority(p.id)}
-                style={{padding:"7px 10px",borderRadius:3,cursor:"pointer",background:active?p.dim:C.bg2,border:`2px solid ${active?p.dot:C.border}`,display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:8,height:8,borderRadius:"50%",background:active?p.dot:C.t3,flexShrink:0}}/>
-                <div>
-                  <div style={{fontSize:9,fontWeight:700,color:active?p.dot:C.t2,fontFamily:"'Courier New',monospace"}}>{p.id}</div>
-                  <div style={{fontSize:8,color:active?C.t1:C.t3}}>{p.label}</div>
-                </div>
-                {active&&pr.marginBonus>0&&<span style={{marginLeft:"auto",fontSize:7,color:p.dot}}>+{pr.marginBonus}%</span>}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Tipo */}
-      <div style={{marginBottom:8}}>
-        <div style={{fontSize:7,color:C.t3,letterSpacing:"0.18em",marginBottom:4}}>TIPO DE OPERACION</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:4}}>
-          {OP_TYPES.map(op=>{
-            const active=opType===op.id;
-            return (
-              <div key={op.id} onClick={()=>setOpType(op.id)}
-                style={{padding:"5px 7px",borderRadius:3,cursor:"pointer",background:active?C.blueDim:C.bg2,border:`1px solid ${active?C.blueHi:C.border}`}}>
-                <div style={{fontSize:8,fontWeight:700,color:active?C.t1:C.t2,lineHeight:1.2}}>{op.label}</div>
-                <div style={{fontSize:7,color:C.t3,marginTop:1}}>{op.baseMin}--{op.baseMax}%</div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Layout: izquierda descripcion+lineas, derecha margen+resultados */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 340px",gap:10}}>
-
-        {/* LEFT */}
-        <div>
-          {/* Datos del ticket */}
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
-            <SHdr title="DATOS DEL TICKET"/>
-            <div style={{padding:9}}>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
-                <div>
-                  <div style={{fontSize:7,color:C.t3,marginBottom:2}}>FECHA</div>
-                  <input value={fecha} onChange={e=>setFecha(e.target.value)} placeholder="DD/MM/AAAA"
-                    style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 6px",color:C.t1,fontSize:10,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace"}}/>
-                </div>
-                <Sel label="Estado" value={status} onChange={setStatus} options={TICKET_ALL.map(id=>({value:id,label:TICKET_META[id].label}))}/>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginTop:4}}>
-                <Sel label="Cliente"   value={clientId}   onChange={setClientId}   options={[{value:"",label:"-- Sin cliente --"},...clients.map(c=>({value:c.id,label:c.empresa}))]}/>
-              </div>
-              <UnitPicker units={units} value={unitId} onChange={setUnitId}/>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginTop:0}}>
-                <Sel label="Proveedor" value={supplierId} onChange={setSupplierId} options={[{value:"",label:"-- Sin proveedor --"},...suppliers.map(s=>({value:s.id,label:s.nombre}))]}/>
-                <Sel label="Pago"      value={payType}    onChange={setPayType}    options={[{value:"contado",label:"Contado"},{value:"credit",label:"Credito"}]}/>
-              </div>
-              {payType==="credit"&&(
-                <div style={{marginBottom:0,marginTop:0}}>
-                  <div style={{fontSize:7,color:C.t3,marginBottom:2}}>PROMESA DE PAGO</div>
-                  <input value={promesa} onChange={e=>setPromesa(e.target.value)} placeholder="DD/MM/AAAA"
-                    style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 6px",color:C.yellow,fontSize:10,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace"}}/>
-                </div>
-              )}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginTop:4}}>
-                <Sel label="Prob. cierre" value={prob} onChange={setProb} options={PROB.map(p=>({value:p.id,label:p.label+" ("+p.pct+"%)"}))}/>
-                <div>
-                  <div style={{fontSize:7,color:C.t3,marginBottom:2}}>HORAS OP.</div>
-                  <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,overflow:"hidden"}}>
-                    <input type="text" inputMode="decimal" min={0} step={0.5} value={horasOp} onChange={e=>setHorasOp(e.target.value)}
-                      onBlur={()=>setHorasOp(v=>String(safeNumber(v)))}
-                      style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:11,padding:"5px 0 5px 7px",fontFamily:"'Courier New',monospace"}}/>
-                    <span style={{padding:"0 6px",color:C.t3,fontSize:10}}>h</span>
-                  </div>
-                </div>
-              </div>
-              <div style={{marginTop:5}}>
-                <div style={{fontSize:7,color:C.t3,marginBottom:2}}>NOTAS / DIAGNOSTICO</div>
-                <textarea rows={2} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Observaciones, diagnostico, evidencia..."
-                  style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 7px",color:C.t2,fontSize:9,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
-              </div>
-            </div>
-          </div>
-
-          {/* Lineas de cotizacion */}
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
-            <SHdr title={"LINEAS DE COTIZACION ("+lineas.length+")"} right={
-              <button onClick={addLinea} style={{fontSize:8,background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,padding:"2px 8px",cursor:"pointer",fontWeight:600}}>
-                + Agregar linea
-              </button>
-            }/>
-            <div style={{padding:9}}>
-              {lineas.map((l,i)=>{
-                const mg    = l.customMgn?Math.min(l.customVal,opMeta.cap):sharedMargin;
-                const lsnap = lineSnaps[i]||{precioConIVA:0,uNeta:0,margenNetoPrecio:0,ivaNeto:0};
-                const lmc   = margenColor(lsnap.margenNetoPrecio);
-                return (
-                  <div key={l.key} style={{background:C.bg0,border:`1px solid ${C.borderHi}`,borderRadius:3,marginBottom:i<lineas.length-1?7:0,overflow:"hidden"}}>
-                    {/* Header linea */}
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 9px",background:C.bg3,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderBottom:`1px solid ${C.border}`}}>
-                      <span style={{fontSize:8,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>LINEA {String(i+1).padStart(2,"0")}</span>
-                      <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                        <span style={{fontSize:10,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(lsnap.precioConIVA)}</span>
-                        <span style={{fontSize:8,color:lmc,fontFamily:"'Courier New',monospace"}}>{fpct(lsnap.margenNetoPrecio)}</span>
-                        {lineas.length>1&&<button onClick={()=>removeLinea(i)} style={{padding:"1px 6px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:2,color:C.red,fontSize:8,cursor:"pointer",fontWeight:700}}>x</button>}
-                      </div>
-                    </div>
-                    <div style={{padding:"8px 9px"}}>
-                      {/* Descripcion, parte y boton catalogo */}
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 110px auto",gap:5,marginBottom:6}}>
-                        <div>
-                          <div style={{fontSize:7,color:C.t3,marginBottom:2}}>DESCRIPCION</div>
-                          <input value={l.titulo} onChange={e=>updateLinea(i,{titulo:e.target.value})}
-                            placeholder={"Pieza o servicio "+(i+1)}
-                            style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.t1,fontSize:10,outline:"none",fontFamily:"inherit"}}/>
-                        </div>
-                        <div>
-                          <div style={{fontSize:7,color:C.t3,marginBottom:2}}>NUM. PARTE</div>
-                          <input value={l.partRef} onChange={e=>updateLinea(i,{partRef:e.target.value})} placeholder="OEM / ref."
-                            style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.t2,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace"}}/>
-                        </div>
-                        <div style={{display:"flex",alignItems:"flex-end"}}>
-                          <button onClick={()=>setCatalogSearch(i)}
-                            style={{padding:"4px 8px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,fontSize:8,cursor:"pointer",fontWeight:600,whiteSpace:"nowrap"}}>
-                            + Catalogo
-                          </button>
-                        </div>
-                      </div>
-                      {/* Cantidad + Costo unitario + Gasolina + Otros */}
-                      <div style={{display:"grid",gridTemplateColumns:"80px 1fr 1fr 1fr",gap:5,marginBottom:6}}>
-                        <div>
-                          <div style={{fontSize:7,color:C.t3,marginBottom:2}}>CANT.</div>
-                          <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
-                            <input type="text" inputMode="numeric"
-                              value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)}
-                              onChange={e=>updateLinea(i,{_qtyRaw:e.target.value})}
-                              onBlur={()=>setLineas(p=>p.map((line,idx)=>{if(idx!==i)return line;const n=parseInt(line._qtyRaw);return {...line,qty:isFinite(n)&&n>=1?n:1,_qtyRaw:undefined};}))}
-                              style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:12,fontWeight:700,padding:"5px 0 5px 7px",fontFamily:"'Courier New',monospace"}}/>
-                            <span style={{padding:"0 5px",color:C.t3,fontSize:9}}>pz</span>
-                          </div>
-                        </div>
-                        {[["COSTO UNIT. (c/IVA)","costoUnit"],["GASOLINA","gasolina"],["OTROS","otros"]].map(([lbl,k])=>(
-                          <div key={k}>
-                            <div style={{fontSize:7,color:C.t3,marginBottom:2}}>{lbl}</div>
-                            <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,overflow:"hidden"}}>
-                              <span style={{padding:"0 5px",color:C.t3,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
-                              <input type="text" inputMode="decimal"
-                                value={l[`_${k}Raw`]!==undefined?l[`_${k}Raw`]:String(l[k]||0)}
-                                onChange={e=>updateLinea(i,{[`_${k}Raw`]:e.target.value})}
-                                onBlur={()=>setLineas(p=>p.map((line,idx)=>idx!==i?line:{...line,[k]:safeNumber(line[`_${k}Raw`]),[`_${k}Raw`]:undefined}))}
-                                style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:10,padding:"5px 0",fontFamily:"'Courier New',monospace"}}/>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      {/* Subtotal de cantidad */}
-                      {(safeNumber(l.qty,1))>1&&(
-                        <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:6}}>
-                          {l.qty} × {mxn(safeNumber(l.costoUnit))} = <span style={{color:C.cyan,fontWeight:700}}>{mxn(safeNumber(l.costoUnit)*safeNumber(l.qty,1))}</span> costo total
-                        </div>
-                      )}
-                      {/* Modo precio */}
-                      <div style={{display:"flex",gap:7,alignItems:"center"}}>
-                        <div style={{display:"flex",borderRadius:3,overflow:"hidden",border:`1px solid ${C.border}`,flexShrink:0}}>
-                          {[["auto","Auto"],["manual","Manual"]].map(([id,lbl])=>(
-                            <button key={id} onClick={()=>updateLinea(i,{mode:id})}
-                              style={{padding:"3px 8px",border:"none",cursor:"pointer",fontSize:8,fontWeight:600,background:l.mode===id?C.blue:C.bg2,color:l.mode===id?C.t1:C.t2}}>
-                              {lbl}
-                            </button>
-                          ))}
-                        </div>
-                        {l.mode==="auto"?(
-                          <div style={{display:"flex",alignItems:"center",gap:5,flex:1}}>
-                            <span style={{fontSize:7,color:C.t3,flexShrink:0}}>Margen:</span>
-                            {l.customMgn?(
-                              <input type="number" min={0} step={0.5} value={l._customValRaw!==undefined?l._customValRaw:String(l.customVal||27)}
-                              onChange={e=>updateLinea(i,{_customValRaw:e.target.value})}
-                              onBlur={()=>setLineas(p=>p.map((line,idx)=>idx!==i?line:{...line,customVal:safeNumber(line._customValRaw,27),_customValRaw:undefined}))}
-                                style={{width:55,background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,padding:"3px 5px",color:C.cyan,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace",textAlign:"right"}}/>
-                            ):(
-                              <span style={{fontSize:11,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{fpct(mg)}</span>
-                            )}
-                            <button onClick={()=>updateLinea(i,{customMgn:!l.customMgn})}
-                              style={{fontSize:7,padding:"2px 5px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:2,color:C.t3,cursor:"pointer"}}>
-                              {l.customMgn?"auto":"editar"}
-                            </button>
-                          </div>
-                        ):(
-                          <div style={{display:"flex",alignItems:"center",gap:5,flex:1}}>
-                            <span style={{fontSize:7,color:C.t3,flexShrink:0}}>Precio c/IVA:</span>
-                            <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden",flex:1}}>
-                              <span style={{padding:"0 4px",color:C.cyan,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
-                              <input type="number" min={0} step={0.01} value={l.manualPrice} onChange={e=>updateLinea(i,{manualPrice:e.target.value})}
-                                style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:11,fontWeight:700,padding:"4px 0",fontFamily:"'Courier New',monospace"}}/>
-                            </div>
-                            <span style={{fontSize:8,color:lmc,fontFamily:"'Courier New',monospace",flexShrink:0}}>{fpct(lsnap.margenNetoPrecio)}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* IVA e ISR globales */}
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
-            <SHdr title="PARAMETROS FISCALES"/>
-            <div style={{padding:9}}>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:6}}>
-                <div>
-                  <div style={{fontSize:7,color:C.t3,marginBottom:2}}>IVA (%)</div>
-                  <input type="number" min={0} step={0.1} value={iva} onChange={e=>setIva(e.target.value)}
-                    onBlur={()=>setIva(v=>String(safeNumber(v,16)))}
-                    style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 7px",color:C.t1,fontSize:11,outline:"none",fontFamily:"'Courier New',monospace"}}/>
-                </div>
-                <div>
-                  <div style={{fontSize:7,color:C.t3,marginBottom:2}}>ISR (%)</div>
-                  <input type="number" min={0} step={0.1} value={isr} onChange={e=>setIsr(e.target.value)}
-                    onBlur={()=>setIsr(v=>String(safeNumber(v,20)))}
-                    style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 7px",color:C.t1,fontSize:11,outline:"none",fontFamily:"'Courier New',monospace"}}/>
-                </div>
-              </div>
-              <Toggle label="Compra incluye IVA?" value={cIVA} onChange={setCIVA}/>
-              <Toggle label="Venta incluye IVA?"  value={vIVA} onChange={setVIVA}/>
-            </div>
-          </div>
-
-          <button onClick={save} disabled={isSaving}
-            style={{width:"100%",padding:"9px",background:isSaving?C.bg2:C.blue,border:"none",borderRadius:4,color:isSaving?C.t3:C.t1,fontSize:11,fontWeight:700,cursor:isSaving?"not-allowed":"pointer",letterSpacing:"0.08em",opacity:isSaving?0.6:1}}>
-            {isSaving?"Registrando…":"+ Registrar ticket operativo"}
-          </button>
-        </div>
-
-        {/* RIGHT — margen + resultados */}
-        <div>
-          {/* Margen efectivo */}
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:6,overflow:"hidden"}}>
-            <SHdr title="MARGEN EFECTIVO" right={
-              <div style={{display:"flex",alignItems:"center",gap:4}}>
-                <span style={{fontSize:7,color:C.t3}}>Manual</span>
-                <div onClick={()=>setCustomMgn(!customMgn)} style={{width:26,height:14,borderRadius:7,cursor:"pointer",position:"relative",background:customMgn?C.blue:C.bg4,border:`1px solid ${customMgn?C.blueHi:C.border}`}}>
-                  <div style={{position:"absolute",top:2,left:customMgn?11:2,width:8,height:8,borderRadius:"50%",background:customMgn?C.t1:C.t3,transition:"left .15s"}}/>
-                </div>
-              </div>
-            }/>
-            <div style={{padding:9}}>
-              <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:4}}>
-                <div style={{fontSize:22,fontWeight:800,fontFamily:"'Courier New',monospace",color:capped?C.yellow:C.cyan,lineHeight:1}}>
-                  {fpct(sharedMargin)}
-                </div>
-                <div style={{fontSize:8,color:C.t3}}>base + prioridad + mods</div>
-              </div>
-              <div style={{display:"flex",gap:8,fontSize:7,color:C.t3,marginBottom:6}}>
-                <span>Rango: {opMeta.baseMin}--{opMeta.baseMax}%</span>
-                <span>Cap: {opMeta.cap}%</span>
-                {pr.marginBonus>0&&<span style={{color:pr.dot}}>+{pr.marginBonus}% P{priority.slice(1)}</span>}
-              </div>
-              {capped&&<div style={{fontSize:7,color:C.yellow,fontFamily:"'Courier New',monospace",marginBottom:6}}>CAP APLICADO</div>}
-              {/* Modificadores */}
-              <div style={{fontSize:7,color:C.t3,marginBottom:4}}>MODIFICADORES</div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:3,marginBottom:6}}>
-                {MODIFIERS.map(mod=>{
-                  const active=activeMods.includes(mod.id);
-                  return (
-                    <div key={mod.id} onClick={()=>toggleMod(mod.id)}
-                      style={{padding:"4px 6px",borderRadius:3,cursor:"pointer",background:active?C.blueDim:C.bg3,border:`1px solid ${active?C.blueHi:C.border}`,display:"flex",alignItems:"center",gap:4}}>
-                      <div style={{width:4,height:4,borderRadius:"50%",background:active?C.cyan:C.t3,flexShrink:0}}/>
-                      <div>
-                        <div style={{fontSize:8,fontWeight:600,color:active?C.t1:C.t2,lineHeight:1.2}}>{mod.label}</div>
-                        <div style={{fontSize:7,color:active?C.cyanDim:C.t3}}>+{mod.pct}%</div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              {customMgn&&(
-                <div>
-                  <div style={{fontSize:7,color:C.t3,marginBottom:2}}>MARGEN PERSONALIZADO</div>
-                  <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
-                    <input type="number" min={0} step={0.5} value={customVal} onChange={e=>setCustomVal(e.target.value)}
-                    onBlur={()=>setCustomVal(v=>safeNumber(v,27))}
-                      style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:12,fontWeight:700,padding:"5px 7px",fontFamily:"'Courier New',monospace"}}/>
-                    <span style={{padding:"0 7px",color:C.t3,fontSize:10}}>%</span>
-                  </div>
-                  <div style={{fontSize:7,color:C.t3,marginTop:2}}>Modificadores ignorados en lineas sin margen propio</div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* KPIs totales */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:5}}>
-            <KPI label="Precio total c/IVA" value={mxn(totalSnap.precioConIVA)} color={C.cyan} accent sub={lineas.length>1?lineas.length+" lineas":""}/>
-            <KPI label="Util. neta total"   value={mxn(totalSnap.uNeta)} color={totalSnap.uNeta>=0?C.green:C.red} sub={fpct(aggMargen)+" del precio"}/>
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:5,marginBottom:5}}>
-            <KPI label="Costo total"  value={mxn(totalSnap.costoTotal)}/>
-            <KPI label="Util. pond."  value={mxn(uEsp)} color={C.yellow} sub={PROB.find(p=>p.id===prob)?.label}/>
-            <KPI label="Util/hora"    value={uPH?mxn(uPH):"---"} color={C.cyan} sub={horasOp>0?horasOp+"h":""}/>
-          </div>
-
-          {/* IVA */}
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:5,overflow:"hidden"}}>
-            <SHdr title="FISCAL — IVA CONSOLIDADO"/>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr"}}>
-              {[["IVA Acreditable","Recuperas",mxn(totalSnap.ivaAcred),C.blueHi],["IVA Trasladado","Cobras",mxn(totalSnap.ivaTraslad),C.cyan],["IVA Neto SAT","Pagas al SAT",mxn(totalSnap.ivaNeto),totalSnap.ivaNeto>=0?C.yellow:C.green]].map(([lbl,sub,val,col],i)=>(
-                <div key={i} style={{padding:"7px 8px",borderRight:i<2?`1px solid ${C.border}`:"none"}}>
-                  <div style={{fontSize:7,color:C.t3,marginBottom:2}}>{lbl}</div>
-                  <div style={{fontSize:11,fontWeight:800,color:col,fontFamily:"'Courier New',monospace"}}>{val}</div>
-                  <div style={{fontSize:7,color:C.t3,marginTop:1}}>{sub}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Desglose por linea cuando hay mas de una */}
-          {lineas.length>1&&(
-            <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:5}}>
-              <SHdr title="DESGLOSE POR LINEA"/>
-              {lineas.map((l,i)=>{
-                const lsnap=lineSnaps[i]||{precioConIVA:0,uNeta:0,margenNetoPrecio:0};
-                return (
-                  <div key={l.key} style={{display:"flex",justifyContent:"space-between",padding:"5px 9px",borderBottom:i<lineas.length-1?`1px solid ${C.border}`:"none",background:i%2===0?C.bg1:C.bg0}}>
-                    <div style={{minWidth:0,flex:1,marginRight:8}}>
-                      <div style={{fontSize:9,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.titulo||"Linea "+(i+1)}</div>
-                      {l.partRef&&<div style={{fontSize:7,color:C.t3,fontFamily:"'Courier New',monospace"}}>{l.partRef}</div>}
-                    </div>
-                    <div style={{textAlign:"right",flexShrink:0}}>
-                      <div style={{fontSize:10,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(lsnap.precioConIVA)}</div>
-                      <div style={{fontSize:8,color:lsnap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(lsnap.uNeta)}</div>
-                    </div>
-                  </div>
-                );
-              })}
-              <div style={{display:"flex",justifyContent:"space-between",padding:"6px 9px",background:C.blueDim,borderTop:`1px solid ${C.blueHi}`}}>
-                <span style={{fontSize:9,fontWeight:700,color:C.t1}}>TOTAL</span>
-                <div style={{textAlign:"right"}}>
-                  <div style={{fontSize:11,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(totalSnap.precioConIVA)}</div>
-                  <div style={{fontSize:9,fontWeight:700,color:totalSnap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(totalSnap.uNeta)}</div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Barra margen */}
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:8}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-              <span style={{fontSize:8,color:C.t2}}>Margen neto promedio s/precio</span>
-              <span style={{fontSize:9,fontWeight:700,color:mColor,fontFamily:"'Courier New',monospace"}}>{fpct(aggMargen)}</span>
-            </div>
-            <div style={{height:4,background:C.bg4,borderRadius:2,overflow:"hidden"}}>
-              <div style={{height:"100%",width:`${clamp(aggMargen,0,100)}%`,background:mColor,transition:"width .3s"}}/>
-            </div>
-            <div style={{display:"flex",justifyContent:"space-between",marginTop:3,fontSize:7,color:C.t3}}>
-              <span>Bajo &lt;10%</span><span>Aceptable 10-20%</span><span>Optimo &gt;20%</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── COTIZADOR REFACCIONES ─────────────────────────────────────────────────────
-let _cotSeq = 1;
-function mkCotId(dateStr) {
-  const p=(dateStr||"").replace(/\//g,"-").split("-");
-  let y,m,d;
-  if(p.length===3){p[0].length===4?([y,m,d]=p):([d,m,y]=p);}
-  else{const n=new Date();y=n.getFullYear();m=String(n.getMonth()+1).padStart(2,"0");d=String(n.getDate()).padStart(2,"0");}
-  return `COT-${y}${String(m).padStart(2,"0")}${String(d).padStart(2,"0")}-${String(_cotSeq++).padStart(3,"0")}`;
-}
-
-const emptyRefLine = () => ({
-  key:         genId("REF"),
-  descripcion: "",
-  oem:         "",
-  aftermarket: "",
-  qty:         1,
-  costoUnit:   0,
-  modo:        "auto",
-  margen:      30,
-  precioManual:"0",
-  notas:       "",
-});
-
-function CotizadorRefacciones({state,dispatch,toast}) {
-  const C = React.useContext(ThemeCtx);
-  const {clients,units,suppliers,parts} = state;
-
-  const [fecha,      setFecha]      = useState(todayMX());
-  const [clientId,   setClientId]   = useState("");
-  const [unitId,     setUnitId]     = useState("");
-  const [supplierId, setSupplierId] = useState("");
-  const [vigencia,   setVigencia]   = useState(3);
-  const [payType,    setPayType]    = useState("contado");
-  const [promesa,    setPromesa]    = useState("");
-  const [notes,      setNotes]      = useState("");
-  const [iva,        setIva]        = useState(16);
-  const [cIVA,       setCIVA]       = useState(true);
-  const [vIVA,       setVIVA]       = useState(true);
-  const [globalMargen, setGlobalMargen] = useState(30);
-  const [useGlobal,    setUseGlobal]    = useState(true);
-  const [lineas,       setLineas]       = useState([emptyRefLine()]);
-  const [catalogSearch,setCatalogSearch]= useState(null);
-  const [catalogQ,     setCatalogQ]     = useState("");
-  const [isSaving,     setIsSaving]     = useState(false);
-
-  const lineSnaps = useMemo(()=>lineas.map(l=>{
-    const mg    = useGlobal ? globalMargen : (l._mgnRaw!==undefined ? safeNumber(l._mgnRaw,30) : l.margen);
-    const qty   = l._qtyRaw!==undefined ? (parseInt(l._qtyRaw)||1) : (safeNumber(l.qty,1)||1);
-    const costoU= l._costoRaw!==undefined ? safeNumber(l._costoRaw) : safeNumber(l.costoUnit);
-    const costo = costoU*qty;
-    return computeSnap({costo,gasolina:0,otros:0,iva,isr:0,compraConIVA:cIVA,ventaConIVA:vIVA,mode:l.modo,margin:mg,manualPrice:l.precioManual||"0"});
-  }),[lineas,globalMargen,useGlobal,iva,cIVA,vIVA]);
-
-  const totalSnap = useMemo(()=>{
-    const sum=k=>lineSnaps.reduce((s,sn)=>s+safeNumber(sn[k]),0);
-    const precioSinIVA=sum("precioSinIVA"), uNeta=sum("uNeta");
-    return {
-      precioConIVA:sum("precioConIVA"), precioSinIVA,
-      costoTotal:sum("costoTotal"), uNeta, uBruta:sum("uBruta"),
-      ivaTraslad:sum("ivaTraslad"), ivaAcred:sum("ivaAcred"), ivaNeto:sum("ivaNeto"),
-      margenNetoPrecio: precioSinIVA>0?(uNeta/precioSinIVA)*100:0,
-    };
-  },[lineSnaps]);
-
-  const aggMargen = totalSnap.margenNetoPrecio;
-  const mColor    = margenColor(aggMargen);
-
-  const updateLinea = useCallback((idx,patch)=>setLineas(p=>p.map((l,i)=>i===idx?{...l,...patch}:l)),[]);
-  const removeLinea = useCallback(idx=>setLineas(p=>p.filter((_,i)=>i!==idx)),[]);
-  const addLinea    = useCallback(()=>setLineas(p=>[...p,emptyRefLine()]),[]);
-
-  const catalogResults = useMemo(()=>{
-    if(catalogSearch===null) return [];
-    const q=(catalogQ||"").toLowerCase().trim();
-    if(!q) return parts.slice(0,12);
-    return parts.filter(p=>
-      p.nombre.toLowerCase().includes(q)||
-      (p.oem||"").toLowerCase().includes(q)||
-      (p.aftermarket||"").toLowerCase().includes(q)||
-      (p.aplicacion||"").toLowerCase().includes(q)
-    ).slice(0,12);
-  },[catalogQ,catalogSearch,parts]);
-
-  const selectFromCatalog = useCallback(p=>{
-    const idx=catalogSearch;
-    updateLinea(idx,{descripcion:p.nombre,oem:p.oem||"",aftermarket:p.aftermarket||"",costoUnit:p.ultimoPrecio||0,precioManual:String(p.ultimoPrecio||0)});
-    setCatalogSearch(null); setCatalogQ("");
-  },[catalogSearch,updateLinea]);
-
-  const generarPDF = useCallback(()=>{
-    const cl   = clients.find(c=>c.id===clientId);
-    const un   = units.find(u=>u.id===unitId);
-    const supp = suppliers.find(s=>s.id===supplierId);
-    const folio = mkCotId(fecha);
-
-    const fechaLarga=(()=>{
-      const p=fecha.split("/");
-      if(p.length!==3) return fecha;
-      const meses=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-      return `${parseInt(p[0])} de ${meses[parseInt(p[1])-1]} de ${p[2]}`;
-    })();
-
-    const unidadStr=un?`${un.economico?"Eco. "+un.economico+" · ":""}${un.marca} ${un.modelo} ${un.anio}${un.placa?" · Placa: "+un.placa:""}${un.vin?" · VIN: "+un.vin:""}` : "";
-    const clLine=cl?cl.empresa+(cl.ciudad?` · ${cl.ciudad}${cl.estado?", "+cl.estado:""}` :""):"—";
-    const formaPago=payType==="credit"?`Crédito`+(promesa?` — Fecha límite: ${promesa}`:""):"Contado / Transferencia bancaria";
-    const entrega=supp?.entregaDias?`${supp.entregaDias} día${supp.entregaDias>1?"s":""} hábiles`:"24-48 hrs hábiles";
-    const fmtMXN=n=>safeNumber(n).toLocaleString("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2});
-    const vigenciaStr=`${vigencia} día${vigencia!==1?"s":""} naturales`;
-    const notaLine=notes?`<li>${notes}</li>`:"";
-    const unidadRow=unidadStr?`<tr><td>Unidad</td><td>${unidadStr}</td></tr>`:"";
-
-    const filas=lineas.map((l,i)=>{
-      const lsnap=lineSnaps[i]||{};
-      const qty=safeNumber(l.qty,1)||1;
-      const unitPrice=qty>0?safeNumber(lsnap.precioConIVA)/qty:0;
-      const refs=[l.oem&&`OEM: ${l.oem}`,l.aftermarket&&`Alt: ${l.aftermarket}`].filter(Boolean).join(" · ");
-      return `<tr>
-        <td>${String(i+1).padStart(2,"0")}</td>
-        <td><strong>${l.descripcion||"Sin descripción"}</strong>${refs?`<br><span style="font-size:10px;color:#666">${refs}</span>`:""}</td>
-        <td class="money">${qty}</td>
-        <td class="money">${fmtMXN(unitPrice)}</td>
-        <td class="money">${fmtMXN(lsnap.precioConIVA)}</td>
-      </tr>`;
-    }).join("");
-
-    const innerHTML=`
-      <style>
-        *{box-sizing:border-box;margin:0;padding:0}
-        .page{width:794px;background:#fff;padding:50px;font-family:Arial,Helvetica,sans-serif;color:#111;font-size:14px;line-height:1.5}
-        .top-header{border:1px solid #dcdcdc;padding:20px;display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0}
-        .brand h1{font-size:28px;font-weight:800;margin:0}
-        .brand p{font-size:10px;color:#666;font-weight:700;margin-top:4px}
-        .issuer{text-align:right;font-size:11px;line-height:1.6}
-        .hero{background:#000;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:20px;margin-top:14px}
-        .hero-title{font-size:20px;font-weight:800}
-        .hero-meta{text-align:right}
-        .hero-meta .folio{font-size:18px;font-weight:800}
-        .hero-meta .date{font-size:13px;font-weight:700}
-        .meta-table{width:100%;border-collapse:collapse;margin-top:14px}
-        .meta-table td{border:1px solid #e3e3e3;padding:10px 12px;font-size:11px}
-        .meta-table td:first-child{width:120px;background:#fafafa;font-weight:700}
-        .section-title{margin-top:22px;margin-bottom:10px;font-size:13px;font-weight:800}
-        .detail-table{width:100%;border-collapse:collapse}
-        .detail-table th{background:#000;color:#fff;padding:10px 12px;text-align:left;font-size:10px}
-        .detail-table td{border:1px solid #e5e5e5;padding:10px 12px;vertical-align:top;font-size:11px;line-height:1.5}
-        .money{text-align:right;white-space:nowrap;font-weight:700}
-        .totals{width:320px;margin-left:auto;margin-top:16px;border-collapse:collapse}
-        .totals td{border:1px solid #e3e3e3;padding:10px 12px;font-size:11px}
-        .totals td:last-child{text-align:right;font-weight:700}
-        .grand-total td{background:#000;color:#fff;font-weight:800}
-        .block{margin-top:22px}
-        .block h3{font-size:13px;font-weight:800;margin-bottom:8px}
-        .block ul{padding-left:16px}
-        .block li{margin-bottom:5px;font-size:11px;line-height:1.6}
-        .footer{margin-top:28px;border-top:1px solid #e5e5e5;padding-top:10px;display:flex;justify-content:space-between;font-size:10px;color:#444}
-      </style>
-      <div class="page">
-        <div class="top-header">
-          <div class="brand"><h1>LOGISOLVE</h1><p>Logistics &middot; Supply &middot; Solutions</p></div>
-          <div class="issuer"><strong>Alejandro Saucedo</strong><br>RFC: SAME9612277T9<br>Tel. 5562321807<br>contacto@logisolve.mx</div>
-        </div>
-        <div class="hero">
-          <div class="hero-title">COTIZACIÓN DE REFACCIONES</div>
-          <div class="hero-meta"><div>No.</div><div class="folio">${folio}</div><div class="date">Fecha: ${fecha.replace(/\//g," / ")}</div></div>
-        </div>
-        <table class="meta-table">
-          <tr><td>Cliente</td><td>${clLine}</td></tr>
-          ${unidadRow}
-          <tr><td>Vigencia</td><td>${vigenciaStr}</td></tr>
-          <tr><td>Forma de pago</td><td>${formaPago}</td></tr>
-          <tr><td>Atención</td><td>Área de Compras / Operaciones</td></tr>
-        </table>
-        <div class="section-title">REFACCIONES COTIZADAS</div>
-        <table class="detail-table">
-          <thead><tr>
-            <th style="width:36px">No.</th>
-            <th>Descripción / Número de parte</th>
-            <th style="width:55px;text-align:right">Cant.</th>
-            <th style="width:120px;text-align:right">P. Unit. c/IVA</th>
-            <th style="width:130px;text-align:right">Importe c/IVA</th>
-          </tr></thead>
-          <tbody>${filas}</tbody>
-        </table>
-        <table class="totals">
-          <tr><td>Subtotal (sin IVA)</td><td>${fmtMXN(totalSnap.precioSinIVA)} MXN</td></tr>
-          <tr><td>IVA (${iva}%)</td><td>${fmtMXN(totalSnap.ivaTraslad)} MXN</td></tr>
-          <tr class="grand-total"><td>TOTAL &middot; IVA INCLUIDO</td><td>${fmtMXN(totalSnap.precioConIVA)} MXN</td></tr>
-        </table>
-        <div class="block">
-          <h3>CONDICIONES COMERCIALES</h3>
-          <ul>
-            <li>Precios incluyen IVA en el total general.</li>
-            <li>Forma de pago: ${formaPago}.</li>
-            <li>Entrega estimada: ${entrega} después de confirmación de pedido.</li>
-            <li>Precios sujetos a disponibilidad al momento de autorización.</li>
-            <li>Vigencia: ${vigenciaStr} a partir de la fecha de emisión.</li>
-            ${notaLine}
-          </ul>
-        </div>
-        <div class="block">
-          <h3>OBSERVACIONES</h3>
-          <ul>
-            <li>La compatibilidad final de las refacciones debe ser validada por el técnico responsable.</li>
-            <li>La garantía aplica conforme a políticas del fabricante o proveedor.</li>
-            <li>Números de parte OEM/aftermarket indicados para referencia — confirmar aplicación antes de instalar.</li>
-          </ul>
-        </div>
-        <div class="footer">
-          <div>Quedo atento para cualquier duda o confirmación.</div>
-          <div>LogiSolve &middot; ${fechaLarga}</div>
-        </div>
-      </div>`;
-
-    const container=document.createElement("div");
-    container.style.cssText="position:absolute;top:0;left:0;width:794px;background:white;opacity:1;pointer-events:none;";
-    container.innerHTML=innerHTML;
-    document.body.appendChild(container);
-
-    const generate=()=>{
-      // eslint-disable-next-line no-undef
-      html2pdf().set({margin:0,filename:`${folio}.pdf`,image:{type:"jpeg",quality:0.98},
-        html2canvas:{scale:2,useCORS:true,backgroundColor:"#ffffff",logging:false,scrollX:0,scrollY:0},
-        jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},
-      }).from(container.querySelector('.page')||container.firstElementChild).save().finally(()=>{container.remove();});
-    };
-    const go=()=>requestAnimationFrame(()=>requestAnimationFrame(generate));
-    if(typeof html2pdf!=="undefined"){go();}
-    else{
-      const script=document.createElement("script");
-      script.src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-      script.onload=go;
-      script.onerror=()=>{container.remove();toast("Error cargando generador PDF","error");};
-      document.head.appendChild(script);
-    }
-  },[lineas,lineSnaps,totalSnap,fecha,clientId,unitId,supplierId,vigencia,payType,promesa,notes,iva,clients,units,suppliers,toast]);
-
-  const convertirATicket = useCallback(()=>{
-    if(isSaving) return;
-    const titulo=lineas.map(l=>l.descripcion.trim()||"Sin descripción").join(" / ");
-    if(!titulo||titulo==="Sin descripción"){toast("Agrega al menos una refacción","error");return;}
-    setIsSaving(true);
-    const lineasConSnap=lineas.map((l,i)=>({
-      titulo:l.descripcion||"Sin descripción", partRef:l.oem||l.aftermarket||"",
-      qty:safeNumber(l.qty,1)||1, costoUnit:safeNumber(l.costoUnit),
-      gasolina:0, otros:0, mode:l.modo, manualPrice:l.precioManual||"0",
-      descripcionPDF:l.notas||"", snap:lineSnaps[i],
-    }));
-    const snapAgregado={
-      ...totalSnap,
-      markupSobre:totalSnap.costoTotal>0?((totalSnap.precioSinIVA-totalSnap.costoTotal)/totalSnap.costoTotal)*100:0,
-      margenNetoPrecio:aggMargen, params:{iva,isr:0},
-    };
-    const tkt={
-      id:mkTicketId(fecha), titulo, opId:"general", opShort:"REF-G", priority:"P3",
-      clientId, supplierId, unitId,
-      partRef:lineas.map(l=>l.oem||l.aftermarket).filter(Boolean).join(", "),
-      date:fecha, status:"cotizado", payType,
-      promesaPago:payType==="credit"?promesa:null,
-      cobrado:false, mods:[], prob:"high", horasOp:0, notes,
-      mode:lineas.length>1?"multilinea":"auto",
-      lineas:lineasConSnap, snap:snapAgregado,
-      timeline:[{ts:nowISO(),evento:"Creado desde Cotizador de Refacciones",actor:"Operador"}],
-      history:[mkEvent("created",{titulo,status:"cotizado",priority:"P3"})],
-    };
-    dispatch({type:"TKT_ADD",t:tkt});
-    opLog.push("TKT_CREATED",{id:tkt.id,titulo});
-    toast("Ticket registrado: "+tkt.id,"success");
-    setTimeout(()=>setIsSaving(false),1500);
-  },[isSaving,lineas,lineSnaps,totalSnap,aggMargen,fecha,clientId,supplierId,unitId,payType,promesa,notes,iva,dispatch,toast]);
-
-  const reset=useCallback(()=>{
-    setLineas([emptyRefLine()]); setClientId(""); setUnitId(""); setSupplierId("");
-    setNotes(""); setPayType("contado"); setPromesa(""); setFecha(todayMX());
-  },[]);
-
-  const selectedUnit = units.find(u=>u.id===unitId);
-
-  return (
-    <div style={{padding:"10px 13px",maxWidth:1200,margin:"0 auto"}}>
-
-      {/* Catalog modal */}
-      {catalogSearch!==null&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}
-          onClick={()=>{setCatalogSearch(null);setCatalogQ("");}}>
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.borderHi}`,borderRadius:5,width:"90%",maxWidth:520,overflow:"hidden"}}
-            onClick={e=>e.stopPropagation()}>
-            <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderBottom:`1px solid ${C.border}`,background:C.bg2}}>
-              <span style={{fontSize:9,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>CATÁLOGO — REF {String(catalogSearch+1).padStart(2,"0")}</span>
-              <input autoFocus value={catalogQ} onChange={e=>setCatalogQ(e.target.value)}
-                placeholder="Buscar por nombre, OEM, aplicación..."
-                style={{flex:1,background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 8px",color:C.t1,fontSize:10,outline:"none",fontFamily:"'Courier New',monospace"}}/>
-              <button onClick={()=>{setCatalogSearch(null);setCatalogQ("");}}
-                style={{padding:"3px 8px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t3,fontSize:10,cursor:"pointer"}}>x</button>
-            </div>
-            {parts.length===0&&<div style={{padding:"20px",textAlign:"center",color:C.t3,fontSize:9}}>Sin partes en el catálogo.</div>}
-            {catalogResults.map((p,i)=>(
-              <div key={p.id} onClick={()=>selectFromCatalog(p)}
-                style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 12px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",background:i%2===0?C.bg1:C.bg0}}>
-                <div style={{minWidth:0,flex:1,marginRight:10}}>
-                  <div style={{fontSize:10,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
-                  <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace"}}>
-                    {p.oem&&<span style={{color:C.cyan}}>{p.oem}</span>}
-                    {p.oem&&p.aplicacion&&" · "}
-                    {p.aplicacion&&<span>{p.aplicacion}</span>}
-                  </div>
-                </div>
-                <div style={{textAlign:"right",flexShrink:0}}>
-                  {p.ultimoPrecio>0&&<div style={{fontSize:10,fontWeight:700,color:C.yellow,fontFamily:"'Courier New',monospace"}}>{mxn(p.ultimoPrecio)}</div>}
-                  <div style={{fontSize:7,color:C.t3}}>{p.ultimaFecha||""}</div>
-                </div>
-              </div>
-            ))}
-            {catalogResults.length===0&&catalogQ&&<div style={{padding:"16px",textAlign:"center",color:C.t3,fontSize:9}}>Sin resultados para "{catalogQ}"</div>}
-          </div>
-        </div>
-      )}
-
-      <div className="ref-grid" style={{display:"grid",gridTemplateColumns:"1fr 320px",gap:10}}>
-
-        {/* LEFT */}
-        <div>
-
-          {/* Quote header */}
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
-            <SHdr title="DATOS DE LA COTIZACIÓN"/>
-            <div style={{padding:9}}>
-              <div className="ref-hdr-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:5,marginBottom:5}}>
-                <div>
-                  <div style={{fontSize:7,color:C.t3,marginBottom:2}}>FECHA</div>
-                  <input value={fecha} onChange={e=>setFecha(e.target.value)} placeholder="DD/MM/AAAA"
-                    style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 6px",color:C.t1,fontSize:10,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace"}}/>
-                </div>
-                <div>
-                  <div style={{fontSize:7,color:C.t3,marginBottom:2}}>VIGENCIA</div>
-                  <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,overflow:"hidden"}}>
-                    <input type="text" inputMode="numeric" value={vigencia}
-                      onChange={e=>setVigencia(e.target.value)}
-                      onBlur={()=>setVigencia(v=>Math.max(1,parseInt(v)||3))}
-                      style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:11,padding:"5px 7px",fontFamily:"'Courier New',monospace"}}/>
-                    <span style={{padding:"0 6px",color:C.t3,fontSize:9}}>días</span>
-                  </div>
-                </div>
-                <Sel label="Pago" value={payType} onChange={setPayType}
-                  options={[{value:"contado",label:"Contado"},{value:"credit",label:"Crédito"}]}/>
-              </div>
-              {payType==="credit"&&(
-                <div style={{marginBottom:5}}>
-                  <div style={{fontSize:7,color:C.t3,marginBottom:2}}>PROMESA DE PAGO</div>
-                  <input value={promesa} onChange={e=>setPromesa(e.target.value)} placeholder="DD/MM/AAAA"
-                    style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 6px",color:C.yellow,fontSize:10,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace"}}/>
-                </div>
-              )}
-              <div className="ref-half-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:5}}>
-                <Sel label="Cliente" value={clientId} onChange={setClientId}
-                  options={[{value:"",label:"-- Sin cliente --"},...clients.map(c=>({value:c.id,label:c.empresa}))]}/>
-                <Sel label="Proveedor" value={supplierId} onChange={setSupplierId}
-                  options={[{value:"",label:"-- Sin proveedor --"},...suppliers.map(s=>({value:s.id,label:s.nombre}))]}/>
-              </div>
-              <UnitPicker units={units} value={unitId} onChange={setUnitId}/>
-              {selectedUnit&&(
-                <div style={{background:C.bg3,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.borderHi}`,borderRadius:3,padding:"6px 9px",marginTop:4,marginBottom:4}}>
-                  <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
-                    <span style={{fontSize:9,color:C.t1,fontWeight:700}}>{selectedUnit.marca} {selectedUnit.modelo} {selectedUnit.anio}</span>
-                    {selectedUnit.motor&&<span style={{fontSize:8,color:C.t3}}>{selectedUnit.motor}</span>}
-                    {selectedUnit.vin&&<span style={{fontSize:8,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{selectedUnit.vin}</span>}
-                    {selectedUnit.placa&&<span style={{fontSize:8,color:C.t2,fontFamily:"'Courier New',monospace"}}>Placa: {selectedUnit.placa}</span>}
-                    {selectedUnit.economico&&<span style={{fontSize:8,color:C.t2,fontFamily:"'Courier New',monospace"}}>Eco: {selectedUnit.economico}</span>}
-                  </div>
-                </div>
-              )}
-              <div style={{marginTop:4}}>
-                <div style={{fontSize:7,color:C.t3,marginBottom:2}}>NOTAS / OBSERVACIONES</div>
-                <textarea rows={2} value={notes} onChange={e=>setNotes(e.target.value)}
-                  placeholder="Diagnóstico, condiciones especiales..."
-                  style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 7px",color:C.t2,fontSize:9,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
-              </div>
-            </div>
-          </div>
-
-          {/* Parts table */}
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
-            <SHdr title={`REFACCIONES (${lineas.length})`} right={
-              <button onClick={addLinea}
-                style={{fontSize:8,background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,padding:"2px 8px",cursor:"pointer",fontWeight:600}}>
-                + Agregar refacción
-              </button>
-            }/>
-            <div style={{padding:9}}>
-              {lineas.map((l,i)=>{
-                const lsnap=lineSnaps[i]||{precioConIVA:0,uNeta:0,margenNetoPrecio:0};
-                const lmc=margenColor(lsnap.margenNetoPrecio);
-                const qty=safeNumber(l.qty,1)||1;
-                const unitPriceConIVA=qty>0?lsnap.precioConIVA/qty:0;
-                return (
-                  <div key={l.key} style={{background:C.bg0,border:`1px solid ${C.borderHi}`,borderRadius:3,marginBottom:i<lineas.length-1?7:0,overflow:"hidden"}}>
-                    {/* Line header */}
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 9px",background:C.bg3,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderBottom:`1px solid ${C.border}`}}>
-                      <span style={{fontSize:8,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>
-                        REFACCIÓN {String(i+1).padStart(2,"0")}
-                      </span>
-                      <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                        <span style={{fontSize:10,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(lsnap.precioConIVA)}</span>
-                        <span style={{fontSize:8,color:lmc,fontFamily:"'Courier New',monospace"}}>{fpct(lsnap.margenNetoPrecio)}</span>
-                        {lineas.length>1&&(
-                          <button onClick={()=>removeLinea(i)}
-                            style={{padding:"1px 6px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:2,color:C.red,fontSize:8,cursor:"pointer",fontWeight:700}}>x</button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div style={{padding:"8px 9px"}}>
-                      {/* Row 1: Description + OEM + Aftermarket + Catalog button */}
-                      <div className="ref-line-row1" style={{display:"grid",gridTemplateColumns:"1fr 120px 120px auto",gap:5,marginBottom:6}}>
-                        <div>
-                          <div style={{fontSize:7,color:C.t3,marginBottom:2}}>DESCRIPCIÓN</div>
-                          <input value={l.descripcion} onChange={e=>updateLinea(i,{descripcion:e.target.value})}
-                            placeholder={`Refacción ${i+1}`}
-                            style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.t1,fontSize:10,outline:"none",fontFamily:"inherit"}}/>
-                        </div>
-                        <div>
-                          <div style={{fontSize:7,color:C.t3,marginBottom:2}}>NUM. OEM</div>
-                          <input value={l.oem} onChange={e=>updateLinea(i,{oem:e.target.value})} placeholder="A0012345..."
-                            style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.cyan,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace"}}/>
-                        </div>
-                        <div>
-                          <div style={{fontSize:7,color:C.t3,marginBottom:2}}>AFTERMARKET</div>
-                          <input value={l.aftermarket} onChange={e=>updateLinea(i,{aftermarket:e.target.value})} placeholder="Alt. compatible"
-                            style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 6px",color:C.t2,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace"}}/>
-                        </div>
-                        <div style={{display:"flex",alignItems:"flex-end"}}>
-                          <button onClick={()=>setCatalogSearch(i)}
-                            style={{padding:"4px 8px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,fontSize:8,cursor:"pointer",fontWeight:600,whiteSpace:"nowrap"}}>
-                            Catálogo
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Row 2: Qty + Cost + Mode + Price */}
-                      <div className="ref-line-row2" style={{display:"grid",gridTemplateColumns:"80px 1fr auto",gap:5,alignItems:"end"}}>
-                        <div>
-                          <div style={{fontSize:7,color:C.t3,marginBottom:2}}>CANT.</div>
-                          <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
-                            <input type="text" inputMode="numeric"
-                              value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)}
-                              onChange={e=>updateLinea(i,{_qtyRaw:e.target.value})}
-                              onBlur={()=>setLineas(p=>p.map((line,idx)=>{if(idx!==i)return line;const n=parseInt(line._qtyRaw);return {...line,qty:isFinite(n)&&n>=1?n:1,_qtyRaw:undefined};}))}
-                              style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:12,fontWeight:700,padding:"5px 0 5px 7px",fontFamily:"'Courier New',monospace"}}/>
-                            <span style={{padding:"0 5px",color:C.t3,fontSize:9}}>pz</span>
-                          </div>
-                        </div>
-                        <div>
-                          <div style={{fontSize:7,color:C.t3,marginBottom:2}}>COSTO UNIT. {cIVA?"(c/IVA)":"(s/IVA)"}</div>
-                          <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,overflow:"hidden"}}>
-                            <span style={{padding:"0 5px",color:C.t3,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
-                            <input type="text" inputMode="decimal"
-                              value={l._costoRaw!==undefined?l._costoRaw:String(l.costoUnit||0)}
-                              onChange={e=>updateLinea(i,{_costoRaw:e.target.value})}
-                              onBlur={()=>setLineas(p=>p.map((line,idx)=>idx!==i?line:{...line,costoUnit:safeNumber(line._costoRaw),_costoRaw:undefined}))}
-                              style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:10,padding:"5px 0",fontFamily:"'Courier New',monospace"}}/>
-                          </div>
-                        </div>
-                        {/* Mode + margin or manual price */}
-                        <div style={{display:"flex",gap:5,alignItems:"center"}}>
-                          <div style={{display:"flex",borderRadius:3,overflow:"hidden",border:`1px solid ${C.border}`,flexShrink:0}}>
-                            {[["auto","Auto"],["manual","Manual"]].map(([id,lbl])=>(
-                              <button key={id} onClick={()=>updateLinea(i,{modo:id})}
-                                style={{padding:"4px 7px",border:"none",cursor:"pointer",fontSize:8,fontWeight:600,background:l.modo===id?C.blue:C.bg2,color:l.modo===id?C.t1:C.t2}}>
-                                {lbl}
-                              </button>
-                            ))}
-                          </div>
-                          {l.modo==="auto"?(
-                            <div style={{display:"flex",alignItems:"center",gap:5}}>
-                              <span style={{fontSize:7,color:C.t3,flexShrink:0}}>Mgn:</span>
-                              {useGlobal?(
-                                <span style={{fontSize:11,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{fpct(globalMargen)}</span>
-                              ):(
-                                <input type="number" min={0} step={0.5}
-                                  value={l._mgnRaw!==undefined?l._mgnRaw:String(l.margen||30)}
-                                  onChange={e=>updateLinea(i,{_mgnRaw:e.target.value})}
-                                  onBlur={()=>setLineas(p=>p.map((line,idx)=>idx!==i?line:{...line,margen:safeNumber(line._mgnRaw,30),_mgnRaw:undefined}))}
-                                  style={{width:52,background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,padding:"3px 5px",color:C.cyan,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace",textAlign:"right"}}/>
-                              )}
-                              <span style={{fontSize:8,color:C.t3}}>→</span>
-                              <span style={{fontSize:9,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{mxn(unitPriceConIVA)}/pz</span>
-                            </div>
-                          ):(
-                            <div style={{display:"flex",alignItems:"center",gap:5}}>
-                              <span style={{fontSize:7,color:C.t3,flexShrink:0}}>Precio c/IVA:</span>
-                              <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
-                                <span style={{padding:"0 4px",color:C.cyan,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
-                                <input type="number" min={0} step={0.01} value={l.precioManual}
-                                  onChange={e=>updateLinea(i,{precioManual:e.target.value})}
-                                  style={{width:90,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:11,fontWeight:700,padding:"4px 0",fontFamily:"'Courier New',monospace"}}/>
-                              </div>
-                              <span style={{fontSize:8,color:lmc,fontFamily:"'Courier New',monospace",flexShrink:0}}>{fpct(lsnap.margenNetoPrecio)}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {qty>1&&(
-                        <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace",marginTop:5}}>
-                          {qty} × {mxn(unitPriceConIVA)} = <span style={{color:C.cyan,fontWeight:700}}>{mxn(lsnap.precioConIVA)}</span> total
-                        </div>
-                      )}
-
-                      <input value={l.notas} onChange={e=>updateLinea(i,{notas:e.target.value})}
-                        placeholder="Aplicación, compatibilidad, notas internas..."
-                        style={{width:"100%",background:"transparent",border:"none",borderBottom:`1px solid ${C.border}`,outline:"none",color:C.t3,fontSize:8,padding:"5px 0",marginTop:6,fontFamily:"inherit",boxSizing:"border-box"}}/>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Tax params */}
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
-            <SHdr title="PARÁMETROS FISCALES"/>
-            <div style={{padding:9,display:"grid",gridTemplateColumns:"80px 1fr 1fr",gap:8,alignItems:"center"}}>
-              <div>
-                <div style={{fontSize:7,color:C.t3,marginBottom:2}}>IVA (%)</div>
-                <input type="number" min={0} step={0.1} value={iva}
-                  onChange={e=>setIva(e.target.value)} onBlur={()=>setIva(v=>String(safeNumber(v,16)))}
-                  style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 7px",color:C.t1,fontSize:11,outline:"none",fontFamily:"'Courier New',monospace"}}/>
-              </div>
-              <Toggle label="Compra incluye IVA" value={cIVA} onChange={setCIVA}/>
-              <Toggle label="Venta incluye IVA"  value={vIVA} onChange={setVIVA}/>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
-            <button onClick={generarPDF}
-              style={{padding:"9px",background:C.blue,border:"none",borderRadius:4,color:C.t1,fontSize:10,fontWeight:700,cursor:"pointer",letterSpacing:"0.06em"}}>
-              Generar PDF
-            </button>
-            <button onClick={convertirATicket} disabled={isSaving}
-              style={{padding:"9px",background:isSaving?C.bg2:C.green,border:"none",borderRadius:4,color:isSaving?C.t3:C.t1,fontSize:10,fontWeight:700,cursor:isSaving?"not-allowed":"pointer",letterSpacing:"0.06em",opacity:isSaving?0.6:1}}>
-              {isSaving?"Registrando…":"Convertir a ticket"}
-            </button>
-            <button onClick={reset}
-              style={{padding:"9px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:4,color:C.t2,fontSize:10,cursor:"pointer"}}>
-              Limpiar
-            </button>
-          </div>
-        </div>
-
-        {/* RIGHT — margin + summary */}
-        <div>
-          {/* Global margin */}
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:6,overflow:"hidden"}}>
-            <SHdr title="MARGEN GLOBAL" right={
-              <div style={{display:"flex",alignItems:"center",gap:4}}>
-                <span style={{fontSize:7,color:C.t3}}>Por línea</span>
-                <div onClick={()=>setUseGlobal(!useGlobal)}
-                  style={{width:26,height:14,borderRadius:7,cursor:"pointer",position:"relative",background:!useGlobal?C.blue:C.bg4,border:`1px solid ${!useGlobal?C.blueHi:C.border}`}}>
-                  <div style={{position:"absolute",top:2,left:!useGlobal?11:2,width:8,height:8,borderRadius:"50%",background:!useGlobal?C.t1:C.t3,transition:"left .15s"}}/>
-                </div>
-              </div>
-            }/>
-            <div style={{padding:9}}>
-              {useGlobal?(
-                <div>
-                  <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:6}}>
-                    <div style={{fontSize:24,fontWeight:800,fontFamily:"'Courier New',monospace",color:C.cyan,lineHeight:1}}>
-                      {fpct(globalMargen)}
-                    </div>
-                    <div style={{fontSize:8,color:C.t3}}>aplicado a todas las líneas</div>
-                  </div>
-                  <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
-                    <input type="number" min={0} step={0.5} value={globalMargen}
-                      onChange={e=>setGlobalMargen(safeNumber(e.target.value,30))}
-                      style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:13,fontWeight:700,padding:"6px 8px",fontFamily:"'Courier New',monospace"}}/>
-                    <span style={{padding:"0 7px",color:C.t3,fontSize:10}}>%</span>
-                  </div>
-                </div>
-              ):(
-                <div style={{fontSize:9,color:C.t3,padding:"8px 0"}}>Margen configurado por refacción individualmente.</div>
-              )}
-            </div>
-          </div>
-
-          {/* KPI totals */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:5}}>
-            <KPI label="Total c/IVA" value={mxn(totalSnap.precioConIVA)} color={C.cyan} accent
-              sub={lineas.length>1?lineas.length+" refacciones":""}/>
-            <KPI label="Util. neta" value={mxn(totalSnap.uNeta)}
-              color={totalSnap.uNeta>=0?C.green:C.red}
-              sub={fpct(aggMargen)+" del precio"}/>
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:5}}>
-            <KPI label="Subtotal s/IVA" value={mxn(totalSnap.precioSinIVA)}/>
-            <KPI label="Costo total"    value={mxn(totalSnap.costoTotal)}/>
-          </div>
-
-          {/* IVA breakdown */}
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:5,overflow:"hidden"}}>
-            <SHdr title="FISCAL — IVA"/>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr"}}>
-              {[
-                ["IVA Acreditable","Recuperas",mxn(totalSnap.ivaAcred),C.blueHi],
-                ["IVA Trasladado","Cobras",mxn(totalSnap.ivaTraslad),C.cyan],
-                ["IVA Neto SAT","Pagas al SAT",mxn(totalSnap.ivaNeto),totalSnap.ivaNeto>=0?C.yellow:C.green],
-              ].map(([lbl,sub,val,col],i)=>(
-                <div key={i} style={{padding:"7px 8px",borderRight:i<2?`1px solid ${C.border}`:"none"}}>
-                  <div style={{fontSize:7,color:C.t3,marginBottom:2}}>{lbl}</div>
-                  <div style={{fontSize:11,fontWeight:800,color:col,fontFamily:"'Courier New',monospace"}}>{val}</div>
-                  <div style={{fontSize:7,color:C.t3,marginTop:1}}>{sub}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Per-line breakdown */}
-          {lineas.length>1&&(
-            <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:5}}>
-              <SHdr title="DESGLOSE POR REFACCIÓN"/>
-              {lineas.map((l,i)=>{
-                const lsnap=lineSnaps[i]||{precioConIVA:0,uNeta:0};
-                return (
-                  <div key={l.key} style={{display:"flex",justifyContent:"space-between",padding:"5px 9px",borderBottom:i<lineas.length-1?`1px solid ${C.border}`:"none",background:i%2===0?C.bg1:C.bg0}}>
-                    <div style={{minWidth:0,flex:1,marginRight:8}}>
-                      <div style={{fontSize:9,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.descripcion||`Refacción ${i+1}`}</div>
-                      {l.oem&&<div style={{fontSize:7,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{l.oem}</div>}
-                    </div>
-                    <div style={{textAlign:"right",flexShrink:0}}>
-                      <div style={{fontSize:10,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(lsnap.precioConIVA)}</div>
-                      <div style={{fontSize:8,color:lsnap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(lsnap.uNeta)}</div>
-                    </div>
-                  </div>
-                );
-              })}
-              <div style={{display:"flex",justifyContent:"space-between",padding:"6px 9px",background:C.blueDim,borderTop:`1px solid ${C.blueHi}`}}>
-                <span style={{fontSize:9,fontWeight:700,color:C.t1}}>TOTAL</span>
-                <div style={{textAlign:"right"}}>
-                  <div style={{fontSize:11,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(totalSnap.precioConIVA)}</div>
-                  <div style={{fontSize:9,fontWeight:700,color:totalSnap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(totalSnap.uNeta)}</div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Margin bar */}
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:8}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-              <span style={{fontSize:8,color:C.t2}}>Margen neto s/precio</span>
-              <span style={{fontSize:9,fontWeight:700,color:mColor,fontFamily:"'Courier New',monospace"}}>{fpct(aggMargen)}</span>
-            </div>
-            <div style={{height:4,background:C.bg4,borderRadius:2,overflow:"hidden"}}>
-              <div style={{height:"100%",width:`${clamp(aggMargen,0,100)}%`,background:mColor,transition:"width .3s"}}/>
-            </div>
-            <div style={{display:"flex",justifyContent:"space-between",marginTop:3,fontSize:7,color:C.t3}}>
-              <span>Bajo &lt;10%</span><span>Aceptable 10-20%</span><span>Óptimo &gt;20%</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── UNIDADES ──────────────────────────────────────────────────────────────────
-function Unidades({state,dispatch,toast}) {
-  const C = React.useContext(ThemeCtx);
-  const {units,clients,tickets} = state;
-  const [search,  setSearch]  = useState("");
-  const [fStatus, setFStatus] = useState("all");
-  const [sel,     setSel]     = useState(null);
-  const [editId,  setEditId]  = useState(null);
-  const [adding,  setAdding]  = useState(false);
-  const [confirm, setConfirm] = useState(null);
-  const empty={vin:"",marca:"",modelo:"",anio:"",motor:"",transmision:"",config:"",clientId:"",statusOp:"operativa",km:"",notas:"",placa:"",economico:""};
-  const [form,setForm]=useState(empty);
-  const sf=k=>v=>setForm(p=>({...p,[k]:v}));
-  const dSearch = useDebounce(search, 250);
-
-  const [fConOp, setFConOp] = useState(false);
-
-  const unitsWithOpenOp = useMemo(()=>new Set(tickets.filter(t=>!CLOSED_SET.has(t.status)&&t.unitId).map(t=>t.unitId)),[tickets]);
-
-  const filtered=useMemo(()=>units.filter(u=>{
-    if(fStatus!=="all"&&u.statusOp!==fStatus) return false;
-    if(fConOp&&!unitsWithOpenOp.has(u.id)) return false;
-    if(dSearch){const lq=safeLower(dSearch);if(!safeLower(u.vin).includes(lq)&&!safeLower(u.marca).includes(lq)&&!safeLower(u.modelo).includes(lq)&&!safeLower(u.economico).includes(lq)&&!safeLower(u.placa).includes(lq))return false;}
-    return true;
-  }),[units,dSearch,fStatus,fConOp,unitsWithOpenOp]);
-
-  const unitTickets=useCallback(id=>tickets.filter(t=>t.unitId===id),[tickets]);
-
-  const startAdd=()=>{setAdding(true);setEditId(null);setForm(empty);};
-  const startEdit=(u,e)=>{e.stopPropagation();setEditId(u.id);setAdding(false);setForm({...u});};
-  const cancel=()=>{setAdding(false);setEditId(null);setForm(empty);};
-  const save=()=>{
-    const parsed={...form,km:parseInt(form.km)||0};
-    if(editId){dispatch({type:"UNIT_UPDATE",id:editId,patch:parsed});toast("Unidad actualizada","success");}
-    else{dispatch({type:"UNIT_ADD",u:{...parsed,id:mkUnitId()}});toast("Unidad registrada","success");}
-    cancel();
-  };
-  const del=(id,e)=>{e.stopPropagation();setConfirm(units.find(u=>u.id===id));};
-
-  const showForm=adding||!!editId;
-  const stMeta=UNIT_STATUS;
-
-  return (
-    <div style={{padding:"10px 13px",maxWidth:1200,margin:"0 auto"}}>
-      {confirm&&<Confirm msg={"Eliminar unidad: "+confirm.marca+" "+confirm.modelo+" "+confirm.anio+"?"} onConfirm={()=>{dispatch({type:"UNIT_DELETE",id:confirm.id});setSel(null);setConfirm(null);toast("Unidad eliminada","info");}} onCancel={()=>setConfirm(null)}/>}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
-        <div style={{fontSize:7,color:C.t3,letterSpacing:"0.2em"}}>FLOTA — {units.length} unidades registradas</div>
-        <button onClick={showForm?cancel:startAdd} style={{padding:"4px 11px",background:showForm?"transparent":C.blue,border:`1px solid ${showForm?C.border:C.blue}`,borderRadius:3,color:showForm?C.t2:C.t1,fontSize:10,fontWeight:600,cursor:"pointer"}}>
-          {showForm?"Cancelar":"+ Nueva unidad"}
-        </button>
-      </div>
-
-      {showForm&&(
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:4,padding:11,marginBottom:8}}>
-          <div style={{fontSize:7,color:C.t3,letterSpacing:"0.18em",marginBottom:7}}>{editId?"EDITAR UNIDAD":"NUEVA UNIDAD"}</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:7}}>
-            <Field label="VIN / Serial"   value={form.vin}          onChange={sf("vin")}          prefix=""/>
-            <Field label="Marca"          value={form.marca}        onChange={sf("marca")}        prefix=""/>
-            <Field label="Modelo"         value={form.modelo}       onChange={sf("modelo")}       prefix=""/>
-            <Field label="Año"            value={form.anio}         onChange={sf("anio")}         prefix="" type="number" min={1990}/>
-            <Field label="Motor"          value={form.motor}        onChange={sf("motor")}        prefix=""/>
-            <Field label="Transmision"    value={form.transmision}  onChange={sf("transmision")}  prefix=""/>
-            <Field label="Configuracion"  value={form.config}       onChange={sf("config")}       prefix="" placeholder="4x2, 6x4..."/>
-            <Field label="Kilometraje"    value={form.km}           onChange={sf("km")}           prefix="" suffix="km" type="number" min={0}/>
-            <Field label="No. Económico"  value={form.economico||""} onChange={sf("economico")}   prefix="" placeholder="Ej: 1045"/>
-            <Field label="Placa"          value={form.placa||""}    onChange={sf("placa")}        prefix="" placeholder="Ej: 912FE2"/>
-            <Sel label="Cliente"          value={form.clientId}     onChange={sf("clientId")}     options={[{value:"",label:"-- Sin cliente --"},...clients.map(c=>({value:c.id,label:c.empresa}))]}/>
-            <Sel label="Estado operativo" value={form.statusOp}     onChange={sf("statusOp")}     options={Object.entries(UNIT_STATUS).map(([k,v])=>({value:k,label:v.label}))}/>
-          </div>
-          <Field label="Notas tecnicas" value={form.notas} onChange={sf("notas")} prefix="" rows={2} placeholder="Historial tecnico, advertencias, patrones de falla..."/>
-          <div style={{display:"flex",gap:6,marginTop:7}}>
-            <button onClick={save} style={{padding:"5px 14px",background:C.blue,border:"none",borderRadius:3,color:C.t1,fontSize:11,fontWeight:700,cursor:"pointer"}}>{editId?"Guardar cambios":"Guardar unidad"}</button>
-            <button onClick={cancel} style={{padding:"5px 10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:11,cursor:"pointer"}}>Cancelar</button>
-          </div>
-        </div>
-      )}
-
-      {units.length===0&&!showForm&&<EmptyState icon="&#128666;" title="Sin unidades registradas" sub='Agrega la primera con "+ Nueva unidad"'/>}
-
-      {/* Filtros */}
-      {units.length>0&&(
-        <div style={{display:"flex",gap:5,marginBottom:6,alignItems:"center",flexWrap:"wrap"}}>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar eco., placa, VIN, marca..."
-            style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 8px",color:C.t1,fontSize:10,outline:"none",width:220,fontFamily:"'Courier New',monospace"}}/>
-          <select value={fStatus} onChange={e=>setFStatus(e.target.value)} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t1,fontSize:10,outline:"none",cursor:"pointer"}}>
-            <option value="all">Todos los estados</option>
-            {Object.entries(UNIT_STATUS).map(([k,v])=><option key={k} value={k} style={{background:C.bg1}}>{v.label}</option>)}
-          </select>
-          <button onClick={()=>setFConOp(v=>!v)}
-            style={{padding:"4px 10px",background:fConOp?C.yellowDim:"transparent",border:`1px solid ${fConOp?C.yellow:C.border}`,borderRadius:3,color:fConOp?C.yellow:C.t2,fontSize:10,cursor:"pointer",fontWeight:fConOp?700:400,display:"flex",alignItems:"center",gap:5}}>
-            <span style={{width:6,height:6,borderRadius:"50%",background:fConOp?C.yellow:C.t3,flexShrink:0,display:"inline-block"}}/>
-            Con operación abierta {fConOp&&unitsWithOpenOp.size>0?`(${unitsWithOpenOp.size})`:""}
-          </button>
-          {(search||fStatus!=="all"||fConOp)&&(
-            <button onClick={()=>{setSearch("");setFStatus("all");setFConOp(false);}}
-              style={{padding:"4px 8px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t3,fontSize:9,cursor:"pointer"}}>
-              × Limpiar
-            </button>
-          )}
-          <span style={{fontSize:8,color:C.t3,marginLeft:"auto"}}>{filtered.length} de {units.length}</span>
-        </div>
-      )}
-
-      {filtered.length>0&&(
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
-          <div style={{display:"grid",gridTemplateColumns:"0.6fr 0.5fr 1.4fr 0.7fr 1fr 1fr 0.6fr 0.6fr 0.6fr 60px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:5}}>
-            <span>ECO.</span><span>VIN</span><span>UNIDAD</span><span>AÑO</span><span>MOTOR</span><span>TRANSMISION</span><span>KM</span><span>CLIENTE</span><span>ESTADO</span><span/>
-          </div>
-          {filtered.map((u,i)=>{
-            const st=stMeta[u.statusOp]||stMeta.operativa;
-            const cl=clients.find(c=>c.id===u.clientId);
-            const tks=unitTickets(u.id);
-            const openTks=tks.filter(t=>!CLOSED_SET.has(t.status));
-            const exp=sel===u.id;
-            return (
-              <div key={u.id} style={{borderBottom:`1px solid ${C.border}`}}>
-                <div onClick={()=>setSel(exp?null:u.id)}
-                  style={{display:"grid",gridTemplateColumns:"0.6fr 0.5fr 1.4fr 0.7fr 1fr 1fr 0.6fr 0.6fr 0.6fr 60px",padding:"7px 9px",background:exp?C.blueDim:i%2===0?C.bg1:C.bg2,gap:5,alignItems:"center",cursor:"pointer",borderLeft:`3px solid ${st.dot}`}}>
-                  <div style={{fontSize:9,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.economico||"—"}</div>
-                  <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.vin.slice(-8)}</div>
-                  <div>
-                    <div style={{fontSize:10,fontWeight:700,color:C.t1}}>{u.marca} {u.modelo}</div>
-                    <div style={{display:"flex",gap:5,alignItems:"center",marginTop:1}}>
-                      <span style={{fontSize:7,color:C.t3}}>{u.id} · {u.config||"---"}</span>
-                      {openTks.length>0&&<span style={{fontSize:7,fontWeight:700,color:C.yellow,background:C.yellowDim,border:`1px solid ${C.yellow}44`,borderRadius:2,padding:"0 4px"}}>{openTks.length} op. abierta{openTks.length>1?"s":""}</span>}
-                    </div>
-                  </div>
-                  <div style={{fontSize:9,color:C.t2,fontFamily:"'Courier New',monospace"}}>{u.anio}</div>
-                  <div style={{fontSize:8,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.motor||"---"}</div>
-                  <div style={{fontSize:8,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.transmision||"---"}</div>
-                  <div style={{fontSize:9,color:C.t2,fontFamily:"'Courier New',monospace"}}>{u.km?u.km.toLocaleString():"---"}</div>
-                  <div style={{fontSize:8,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl?cl.empresa.split(" ")[0]:"---"}</div>
-                  <div>
-                    <span style={{display:"inline-block",padding:"2px 5px",borderRadius:2,background:st.color+"22",border:`1px solid ${st.color}55`,fontSize:7,color:st.dot,fontWeight:600}}>{st.label}</span>
-                  </div>
-                  <div style={{display:"flex",gap:3}}>
-                    <button onClick={e=>startEdit(u,e)} style={{padding:"2px 5px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:8,cursor:"pointer"}}>Editar</button>
-                    <button onClick={e=>del(u.id,e)}    style={{padding:"2px 4px",background:"transparent",border:`1px solid ${C.red}44`,borderRadius:3,color:C.red,fontSize:9,cursor:"pointer"}}>x</button>
-                  </div>
-                </div>
-                {exp&&(
-                  <div style={{background:C.bg0,borderTop:`1px solid ${C.border}`,padding:"8px 11px"}}>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,marginBottom:6,fontSize:8}}>
-                      <span style={{color:C.t3}}>No. Económico: <span style={{color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>{u.economico||"---"}</span></span>
-                      <span style={{color:C.t3}}>Placa: <span style={{color:C.t2,fontFamily:"'Courier New',monospace"}}>{u.placa||"---"}</span></span>
-                      <span style={{color:C.t3}}>VIN: <span style={{color:C.t2,fontFamily:"'Courier New',monospace"}}>{u.vin||"---"}</span></span>
-                      <span style={{color:C.t3}}>Config: <span style={{color:C.t2}}>{u.config||"---"}</span></span>
-                      <span style={{color:C.t3}}>Motor: <span style={{color:C.t2}}>{u.motor||"---"}</span></span>
-                      <span style={{color:C.t3}}>Transmision: <span style={{color:C.t2}}>{u.transmision||"---"}</span></span>
-                    </div>
-                    {u.notas&&<div style={{fontSize:8,color:C.t3,marginBottom:6,fontStyle:"italic",lineHeight:1.4}}>"{u.notas}"</div>}
-                    <div style={{fontSize:7,color:C.t3,marginBottom:4,letterSpacing:"0.1em"}}>HISTORIAL OPERATIVO ({tks.length} tickets)</div>
-                    {tks.length===0?<div style={{fontSize:8,color:C.t3}}>Sin tickets vinculados a esta unidad.</div>:
-                      tks.slice(0,4).map(t=>(
-                        <div key={t.id} style={{display:"flex",justifyContent:"space-between",padding:"2px 0",borderBottom:`1px solid ${C.border}`,fontSize:8,alignItems:"center"}}>
-                          <span style={{color:C.t3,fontFamily:"'Courier New',monospace"}}>{t.id}</span>
-                          <span style={{color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:220}}>{t.titulo}</span>
-                          <PriorityBadge pid={t.priority} small/>
-                          <StatusBadge sid={t.status} meta={TICKET_META} small/>
-                        </div>
-                      ))
-                    }
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── CATALOGO DE PARTES ────────────────────────────────────────────────────────
-function Catalogo({state,dispatch,toast}) {
-  const C = React.useContext(ThemeCtx);
-  const {parts,suppliers} = state;
-  const [search, setSearch]  = useState("");
-  const [sel,    setSel]     = useState(null);
-  const [editId, setEditId]  = useState(null);
-  const [adding, setAdding]  = useState(false);
-  const [confirm,setConfirm] = useState(null);
-  const empty={nombre:"",oem:"",aftermarket:"",aplicacion:"",notas:"",proveedor:"",ultimoPrecio:"",ultimaFecha:""};
-  const [form,setForm]=useState(empty);
-  const sf=k=>v=>setForm(p=>({...p,[k]:v}));
-  const dSearch = useDebounce(search, 250);
-
-  const filtered=useMemo(()=>parts.filter(p=>{
-    if(!dSearch.trim()) return true;
-    const lq=safeLower(dSearch);
-    return safeLower(p.nombre).includes(lq)||safeLower(p.oem).includes(lq)||safeLower(p.aftermarket).includes(lq)||safeLower(p.aplicacion).includes(lq);
-  }),[parts,dSearch]);
-
-  const startAdd=()=>{setAdding(true);setEditId(null);setForm(empty);};
-  const startEdit=(p,e)=>{e.stopPropagation();setEditId(p.id);setAdding(false);setForm({...p,ultimoPrecio:String(p.ultimoPrecio||"")});};
-  const cancel=()=>{setAdding(false);setEditId(null);setForm(empty);};
-  const save=()=>{
-    const parsed={...form,ultimoPrecio:parseFloat(form.ultimoPrecio)||0};
-    if(editId){dispatch({type:"PART_UPDATE",id:editId,patch:parsed});toast("Parte actualizada","success");}
-    else{dispatch({type:"PART_ADD",p:{...parsed,id:mkPartId()}});toast("Parte registrada","success");}
-    cancel();
-  };
-  const del=(id,e)=>{e.stopPropagation();setConfirm(parts.find(p=>p.id===id));};
-  const showForm=adding||!!editId;
-
-  return (
-    <div style={{padding:"10px 13px",maxWidth:1200,margin:"0 auto"}}>
-      {confirm&&<Confirm msg={"Eliminar: "+confirm.nombre+"?"} onConfirm={()=>{dispatch({type:"PART_DELETE",id:confirm.id});setSel(null);setConfirm(null);toast("Eliminado","info");}} onCancel={()=>setConfirm(null)}/>}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
-        <div style={{fontSize:7,color:C.t3,letterSpacing:"0.2em"}}>CATALOGO DE PARTES — {parts.length} registradas</div>
-        <button onClick={showForm?cancel:startAdd} style={{padding:"4px 11px",background:showForm?"transparent":C.blue,border:`1px solid ${showForm?C.border:C.blue}`,borderRadius:3,color:showForm?C.t2:C.t1,fontSize:10,fontWeight:600,cursor:"pointer"}}>
-          {showForm?"Cancelar":"+ Nueva parte"}
-        </button>
-      </div>
-
-      {showForm&&(
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:4,padding:11,marginBottom:8}}>
-          <div style={{fontSize:7,color:C.t3,letterSpacing:"0.18em",marginBottom:7}}>{editId?"EDITAR PARTE":"NUEVA PARTE"}</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
-            <Field label="Nombre / descripcion" value={form.nombre}       onChange={sf("nombre")}       prefix=""/>
-            <Field label="Num. OEM"             value={form.oem}          onChange={sf("oem")}          prefix=""/>
-            <Field label="Aftermarket / equiv."  value={form.aftermarket}  onChange={sf("aftermarket")}  prefix="" placeholder="Marca · codigo"/>
-            <Field label="Aplicacion / modelos" value={form.aplicacion}   onChange={sf("aplicacion")}   prefix="" placeholder="Marca modelo año motor"/>
-            <Field label="Ultimo precio (c/IVA)" value={form.ultimoPrecio} onChange={sf("ultimoPrecio")} type="number" min={0}/>
-            <Field label="Ultima fecha"          value={form.ultimaFecha}  onChange={sf("ultimaFecha")}  prefix="" hint="DD/MM/AAAA"/>
-            <Field label="Proveedor habitual"    value={form.proveedor}    onChange={sf("proveedor")}    prefix=""/>
-          </div>
-          <Field label="Notas tecnicas" value={form.notas} onChange={sf("notas")} prefix="" rows={2} placeholder="Advertencias, variantes, notas de compatibilidad..."/>
-          <div style={{display:"flex",gap:6,marginTop:7}}>
-            <button onClick={save} style={{padding:"5px 14px",background:C.blue,border:"none",borderRadius:3,color:C.t1,fontSize:11,fontWeight:700,cursor:"pointer"}}>{editId?"Guardar cambios":"Guardar parte"}</button>
-            <button onClick={cancel} style={{padding:"5px 10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:11,cursor:"pointer"}}>Cancelar</button>
-          </div>
-        </div>
-      )}
-
-      <div style={{marginBottom:6}}>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por nombre, OEM, aftermarket, aplicacion..."
-          style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 9px",color:C.t1,fontSize:10,outline:"none",width:320,fontFamily:"'Courier New',monospace"}}/>
-      </div>
-
-      {parts.length===0&&!showForm&&<EmptyState icon="&#128295;" title="Sin partes registradas" sub='Agrega la primera con "+ Nueva parte"'/>}
-
-      {filtered.length>0&&(
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
-          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 2fr 0.8fr 60px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:5}}>
-            <span>NOMBRE</span><span>OEM</span><span>AFTERMARKET</span><span>APLICACION</span><span>ULT. PRECIO</span><span/>
-          </div>
-          {filtered.map((p,i)=>{
-            const exp=sel===p.id;
-            return (
-              <div key={p.id} style={{borderBottom:`1px solid ${C.border}`}}>
-                <div onClick={()=>setSel(exp?null:p.id)}
-                  style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 2fr 0.8fr 60px",padding:"7px 9px",background:exp?C.blueDim:i%2===0?C.bg1:C.bg2,gap:5,alignItems:"center",cursor:"pointer"}}>
-                  <div>
-                    <div style={{fontSize:10,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
-                    <div style={{fontSize:7,color:C.t3}}>{p.id}</div>
-                  </div>
-                  <div style={{fontSize:9,color:C.cyan,fontFamily:"'Courier New',monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.oem||"---"}</div>
-                  <div style={{fontSize:8,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.aftermarket||"---"}</div>
-                  <div style={{fontSize:8,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.aplicacion||"---"}</div>
-                  <div style={{fontSize:9,fontWeight:700,color:C.yellow,fontFamily:"'Courier New',monospace"}}>{p.ultimoPrecio?mxn(p.ultimoPrecio):"---"}</div>
-                  <div style={{display:"flex",gap:3}}>
-                    <button onClick={e=>startEdit(p,e)} style={{padding:"2px 5px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:8,cursor:"pointer"}}>Editar</button>
-                    <button onClick={e=>del(p.id,e)}    style={{padding:"2px 4px",background:"transparent",border:`1px solid ${C.red}44`,borderRadius:3,color:C.red,fontSize:9,cursor:"pointer"}}>x</button>
-                  </div>
-                </div>
-                {exp&&(
-                  <div style={{background:C.bg0,borderTop:`1px solid ${C.border}`,padding:"7px 11px"}}>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:4,fontSize:8}}>
-                      <span style={{color:C.t3}}>OEM: <span style={{color:C.cyan,fontFamily:"'Courier New',monospace"}}>{p.oem||"---"}</span></span>
-                      <span style={{color:C.t3}}>Aftermarket: <span style={{color:C.t2}}>{p.aftermarket||"---"}</span></span>
-                      <span style={{color:C.t3}}>Proveedor: <span style={{color:C.t2}}>{p.proveedor||"---"}</span></span>
-                      <span style={{color:C.t3}}>Ult. precio: <span style={{color:C.yellow,fontFamily:"'Courier New',monospace"}}>{p.ultimoPrecio?mxn(p.ultimoPrecio):"---"}</span></span>
-                      <span style={{color:C.t3}}>Ult. fecha: <span style={{color:C.t2}}>{p.ultimaFecha||"---"}</span></span>
-                    </div>
-                    {p.notas&&<div style={{fontSize:8,color:C.t3,lineHeight:1.5,fontStyle:"italic"}}>"{p.notas}"</div>}
-                    <div style={{fontSize:8,color:C.t2,marginTop:4,lineHeight:1.4}}>Aplicacion: <span style={{color:C.t1}}>{p.aplicacion||"---"}</span></div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── PROVEEDORES ───────────────────────────────────────────────────────────────
-function Proveedores({state,dispatch,toast}) {
-  const C = React.useContext(ThemeCtx);
-  const {suppliers,tickets} = state;
-  const [sel,    setSel]    = useState(null);
-  const [editId, setEditId] = useState(null);
-  const [adding, setAdding] = useState(false);
-  const [confirm,setConfirm]= useState(null);
-  const empty={nombre:"",categoria:"heavy",especialidad:"",entregaDias:1,confiabilidad:85,contacto:"",correo:"",horario:"",cobertura:"",scoreOp:80,incidencias:0};
-  const [form,setForm]=useState(empty);
-  const sf=k=>v=>setForm(p=>({...p,[k]:v}));
-
-  const stats=useCallback(id=>{
-    const so=tickets.filter(t=>t.supplierId===id);
-    return{total:so.length,neta:so.reduce((s,t)=>s+(t.snap?.uNeta||0),0),inv:so.reduce((s,t)=>s+(t.snap?.costoBase||0)*(1+((t.snap?.params?.iva||16))/100),0)};
-  },[tickets]);
-  const maxNeta=useMemo(()=>Math.max(...suppliers.map(s=>stats(s.id).neta),1),[suppliers,tickets]);
-
-  const startAdd=()=>{setAdding(true);setEditId(null);setForm(empty);};
-  const startEdit=(s,e)=>{e.stopPropagation();setEditId(s.id);setAdding(false);setForm({...s});};
-  const cancel=()=>{setAdding(false);setEditId(null);setForm(empty);};
-  const save=()=>{
-    if(editId){dispatch({type:"SUP_UPDATE",id:editId,patch:form});toast("Proveedor actualizado","success");}
-    else{dispatch({type:"SUP_ADD",s:{...form,id:"PRV-"+Date.now().toString().slice(-5)}});toast("Proveedor registrado","success");}
-    cancel();
-  };
-  const del=(id,e)=>{e.stopPropagation();setConfirm(suppliers.find(s=>s.id===id));};
-  const showForm=adding||!!editId;
-
-  return (
-    <div style={{padding:"10px 13px",maxWidth:1100,margin:"0 auto"}}>
-      {confirm&&<Confirm msg={"Eliminar: "+confirm.nombre+"?"} onConfirm={()=>{dispatch({type:"SUP_DELETE",id:confirm.id});setSel(null);setConfirm(null);toast("Eliminado","info");}} onCancel={()=>setConfirm(null)}/>}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
-        <div style={{fontSize:7,color:C.t3,letterSpacing:"0.2em"}}>RED DE SUMINISTRO — {suppliers.length} proveedores</div>
-        <button onClick={showForm?cancel:startAdd} style={{padding:"4px 11px",background:showForm?"transparent":C.blue,border:`1px solid ${showForm?C.border:C.blue}`,borderRadius:3,color:showForm?C.t2:C.t1,fontSize:10,fontWeight:600,cursor:"pointer"}}>
-          {showForm?"Cancelar":"+ Nuevo proveedor"}
-        </button>
-      </div>
-
-      {showForm&&(
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:4,padding:11,marginBottom:8}}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
-            <Field label="Nombre"          value={form.nombre}        onChange={sf("nombre")}        prefix=""/>
-            <Field label="Especialidad"    value={form.especialidad}  onChange={sf("especialidad")}  prefix=""/>
-            <Field label="Contacto"        value={form.contacto}      onChange={sf("contacto")}      prefix=""/>
-            <Field label="Correo"          value={form.correo}        onChange={sf("correo")}        prefix=""/>
-            <Field label="Horario"         value={form.horario}       onChange={sf("horario")}       prefix="" placeholder="Lun-Sab 07:00-20:00"/>
-            <Field label="Cobertura"       value={form.cobertura}     onChange={sf("cobertura")}     prefix="" placeholder="CDMX, Edomex..."/>
-            <Field label="Entrega (dias)"  value={form.entregaDias}   onChange={sf("entregaDias")}   prefix="" type="number" min={0}/>
-            <Field label="Confiabilidad"   value={form.confiabilidad} onChange={sf("confiabilidad")} prefix="" suffix="/100" type="number" min={0}/>
-            <Field label="Score operativo" value={form.scoreOp}       onChange={sf("scoreOp")}       prefix="" suffix="/100" type="number" min={0}/>
-            <Field label="Incidencias"     value={form.incidencias}   onChange={sf("incidencias")}   prefix="" type="number" min={0}/>
-            <Sel   label="Categoria"       value={form.categoria}     onChange={sf("categoria")}     options={OP_TYPES.map(o=>({value:o.id,label:o.label}))}/>
-          </div>
-          <div style={{display:"flex",gap:6,marginTop:7}}>
-            <button onClick={save} style={{padding:"5px 14px",background:C.blue,border:"none",borderRadius:3,color:C.t1,fontSize:11,fontWeight:700,cursor:"pointer"}}>{editId?"Guardar cambios":"Guardar proveedor"}</button>
-            <button onClick={cancel} style={{padding:"5px 10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:11,cursor:"pointer"}}>Cancelar</button>
-          </div>
-        </div>
-      )}
-
-      {suppliers.length===0&&!showForm&&<EmptyState icon="&#127981;" title="Sin proveedores registrados"/>}
-
-      {suppliers.length>0&&(
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
-          <div style={{display:"grid",gridTemplateColumns:"1.8fr 0.8fr 0.6fr 0.6fr 0.7fr 1fr 1fr 60px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:5}}>
-            <span>PROVEEDOR</span><span>COBERTURA</span><span>ENTREGA</span><span>CONF.</span><span>SCORE OP.</span><span>INVERTIDO</span><span>UTIL. GEN.</span><span/>
-          </div>
-          {suppliers.map((s,i)=>{
-            const st=stats(s.id);
-            const exp=sel===s.id;
-            return (
-              <div key={s.id} style={{borderBottom:`1px solid ${C.border}`}}>
-                <div onClick={()=>setSel(exp?null:s.id)}
-                  style={{display:"grid",gridTemplateColumns:"1.8fr 0.8fr 0.6fr 0.6fr 0.7fr 1fr 1fr 60px",padding:"7px 9px",background:exp?C.blueDim:i%2===0?C.bg1:C.bg2,gap:5,alignItems:"center",cursor:"pointer"}}>
-                  <div style={{minWidth:0}}>
-                    <div style={{fontSize:10,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.nombre}</div>
-                    <div style={{fontSize:7,color:C.t3}}>{s.especialidad}</div>
-                    <MiniBar value={st.neta} max={maxNeta} color={C.greenDim}/>
-                  </div>
-                  <div style={{fontSize:8,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.cobertura||"---"}</div>
-                  <div style={{fontSize:9,color:C.t1,fontFamily:"'Courier New',monospace"}}>{s.entregaDias}d</div>
-                  <div style={{fontSize:9,fontWeight:700,color:s.confiabilidad>=90?C.green:s.confiabilidad>=75?C.yellow:C.red,fontFamily:"'Courier New',monospace"}}>{s.confiabilidad}%</div>
-                  <div style={{fontSize:9,fontWeight:700,color:s.scoreOp>=80?C.green:s.scoreOp>=60?C.yellow:C.red,fontFamily:"'Courier New',monospace"}}>{s.scoreOp}</div>
-                  <div style={{fontSize:9,color:C.t2,fontFamily:"'Courier New',monospace"}}>{mxn(st.inv)}</div>
-                  <div style={{fontSize:10,fontWeight:700,color:st.neta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(st.neta)}</div>
-                  <div style={{display:"flex",gap:3}}>
-                    <button onClick={e=>startEdit(s,e)} style={{padding:"2px 5px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:8,cursor:"pointer"}}>Editar</button>
-                    <button onClick={e=>del(s.id,e)}    style={{padding:"2px 4px",background:"transparent",border:`1px solid ${C.red}44`,borderRadius:3,color:C.red,fontSize:9,cursor:"pointer"}}>x</button>
-                  </div>
-                </div>
-                {exp&&(
-                  <div style={{background:C.bg0,borderTop:`1px solid ${C.border}`,padding:"7px 11px"}}>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,fontSize:8}}>
-                      <span style={{color:C.t3}}>ID: <span style={{color:C.t2,fontFamily:"'Courier New',monospace"}}>{s.id}</span></span>
-                      <span style={{color:C.t3}}>Contacto: <span style={{color:C.t2}}>{s.contacto||"---"}</span></span>
-                      <span style={{color:C.t3}}>Correo: <span style={{color:C.t2}}>{s.correo||"---"}</span></span>
-                      <span style={{color:C.t3}}>Horario: <span style={{color:C.t2}}>{s.horario||"---"}</span></span>
-                      <span style={{color:C.t3}}>Incidencias: <span style={{color:s.incidencias>0?C.red:C.green,fontFamily:"'Courier New',monospace"}}>{s.incidencias}</span></span>
-                      <span style={{color:C.t3}}>Util. prom/op: <span style={{color:C.green,fontFamily:"'Courier New',monospace"}}>{mxn(st.total>0?st.neta/st.total:0)}</span></span>
-                      <span style={{color:C.t3}}>Margen s/inv: <span style={{color:C.cyan,fontFamily:"'Courier New',monospace"}}>{st.inv>0?fpct((st.neta/st.inv)*100):"---"}</span></span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── CLIENTES ──────────────────────────────────────────────────────────────────
-function Clientes({state,dispatch,toast}) {
-  const C = React.useContext(ThemeCtx);
-  const {clients,tickets,units} = state;
-  const [sel,setSel]=useState(null);
-  const [editId,setEditId]=useState(null);
-  const [adding,setAdding]=useState(false);
-  const [confirm,setConfirm]=useState(null);
-  const empty={empresa:"",contacto:"",tel:"",correo:"",rfc:"",direccion:"",ciudad:"",estado:"",creditDays:15,category:"B",score:70};
-  const [form,setForm]=useState(empty);
-  const sf=k=>v=>setForm(p=>({...p,[k]:v}));
-
-  const stats=useCallback(id=>{
-    const co=tickets.filter(t=>t.clientId===id);
-    return{total:co.length,fact:co.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0),neta:co.reduce((s,t)=>s+(t.snap?.uNeta||0),0),pend:co.filter(t=>t.payType==="credit"&&!t.cobrado).reduce((s,t)=>s+(t.snap?.precioConIVA||0),0)};
-  },[tickets]);
-  const maxFact=useMemo(()=>Math.max(...clients.map(c=>stats(c.id).fact),1),[clients,tickets]);
-
-  const startAdd=()=>{setAdding(true);setEditId(null);setForm(empty);};
-  const startEdit=(c,e)=>{e.stopPropagation();setEditId(c.id);setAdding(false);setForm({...c});};
-  const cancel=()=>{setAdding(false);setEditId(null);setForm(empty);};
-  const save=()=>{
-    if(editId){dispatch({type:"CLI_UPDATE",id:editId,patch:form});toast("Cliente actualizado","success");}
-    else{dispatch({type:"CLI_ADD",c:{...form,id:genId("CLI"),unidades:[]}});toast("Cliente registrado","success");}
-    cancel();
-  };
-  const del=(id,e)=>{e.stopPropagation();setConfirm(clients.find(c=>c.id===id));};
-  const showForm=adding||!!editId;
-
-  return (
-    <div style={{padding:"10px 13px",maxWidth:1100,margin:"0 auto"}}>
-      {confirm&&<Confirm msg={"Eliminar: "+confirm.empresa+"?"} onConfirm={()=>{dispatch({type:"CLI_DELETE",id:confirm.id});setSel(null);setConfirm(null);toast("Eliminado","info");}} onCancel={()=>setConfirm(null)}/>}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
-        <div style={{fontSize:7,color:C.t3,letterSpacing:"0.2em"}}>CLIENTES — {clients.length} registrados</div>
-        <button onClick={showForm?cancel:startAdd} style={{padding:"4px 11px",background:showForm?"transparent":C.blue,border:`1px solid ${showForm?C.border:C.blue}`,borderRadius:3,color:showForm?C.t2:C.t1,fontSize:10,fontWeight:600,cursor:"pointer"}}>
-          {showForm?"Cancelar":"+ Nuevo cliente"}
-        </button>
-      </div>
-      {showForm&&(
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:4,padding:11,marginBottom:8}}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
-            <Field label="Empresa / Razón social" value={form.empresa}    onChange={sf("empresa")}    prefix="" hint="Razón social"/>
-            <Field label="RFC"                    value={form.rfc||""}    onChange={sf("rfc")}         prefix=""/>
-            <Field label="Contacto"               value={form.contacto}   onChange={sf("contacto")}   prefix=""/>
-            <Field label="Teléfono"               value={form.tel}        onChange={sf("tel")}         prefix=""/>
-            <Field label="Correo"                 value={form.correo||""} onChange={sf("correo")}     prefix=""/>
-            <Field label="Días crédito"           value={form.creditDays} onChange={sf("creditDays")} prefix="" suffix="días" type="number"/>
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:7,marginTop:7}}>
-            <Field label="Dirección"   value={form.direccion||""} onChange={sf("direccion")} prefix="" hint="Calle, número, colonia"/>
-            <Field label="Ciudad"      value={form.ciudad||""}    onChange={sf("ciudad")}    prefix=""/>
-            <Field label="Estado"      value={form.estado||""}    onChange={sf("estado")}    prefix=""/>
-          </div>
-          <div style={{display:"flex",gap:6,marginTop:7}}>
-            <button onClick={save} style={{padding:"5px 14px",background:C.blue,border:"none",borderRadius:3,color:C.t1,fontSize:11,fontWeight:700,cursor:"pointer"}}>{editId?"Guardar cambios":"Guardar cliente"}</button>
-            <button onClick={cancel} style={{padding:"5px 10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:11,cursor:"pointer"}}>Cancelar</button>
-          </div>
-        </div>
-      )}
-      {clients.length===0&&!showForm&&<EmptyState icon="&#127970;" title="Sin clientes registrados"/>}
-      {clients.length>0&&(
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
-          <div style={{display:"grid",gridTemplateColumns:"1.6fr 0.8fr 1fr 1fr 0.8fr 0.6fr 60px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:5}}>
-            <span>EMPRESA</span><span>CONTACTO</span><span>FACTURADO</span><span>UTIL. NETA</span><span>PENDIENTE</span><span>SCORE</span><span/>
-          </div>
-          {clients.map((c,i)=>{
-            const st=stats(c.id);
-            const pctU=st.fact>0?(st.neta/st.fact)*100:0;
-            const exp=sel===c.id;
-            const cliUnits=units.filter(u=>u.clientId===c.id);
-            return (
-              <div key={c.id} style={{borderBottom:`1px solid ${C.border}`}}>
-                <div onClick={()=>setSel(exp?null:c.id)}
-                  style={{display:"grid",gridTemplateColumns:"1.6fr 0.8fr 1fr 1fr 0.8fr 0.6fr 60px",padding:"7px 9px",background:exp?C.blueDim:i%2===0?C.bg1:C.bg2,gap:5,alignItems:"center",cursor:"pointer"}}>
-                  <div style={{minWidth:0}}>
-                    <div style={{fontSize:10,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.empresa}</div>
-                    <div style={{fontSize:7,color:C.t3}}>{c.id}</div>
-                    <MiniBar value={st.fact} max={maxFact} color={C.cyanDim}/>
-                  </div>
-                  <div style={{fontSize:9,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.contacto||"---"}</div>
-                  <div style={{fontSize:10,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(st.fact)}</div>
-                  <div>
-                    <div style={{fontSize:10,fontWeight:700,color:st.neta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(st.neta)}</div>
-                    <div style={{fontSize:7,color:C.t3}}>{fpct(pctU)} del fact.</div>
-                  </div>
-                  <div style={{fontSize:9,color:st.pend>0?C.yellow:C.t3,fontFamily:"'Courier New',monospace",fontWeight:st.pend>0?700:400}}>{st.pend>0?mxn(st.pend):"---"}</div>
-                  <div style={{fontSize:10,fontWeight:700,color:c.score>=80?C.green:c.score>=60?C.yellow:C.red,fontFamily:"'Courier New',monospace"}}>{c.score}</div>
-                  <div style={{display:"flex",gap:3}}>
-                    <button onClick={e=>startEdit(c,e)} style={{padding:"2px 5px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:8,cursor:"pointer"}}>Editar</button>
-                    <button onClick={e=>del(c.id,e)}    style={{padding:"2px 4px",background:"transparent",border:`1px solid ${C.red}44`,borderRadius:3,color:C.red,fontSize:9,cursor:"pointer"}}>x</button>
-                  </div>
-                </div>
-                {exp&&(
-                  <div style={{background:C.bg0,borderTop:`1px solid ${C.border}`,padding:"7px 11px"}}>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7,marginBottom:5,fontSize:8}}>
-                      <span style={{color:C.t3}}>Tel: <span style={{color:C.t2}}>{c.tel||"---"}</span></span>
-                      <span style={{color:C.t3}}>Credito: <span style={{color:C.yellow}}>{c.creditDays}d</span></span>
-                      <span style={{color:C.t3}}>Tickets: <span style={{color:C.t1}}>{st.total}</span></span>
-                    </div>
-                    {cliUnits.length>0&&(
-                      <div style={{marginBottom:5}}>
-                        <div style={{fontSize:7,color:C.t3,marginBottom:3}}>FLOTA VINCULADA</div>
-                        {cliUnits.map(u=><div key={u.id} style={{fontSize:8,color:C.t2,marginBottom:2}}>&#128666; {u.marca} {u.modelo} {u.anio} — {u.vin}</div>)}
-                      </div>
-                    )}
-                    <div style={{fontSize:7,color:C.t3,marginBottom:3}}>ULTIMOS TICKETS</div>
-                    {tickets.filter(t=>t.clientId===c.id).slice(0,3).map(t=>(
-                      <div key={t.id} style={{display:"flex",justifyContent:"space-between",padding:"2px 0",borderBottom:`1px solid ${C.border}`,fontSize:8,alignItems:"center",gap:6}}>
-                        <span style={{color:C.t3,fontFamily:"'Courier New',monospace",flexShrink:0}}>{t.id}</span>
-                        <span style={{color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{t.titulo}</span>
-                        <PriorityBadge pid={t.priority} small/>
-                        <StatusBadge sid={t.status} meta={TICKET_META} small/>
-                        <span style={{color:(t.snap?.uNeta||0)>=0?C.green:C.red,fontFamily:"'Courier New',monospace",flexShrink:0}}>{mxn((t.snap?.uNeta||0))}</span>
-                      </div>
-                    ))}
-                    {tickets.filter(t=>t.clientId===c.id).length===0&&<div style={{fontSize:8,color:C.t3}}>Sin tickets vinculados.</div>}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── CARTERA ───────────────────────────────────────────────────────────────────
-function Cartera({state,dispatch,toast}) {
-  const C = React.useContext(ThemeCtx);
-  const {tickets,clients}=state;
-  const now=useMemo(()=>new Date(),[]);
-  // Use shared selectors — same criteria as MCartera (CARTERA_SET + !cobrado)
-  const pendientes = useMemo(()=>sel_cartera(tickets),[tickets]);
-  const cobrados   = useMemo(()=>sel_cobrados(tickets),[tickets]);
-  const vencidos   = useMemo(()=>sel_vencidos(tickets),[tickets]);
-
-  return (
-    <div style={{padding:"10px 13px",maxWidth:950,margin:"0 auto"}}>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:8}}>
-        <KPI label="Cartera pendiente" value={mxn(pendientes.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0))} color={C.yellow} accent sub={pendientes.length+" tickets"}/>
-        <KPI label="Vencidas"          value={mxn(vencidos.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0))}   color={C.red}    alert={vencidos.length>0} sub={vencidos.length+" vencidas"}/>
-        <KPI label="Cobrado (credito)" value={mxn(cobrados.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0))}   color={C.green}  sub={cobrados.length+" cobradas"}/>
-        <KPI label="Emision total"     value={mxn(creditOps.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0))}  color={C.t1}     sub="credito emitido"/>
-      </div>
-      {vencidos.length>0&&(
-        <div style={{background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:3,padding:"6px 10px",marginBottom:7}}>
-          <div style={{fontSize:8,color:C.red,fontWeight:700,marginBottom:3}}>CARTERA VENCIDA — {vencidos.length} operaciones</div>
-          {vencidos.map(t=>{const cl=clients.find(c=>c.id===t.clientId);return(
-            <div key={t.id} style={{fontSize:8,color:C.t2,marginBottom:2,fontFamily:"'Courier New',monospace"}}>{t.id} · {cl?.empresa||"---"} · {mxn(t.snap?.precioConIVA||0)} · Vto: {t.promesaPago}</div>
-          );})}
-        </div>
-      )}
-      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
-        <SHdr title="CUENTAS POR COBRAR" right={pendientes.length+" pendientes"}/>
-        <div style={{display:"grid",gridTemplateColumns:"1.5fr 1fr 0.8fr 0.9fr 0.8fr 0.7fr 90px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:4}}>
-          <span>TICKET / OP</span><span>CLIENTE</span><span>ESTADO</span><span>MONTO</span><span>PROMESA</span><span>DIAS</span><span/>
-        </div>
-        {pendientes.length===0&&<EmptyState icon="&#9989;" title="Sin creditos pendientes"/>}
-        {pendientes.map((t,i)=>{
-          const cl=clients.find(c=>c.id===t.clientId);
-          const dias=daysFromNow(t.promesaPago);
-          const venc=dias!=null&&dias>0;
-          return (
-            <div key={t.id} style={{display:"grid",gridTemplateColumns:"1.5fr 1fr 0.8fr 0.9fr 0.8fr 0.7fr 90px",padding:"6px 9px",background:venc?C.redDim:i%2===0?C.bg1:C.bg2,borderBottom:`1px solid ${C.border}`,gap:4,alignItems:"center"}}>
-              <div style={{minWidth:0}}>
-                <div style={{fontSize:8,fontWeight:700,color:C.t1,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.id}</div>
-                <div style={{fontSize:8,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo.substring(0,30)}</div>
-              </div>
-              <div style={{fontSize:9,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl?.empresa||"---"}</div>
-              <StatusBadge sid={t.status} meta={TICKET_META} small/>
-              <div style={{fontSize:10,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap?.precioConIVA||0)}</div>
-              <div style={{fontSize:9,color:C.t2,fontFamily:"'Courier New',monospace"}}>{t.promesaPago||"---"}</div>
-              <div style={{fontSize:9,fontWeight:700,color:venc?C.red:C.green,fontFamily:"'Courier New',monospace"}}>{dias!=null?(venc?"+"+dias+"d":Math.abs(dias)+"d"):"---"}</div>
-              <button onClick={()=>{dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado","success");}}
-                style={{padding:"2px 7px",background:C.greenDim,border:`1px solid ${C.green}44`,borderRadius:3,color:C.green,fontSize:9,cursor:"pointer",fontWeight:600}}>Cobrado</button>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ── AJUSTES ───────────────────────────────────────────────────────────────────
-function Ajustes({state,dispatch,toast}) {
-  const C = React.useContext(ThemeCtx);
-  const fileRef=useRef();
-  const importUnitsFile=useRef();
-  const [confirmReset,setConfirmReset]=useState(false);
-  const [confirmClearUnits,setConfirmClearUnits]=useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [showBackups, setShowBackups] = useState(false);
-  const [backupList, setBackupList] = useState([]);
-  const [previewKey, setPreviewKey] = useState(null);
-  const [previewData, setPreviewData] = useState(null);
-  const [confirmDel, setConfirmDel] = useState(null);
-  const [importMode, setImportMode] = useState("merge"); // "merge" | "replace"
-
-  const savedAt=(()=>{try{const r=localStorage.getItem(STORAGE_KEY);if(r){const p=JSON.parse(r);return p.savedAt?new Date(p.savedAt).toLocaleString("es-MX"):"---";}}catch(_e){}return "---";})();
-
-  const importUnitsJSON=(file, mode="merge")=>{
-    const r=new FileReader();
-    r.onload=e=>{
-      try{
-        const d=JSON.parse(e.target.result);
-        const arr=Array.isArray(d)?d:(d.units||[]);
-        if(!arr.length){toast("Sin unidades en el JSON","error");return;}
-        if(mode==="replace") {
-          dispatch({type:"UNITS_REPLACE", units: arr.map(u=>({...u, clientId:u.clientId||"CLI-00001"}))});
-          toast(`Flotilla reemplazada: ${arr.length} unidades`,"success");
-        } else {
-          arr.forEach(u=>{if(!u.id)return;dispatch({type:"UNIT_ADD",u:{...u,clientId:u.clientId||"CLI-00001"}});});
-          toast(`${arr.length} unidades agregadas`,"success");
-        }
-      }catch{toast("Archivo inválido","error");}
-    };
-    r.readAsText(file);
-  };
-
-  // Load backup keys from localStorage
-  const loadBackupList = () => {
-    try {
-      const keys = Object.keys(localStorage)
-        .filter(k=>k.startsWith("lgs_backup_")||k==="logisolve_state"||k==="lgs_pending_v1")
-        .map(k=>{
-          try {
-            const raw = localStorage.getItem(k);
-            const size = (raw?.length||0);
-            let info = {key:k, size, date:"---", tickets:0, units:0};
-            if(raw) {
-              const parsed = JSON.parse(raw);
-              if(parsed.exportedAt||parsed.savedAt) info.date = new Date(parsed.exportedAt||parsed.savedAt).toLocaleString("es-MX");
-              info.tickets = safeArr(parsed.tickets).length;
-              info.units   = safeArr(parsed.units).length;
-            }
-            return info;
-          } catch { return {key:k, size:0, date:"---", tickets:0, units:0}; }
-        });
-      setBackupList(keys);
-    } catch(e) { toast("Error leyendo localStorage","error"); }
-  };
-
-  const exportData=async()=>{
-    if(exporting) return;
-    setExporting(true);
-    try {
-      await new Promise(r=>setTimeout(r,0));
-      const payload = {version:STORAGE_VER, exportedAt:nowISO(), ...state};
-      const json = JSON.stringify(payload, null, 2);
-      // Save a copy in localStorage as backup
-      const backupKey = "lgs_backup_"+Date.now();
-      try { localStorage.setItem(backupKey, json); } catch(_e) {}
-      const blob = new Blob([json],{type:"application/json"});
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement("a");
-      a.href=url; a.download="logisolve-backup-"+Date.now()+".json"; a.click();
-      URL.revokeObjectURL(url);
-      opLog.push("EXPORT_OK", {tickets: state.tickets.length});
-      toast("Backup exportado","success");
-    } catch(e) {
-      toast("Error al exportar","error");
-    } finally { setExporting(false); }
-  };
-
-  const importData=file=>{
-    const r=new FileReader();
-    r.onload=e=>{
-      try{
-        const d=JSON.parse(e.target.result);
-        if(!d||typeof d!=="object") throw new Error("JSON inválido");
-        // Validate before importing
-        const tCount = safeArr(d.tickets).length;
-        const uCount = safeArr(d.units).length;
-        dispatch({type:"IMPORT",data:d});
-        opLog.push("IMPORT_OK", {tickets:tCount, units:uCount});
-        toast(`Importado: ${tCount} tickets, ${uCount} unidades`,"success");
-      } catch(e) {
-        opLog.push("IMPORT_ERROR", {error: e?.message});
-        toast("Archivo inválido: "+e?.message,"error");
-      }
-    };
-    r.readAsText(file);
-  };
-
-  const previewBackup = (key) => {
-    try {
-      const raw = localStorage.getItem(key);
-      if(!raw) return;
-      const d = JSON.parse(raw);
-      setPreviewKey(key);
-      setPreviewData(d);
-    } catch { toast("No se pudo leer el backup","error"); }
-  };
-
-  const deleteBackup = (key) => {
-    try {
-      localStorage.removeItem(key);
-      setBackupList(p=>p.filter(b=>b.key!==key));
-      if(previewKey===key) { setPreviewKey(null); setPreviewData(null); }
-      toast("Backup eliminado","info");
-    } catch { toast("Error al eliminar","error"); }
-    setConfirmDel(null);
-  };
-
-  const restoreFromBackup = (key) => {
-    try {
-      const raw = localStorage.getItem(key);
-      if(!raw) return;
-      const d = JSON.parse(raw);
-      dispatch({type:"IMPORT",data:d});
-      toast("Datos restaurados desde backup","success");
-    } catch { toast("Error al restaurar","error"); }
-  };
-
-  return (
-    <div style={{padding:"10px 13px",maxWidth:640,margin:"0 auto"}}>
-      {confirmReset&&<Confirm msg="Restablecer todos los datos al estado inicial?" onConfirm={()=>{dispatch({type:"RESET"});setConfirmReset(false);toast("Sistema restablecido","info");}} onCancel={()=>setConfirmReset(false)}/>}
-      {confirmClearUnits&&<Confirm msg={`Eliminar las ${state.units.length} unidades de la flotilla?`} onConfirm={()=>{dispatch({type:"UNITS_CLEAR"});setConfirmClearUnits(false);toast("Flotilla eliminada","info");}} onCancel={()=>setConfirmClearUnits(false)}/>}
-      {confirmDel&&<Confirm msg={"Eliminar backup: "+confirmDel+"?"} onConfirm={()=>deleteBackup(confirmDel)} onCancel={()=>setConfirmDel(null)}/>}
-
-      <div style={{fontSize:7,color:C.t3,letterSpacing:"0.2em",marginBottom:9}}>AJUSTES DEL SISTEMA</div>
-      {[
-        {title:"PERSISTENCIA",content:(
-          <div style={{padding:11}}>
-            <div style={{fontSize:9,color:C.t2,marginBottom:5}}>Guardado automático en Supabase + localStorage.</div>
-            <div style={{fontSize:8,color:C.t3,marginBottom:8}}>Último guardado: <span style={{color:C.cyan,fontFamily:"'Courier New',monospace"}}>{savedAt}</span></div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5}}>
-              <KPI label="Tickets"    value={String(state.tickets.filter(t=>!t._deleted).length)}/>
-              <KPI label="Unidades"   value={String(state.units.length)}/>
-              <KPI label="Clientes"   value={String(state.clients.length)}/>
-              <KPI label="Partes"     value={String(state.parts.length)}/>
-            </div>
-          </div>
-        )},
-        {title:"EXPORTAR BACKUP",content:(
-          <div style={{padding:11}}>
-            <div style={{fontSize:9,color:C.t2,marginBottom:7}}>Exporta todos los datos como JSON. También guarda una copia en localStorage.</div>
-            <button onClick={exportData} disabled={exporting} style={{padding:"6px 14px",background:exporting?C.bg2:C.blue,border:"none",borderRadius:3,color:exporting?C.t3:C.t1,fontSize:11,fontWeight:700,cursor:exporting?"not-allowed":"pointer"}}>
-              {exporting?"Exportando…":"⬇ Exportar JSON"}
-            </button>
-          </div>
-        )},
-        {title:"VER Y GESTIONAR BACKUPS (localStorage)",content:(
-          <div style={{padding:11}}>
-            <div style={{fontSize:9,color:C.t2,marginBottom:7}}>Backups guardados en este navegador. Puedes ver, restaurar o eliminar cada uno.</div>
-            <button onClick={()=>{setShowBackups(v=>!v);loadBackupList();}} style={{padding:"5px 12px",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:10,cursor:"pointer",marginBottom:8}}>
-              {showBackups?"▲ Ocultar":"▼ Ver backups"}
-            </button>
-            {showBackups&&(
-              <div>
-                {backupList.length===0&&<div style={{fontSize:9,color:C.t3}}>No hay backups guardados.</div>}
-                {backupList.map(b=>(
-                  <div key={b.key} style={{background:C.bg0,border:`1px solid ${C.border}`,borderRadius:4,padding:"8px 10px",marginBottom:6}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:9,fontFamily:"'Courier New',monospace",color:C.cyan,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.key}</div>
-                        <div style={{fontSize:8,color:C.t3}}>{b.date} · {b.tickets} tickets · {b.units} unidades · {(b.size/1024).toFixed(1)}KB</div>
-                      </div>
-                      <div style={{display:"flex",gap:5,flexShrink:0,marginLeft:8}}>
-                        <button onClick={()=>previewKey===b.key?setPreviewKey(null):previewBackup(b.key)}
-                          style={{padding:"3px 8px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,fontSize:9,cursor:"pointer"}}>
-                          {previewKey===b.key?"▲":"👁"}
-                        </button>
-                        <button onClick={()=>restoreFromBackup(b.key)}
-                          style={{padding:"3px 8px",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:9,cursor:"pointer"}}>
-                          ↩ Restaurar
-                        </button>
-                        <button onClick={()=>setConfirmDel(b.key)}
-                          style={{padding:"3px 8px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:3,color:C.red,fontSize:9,cursor:"pointer"}}>
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                    {previewKey===b.key&&previewData&&(
-                      <div style={{marginTop:8,padding:"8px",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderRadius:3,border:`1px solid ${C.border}`}}>
-                        <div style={{fontSize:8,color:C.t3,marginBottom:6}}>PREVIEW DEL BACKUP</div>
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>
-                          <KPI label="Tickets"    value={String(safeArr(previewData.tickets).length)}/>
-                          <KPI label="Clientes"   value={String(safeArr(previewData.clients).length)}/>
-                          <KPI label="Unidades"   value={String(safeArr(previewData.units).length)}/>
-                        </div>
-                        <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace",maxHeight:120,overflow:"auto",whiteSpace:"pre-wrap",wordBreak:"break-all"}}>
-                          {JSON.stringify({version:previewData.version,exportedAt:previewData.exportedAt,tickets:safeArr(previewData.tickets).slice(0,3).map(t=>({id:t.id,titulo:t.titulo,date:t.date}))},null,2)}
-                          {safeArr(previewData.tickets).length>3&&`\n... y ${safeArr(previewData.tickets).length-3} tickets más`}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-                <div style={{fontSize:8,color:C.t3,marginTop:6}}>
-                  localStorage usado: ~{(Object.keys(localStorage).reduce((s,k)=>{try{return s+(localStorage.getItem(k)||"").length;}catch{return s;}},0)/1024).toFixed(0)}KB
-                </div>
-              </div>
-            )}
-          </div>
-        )},
-        {title:"IMPORTAR FLOTILLA (JSON)",content:(
-          <div style={{padding:11}}>
-            <div style={{fontSize:9,color:C.t2,marginBottom:4}}>Importa unidades desde JSON.</div>
-            <div style={{fontSize:8,color:C.t3,marginBottom:8}}>Campos: id, vin, marca, modelo, anio, motor, transmision, config, clientId, statusOp, km, notas, placa, economico</div>
-
-            {/* Mode toggle */}
-            <div style={{display:"flex",gap:6,marginBottom:10}}>
-              {[["merge","Agregar a existentes"],["replace","Reemplazar toda la flotilla"]].map(([m,l])=>(
-                <button key={m} onClick={()=>setImportMode(m)}
-                  style={{padding:"4px 10px",border:`1px solid ${importMode===m?C.blueHi:C.border}`,borderRadius:3,background:importMode===m?C.blueDim:"transparent",color:importMode===m?C.cyan:C.t2,fontSize:9,cursor:"pointer",fontWeight:importMode===m?700:400}}>
-                  {l}
-                </button>
-              ))}
-            </div>
-
-            {importMode==="replace"&&(
-              <div style={{padding:"6px 10px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:3,marginBottom:8,fontSize:8,color:C.red}}>
-                ⚠ Esto eliminará las {state.units.length} unidades actuales y las reemplazará con el JSON.
-              </div>
-            )}
-
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              <input ref={importUnitsFile} type="file" accept=".json" onChange={e=>{if(e.target.files[0])importUnitsJSON(e.target.files[0],importMode);e.target.value="";}} style={{display:"none"}}/>
-              <button onClick={()=>importUnitsFile.current&&importUnitsFile.current.click()}
-                style={{padding:"6px 14px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,fontSize:11,fontWeight:700,cursor:"pointer"}}>
-                ⬆ {importMode==="replace"?"Reemplazar flotilla":"Importar flotilla JSON"}
-              </button>
-              <button onClick={()=>setConfirmClearUnits(true)}
-                style={{padding:"6px 12px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:3,color:C.red,fontSize:11,fontWeight:700,cursor:"pointer"}}>
-                🗑 Limpiar flotilla
-              </button>
-            </div>
-
-            <div style={{fontSize:8,color:C.t3,marginTop:6}}>Flotilla actual: <span style={{color:C.cyan,fontFamily:"'Courier New',monospace"}}>{state.units.length} unidades</span></div>
-          </div>
-        )},
-        {title:"IMPORTAR DATOS COMPLETOS",content:(
-          <div style={{padding:11}}>
-            <div style={{fontSize:9,color:C.t2,marginBottom:4}}>Importa un backup JSON completo. <span style={{color:C.yellow}}>Reemplaza los datos actuales.</span></div>
-            <input ref={fileRef} type="file" accept=".json" onChange={e=>{if(e.target.files[0])importData(e.target.files[0]);}} style={{display:"none"}}/>
-            <button onClick={()=>fileRef.current&&fileRef.current.click()} style={{padding:"6px 14px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:11,cursor:"pointer"}}>⬆ Importar JSON</button>
-          </div>
-        )},
-        {title:"RESTABLECER",content:(
-          <div style={{padding:11}}>
-            <div style={{fontSize:9,color:C.t2,marginBottom:7}}>Elimina todos los datos y vuelve al estado inicial. <span style={{color:C.red}}>No se puede deshacer.</span></div>
-            <button onClick={()=>setConfirmReset(true)} style={{padding:"6px 14px",background:C.redDim,border:`1px solid ${C.red}55`,borderRadius:3,color:C.red,fontSize:11,fontWeight:700,cursor:"pointer"}}>Restablecer sistema</button>
-          </div>
-        )},
-      ].map(sec=>(
-        <div key={sec.title} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
-          <SHdr title={sec.title}/>
-          {sec.content}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── MAjustes — Ajustes móvil ─────────────────────────────────────────────────
-function MAjustes({state,dispatch,toast}) {
-  const C = React.useContext(ThemeCtx);
-  const fileRef=useRef();
-  const importUnitsFile=useRef();
-  const [confirmReset,setConfirmReset]=useState(false);
-  const [confirmClearUnits,setConfirmClearUnits]=useState(false);
-  const [exporting,setExporting]=useState(false);
-  const [importMode,setImportMode]=useState("merge");
-
-  const savedAt=(()=>{try{const r=localStorage.getItem(STORAGE_KEY);if(r){const p=JSON.parse(r);return p.savedAt?new Date(p.savedAt).toLocaleString("es-MX"):"---";}}catch(_e){}return "---";})();
-
-  const importUnitsJSON=(file,mode="merge")=>{
-    const r=new FileReader();
-    r.onload=e=>{
-      try{
-        const d=JSON.parse(e.target.result);
-        const arr=Array.isArray(d)?d:(d.units||[]);
-        if(!arr.length){toast("Sin unidades en el JSON","error");return;}
-        if(mode==="replace"){dispatch({type:"UNITS_REPLACE",units:arr.map(u=>({...u,clientId:u.clientId||"CLI-00001"}))});toast(`Flotilla reemplazada: ${arr.length} unidades`,"success");}
-        else{arr.forEach(u=>{if(!u.id)return;dispatch({type:"UNIT_ADD",u:{...u,clientId:u.clientId||"CLI-00001"}});});toast(`${arr.length} unidades agregadas`,"success");}
-      }catch{toast("Archivo inválido","error");}
-    };
-    r.readAsText(file);
-  };
-
-  const exportData=async()=>{
-    if(exporting) return;
-    setExporting(true);
-    try{
-      await new Promise(r=>setTimeout(r,0));
-      const payload={version:STORAGE_VER,exportedAt:nowISO(),...state};
-      const json=JSON.stringify(payload,null,2);
-      try{localStorage.setItem("lgs_backup_"+Date.now(),json);}catch(_e){}
-      const blob=new Blob([json],{type:"application/json"});
-      const url=URL.createObjectURL(blob);
-      const a=document.createElement("a");
-      a.href=url;a.download="logisolve-backup-"+Date.now()+".json";a.click();
-      URL.revokeObjectURL(url);
-      toast("Backup exportado","success");
-    }catch{toast("Error al exportar","error");}
-    finally{setExporting(false);}
-  };
-
-  const importData=file=>{
-    const r=new FileReader();
-    r.onload=e=>{
-      try{
-        const d=JSON.parse(e.target.result);
-        if(!d||typeof d!=="object") throw new Error("JSON inválido");
-        dispatch({type:"IMPORT",data:d});
-        toast(`Importado: ${safeArr(d.tickets).length} tickets, ${safeArr(d.units).length} unidades`,"success");
-      }catch(e){toast("Archivo inválido: "+e?.message,"error");}
-    };
-    r.readAsText(file);
-  };
-
-  const Card=({title,children})=>(
-    <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",marginBottom:10}}>
-      <div style={{padding:"11px 16px",borderBottom:`1px solid ${C.border}`,background:C.bg3}}>
-        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.18em",fontWeight:700}}>{title}</div>
-      </div>
-      <div style={{padding:"14px 16px"}}>{children}</div>
-    </div>
-  );
-
-  return (
-    <div style={{padding:"14px 14px 8px"}}>
-      {confirmReset&&<Confirm msg="Restablecer todos los datos al estado inicial?" onConfirm={()=>{dispatch({type:"RESET"});setConfirmReset(false);toast("Sistema restablecido","info");}} onCancel={()=>setConfirmReset(false)}/>}
-      {confirmClearUnits&&<Confirm msg={`Eliminar las ${state.units.length} unidades de la flotilla?`} onConfirm={()=>{dispatch({type:"UNITS_CLEAR"});setConfirmClearUnits(false);toast("Flotilla eliminada","info");}} onCancel={()=>setConfirmClearUnits(false)}/>}
-
-      <div style={{fontSize:11,color:C.t3,letterSpacing:"0.15em",textTransform:"uppercase",fontWeight:700,marginBottom:14}}>Ajustes del sistema</div>
-
-      <Card title="PERSISTENCIA">
-        <div style={{fontSize:13,color:C.t2,marginBottom:4}}>Guardado automático en Supabase + localStorage.</div>
-        <div style={{fontSize:11,color:C.t3,marginBottom:12}}>Último guardado: <span style={{color:C.cyan,fontFamily:"'Courier New',monospace"}}>{savedAt}</span></div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-          {[["Tickets",state.tickets.filter(t=>!t._deleted).length],["Unidades",state.units.length],["Clientes",state.clients.length],["Partes",state.parts.length]].map(([l,v])=>(
-            <div key={l} style={{background:C.bg0,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px"}}>
-              <div style={{fontSize:22,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{v}</div>
-              <div style={{fontSize:10,color:C.t3,textTransform:"uppercase",letterSpacing:"0.1em"}}>{l}</div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      <Card title="EXPORTAR BACKUP">
-        <div style={{fontSize:13,color:C.t2,marginBottom:12}}>Exporta todos los datos como JSON y guarda copia en localStorage.</div>
-        <MBtn label={exporting?"Exportando…":"⬇ Exportar JSON"} full color={C.t1} bg={exporting?C.bg2:C.blue} border={exporting?C.border:C.blue} onClick={exportData}/>
-      </Card>
-
-      <Card title="IMPORTAR FLOTILLA (JSON)">
-        <div style={{fontSize:13,color:C.t2,marginBottom:4}}>Importa unidades desde JSON. Flotilla actual: <span style={{color:C.cyan,fontWeight:700}}>{state.units.length}</span></div>
-        <div style={{display:"flex",gap:8,marginBottom:12}}>
-          {[["merge","Agregar"],["replace","Reemplazar"]].map(([m,l])=>(
-            <button key={m} onClick={()=>setImportMode(m)}
-              style={{flex:1,padding:"8px",border:`1px solid ${importMode===m?C.blueHi:C.border}`,borderRadius:8,background:importMode===m?C.blueDim:"transparent",color:importMode===m?C.cyan:C.t2,fontSize:12,cursor:"pointer",fontWeight:importMode===m?700:400}}>
-              {l}
-            </button>
-          ))}
-        </div>
-        {importMode==="replace"&&(
-          <div style={{padding:"10px 12px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:8,marginBottom:12,fontSize:12,color:C.red}}>
-            ⚠ Esto eliminará las {state.units.length} unidades actuales.
-          </div>
-        )}
-        <input ref={importUnitsFile} type="file" accept=".json" onChange={e=>{if(e.target.files[0])importUnitsJSON(e.target.files[0],importMode);e.target.value="";}} style={{display:"none"}}/>
-        <div style={{display:"flex",gap:8}}>
-          <MBtn label={importMode==="replace"?"⬆ Reemplazar flotilla":"⬆ Importar flotilla"} full color={C.cyan} bg={C.blueDim} border={C.blueHi} onClick={()=>importUnitsFile.current&&importUnitsFile.current.click()}/>
-        </div>
-        {state.units.length>0&&<div style={{marginTop:8}}><MBtn label="🗑 Limpiar flotilla" full color={C.red} bg={C.redDim} border={C.red+"44"} onClick={()=>setConfirmClearUnits(true)}/></div>}
-      </Card>
-
-      <Card title="IMPORTAR DATOS COMPLETOS">
-        <div style={{fontSize:13,color:C.t2,marginBottom:12}}>Importa un backup JSON completo. <span style={{color:C.yellow}}>Reemplaza los datos actuales.</span></div>
-        <input ref={fileRef} type="file" accept=".json" onChange={e=>{if(e.target.files[0])importData(e.target.files[0]);}} style={{display:"none"}}/>
-        <MBtn label="⬆ Importar JSON" full color={C.t2} bg="transparent" border={C.border} onClick={()=>fileRef.current&&fileRef.current.click()}/>
-      </Card>
-
-      <Card title="RESTABLECER">
-        <div style={{fontSize:13,color:C.t2,marginBottom:12}}>Elimina todos los datos y vuelve al estado inicial. <span style={{color:C.red}}>No se puede deshacer.</span></div>
-        <MBtn label="Restablecer sistema" full color={C.red} bg={C.redDim} border={C.red+"55"} onClick={()=>setConfirmReset(true)}/>
-      </Card>
-    </div>
-  );
-}
-
-// ── HISTORIAL ─────────────────────────────────────────────────────────────────
-function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
-  const C = React.useContext(ThemeCtx);
-  const {tickets,clients,units,suppliers} = state;
-  const [hide,    setHide]   = useState(false);
-  const [expId,   setExpId]  = useState(null);
-  const [editId,  setEditId] = useState(null);
-  const [ef,      setEf]     = useState({});
-  const [confirm, setConfirm]= useState(null);
-  const [showTrash, setShowTrash] = useState(false);
-  const [sortBy, setSortBy]  = useState("date_desc");
-  const sfn = k => v => setEf(p=>({...p,[k]:v}));
-
-  const activeTickets  = useMemo(()=>tickets.filter(t=>!t._deleted),[tickets]);
-  const active = activeTickets; // alias
-  const trashedTickets = useMemo(()=>tickets.filter(t=>t._deleted),[tickets]);
-
-  const sortedTickets = useMemo(()=>{
-    const arr = [...activeTickets];
-    // Convert DD/MM/YYYY to YYYY/MM/DD for correct date sort
-    const toSortable = (d="") => { const p=d.split("/"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; };
-    switch(sortBy){
-      case "date_asc":   return arr.sort((a,b)=>toSortable(a.date).localeCompare(toSortable(b.date)));
-      case "total_desc": return arr.sort((a,b)=>safeNumber(b.snap?.precioConIVA)-safeNumber(a.snap?.precioConIVA));
-      case "uneta_desc": return arr.sort((a,b)=>safeNumber(b.snap?.uNeta)-safeNumber(a.snap?.uNeta));
-      case "priority":   return arr.sort((a,b)=>a.priority.localeCompare(b.priority));
-      default:           return arr.sort((a,b)=>toSortable(b.date).localeCompare(toSortable(a.date)));
-    }
-  },[activeTickets,sortBy]);
-
-  const realizados = useMemo(()=>activeTickets.filter(t=>REVENUE_SET.has(t.status)),[activeTickets]);
-  const totalFact = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[realizados]);
-  const totalNeta = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0),[realizados]);
-  const totalInv  = useMemo(()=>realizados.reduce((s,t)=>s+safeNumber(t.snap?.costoBase)*(1+(safeNumber(t.snap?.params?.iva,16))/100),0),[realizados]);
-  const pctN      = totalFact>0?(totalNeta/totalFact)*100:0;
-
-  const days = useMemo(()=>{
-    const d={};
-    activeTickets.forEach(t=>{if(!d[t.date])d[t.date]={v:0,n:0,c:0};d[t.date].v+=safeNumber(t.snap?.precioConIVA);d[t.date].n+=safeNumber(t.snap?.uNeta);d[t.date].c++;});
-    return d;
-  },[activeTickets]);
-
-  const [editLineas, setEditLineas] = useState([]);
-  const updLinea = (idx,patch) => setEditLineas(p=>p.map((l,i)=>i===idx?{...l,...patch}:l));
-  const delLinea = idx => setEditLineas(p=>p.filter((_,i)=>i!==idx));
-  const addEditLinea = () => setEditLineas(p=>[...p,{titulo:"",partRef:"",manualPrice:"0",qty:1}]);
-
-  const startEdit = useCallback((t,e)=>{
-    e.stopPropagation();
-    setEditId(t.id);
-    setExpId(t.id);
-    const iva = t.snap?.params?.iva||16;
-    const ivaR = iva/100;
-    // costoBase en snap es sin IVA; el cotizador trabaja con costo CON IVA
-    const toConIVA = (snap) => (snap?.costoBase||0)*(1+ivaR);
-    let lineas;
-    if(t.lineas&&t.lineas.length>0) {
-      lineas = t.lineas.map(l=>({
-        titulo:l.titulo||"", partRef:l.partRef||"",
-        qty:l.qty||1, costoUnit:toConIVA(l.snap),
-        gasolina:l.snap?.gastos||0, otros:0,
-        mode:"manual", manualPrice:(l.snap?.precioConIVA||0).toFixed(2),
-        customMgn:false, customVal:27,
-        descripcionPDF:l.descripcionPDF||"",
-      }));
-    } else {
-      const parts=(t.titulo||"").split(" / ").filter(Boolean);
-      if(parts.length>1) {
-        const pxLinea=((t.snap?.precioConIVA||0)/parts.length).toFixed(2);
-        const costoXLinea=toConIVA(t.snap)/parts.length;
-        lineas=parts.map(p=>({titulo:p.trim(),partRef:"",qty:1,costoUnit:costoXLinea,gasolina:0,otros:0,mode:"manual",manualPrice:pxLinea,customMgn:false,customVal:27,descripcionPDF:""}));
-      } else {
-        lineas=[{titulo:t.titulo||"",partRef:t.partRef||"",qty:1,costoUnit:toConIVA(t.snap),gasolina:t.snap?.gastos||0,otros:0,mode:"manual",manualPrice:(t.snap?.precioConIVA||0).toFixed(2),customMgn:false,customVal:27,descripcionPDF:""}];
-      }
-    }
-    setEditLineas(lineas);
-    setEf({
-      date:t.date, clientId:t.clientId||"", supplierId:t.supplierId||"", unitId:t.unitId||"",
-      status:t.status, payType:t.payType, promesaPago:t.promesaPago||"",
-      prob:t.prob||"high", horasOp:t.horasOp||0, notes:t.notes||"",
-      iva, isr:t.snap?.params?.isr||20,
-      cIVA:true, vIVA:true,
-      opType:t.opId||"consumable", activeMods:[...(t.mods||[])], priority:t.priority||"P3",
-    });
-  },[]);
-
-  const cancelEdit = useCallback(()=>{setEditId(null);setEf({});setEditLineas([]);},[]);
-
-  // Snap agregado de todas las líneas — igual que cotizador
-  const editTotalSnap = useMemo(()=>{
-    if(!editId||!editLineas.length) return null;
-    const iva=safeNumber(ef.iva,16); const isr=safeNumber(ef.isr,20);
-    const opType=ef.opType||"consumable"; const priority=ef.priority||"P3";
-    const activeMods=safeArr(ef.activeMods);
-    const sharedMgn = effectiveMargin(opType,priority,activeMods,false,27);
-    const snaps = editLineas.map(l=>{
-      const mg = l.customMgn?Math.min(safeNumber(l.customVal),99):sharedMgn;
-      const qty = safeNumber(l.qty,1)||1;
-      const costo = safeNumber(l.costoUnit)*qty;
-      return computeSnap({costo,gasolina:safeNumber(l.gasolina),otros:safeNumber(l.otros),iva,isr,
-        compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,
-        mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
-    });
-    const sum=k=>snaps.reduce((s,sn)=>s+safeNumber(sn[k]),0);
-    const precioSinIVA=sum("precioSinIVA");
-    const uNeta=sum("uNeta");
-    return {
-      precioConIVA:sum("precioConIVA"), precioSinIVA,
-      ivaTraslad:sum("ivaTraslad"), ivaAcred:sum("ivaAcred"), ivaNeto:sum("ivaNeto"),
-      costoTotal:sum("costoTotal"), costoBase:sum("costoBase"), gastos:sum("gastos"),
-      uNeta, uBruta:sum("uBruta"), isr:sum("isr"),
-      markupSobre:sum("costoTotal")>0?((precioSinIVA-sum("costoTotal"))/sum("costoTotal"))*100:0,
-      margenNetoPrecio:precioSinIVA>0?(uNeta/precioSinIVA)*100:0,
-      params:{iva,isr},
-    };
-  },[editId,editLineas,ef]);
-
-  const liveSnap = editTotalSnap;
-
-  const saveEdit = useCallback(id=>{
-    if(!editTotalSnap) return;
-    const titulo = editLineas.map(l=>l.titulo.trim()||"Sin descripcion").join(" / ");
-    const opType=ef.opType||"consumable"; const priority=ef.priority||"P3";
-    const activeMods=ef.activeMods||[];
-    const sharedMgn=effectiveMargin(opType,priority,activeMods,false,27);
-    const lineasConSnap = editLineas.map(l=>{
-      const mg=l.customMgn?Math.min(l.customVal,99):sharedMgn;
-      const costo=(l.costoUnit||0)*(l.qty||1);
-      const snap=computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,
-        iva:parseFloat(ef.iva)||16,isr:parseFloat(ef.isr)||20,
-        compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,
-        mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
-      return {titulo:l.titulo||"Sin descripcion",partRef:l.partRef||"",snap,qty:l.qty||1,descripcionPDF:l.descripcionPDF||""};
-    });
-    const opMeta=OP_TYPES.find(o=>o.id===opType)||OP_TYPES[0];
-    const patch={
-      titulo, lineas:lineasConSnap,
-      opId:opType, opShort:opMeta.short, priority:ef.priority||"P3",
-      mods:[...activeMods],
-      date:ef.date, clientId:ef.clientId, supplierId:ef.supplierId, unitId:ef.unitId||"",
-      status:ef.status, payType:ef.payType,
-      promesaPago:ef.payType==="credit"?ef.promesaPago:null,
-      cobrado:PAID_SET.has(ef.status), prob:ef.prob,
-      horasOp:parseFloat(ef.horasOp)||0, notes:ef.notes,
-      snap:editTotalSnap, mode:editLineas.length>1?"multilinea":"auto",
-      partRef:editLineas.map(l=>l.partRef).filter(Boolean).join(", "),
-    };
-    dispatch({type:"TKT_UPDATE",id,patch});
-    toast("Ticket actualizado","success");
-    cancelEdit();
-  },[ef,editLineas,editTotalSnap,dispatch,toast,cancelEdit]);
-
-  const desgloseRows = t=>{
-    const s = t.snap||{};
-    const iva16  = safeNumber(s.params?.iva,16);
-    const carga  = safeNumber(s.cargaFiscal, safeNumber(s.ivaNeto)+safeNumber(s.isr));
-    const efic   = safeNumber(s.eficienciaFiscal, safeNumber(s.uBruta)>0?(safeNumber(s.uNeta)/safeNumber(s.uBruta))*100:0);
-    const rows = [
-      ["Costo producto (c/IVA)",  mxn(safeNumber(s.costoBase)*(1+iva16/100)), C.t2,     false],
-      ["IVA acreditable",         mxn(s.ivaAcred),                            C.blueHi, false],
-      ["Gastos operativos",       mxn(s.gastos),                              C.t2,     false],
-      ["Costo operativo total",   mxn(s.costoTotal),                          C.t1,     true ],
-      ["Markup s/costo",          fpct(calcMarkup(s.precioSinIVA,s.costoTotal)),                        C.blueHi, false],
-      ["Precio sin IVA",          mxn(s.precioSinIVA),                        C.cyan,   false],
-      ["IVA trasladado",          mxn(s.ivaTraslad),                          C.cyan,   false],
-      ["Precio con IVA",          mxn(s.precioConIVA),                        C.cyan,   true ],
-      ["IVA neto SAT",            mxn(s.ivaNeto),                             C.yellow, false],
-      ["Utilidad bruta",          mxn(s.uBruta),                              C.t2,     false],
-      ["ISR estimado SAT",        mxn(s.isr),                                 C.yellow, false],
-      ["Carga fiscal total",      mxn(carga),                                 C.red,    false],
-      ["Utilidad neta",           mxn(s.uNeta),                               safeNumber(s.uNeta)>=0?C.green:C.red, true],
-      ["Rentabilidad neta",       fpct(s.margenNetoPrecio),                   margenColor(safeNumber(s.margenNetoPrecio)), false],
-      ["Eficiencia fiscal",       fpct(efic),                                 efic>=75?C.green:efic>=60?C.yellow:C.red, false],
-    ];
-    const al = safeArr(s.alertas);
-    if(al.includes("margen_critico"))    rows.push(["⚠ Margen crítico","< 15%",C.red,false]);
-    if(al.includes("carga_fiscal_alta")) rows.push(["⚠ Carga fiscal alta","> util. neta",C.red,false]);
-    if(al.includes("markup_bajo"))       rows.push(["⚠ Markup insuficiente","< 25%",C.yellow,false]);
-    return rows;
-  };
-
-  return (
-    <div style={{padding:"10px 13px",maxWidth:1050,margin:"0 auto"}}>
-      {confirm&&<Confirm msg={"Eliminar: "+confirm.titulo+"?"} onConfirm={()=>{
-        const id=confirm.id;
-        dispatch({type:"TKT_SOFT_DEL",id});
-        scheduleHardDelete(id);
-        toast("Ticket a papelera — restaurable","info");
-        setConfirm(null);setExpId(null);
-      }} onCancel={()=>setConfirm(null)}/>}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
-        <div style={{fontSize:7,color:C.t3,letterSpacing:"0.2em"}}>HISTORIAL DE OPERACIONES</div>
-        <button onClick={()=>setHide(!hide)} style={{padding:"3px 9px",background:hide?C.blue:"transparent",border:`1px solid ${hide?C.blueHi:C.border}`,borderRadius:3,color:hide?C.t1:C.t2,fontSize:9,cursor:"pointer"}}>
-          {hide?"Mostrar":"Ocultar"} cifras
-        </button>
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:8}}>
-        <KPI label="Total facturado" value={mxn(totalFact)} color={C.cyan}/>
-        <KPI label="Total invertido" value={hide?"---":mxn(totalInv)} color={C.t2} sub="Costo prod. c/IVA"/>
-        <KPI label="Utilidad neta"   value={hide?"---":mxn(totalNeta)} color={totalNeta>=0?C.green:C.red} sub={hide?"---":fpct(pctN)+" del facturado"}/>
-        <KPI label="Operaciones"     value={String(tickets.length)} color={C.t1} sub={Object.keys(days).length+" dias"}/>
-      </div>
-
-      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
-        <div style={{display:"grid",gridTemplateColumns:"1.6fr 0.5fr 0.6fr 0.7fr 0.6fr 0.7fr 0.7fr 56px 20px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:4}}>
-          <span>ID / TITULO</span><span>TIPO</span><span>PRIO</span><span>ESTADO</span><span>MARKUP</span><span>PRECIO</span><span>UTIL.</span><span/><span/>
-        </div>
-
-        {/* Sort controls */}
-        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
-          <span style={{fontSize:7,color:C.t3}}>ORDENAR:</span>
-          {[["date_desc","Más reciente"],["date_asc","Más antiguo"],["total_desc","Mayor total"],["uneta_desc","Mayor utilidad"],["priority","Prioridad"]].map(([v,l])=>(
-            <button key={v} onClick={()=>setSortBy(v)}
-              style={{padding:"2px 7px",background:sortBy===v?C.blueDim:"transparent",border:`1px solid ${sortBy===v?C.blueHi:C.border}`,borderRadius:3,color:sortBy===v?C.cyan:C.t3,fontSize:7,cursor:"pointer"}}>
-              {l}
-            </button>
-          ))}
-        </div>
-        {sortedTickets.map((t,i)=>{
-          const exp=expId===t.id;
-          const editing=editId===t.id;
-          const cl=clients.find(c=>c.id===t.clientId);
-          return (
-            <div key={t.id} style={{borderBottom:`1px solid ${C.border}`}}>
-              <div onClick={()=>{if(!editing)setExpId(exp?null:t.id);}}
-                style={{display:"grid",gridTemplateColumns:"1.6fr 0.5fr 0.6fr 0.7fr 0.6fr 0.7fr 0.7fr 56px 20px",padding:"6px 9px",background:editing?C.blueDim:exp?C.bg3:i%2===0?C.bg1:C.bg2,cursor:editing?"default":"pointer",gap:4,alignItems:"center",borderLeft:`2px solid ${PRIORITY[t.priority]?.dot||C.border}`}}>
-                <div style={{minWidth:0}}>
-                  <div style={{fontSize:8,fontWeight:700,color:C.t1,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.id}</div>
-                  <div style={{fontSize:9,color:C.cyan,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
-                  <div style={{fontSize:7,color:C.t3}}>{t.date}{cl?" · "+cl.empresa.split(" ")[0]:""}</div>
-                </div>
-                <div style={{fontSize:8,fontFamily:"'Courier New',monospace",color:C.t2,fontWeight:600}}>{t.opShort}</div>
-                <PriorityBadge pid={t.priority} small/>
-                <StatusBadge sid={t.status} meta={TICKET_META} small/>
-                <div style={{fontSize:9,color:C.blueHi,fontFamily:"'Courier New',monospace"}}>{hide?"---":fpct(calcMarkup((t.snap?.precioSinIVA||0),(t.snap?.costoTotal||0)))}</div>
-                <div style={{fontSize:9,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{mxn((t.snap?.precioConIVA||0))}</div>
-                <div style={{fontSize:9,fontWeight:700,color:(t.snap?.uNeta||0)>=0?C.green:C.red,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{hide?"---":mxn((t.snap?.uNeta||0))}</div>
-                <div style={{display:"flex",gap:3}}>
-                  {!editing&&<button onClick={e=>startEdit(t,e)} style={{padding:"2px 5px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:8,cursor:"pointer"}}>Editar</button>}
-                  {!editing&&<button onClick={e=>{e.stopPropagation();const cl2=clients.find(c=>c.id===t.clientId);const un2=units?.find(u=>u.id===t.unitId);const su2=suppliers?.find(s=>s.id===t.supplierId);generarCotizacionPDF(t,cl2,un2,su2);}} style={{padding:"2px 5px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,fontSize:8,cursor:"pointer"}}>PDF</button>}
-                  {!editing&&<button onClick={e=>{e.stopPropagation();setConfirm(t);}} style={{padding:"2px 4px",background:"transparent",border:`1px solid ${C.red}44`,borderRadius:3,color:C.red,fontSize:9,cursor:"pointer",fontWeight:700}}>x</button>}
-                </div>
-                <div style={{fontSize:9,color:C.t3,textAlign:"center"}}>{exp?"^":"v"}</div>
-              </div>
-
-              {exp&&(
-                <div style={{background:C.bg0,borderTop:`1px solid ${C.border}`}}>
-                  {editing?(
-                    <div style={{padding:10}}>
-                      <div style={{fontSize:7,color:C.cyan,letterSpacing:"0.14em",marginBottom:7,fontWeight:700}}>EDITANDO {t.id}</div>
-
-                      {/* Datos generales */}
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:6}}>
-                        <Field label="Fecha"  value={ef.date}   onChange={sfn("date")}   prefix="" hint="DD/MM/AAAA"/>
-                        <Sel label="Estado"   value={ef.status} onChange={sfn("status")} options={TICKET_ALL.map(id=>({value:id,label:TICKET_META[id].label}))}/>
-                        <Sel label="Pago" value={ef.payType} onChange={sfn("payType")} options={[{value:"contado",label:"Contado"},{value:"credit",label:"Credito"}]}/>
-                      </div>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}>
-                        <Sel label="Cliente"   value={ef.clientId}   onChange={sfn("clientId")}   options={[{value:"",label:"-- Sin cliente --"},...clients.map(c=>({value:c.id,label:c.empresa}))]}/>
-                        <Sel label="Proveedor" value={ef.supplierId} onChange={sfn("supplierId")} options={[{value:"",label:"-- Sin proveedor --"},...suppliers.map(s=>({value:s.id,label:s.nombre}))]}/>
-                      </div>
-                      <UnitPicker units={units} value={ef.unitId||""} onChange={sfn("unitId")}/>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6,marginBottom:6}}>
-                        {ef.payType==="credit"&&<Field label="Promesa" value={ef.promesaPago} onChange={sfn("promesaPago")} prefix="" hint="DD/MM/AAAA"/>}
-                        <Sel label="Prob." value={ef.prob} onChange={sfn("prob")} options={PROB.map(p=>({value:p.id,label:p.label+" ("+p.pct+"%)"}))}/>
-                        <Field label="Horas op." value={ef.horasOp} onChange={sfn("horasOp")} prefix="" suffix="h" type="number" min={0} step={0.5}/>
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
-                          <Field label="IVA %" value={ef.iva} onChange={sfn("iva")} prefix="" suffix="%" type="number" min={0} step={0.1}/>
-                          <Field label="ISR %" value={ef.isr} onChange={sfn("isr")} prefix="" suffix="%" type="number" min={0} step={0.1}/>
-                        </div>
-                      </div>
-
-                      {/* Tipo de operación y modificadores */}
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}>
-                        <div>
-                          <div style={{fontSize:7,color:C.t3,letterSpacing:"0.14em",marginBottom:3}}>TIPO DE OPERACIÓN</div>
-                          <select value={ef.opType||"consumable"} onChange={e=>sfn("opType")(e.target.value)}
-                            style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 6px",color:C.t1,fontSize:10,outline:"none"}}>
-                            {OP_TYPES.map(op=><option key={op.id} value={op.id}>{op.label} ({op.baseMin}-{op.baseMax}%)</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <div style={{fontSize:7,color:C.t3,letterSpacing:"0.14em",marginBottom:3}}>PRIORIDAD</div>
-                          <select value={ef.priority||"P3"} onChange={e=>sfn("priority")(e.target.value)}
-                            style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 6px",color:C.t1,fontSize:10,outline:"none"}}>
-                            {Object.values(PRIORITY).map(p=><option key={p.id} value={p.id}>{p.id} — {p.label}</option>)}
-                          </select>
-                        </div>
-                      </div>
-
-                      {/* Parámetros fiscales */}
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6,marginBottom:6}}>
-                        <Field label="IVA %" value={ef.iva} onChange={sfn("iva")} prefix="" suffix="%" type="text" inputMode="decimal"/>
-                        <Field label="ISR %" value={ef.isr} onChange={sfn("isr")} prefix="" suffix="%" type="text" inputMode="decimal"/>
-                        <div style={{display:"flex",flexDirection:"column",justifyContent:"flex-end",paddingBottom:2}}>
-                          <Toggle label="Compra c/IVA" value={ef.cIVA!==false} onChange={v=>sfn("cIVA")(v)}/>
-                        </div>
-                        <div style={{display:"flex",flexDirection:"column",justifyContent:"flex-end",paddingBottom:2}}>
-                          <Toggle label="Venta c/IVA" value={ef.vIVA!==false} onChange={v=>sfn("vIVA")(v)}/>
-                        </div>
-                      </div>
-
-                      {/* Líneas */}
-                      <div style={{height:1,background:C.border,margin:"4px 0 7px"}}/>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
-                        <div style={{fontSize:7,color:C.t3,letterSpacing:"0.14em"}}>LÍNEAS ({editLineas.length})</div>
-                        <button onClick={addEditLinea} style={{fontSize:8,background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,padding:"2px 8px",cursor:"pointer",fontWeight:600}}>+ Agregar línea</button>
-                      </div>
-                      {editLineas.map((l,idx)=>{
-                        const mg = l.customMgn ? Math.min(l.customVal,99) : effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
-                        const costo=(l.costoUnit||0)*(l.qty||1);
-                        const lsnap = computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,iva:parseFloat(ef.iva)||16,isr:parseFloat(ef.isr)||20,compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
-                        return (
-                        <div key={idx} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.borderHi}`,borderRadius:3,padding:"7px 9px",marginBottom:5}}>
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
-                            <span style={{fontSize:8,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>LÍNEA {String(idx+1).padStart(2,"0")} · {mxn(lsnap.precioConIVA)} · {fpct(lsnap.margenNetoPrecio)}</span>
-                            {editLineas.length>1&&<button onClick={()=>delLinea(idx)} style={{padding:"1px 6px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:2,color:C.red,fontSize:8,cursor:"pointer",fontWeight:700}}>× Eliminar</button>}
-                          </div>
-                          {/* Descripción y parte */}
-                          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:5,marginBottom:5}}>
-                            <Field label="Descripción / producto" value={l.titulo} onChange={v=>updLinea(idx,{titulo:v})} prefix=""/>
-                            <Field label="Ref. / OEM" value={l.partRef||""} onChange={v=>updLinea(idx,{partRef:v})} prefix=""/>
-                          </div>
-                          <Field label="Descripción PDF (aparece en cotización)" value={l.descripcionPDF||""} onChange={v=>updLinea(idx,{descripcionPDF:v})} prefix="" hint="Dejar vacío para usar texto por defecto" rows={2}/>
-                          {/* Qty, costo, gasolina, otros */}
-                          <div style={{display:"grid",gridTemplateColumns:"70px 1fr 1fr 1fr",gap:5,marginBottom:5}}>
-                            <Field label="Cant." value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)} onChange={v=>updLinea(idx,{_qtyRaw:v})} onBlur={()=>{const n=parseInt(l._qtyRaw);updLinea(idx,{qty:isFinite(n)&&n>=1?n:1,_qtyRaw:undefined});}} prefix="" suffix="pz" type="text" inputMode="numeric"/>
-                            <Field label="Costo unit. c/IVA" value={l.costoUnit||0} onChange={v=>updLinea(idx,{costoUnit:v})} onBlur={()=>updLinea(idx,{costoUnit:safeNumber(l.costoUnit)})} type="text" inputMode="decimal"/>
-                            <Field label="Gasolina" value={l.gasolina||0} onChange={v=>updLinea(idx,{gasolina:v})} onBlur={()=>updLinea(idx,{gasolina:safeNumber(l.gasolina)})} type="text" inputMode="decimal"/>
-                            <Field label="Otros gastos" value={l.otros||0} onChange={v=>updLinea(idx,{otros:v})} onBlur={()=>updLinea(idx,{otros:safeNumber(l.otros)})} type="text" inputMode="decimal"/>
-                          </div>
-                          {(safeNumber(l.qty,1))>1&&<div style={{fontSize:7,color:C.t3,marginBottom:5,fontFamily:"'Courier New',monospace"}}>{l.qty} × {mxn(safeNumber(l.costoUnit))} = {mxn(safeNumber(l.costoUnit)*safeNumber(l.qty,1))} costo total</div>}
-                          {/* Modo precio */}
-                          <div style={{display:"flex",gap:7,alignItems:"center"}}>
-                            <div style={{display:"flex",borderRadius:3,overflow:"hidden",border:`1px solid ${C.border}`,flexShrink:0}}>
-                              {[["auto","Auto"],["manual","Manual"]].map(([id,lbl])=>(
-                                <button key={id} onClick={()=>updLinea(idx,{mode:id})}
-                                  style={{padding:"3px 8px",border:"none",cursor:"pointer",fontSize:8,fontWeight:600,background:l.mode===id?C.blue:C.bg2,color:l.mode===id?C.t1:C.t2}}>{lbl}</button>
-                              ))}
-                            </div>
-                            {l.mode==="auto" ? (
-                              <div style={{display:"flex",alignItems:"center",gap:5,flex:1}}>
-                                <span style={{fontSize:7,color:C.t3}}>Margen:</span>
-                                {l.customMgn ? (
-                                  <input type="text" inputMode="decimal" value={l._customValRaw!==undefined?l._customValRaw:String(l.customVal||27)}
-                                  onChange={e=>updLinea(idx,{_customValRaw:e.target.value})}
-                                  onBlur={()=>updLinea(idx,{customVal:safeNumber(l._customValRaw,27),_customValRaw:undefined})}
-                                    style={{width:55,background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:3,padding:"3px 5px",color:C.cyan,fontSize:9,outline:"none",fontFamily:"'Courier New',monospace",textAlign:"right"}}/>
-                                ) : (
-                                  <span style={{fontSize:11,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{fpct(mg)}</span>
-                                )}
-                                <button onClick={()=>updLinea(idx,{customMgn:!l.customMgn})}
-                                  style={{fontSize:7,padding:"2px 5px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:2,color:C.t3,cursor:"pointer"}}>
-                                  {l.customMgn?"auto":"editar"}
-                                </button>
-                              </div>
-                            ) : (
-                              <div style={{display:"flex",alignItems:"center",gap:5,flex:1}}>
-                                <span style={{fontSize:7,color:C.t3}}>Precio c/IVA:</span>
-                                <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden",flex:1}}>
-                                  <span style={{padding:"0 4px",color:C.cyan,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
-                                  <input type="text" inputMode="decimal" value={l.manualPrice} onChange={e=>updLinea(idx,{manualPrice:e.target.value})}
-                                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:11,fontWeight:700,padding:"4px 0",fontFamily:"'Courier New',monospace"}}/>
-                                </div>
-                                <span style={{fontSize:8,color:margenColor(lsnap.margenNetoPrecio),fontFamily:"'Courier New',monospace",flexShrink:0}}>{fpct(lsnap.margenNetoPrecio)}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        );
-                      })}
-
-                      {/* Preview total */}
-                      {liveSnap&&(
-                        <div style={{background:C.bg3,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderRadius:3,border:`1px solid ${C.borderHi}`,padding:"6px 9px",marginBottom:6,display:"flex",gap:16,alignItems:"center"}}>
-                          <div>
-                            <div style={{fontSize:7,color:C.t3,marginBottom:1}}>TOTAL c/IVA</div>
-                            <div style={{fontSize:13,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(liveSnap.precioConIVA)}</div>
-                          </div>
-                          <div>
-                            <div style={{fontSize:7,color:C.t3,marginBottom:1}}>UTIL. NETA</div>
-                            <div style={{fontSize:12,fontWeight:700,color:liveSnap.uNeta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(liveSnap.uNeta)}</div>
-                          </div>
-                          <div style={{fontSize:7,color:C.t3}}>{editLineas.length} línea{editLineas.length>1?"s":""}</div>
-                        </div>
-                      )}
-
-                      <Field label="Notas" value={ef.notes} onChange={sfn("notes")} prefix="" rows={2}/>
-                      <div style={{display:"flex",gap:5,marginTop:5}}>
-                        <button onClick={()=>saveEdit(t.id)} style={{padding:"5px 14px",background:C.blue,border:"none",borderRadius:3,color:C.t1,fontSize:11,fontWeight:700,cursor:"pointer"}}>Guardar</button>
-                        <button onClick={cancelEdit} style={{padding:"5px 10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:11,cursor:"pointer"}}>Cancelar</button>
-                      </div>
-                    </div>
-                  ):(
-                    <>
-                        {/* Líneas individuales si existen */}
-                      {t.lineas&&t.lineas.length>0 ? (
-                        <div>
-                          {t.lineas.map((l,j)=>(
-                            <div key={j} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 11px",borderBottom:`1px solid ${C.border}`,background:j%2===0?C.bg0:C.bg1}}>
-                              <div style={{minWidth:0,flex:1}}>
-                                <div style={{fontSize:9,color:C.t1,fontWeight:600}}>{l.titulo||"Sin descripcion"}</div>
-                                {l.partRef&&<div style={{fontSize:7,color:C.t3,fontFamily:"'Courier New',monospace"}}>{l.partRef}</div>}
-                              </div>
-                              <div style={{textAlign:"right",flexShrink:0,marginLeft:12}}>
-                                <div style={{fontSize:9,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(l.snap?.precioConIVA||0)}</div>
-                                <div style={{fontSize:7,color:C.t3}}>c/IVA</div>
-                              </div>
-                            </div>
-                          ))}
-                          <div style={{display:"flex",justifyContent:"space-between",padding:"5px 11px",background:C.bg3,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderBottom:`1px solid ${C.border}`}}>
-                            <span style={{fontSize:9,fontWeight:700,color:C.t1}}>TOTAL</span>
-                            <span style={{fontSize:10,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn((t.snap?.precioConIVA||0))}</span>
-                          </div>
-                        </div>
-                      ) : (
-                        desgloseRows(t).map(([lbl,val,col,bold],j)=>(
-                          <div key={j} style={{display:"flex",justifyContent:"space-between",padding:"3px 11px",background:bold?C.bg3:j%2===0?C.bg0:C.bg1,borderBottom:j<12?`1px solid ${C.border}`:"none"}}>
-                            <span style={{fontSize:9,color:bold?C.t1:C.t2,fontWeight:bold?700:400}}>{lbl}</span>
-                            <span style={{fontSize:9,fontWeight:bold?800:600,color:col,fontFamily:"'Courier New',monospace"}}>{val}</span>
-                          </div>
-                        ))
-                      )}
-                      <div style={{padding:"4px 11px",fontSize:7,color:C.t3,display:"flex",gap:8,flexWrap:"wrap"}}>
-                        <span>IVA {t.snap?.params?.iva||16}%</span>
-                        <span>ISR {t.snap?.params?.isr||20}%</span>
-                        {cl&&<span>Cliente: {cl.empresa}</span>}
-                        {t.mods&&t.mods.length>0&&<span>Mods: {t.mods.join(", ")}</span>}
-                        {t.horasOp>0&&<span>Util/h: {mxn((t.snap?.uNeta||0)/t.horasOp)}</span>}
-                        {t.payType==="credit"&&<span style={{color:C.yellow}}>Credito · {t.promesaPago||"sin fecha"}</span>}
-                        {t.notes&&<span style={{fontStyle:"italic"}}>{t.notes}</span>}
-                      </div>
-                      {/* Timeline compacto */}
-                      {t.timeline&&t.timeline.length>0&&(
-                        <div style={{padding:"4px 11px 8px",borderTop:`1px solid ${C.border}`}}>
-                          <div style={{fontSize:7,color:C.t3,marginBottom:3}}>TIMELINE ({t.timeline.length} eventos)</div>
-                          {t.timeline.slice(-3).map((ev,j)=>(
-                            <div key={j} style={{fontSize:7,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:1}}>
-                              {fmtTS(ev.ts)} — {ev.evento}{ev.actor?" · "+ev.actor:""}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        {/* Subtotales por dia */}
-        {Object.keys(days).sort().reverse().map(d=>(
-          <div key={d} style={{display:"grid",gridTemplateColumns:"1.6fr 0.5fr 0.6fr 0.7fr 0.6fr 0.7fr 0.7fr 56px 20px",padding:"4px 9px",background:C.bg4,borderTop:`1px solid ${C.border}`,gap:4,alignItems:"center"}}>
-            <div style={{fontSize:7,color:C.t3}}>&#128197; {d} · {days[d].c} op.</div>
-            <div/><div/><div/><div/>
-            <div style={{fontSize:9,fontWeight:700,color:C.t2,fontFamily:"'Courier New',monospace"}}>{mxn(days[d].v)}</div>
-            <div style={{fontSize:9,fontWeight:700,fontFamily:"'Courier New',monospace",color:days[d].n>=0?C.green:C.red}}>{hide?"---":mxn(days[d].n)}</div>
-            <div/><div/>
-          </div>
-        ))}
-
-        {/* Total global */}
-        <div style={{display:"grid",gridTemplateColumns:"1.6fr 0.5fr 0.6fr 0.7fr 0.6fr 0.7fr 0.7fr 56px 20px",padding:"8px 9px",background:C.blueDim,borderTop:`2px solid ${C.blue}`,gap:4,alignItems:"center"}}>
-          <div><div style={{fontSize:8,color:C.cyan,fontWeight:700}}>TOTAL GLOBAL</div><div style={{fontSize:7,color:C.t3}}>{activeTickets.length} operaciones{trashedTickets.length>0?` · ${trashedTickets.length} en papelera`:""}</div></div>
-          <div/><div/><div/><div/>
-          <div style={{fontSize:11,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(totalFact)}</div>
-          <div style={{fontSize:11,fontWeight:800,fontFamily:"'Courier New',monospace",color:totalNeta>=0?C.green:C.red}}>{hide?"---":mxn(totalNeta)}</div>
-          <div/><div/>
-        </div>
-      </div>
-
-      {/* Papelera */}
-      {trashedTickets.length>0&&(
-        <div style={{margin:"10px 0",padding:"0 9px"}}>
-          <button onClick={()=>setShowTrash(v=>!v)}
-            style={{fontSize:8,color:C.t3,background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,padding:"3px 8px",cursor:"pointer"}}>
-            🗑 Papelera ({trashedTickets.length}) {showTrash?"▲":"▼"}
-          </button>
-          {showTrash&&trashedTickets.map(t=>(
-            <div key={t.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 9px",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderBottom:`1px solid ${C.border}`,opacity:0.6}}>
-              <div>
-                <span style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace"}}>{t.id}</span>
-                <span style={{fontSize:9,color:C.t2,marginLeft:8}}>{t.titulo}</span>
-              </div>
-              <div style={{display:"flex",gap:6}}>
-                <button onClick={()=>{dispatch({type:"TKT_RESTORE",id:t.id});cancelHardDelete(t.id);toast("Ticket restaurado","success");}}
-                  style={{fontSize:8,padding:"2px 8px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,cursor:"pointer"}}>↩ Restaurar</button>
-                <button onClick={()=>dispatch({type:"TKT_DELETE",id:t.id})}
-                  style={{fontSize:8,padding:"2px 8px",background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:3,color:C.red,cursor:"pointer"}}>✕ Borrar</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// MOBILE VIEWS — diseñadas para pulgar, una columna, elementos grandes
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// ── Helpers móviles ──────────────────────────────────────────────────────────
-function MCard({children,style={}}) {
-  const C = React.useContext(ThemeCtx);
-  return <div style={{background:"rgba(22,24,28,0.82)",border:"1px solid rgba(255,255,255,0.04)",borderRadius:18,marginBottom:10,overflow:"hidden",boxShadow:"0 2px 16px rgba(255,255,255,0.04)",...style}}>{children}</div>;
-}
-function MRow({label,value,color,bold}) {
-  const C = React.useContext(ThemeCtx);
-  return (
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
-      <span style={{fontSize:12,color:"#4A5568"}}>{label}</span>
-      <span style={{fontSize:bold?16:13,fontWeight:bold?800:600,color:color||"#F3F4F6",fontFamily:"'Courier New',monospace"}}>{value}</span>
-    </div>
-  );
-}
-function MBtn({label,color,bg,border,onClick,full,small}) {
-  const C = React.useContext(ThemeCtx);
-  return (
-    <button onClick={onClick} style={{
-      width:full?"100%":"auto",
-      padding:small?"10px 16px":"15px 20px",
-      background:bg||"rgba(255,255,255,0.07)",
-      border:`1px solid ${border||"rgba(255,255,255,0.1)"}`,
-      borderRadius:12,cursor:"pointer",
-      fontSize:small?12:14,fontWeight:700,
-      color:color||"#F3F4F6",letterSpacing:"0.04em",
-      minHeight:small?40:48,touchAction:"manipulation",WebkitTapHighlightColor:"transparent",
-    }}>{label}</button>
-  );
-}
-function MField({label,value,onChange,type="text",placeholder,suffix,color}) {
-  const C = React.useContext(ThemeCtx);
-  return (
-    <div style={{marginBottom:10}}>
-      {label&&<div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase",fontWeight:600}}>{label}</div>}
-      <div style={{display:"flex",alignItems:"center",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden",minHeight:48}}>
-        <input type={type} value={value} placeholder={placeholder||""} onChange={e=>onChange(e.target.value)}
-          style={{flex:1,background:"transparent",border:"none",outline:"none",color:color||C.t1,
-            fontSize:16,/* 16px prevents iOS auto-zoom on focus */
-            padding:"12px 14px",fontFamily:"inherit"}}/>
-        {suffix&&<span style={{padding:"0 12px",color:C.t3,fontSize:12}}>{suffix}</span>}
-      </div>
-    </div>
-  );
-}
-function MSel({label,value,onChange,options}) {
-  const C = React.useContext(ThemeCtx);
-  return (
-    <div style={{marginBottom:10}}>
-      {label&&<div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase",fontWeight:600}}>{label}</div>}
-      <select value={value} onChange={e=>onChange(e.target.value)}
-        style={{width:"100%",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px",color:C.t1,
-          fontSize:16,/* 16px prevents iOS auto-zoom on focus */
-          outline:"none",fontFamily:"inherit",minHeight:48,appearance:"auto"}}>
-        {options.map(o=><option key={o.value} value={o.value} style={{background:C.bgSolid}}>{o.label}</option>)}
-      </select>
-    </div>
-  );
-}
-
-// ── MOps — Dashboard móvil ───────────────────────────────────────────────────
-function MOps({state,setTab,triggerMargin}) {
-  const C = React.useContext(ThemeCtx);
-  const {tickets,clients} = state;
-  const [period,setPeriod] = useState("month");
-
-  // ── Accent palette — Black/white monochrome
-  const A = makeA(C);
-
-  // ── Periods ───────────────────────────────────────────────────────────────
-  const range     = useMemo(()=>buildRange(period),[period]);
-  const prevRange = useMemo(()=>{
-    const ms=range.to-range.from;
-    return {from:new Date(range.from.getTime()-ms),to:new Date(range.from)};
-  },[range]);
-
-  // ── Core metrics ──────────────────────────────────────────────────────────
-  const operados = useMemo(()=>
-    sel_operados(tickets).filter(t=>{const d=parseDateMX(t.date);return d&&d>=range.from&&d<=range.to;})
-  ,[tickets,range]);
-  const prevOps = useMemo(()=>
-    sel_operados(tickets).filter(t=>{const d=parseDateMX(t.date);return d&&d>=prevRange.from&&d<=prevRange.to;})
-  ,[tickets,prevRange]);
-
-  const totalFact = useMemo(()=>sumSnap(operados,"precioConIVA"),[operados]);
-  const totalNeta = useMemo(()=>sumSnap(operados,"uNeta"),[operados]);
-  const prevFact  = useMemo(()=>sumSnap(prevOps,"precioConIVA"),[prevOps]);
-  const growth    = prevFact>0?((totalFact-prevFact)/prevFact)*100:null;
-  const margen    = totalFact>0?(totalNeta/totalFact)*100:0;
-
-  const carteraTkts  = useMemo(()=>sel_cartera(tickets),[tickets]);
-  const carteraMonto = useMemo(()=>sumSnap(carteraTkts,"precioConIVA"),[carteraTkts]);
-  const pipeline     = useMemo(()=>sel_open(tickets),[tickets]);
-  const p1Active     = useMemo(()=>pipeline.filter(t=>t.priority==="P1"),[pipeline]);
-  // "Acción requerida" = P1 stuck in early stages (not yet sourced/purchased)
-  const EARLY_STAGES = new Set(["recibido","validando","sourcing","cotizado"]);
-  const p1Bloqueados = useMemo(()=>p1Active.filter(t=>EARLY_STAGES.has(t.status)),[p1Active]);
-  const p1EnProceso  = useMemo(()=>p1Active.filter(t=>!EARLY_STAGES.has(t.status)),[p1Active]);
-  const p2Active     = useMemo(()=>pipeline.filter(t=>t.priority==="P2"),[pipeline]);
-  const vencidos     = useMemo(()=>sel_vencidos(tickets),[tickets]);
-
-  // ── Financial deep metrics (full breakdown) ────────────────────────────────
-  const costoProducto = useMemo(()=>operados.reduce((s,t)=>s+safeNumber(t.snap?.costoBase)*(1+safeNumber(t.snap?.params?.iva,16)/100),0),[operados]);
-  const gastosOp      = useMemo(()=>sumSnap(operados,"gastos"),[operados]);
-  const uBrutaOp      = useMemo(()=>sumSnap(operados,"uBruta"),[operados]);
-  const ivaNetoOp     = useMemo(()=>sumSnap(operados,"ivaNeto"),[operados]);
-  const isrOp         = useMemo(()=>sumSnap(operados,"isr"),[operados]);
-  const cargaFiscal   = ivaNetoOp + isrOp;
-  const eficienciaFiscal = uBrutaOp>0?(totalNeta/uBrutaOp)*100:0;
-  const roi           = costoProducto>0?(totalNeta/costoProducto)*100:0;
-  const markupProm    = useMemo(()=>{
-    const v=operados.filter(t=>safeNumber(t.snap?.costoTotal)>0);
-    return v.length>0?v.reduce((s,t)=>s+calcMarkup(safeNumber(t.snap?.precioSinIVA),safeNumber(t.snap?.costoTotal)),0)/v.length:0;
-  },[operados]);
-  const cobradosTkts  = useMemo(()=>sel_cobrados(tickets),[tickets]);
-  const cashTotal     = useMemo(()=>sumSnap(cobradosTkts,"precioConIVA"),[cobradosTkts]);
-  const cxp           = useMemo(()=>sel_active(tickets).filter(t=>!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap?.costoTotal),0),[tickets]);
-  const flujoOp       = carteraMonto - cargaFiscal - cxp;
-  const forecastTkts  = useMemo(()=>sel_forecast(tickets),[tickets]);
-  const forecastMonto = useMemo(()=>sumSnap(forecastTkts,"precioConIVA"),[forecastTkts]);
-  const forecastUtil  = useMemo(()=>forecastTkts.reduce((s,t)=>s+utilidadPonderada(safeNumber(t.snap?.uNeta),t.prob),0),[forecastTkts]);
-
-  // ── Operational status ────────────────────────────────────────────────────
-  const opsStatus = useMemo(()=>{
-    if(p1Bloqueados.length>0) return {msg:`${p1Bloqueados.length} P1 requiere${p1Bloqueados.length>1?"n":""} acción`,level:"critical"};
-    if(vencidos.length>0) return {msg:`${vencidos.length} cobro${vencidos.length>1?"s":""} vencido${vencidos.length>1?"s":""}`,level:"warning"};
-    if(p1EnProceso.length>0) return {msg:`${p1EnProceso.length} P1 en progreso`,level:"warning"};
-    if(operados.length===0) return {msg:"Sin operaciones en este período",level:"idle"};
-    if(margen>=25) return {msg:"Margen saludable · Todo operando",level:"good"};
-    if(margen>=15) return {msg:"Rentabilidad estable",level:"ok"};
-    return {msg:"Margen bajo — revisar precios",level:"warn"};
-  },[p1Bloqueados,p1EnProceso,vencidos,operados,margen]);
-
-  const sc = {
-    critical:{dot:A.red,   text:A.red},
-    warning: {dot:A.amber, text:A.amber},
-    idle:    {dot:A.t3,    text:A.t3},
-    good:    {dot:A.lime,  text:A.lime},
-    ok:      {dot:A.mint,  text:A.mint},
-    warn:    {dot:A.amber, text:A.amber},
-  }[opsStatus.level];
-
-  // ── 7-day sparkline ───────────────────────────────────────────────────────
-  const sparkData = useMemo(()=>{
-    const days=[];
-    for(let i=6;i>=0;i--){
-      const d=new Date(); d.setDate(d.getDate()-i);
-      const dd=String(d.getDate()).padStart(2,"0");
-      const mm=String(d.getMonth()+1).padStart(2,"0");
-      const ds=`${dd}/${mm}/${d.getFullYear()}`;
-      const val=sumSnap(sel_operados(tickets).filter(t=>t.date===ds),"uNeta");
-      days.push({val,today:i===0,label:i===0?"Hoy":`${dd}/${mm}`});
-    }
-    return days;
-  },[tickets]);
-  const maxSpark = Math.max(...sparkData.map(d=>d.val),1);
-
-  // SVG sparkline path (280×52 viewBox)
-  const sparkPath = useMemo(()=>{
-    const W=280,H=50,pts=sparkData.length;
-    const xs=sparkData.map((_,i)=>(i/(pts-1))*W);
-    const ys=sparkData.map(d=>H-(Math.max(d.val,0)/maxSpark)*(H-6)-3);
-    const line=xs.map((x,i)=>`${i===0?"M":"L"}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(" ");
-    return {line, area:line+` L${W},${H} L0,${H} Z`};
-  },[sparkData,maxSpark]);
-
-  const growthUp = growth!==null&&growth>=0;
-  const pLabel   = {"today":"Hoy","week":"7 días","month":"30 días","3m":"90 días"}[period]||"Período";
-
-  return (
-    <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
-
-      {/* ══ ALERT BANNER — breaks layout, appears FIRST ══════════════════════ */}
-      {(p1Bloqueados.length>0||p1EnProceso.length>0||vencidos.length>0)&&(
+      <div style={{ height: 3, background: C.bg2, borderRadius: 2, overflow: "hidden" }}>
         <div style={{
-          background: p1Bloqueados.length>0
-            ? "rgba(239,68,68,0.08)"
-            : "rgba(245,158,11,0.06)",
-          borderBottom: `1px solid ${p1Bloqueados.length>0?"rgba(239,68,68,0.2)":"rgba(245,158,11,0.15)"}`,
-          padding:"20px 20px 16px",
-        }}>
-          {p1Bloqueados.length>0&&(
-            <div style={{marginBottom:(p1EnProceso.length>0||vencidos.length>0)?18:0}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
-                <div style={{width:7,height:7,borderRadius:"50%",background:A.red,flexShrink:0}}/>
-                <span style={{fontSize:10,fontWeight:800,color:A.red,letterSpacing:"0.16em",textTransform:"uppercase"}}>
-                  Acción requerida
-                </span>
-              </div>
-              {p1Bloqueados.slice(0,2).map((t,i)=>(
-                <div key={t.id} onClick={()=>setTab("tickets")}
-                  style={{display:"flex",alignItems:"center",gap:12,padding:"11px 0",
-                    cursor:"pointer",borderTop:i>0?`1px solid rgba(232,72,72,0.12)`:"none"}}>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:14,fontWeight:600,color:A.t1,overflow:"hidden",
-                      textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>{t.titulo}</div>
-                    <div style={{fontSize:11,color:A.red}}>Pendiente acción · {TICKET_META[t.status]?.label||t.status}</div>
-                  </div>
-                  <div style={{fontSize:20,color:A.red,opacity:0.65,flexShrink:0}}>›</div>
-                </div>
-              ))}
-              {p1Bloqueados.length>2&&(
-                <div onClick={()=>setTab("tickets")} style={{fontSize:11,color:A.red,marginTop:8,cursor:"pointer",opacity:0.8}}>
-                  +{p1Bloqueados.length-2} más →
-                </div>
-              )}
-            </div>
-          )}
-          {p1EnProceso.length>0&&(
-            <div style={{marginBottom:vencidos.length>0?18:0}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                <div style={{width:6,height:6,borderRadius:"50%",background:A.amber,flexShrink:0}}/>
-                <span style={{fontSize:10,fontWeight:700,color:A.amber,letterSpacing:"0.14em",textTransform:"uppercase"}}>
-                  P1 en progreso
-                </span>
-              </div>
-              <div style={{fontSize:11,color:A.t3}}>
-                {p1EnProceso.length} operación{p1EnProceso.length>1?"es":""} — {p1EnProceso.map(t=>TICKET_META[t.status]?.label||t.status).join(", ")}
-              </div>
-            </div>
-          )}
-          {vencidos.length>0&&(
-            <div>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
-                <div style={{width:7,height:7,borderRadius:"50%",background:A.amber,flexShrink:0}}/>
-                <span style={{fontSize:10,fontWeight:800,color:A.amber,letterSpacing:"0.16em",textTransform:"uppercase"}}>
-                  Cobros vencidos
-                </span>
-              </div>
-              {vencidos.slice(0,1).map(t=>(
-                <div key={t.id} onClick={()=>setTab("cartera")}
-                  style={{display:"flex",alignItems:"center",gap:12,padding:"11px 0",cursor:"pointer"}}>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:14,fontWeight:600,color:A.t1,overflow:"hidden",
-                      textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>
-                      {t.titulo}
-                    </div>
-                    <div style={{fontSize:11,color:A.amber}}>Prometido {t.promesaPago} · Vencido</div>
-                  </div>
-                  <div style={{fontSize:20,color:A.amber,opacity:0.65,flexShrink:0}}>›</div>
-                </div>
-              ))}
-              {vencidos.length>1&&(
-                <div onClick={()=>setTab("cartera")}
-                  style={{fontSize:11,color:A.amber,marginTop:8,cursor:"pointer",opacity:0.8}}>
-                  +{vencidos.length-1} más →
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      <div style={{padding:"0 16px"}}>
-        {/* ── Period tabs + IA button ── */}
-        <div style={{display:"flex",gap:6,padding:"20px 0 20px",overflowX:"auto",
-          scrollbarWidth:"none",msOverflowStyle:"none",alignItems:"center"}}>
-          {[["today","Hoy"],["week","7d"],["month","30d"],["3m","3M"]].map(([v,l])=>(
-            <button key={v} onClick={()=>setPeriod(v)}
-              className={period===v?"glass-pill-active":"glass-pill-inactive"}
-              style={{
-                flexShrink:0,padding:"7px 18px",borderRadius:20,fontSize:12,fontWeight:700,
-                color:period===v ? A.pillColor : A.t3,
-                cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.18s",
-              }}>
-              {l}
-            </button>
-          ))}
-          {triggerMargin&&(
-            <button
-              onClick={()=>{
-                const t=[...tickets].filter(t=>safeNumber(t.snap?.costoTotal)>0)
-                  .sort((a,b)=>b.date.localeCompare(a.date))[0];
-                if(t) triggerMargin(t);
-              }}
-              style={{
-                flexShrink:0,marginLeft:"auto",padding:"7px 13px",borderRadius:20,
-                background:"rgba(143,227,190,0.10)",border:"1px solid rgba(143,227,190,0.28)",
-                color:"#8FE3BE",fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:"0.04em",
-                display:"flex",alignItems:"center",gap:5,
-              }}>
-              ⚡ IA
-            </button>
-          )}
-        </div>
-
-        {/* ══ HERO CARD ══════════════════════════════════════ */}
-        <div className="glass-card" style={{
-          padding:"28px 24px",
-          marginBottom:12,
-        }}>
-          {/* Operational status line */}
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:22}}>
-            <div style={{
-              width:6,height:6,borderRadius:"50%",background:sc.dot,flexShrink:0,
-              boxShadow:"none",
-            }}/>
-            <span style={{fontSize:11,fontWeight:700,color:sc.text,letterSpacing:"0.1em",textTransform:"uppercase"}}>
-              {opsStatus.msg}
-            </span>
-          </div>
-
-          {/* Label */}
-          <div style={{fontSize:9,color:A.t3,letterSpacing:"0.18em",textTransform:"uppercase",marginBottom:10}}>
-            Facturado · {pLabel}
-          </div>
-
-          {/* GIANT number */}
-          <div style={{
-            fontSize:58,fontWeight:800,color:C.t1,lineHeight:0.9,
-            letterSpacing:"-0.025em",fontVariantNumeric:"tabular-nums",
-            marginBottom:16,
-          }}>
-            {mxn(totalFact)}
-          </div>
-
-          {/* Growth chip */}
-          {growth!==null&&(
-            <div style={{marginBottom:22}}>
-              <span style={{
-                display:"inline-flex",alignItems:"center",gap:6,
-                padding:"5px 14px",borderRadius:20,
-                background: growthUp?A.limeDim:A.redDim,
-                border:`1px solid ${growthUp?C.borderHi:"rgba(224,85,85,0.25)"}`,
-              }}>
-                <span style={{fontSize:14,fontWeight:800,color:growthUp?A.lime:A.red}}>
-                  {growthUp?"+":""}{growth.toFixed(0)}%
-                </span>
-                <span style={{fontSize:10,color:A.t3,letterSpacing:"0.05em"}}>vs anterior</span>
-              </span>
-            </div>
-          )}
-
-          {/* Divider */}
-          <div style={{height:1,background:C.border,marginBottom:22}}/>
-
-          {/* Secondary KPIs */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:0}}>
-            {[
-              {label:"Util. neta", value:mxn(totalNeta), color:A.lime},
-              {label:"Margen",    value:fpct(margen),    color:margen>=25?A.lime:margen>=15?A.mint:A.amber, border:true},
-              {label:"Ops",       value:operados.length, color:A.t1, border:true},
-            ].map(({label,value,color,border})=>(
-              <div key={label} style={{paddingLeft:border?14:0,
-                borderLeft:border?`1px solid ${C.border}`:"none"}}>
-                <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>
-                  {label}
-                </div>
-                <div style={{fontSize:22,fontWeight:800,color,letterSpacing:"-0.01em"}}>
-                  {value}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ══ QUICK ACTIONS ═════════════════════════════════════════════════════ */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-          <button onClick={()=>setTab("cotizador")} className="glass-button" style={{
-            borderRadius:18,padding:"18px 16px",
-            textAlign:"left",WebkitTapHighlightColor:"transparent",touchAction:"manipulation",
-          }}>
-            <div style={{fontSize:22,fontWeight:800,color:A.lime,lineHeight:1,marginBottom:6}}>+</div>
-            <div style={{fontSize:13,fontWeight:700,color:A.lime,letterSpacing:"-0.01em",lineHeight:1.2}}>
-              Nueva<br/>cotización
-            </div>
-          </button>
-          <button onClick={()=>setTab("tickets")} className="glass-button" style={{
-            borderRadius:18,padding:"18px 16px",
-            cursor:"pointer",textAlign:"left",
-            WebkitTapHighlightColor:"transparent",touchAction:"manipulation",
-          }}>
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
-              <span style={{fontSize:26,fontWeight:800,color:A.t1,lineHeight:1}}>{pipeline.length}</span>
-              {p1Active.length>0&&(
-                <span style={{width:7,height:7,borderRadius:"50%",background:A.red,display:"inline-block",
-                  }}/>
-              )}
-            </div>
-            <div style={{fontSize:12,fontWeight:600,color:A.t2}}>
-              en Pipeline
-              {p1Active.length>0&&<div style={{fontSize:10,color:A.red,marginTop:3}}>{p1Active.length} P1 urgente{p1Active.length>1?"s":""}</div>}
-            </div>
-          </button>
-        </div>
-
-        {/* ══ CARTERA WIDGET — interactive, touchable ═══════════════════════════ */}
-        <div onClick={()=>setTab("cartera")} style={{
-          background: vencidos.length>0
-            ? "rgba(245,158,11,0.08)"
-            : A.card,
-          borderRadius:A.r,
-          padding:"22px 24px",
-          marginBottom:12,
-          boxShadow:A.shadow,
-          cursor:"pointer",
-          border:`1px solid ${vencidos.length>0?"rgba(240,160,48,0.25)":C.border}`,
-          WebkitTapHighlightColor:"transparent",
-        }}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
-            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase"}}>
-              Cartera activa
-            </div>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              {vencidos.length>0&&(
-                <span style={{
-                  fontSize:10,fontWeight:700,color:A.amber,
-                  background:A.amberDim,
-                  padding:"3px 10px",borderRadius:10,
-                  border:"1px solid rgba(240,160,48,0.28)",
-                }}>
-                  {vencidos.length} vencida{vencidos.length>1?"s":""}
-                </span>
-              )}
-              <span style={{fontSize:20,color:A.t3,opacity:0.5}}>›</span>
-            </div>
-          </div>
-          <div style={{
-            fontSize:42,fontWeight:800,lineHeight:1,letterSpacing:"-0.025em",
-            color:vencidos.length>0?A.amber:carteraMonto>0?A.t1:A.t3,
-            marginBottom:10,fontVariantNumeric:"tabular-nums",
-          }}>
-            {mxn(carteraMonto)}
-          </div>
-          <div style={{fontSize:11,color:A.t3}}>
-            {carteraTkts.length} ticket{carteraTkts.length!==1?"s":""} pendientes · toca para detalle
-          </div>
-        </div>
-
-        {/* ══ SPARKLINE — 7-day util trend ══════════════════════════════════════ */}
-        <div className="glass-card" style={{
-          padding:"22px 24px",marginBottom:12,
-        }}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
-            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase"}}>
-              Utilidad neta · 7 días
-            </div>
-            {growth!==null&&(
-              <span style={{fontSize:10,fontWeight:700,color:growthUp?A.lime:A.red}}>
-                {growthUp?"+":""}{growth.toFixed(0)}% sem. anterior
-              </span>
-            )}
-          </div>
-
-          <svg viewBox="0 0 280 52" style={{width:"100%",height:52,display:"block",overflow:"visible"}}>
-            <defs>
-              <linearGradient id="mops-sg" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%"   stopColor={A.lime} stopOpacity="0.25"/>
-                <stop offset="100%" stopColor={A.lime} stopOpacity="0.02"/>
-              </linearGradient>
-            </defs>
-            <path d={sparkPath.area} fill="url(#mops-sg)"/>
-            <path d={sparkPath.line} fill="none" stroke={A.lime} strokeWidth="1.6"
-              strokeLinecap="round" strokeLinejoin="round"/>
-            {sparkData.map((d,i)=>{
-              if(!d.today) return null;
-              const x=(i/(sparkData.length-1))*280;
-              const y=50-(Math.max(d.val,0)/maxSpark)*(50-6)-3;
-              return (
-                <g key="td">
-                  <circle cx={x} cy={y} r={10} fill={A.lime} opacity={0.1}/>
-                  <circle cx={x} cy={y} r={5}  fill={A.lime} opacity={0.85}/>
-                </g>
-              );
-            })}
-          </svg>
-
-          <div style={{display:"flex",justifyContent:"space-between",marginTop:10}}>
-            {sparkData.map((d,i)=>(
-              <div key={i} style={{fontSize:8,color:d.today?A.lime:A.t3,
-                fontWeight:d.today?800:400,textAlign:"center",letterSpacing:"0.02em"}}>
-                {d.label}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ══ SALUD FINANCIERA ══════════════════════════════════════════════════ */}
-        {operados.length>0&&(
-          <div className="glass-card" style={{padding:"22px 24px",marginBottom:12}}>
-            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:18}}>
-              Salud financiera · {pLabel}
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:16}}>
-              {[
-                {label:"Facturado",    value:mxn(totalFact),   color:A.t1},
-                {label:"Util. neta",   value:mxn(totalNeta),   color:A.lime},
-                {label:"Carga fiscal", value:mxn(cargaFiscal), color:A.amber},
-                {label:"ROI",          value:fpct(roi),        color:roi>=30?A.lime:roi>=15?A.mint:A.amber},
-                {label:"Markup prom.", value:fpct(markupProm), color:A.t2},
-                {label:"Margen neto",  value:fpct(margen),     color:margen>=25?A.lime:margen>=15?A.mint:A.amber},
-              ].map(({label,value,color})=>(
-                <div key={label}>
-                  <div style={{fontSize:9,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:5}}>{label}</div>
-                  <div style={{fontSize:18,fontWeight:800,color,fontVariantNumeric:"tabular-nums"}}>{value}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{height:1,background:C.border,marginBottom:14}}/>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-              {[
-                {label:"Cartera",   value:mxn(carteraMonto), color:vencidos.length>0?A.amber:A.t2},
-                {label:"Cash",      value:mxn(cashTotal),    color:A.lime},
-                {label:"Forecast",  value:mxn(forecastMonto),color:A.t3},
-              ].map(({label,value,color})=>(
-                <div key={label} style={{textAlign:"center",padding:"10px 6px",
-                  background:C._dark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.03)",borderRadius:10}}>
-                  <div style={{fontSize:8,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:5}}>{label}</div>
-                  <div style={{fontSize:13,fontWeight:700,color,fontVariantNumeric:"tabular-nums"}}>{value}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ══ CLIENTE LÍDER ═════════════════════════════════════════════════════ */}
-        {(()=>{
-          const map={};
-          operados.forEach(t=>{if(t.clientId) map[t.clientId]=(map[t.clientId]||0)+safeNumber(t.snap?.precioConIVA);});
-          const top=Object.entries(map).sort((a,b)=>b[1]-a[1])[0];
-          if(!top) return null;
-          const cl=clients.find(c=>c.id===top[0]);
-          if(!cl) return null;
-          const pct=totalFact>0?(top[1]/totalFact)*100:0;
-          return (
-            <div className="glass-card" style={{padding:"22px 24px",marginBottom:12}}>
-              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:18}}>
-                Cliente líder · {pLabel}
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:16}}>
-                <div>
-                  <div style={{fontSize:15,fontWeight:700,color:A.t1,marginBottom:6}}>{cl.empresa}</div>
-                  <div style={{fontSize:30,fontWeight:800,color:A.t1,letterSpacing:"-0.02em",fontVariantNumeric:"tabular-nums"}}>
-                    {mxn(top[1])}
-                  </div>
-                </div>
-                <div style={{textAlign:"right"}}>
-                  <div style={{fontSize:26,fontWeight:800,color:A.lime,letterSpacing:"-0.02em",lineHeight:1}}>
-                    {pct.toFixed(0)}%
-                  </div>
-                  <div style={{fontSize:9,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginTop:4}}>
-                    del total
-                  </div>
-                </div>
-              </div>
-              <div style={{height:3,background:C.border,borderRadius:2,overflow:"hidden"}}>
-                <div style={{height:"100%",width:`${Math.min(pct,100)}%`,
-                  background:`linear-gradient(90deg,${A.lime},${A.mint})`,
-                  borderRadius:2,transition:"width 600ms ease"}}/>
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* ── Sin datos empty state ── */}
-        {operados.length===0&&!p1Active.length&&!vencidos.length&&!p1EnProceso.length&&(
-          <div style={{textAlign:"center",padding:"48px 20px"}}>
-            <div style={{fontSize:11,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
-              Sin operaciones en {pLabel.toLowerCase()}
-            </div>
-            <div style={{fontSize:13,color:A.t3,marginBottom:20}}>
-              Crea una cotización para comenzar
-            </div>
-            <button onClick={()=>setTab("cotizador")} style={{
-              background:A.limeDim,border:`1px solid ${C.borderHi}`,
-              borderRadius:12,padding:"10px 22px",cursor:"pointer",
-              fontSize:13,fontWeight:600,color:A.lime,letterSpacing:"0.04em",
-            }}>
-              + Nueva cotización
-            </button>
-          </div>
-        )}
-
-        {/* ══ RESUMEN FINANCIERO — tabla completa ══════════════════════════════ */}
-        <div className="glass-card" style={{
-          overflow:"hidden",marginBottom:12,
-        }}>
-          {/* Header */}
-          <div style={{padding:"20px 22px 16px",borderBottom:`1px solid ${C.border}`}}>
-            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:6}}>
-              Resumen financiero
-            </div>
-            <div style={{fontSize:11,color:A.t2}}>{pLabel} · {operados.length} operación{operados.length!==1?"es":""}</div>
-          </div>
-          {/* Rows */}
-          {[
-            {label:"Revenue operado",   val:mxn(totalFact),          col:A.lime,     bold:true},
-            {label:"Costo producto",    val:mxn(costoProducto),      col:A.t2},
-            {label:"Gastos operativos", val:mxn(gastosOp),           col:A.t2},
-            {label:"Cash cobrado",      val:mxn(cashTotal),          col:"#8FE3BE"},
-            {label:"Utilidad operativa",val:mxn(totalNeta),          col:totalNeta>=0?"#8FE3BE":A.red, bold:true},
-            {label:"Markup promedio",   val:fpct(markupProm),        col:A.lime},
-            {label:"Rentabilidad neta", val:fpct(margen),            col:margen>=20?"#8FE3BE":margen>=10?"#F3F4F6":A.amber},
-            {label:"ROI operativo",     val:fpct(roi),               col:roi>=25?"#8FE3BE":A.amber},
-            {label:"IVA neto SAT",      val:mxn(ivaNetoOp),         col:A.amber},
-            {label:"ISR estimado",      val:mxn(isrOp),              col:A.amber},
-            {label:"Carga fiscal",      val:mxn(cargaFiscal),        col:A.red},
-            {label:"Eficiencia fiscal", val:fpct(eficienciaFiscal),  col:eficienciaFiscal>=75?"#8FE3BE":A.amber},
-            {label:"Cartera pendiente", val:mxn(carteraMonto),       col:vencidos.length>0?A.amber:A.t1},
-            {label:"Flujo operativo",   val:mxn(flujoOp),            col:flujoOp>=0?"#8FE3BE":A.red},
-            {label:"Forecast revenue",  val:mxn(forecastMonto),      col:A.t2},
-            {label:"Forecast utilidad", val:mxn(forecastUtil),       col:forecastUtil>0?A.lime:A.t2},
-            {label:"P1 activos",        val:String(p1Active.length), col:p1Active.length>0?A.red:A.t3, bold:p1Active.length>0},
-            {label:"P2 activos",        val:String(p2Active.length), col:p2Active.length>0?A.amber:A.t3},
-          ].map(({label,val,col,bold},i,arr)=>(
-            <div key={label} style={{
-              display:"flex",justifyContent:"space-between",alignItems:"center",
-              padding:"12px 22px",
-              borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none",
-              background:bold?(C._dark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.02)"):"transparent",
-            }}>
-              <span style={{fontSize:12,color:A.t2,letterSpacing:"0.01em"}}>{label}</span>
-              <span style={{
-                fontSize:bold?15:13,fontWeight:bold?800:600,
-                color:col,fontFamily:"'Courier New',monospace",
-                letterSpacing:"0.01em",
-              }}>{val}</span>
-            </div>
-          ))}
-          {/* Footer CTA */}
-          <div style={{padding:"16px 22px"}}>
-            <button onClick={()=>setTab("cotizador")}
-              style={{width:"100%",padding:"14px",
-                background:A.limeFill,
-                border:"none",borderRadius:14,cursor:"pointer",
-                fontSize:14,fontWeight:700,color:C._dark?"#0A1F14":"#161616",
-                letterSpacing:"0.02em",touchAction:"manipulation",
-                boxShadow:`0 4px 20px ${A.limeDim}`,
-              }}>
-              + Nueva cotización
-            </button>
-          </div>
-        </div>
+          height: "100%", width: `${Math.min(100, sla.pctUsado)}%`,
+          background: barColor, borderRadius: 2,
+          transition: "width 1s linear",
+        }} />
       </div>
     </div>
   );
 }
 
-// ── StatusFlowSheet — bottom sheet para cambiar estado de ticket en mobile ────
-function StatusFlowSheet({tkt, dispatch, toast, onClose}) {
-  const C = React.useContext(ThemeCtx);
-  if(!tkt) return null;
-  const nexts = TICKET_TRANSITIONS[tkt.status] || [];
-  const meta  = TICKET_META[tkt.status] || {};
+function Toast({ toasts }) {
   return (
-    <>
-      <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,0.55)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)"}}/>
-      <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:201,
-        background:"rgba(14,16,20,0.92)",backdropFilter:"blur(32px) saturate(1.8)",WebkitBackdropFilter:"blur(32px) saturate(1.8)",
-        borderRadius:"28px 28px 0 0",borderTop:`1px solid rgba(255,255,255,0.10)`,
-        padding:`16px 16px calc(20px + env(safe-area-inset-bottom,0px))`,
-        boxShadow:"0 -12px 60px rgba(0,0,0,0.7), 0 1px 0 rgba(255,255,255,0.06) inset"}}>
-        {/* Handle */}
-        <div style={{display:"flex",justifyContent:"center",marginBottom:14}}>
-          <div style={{width:40,height:4,borderRadius:2,background:C.border}}/>
-        </div>
-        {/* Current state */}
-        <div style={{marginBottom:4}}>
-          <div style={{fontSize:9,color:C.t3,letterSpacing:"0.15em",textTransform:"uppercase",marginBottom:4}}>Estado actual</div>
-          <div style={{fontSize:13,fontWeight:700,color:meta.dot||C.t2}}>{meta.label||tkt.status}</div>
-          <div style={{fontSize:11,color:C.t3,marginTop:2,marginBottom:16}}>{tkt.titulo}</div>
-        </div>
-        {/* Transitions */}
-        {nexts.length===0?(
-          <div style={{textAlign:"center",padding:"16px 0",color:C.t3,fontSize:13}}>
-            Ticket en estado final — sin transiciones disponibles
+    <div style={{ position: "fixed", bottom: 80, left: "50%", transform: "translateX(-50%)", zIndex: 9999, display: "flex", flexDirection: "column", gap: 8, pointerEvents: "none" }}>
+      {toasts.map(t => (
+        <div key={t.id} style={{
+          padding: "10px 18px", borderRadius: 10,
+          background: t.type === "error" ? "rgba(255,59,48,0.9)" : t.type === "success" ? "rgba(48,209,88,0.9)" : "rgba(30,40,55,0.95)",
+          color: "#fff", fontSize: 13, fontWeight: 600,
+          boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+          backdropFilter: "blur(20px)", border: `1px solid rgba(255,255,255,0.1)`,
+          whiteSpace: "nowrap",
+        }}>{t.msg}</div>
+      ))}
+    </div>
+  );
+}
+
+function useToast() {
+  const [toasts, setToasts] = useState([]);
+  const toast = useCallback((msg, type = "info") => {
+    const id = Date.now();
+    setToasts(p => [...p, { id, msg, type }]);
+    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 3000);
+  }, []);
+  return { toasts, toast };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ESTADÍSTICA KPI
+// ─────────────────────────────────────────────────────────────────────────────
+
+function useKPIs(operaciones) {
+  return useMemo(() => {
+    const activas = operaciones.filter(o => !o._deleted && ACTIVOS.has(o.estado));
+    const resueltas = operaciones.filter(o => !o._deleted && RESUELTOS.has(o.estado));
+    const criticas = activas.filter(o => o.urgencia === "critica");
+    const sla_vencidas = activas.filter(o => {
+      const s = slaStatus(o);
+      return s && s.vencido;
+    });
+    const pendiente_cobro = resueltas
+      .filter(o => !o.pago?.cobrado && o.estado !== "cerrado")
+      .reduce((s, o) => s + safeN(snapOp(o.lineas).precio_con_iva), 0);
+    const cobrado_mes = operaciones
+      .filter(o => o.pago?.cobrado && o.pago?.fecha_cobro && new Date(o.pago.fecha_cobro) > new Date(Date.now() - 30 * 86400000))
+      .reduce((s, o) => s + safeN(snapOp(o.lineas).u_neta), 0);
+    return { activas: activas.length, criticas: criticas.length, sla_vencidas: sla_vencidas.length, pendiente_cobro, cobrado_mes, resueltas: resueltas.length };
+  }, [operaciones]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CENTRO — Command Center
+// ─────────────────────────────────────────────────────────────────────────────
+
+function Centro({ state, dispatch, toast, onVer, onNueva }) {
+  const { operaciones, clientes, unidades } = state;
+  const kpi = useKPIs(operaciones);
+
+  const activas = useMemo(() =>
+    operaciones
+      .filter(o => !o._deleted && ACTIVOS.has(o.estado))
+      .sort((a, b) => {
+        const ua = URGENCIA[a.urgencia]?.orden ?? 99;
+        const ub = URGENCIA[b.urgencia]?.orden ?? 99;
+        if (ua !== ub) return ua - ub;
+        return new Date(a.createdAt) - new Date(b.createdAt);
+      }), [operaciones]);
+
+  const porCobrar = useMemo(() =>
+    operaciones.filter(o => !o._deleted && o.estado === "resuelto" && !o.pago?.cobrado),
+    [operaciones]);
+
+  const cliente = id => clientes.find(c => c.id === id);
+  const unidad  = id => unidades.find(u => u.id === id);
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg0, paddingBottom: 80 }}>
+
+      {/* Header */}
+      <div style={{ padding: "24px 16px 0" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div>
+            <div style={{ fontSize: 11, color: C.t3, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 4 }}>Logisolve v2</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: C.t1 }}>Centro Ops</div>
           </div>
-        ):(
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>
-              Mover a:
+          <button onClick={onNueva} style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "10px 18px", background: `${C.lime}18`, border: `1px solid ${C.lime}55`,
+            borderRadius: 12, color: C.lime, fontSize: 14, fontWeight: 800, cursor: "pointer",
+            fontFamily: "inherit",
+          }}>+ Nueva</button>
+        </div>
+
+        {/* Alert bar */}
+        {(kpi.criticas > 0 || kpi.sla_vencidas > 0) && (
+          <div style={{
+            marginTop: 16, padding: "10px 14px", borderRadius: 10,
+            background: "rgba(255,59,48,0.1)", border: "1px solid rgba(255,59,48,0.3)",
+            display: "flex", alignItems: "center", gap: 8,
+          }}>
+            <span style={{ fontSize: 14 }}>⚠</span>
+            <div style={{ fontSize: 12, color: C.red, fontWeight: 600, lineHeight: 1.4 }}>
+              {kpi.criticas > 0 && <span>{kpi.criticas} operación{kpi.criticas > 1 ? "es" : ""} crítica{kpi.criticas > 1 ? "s" : ""}</span>}
+              {kpi.criticas > 0 && kpi.sla_vencidas > 0 && " · "}
+              {kpi.sla_vencidas > 0 && <span>{kpi.sla_vencidas} SLA vencido{kpi.sla_vencidas > 1 ? "s" : ""}</span>}
             </div>
-            {nexts.map(to=>{
-              const m=TICKET_META[to]||{};
-              const isCancel=to==="cancelado";
-              return (
-                <button key={to} onClick={()=>{
-                  dispatch({type:"TKT_STATUS",id:tkt.id,to});
-                  toast(`${meta.label||tkt.status} → ${m.label||to}`,"success");
-                  onClose();
-                }}
-                  style={{padding:"14px 18px",borderRadius:14,cursor:"pointer",
-                    background:isCancel?C.redDim:C.bg2,
-                    border:`1px solid ${isCancel?C.red+"50":m.dot||C.border}`,
-                    display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
-                  <div style={{width:10,height:10,borderRadius:5,background:m.dot||C.border,flexShrink:0}}/>
-                  <div>
-                    <div style={{fontSize:14,fontWeight:700,color:isCancel?C.red:C.t1}}>{m.label||to}</div>
-                    {to==="cancelado"&&<div style={{fontSize:10,color:C.red,marginTop:1}}>Esta acción no se puede deshacer</div>}
+          </div>
+        )}
+
+        {/* KPI Row */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 16, marginBottom: 4 }}>
+          {[
+            { l: "Activas", v: kpi.activas, c: C.t1 },
+            { l: "Por cobrar", v: mxn(kpi.pendiente_cobro), c: kpi.pendiente_cobro > 0 ? C.amber : C.t3 },
+            { l: "Util. mes", v: mxn(kpi.cobrado_mes), c: C.lime },
+          ].map(({ l, v, c }) => (
+            <div key={l} style={{ background: C.bg1, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 12px" }}>
+              <div style={{ fontSize: 8, color: C.t3, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 4 }}>{l}</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: c, fontVariantNumeric: "tabular-nums" }}>{v}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ padding: "16px 16px 0" }}>
+
+        {/* Operaciones activas */}
+        {activas.length > 0 ? (
+          <>
+            <div style={{ fontSize: 10, color: C.t3, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 10, fontWeight: 700 }}>
+              En proceso · {activas.length}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {activas.map(op => {
+                const u = URGENCIA[op.urgencia];
+                const cli = cliente(op.clienteId);
+                const uni = unidad(op.unidadId);
+                const snap = snapOp(op.lineas);
+                return (
+                  <div key={op.id} onClick={() => onVer(op.id)}
+                    style={{
+                      background: C.bg1, border: `1px solid ${C.border}`,
+                      borderLeft: `3px solid ${u?.color || C.t3}`,
+                      borderRadius: C.r, padding: "14px 16px", cursor: "pointer",
+                      boxShadow: C.shadow,
+                    }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <Pill label={u?.label || op.urgencia} color={u?.color} dim={u?.dim} small />
+                        <Pill label={ESTADO_META[op.estado]?.label || op.estado} color={ESTADO_META[op.estado]?.dot} small />
+                      </div>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: C.t2, fontVariantNumeric: "tabular-nums" }}>
+                        {snap.precio_con_iva > 0 ? mxn(snap.precio_con_iva) : "—"}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.t1, lineHeight: 1.3, marginBottom: 4 }}>
+                      {op.titulo}
+                    </div>
+                    {(cli || uni) && (
+                      <div style={{ fontSize: 10, color: C.t3, marginBottom: 6 }}>
+                        {cli && <span style={{ color: C.t2 }}>{cli.empresa}</span>}
+                        {cli && uni && " · "}
+                        {uni && <span>Eco. {uni.economico || uni.id.slice(-3)}</span>}
+                      </div>
+                    )}
+                    <SLABar op={op} />
+                    {op.ai_sugerencia && (
+                      <div style={{
+                        marginTop: 8, padding: "6px 10px", borderRadius: 8,
+                        background: "rgba(10,132,255,0.07)", border: `1px solid ${C.blue}22`,
+                        fontSize: 10, color: C.blue, lineHeight: 1.4,
+                      }}>
+                        🤖 {op.ai_sugerencia}
+                      </div>
+                    )}
                   </div>
-                </button>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <div style={{ textAlign: "center", padding: "40px 0" }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>✓</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.t2, marginBottom: 4 }}>Sin operaciones activas</div>
+            <div style={{ fontSize: 12, color: C.t3 }}>Todo al día</div>
+          </div>
+        )}
+
+        {/* Por cobrar */}
+        {porCobrar.length > 0 && (
+          <div style={{ marginTop: 24 }}>
+            <div style={{ fontSize: 10, color: C.t3, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 10, fontWeight: 700 }}>
+              Pendiente cobro · {porCobrar.length}
+            </div>
+            {porCobrar.map(op => {
+              const cli = cliente(op.clienteId);
+              const snap = snapOp(op.lineas);
+              return (
+                <div key={op.id} onClick={() => onVer(op.id)}
+                  style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    padding: "12px 16px", background: C.bg1, border: `1px solid ${C.border}`,
+                    borderLeft: `3px solid ${C.amber}`,
+                    borderRadius: 10, marginBottom: 8, cursor: "pointer",
+                  }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>{op.titulo}</div>
+                    {cli && <div style={{ fontSize: 10, color: C.t3, marginTop: 2 }}>{cli.empresa}</div>}
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: C.amber, fontVariantNumeric: "tabular-nums" }}>
+                      {mxn(snap.precio_con_iva)}
+                    </div>
+                    {op.pago?.promesa && (
+                      <div style={{ fontSize: 9, color: C.t3, marginTop: 2 }}>
+                        Promesa: {op.pago.promesa}
+                      </div>
+                    )}
+                  </div>
+                </div>
               );
             })}
           </div>
         )}
-        <button onClick={onClose}
-          style={{marginTop:16,width:"100%",padding:"12px",borderRadius:12,
-            background:"transparent",border:`1px solid ${C.border}`,
-            color:C.t2,fontSize:13,cursor:"pointer",fontWeight:600}}>
-          Cancelar
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NUEVA OPERACIÓN — AI intake
+// ─────────────────────────────────────────────────────────────────────────────
+
+function NuevaOperacion({ state, dispatch, toast, onBack, onCreated }) {
+  const { clientes, unidades } = state;
+  const [fase, setFase] = useState("intake"); // intake | confirmacion | creando
+  const [texto, setTexto] = useState("");
+  const [analizando, setAnalizando] = useState(false);
+  const [propuesta, setPropuesta] = useState(null);
+  const [error, setError] = useState(null);
+  const [form, setForm] = useState({
+    titulo: "", urgencia: "normal", tipo: "emergencia",
+    clienteId: "", unidadId: "", notas: "",
+    pago_tipo: "contado", sla_inicio: nowISO(),
+  });
+
+  const sf = k => v => setForm(p => ({ ...p, [k]: v }));
+
+  async function analizar() {
+    if (!texto.trim()) return;
+    setAnalizando(true); setError(null);
+    try {
+      const res = await fetch("/api/ai/intake", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          texto,
+          unidades: unidades.map(u => ({ id: u.id, economico: u.economico, marca: u.marca, modelo: u.modelo, placa: u.placa })),
+          clientes: clientes.map(c => ({ id: c.id, empresa: c.empresa })),
+        }),
+      });
+      if (!res.ok) throw new Error("Error en análisis");
+      const data = await res.json();
+      setPropuesta(data);
+      setForm(p => ({
+        ...p,
+        titulo: data.titulo || p.titulo,
+        urgencia: data.urgencia || p.urgencia,
+        tipo: data.tipo || p.tipo,
+        clienteId: data.clienteId || p.clienteId,
+        unidadId: data.unidadId || p.unidadId,
+      }));
+      setFase("confirmacion");
+    } catch (e) {
+      setError("No se pudo analizar. Puedes continuar manualmente.");
+      setFase("confirmacion");
+    } finally {
+      setAnalizando(false);
+    }
+  }
+
+  function crear() {
+    setFase("creando");
+    const lineas_sugeridas = (propuesta?.lineas_sugeridas || []).map(l => ({
+      id: genId("L"),
+      descripcion: l.descripcion,
+      tipo: l.tipo || "refaccion",
+      oem: l.oem_probable || null,
+      cantidad: l.cantidad || 1,
+      costo_unitario: l.precio_estimado ? Math.round(l.precio_estimado * 0.7) : 0,
+      precio_unitario: l.precio_estimado || 0,
+      costo_con_iva: true,
+      estado: "buscando",
+    }));
+
+    const op = {
+      ...form,
+      diagnostico: propuesta?.diagnostico || { falla_reportada: texto, sistema_afectado: "otro", causa_probable: "", confianza: 0 },
+      lineas: lineas_sugeridas,
+      ai_sugerencia: propuesta?.notas_ia || null,
+      pago: { tipo: form.pago_tipo, promesa: null, cobrado: false },
+      eventos: [],
+      _deleted: false,
+    };
+    dispatch({ type: "OP_CREATE", op });
+    toast("Operación creada", "success");
+    onCreated();
+  }
+
+  if (fase === "intake") return (
+    <div style={{ minHeight: "100vh", background: C.bg0, padding: "24px 16px 80px" }}>
+      <button onClick={onBack} style={{ background: "none", border: "none", color: C.t3, fontSize: 14, cursor: "pointer", padding: "0 0 20px", fontFamily: "inherit" }}>← Volver</button>
+      <div style={{ fontSize: 22, fontWeight: 800, color: C.t1, marginBottom: 6 }}>Nueva Operación</div>
+      <div style={{ fontSize: 13, color: C.t3, marginBottom: 24 }}>Describe la necesidad operativa. La IA extrae el resto.</div>
+
+      <textarea
+        value={texto}
+        onChange={e => setTexto(e.target.value)}
+        placeholder={"Ej: Unidad 45 Freightliner varada en carretera, no arranca. Posible falla en motor. Cliente Logis Express necesita solución urgente."}
+        rows={6}
+        autoFocus
+        style={{
+          width: "100%", boxSizing: "border-box",
+          background: "rgba(255,255,255,0.05)", border: `1px solid ${C.lime}44`,
+          borderRadius: 14, padding: "14px 16px", color: C.t1,
+          fontSize: 15, outline: "none", fontFamily: "inherit", resize: "none",
+          lineHeight: 1.5, marginBottom: 16,
+        }}
+      />
+
+      <Btn
+        label={analizando ? "Analizando..." : "Analizar con IA →"}
+        onClick={analizar}
+        variant="primary"
+        full
+        disabled={analizando || !texto.trim()}
+        icon={analizando ? "⟳" : "🤖"}
+      />
+      <div style={{ marginTop: 10, textAlign: "center" }}>
+        <button onClick={() => setFase("confirmacion")} style={{ background: "none", border: "none", color: C.t3, fontSize: 12, cursor: "pointer" }}>
+          Continuar manualmente sin IA
         </button>
       </div>
-    </>
+    </div>
   );
-}
-
-// ── MEditSheet — bottom sheet para editar ticket en mobile ────────────────────
-function MEditSheet({ticket, state, dispatch, toast, onClose}) {
-  const C = React.useContext(ThemeCtx);
-  const A = makeA(C);
-
-  const snap0 = ticket.snap || {};
-  const [titulo,    setTitulo]    = useState(ticket.titulo || "");
-  const [costoIVA,  setCostoIVA]  = useState(String(safeNumber(snap0.costoTotal + (snap0.ivaAcred||0)) || 0));
-  const [precioIVA, setPrecioIVA] = useState(String(safeNumber(snap0.precioConIVA) || 0));
-  const [notes,     setNotes]     = useState(ticket.notes || "");
-  const [priority,  setPriority]  = useState(ticket.priority || "P3");
-
-  const iva = safeNumber(snap0.params?.iva, 16);
-  const isr = safeNumber(snap0.params?.isr, 20);
-
-  const preview = useMemo(()=>{
-    const costo = safeNumber(costoIVA);
-    const precio = safeNumber(precioIVA);
-    if (!costo && !precio) return null;
-    return computeSnap({
-      costo, compraConIVA: true,
-      manualPrice: precio, ventaConIVA: true, mode: "manual",
-      gasolina: 0, otros: 0, iva, isr,
-    });
-  }, [costoIVA, precioIVA, iva, isr]);
-
-  const handleSave = () => {
-    const newSnap = computeSnap({
-      costo: safeNumber(costoIVA), compraConIVA: true,
-      manualPrice: safeNumber(precioIVA), ventaConIVA: true, mode: "manual",
-      gasolina: 0, otros: 0, iva, isr,
-    });
-    dispatch({type:"TKT_UPDATE", id: ticket.id, patch:{
-      titulo: titulo.trim() || ticket.titulo,
-      notes, priority, snap: newSnap,
-    }});
-    toast("Ticket actualizado","success");
-    onClose();
-  };
-
-  const inputStyle = {
-    width:"100%", boxSizing:"border-box",
-    background:C.bg2, border:`1px solid ${C.border}`,
-    borderRadius:12, padding:"12px 14px",
-    color:C.t1, fontSize:14, outline:"none",
-    fontFamily:"inherit",
-  };
-  const labelStyle = {fontSize:9, color:A.t3, letterSpacing:"0.13em", textTransform:"uppercase", marginBottom:5, display:"block"};
 
   return (
-    <>
-      <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,0.55)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)"}}/>
-      <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:201,
-        background:"rgba(14,16,20,0.97)",backdropFilter:"blur(32px) saturate(1.8)",WebkitBackdropFilter:"blur(32px) saturate(1.8)",
-        borderRadius:"28px 28px 0 0",borderTop:`1px solid rgba(255,255,255,0.10)`,
-        padding:`16px 16px calc(20px + env(safe-area-inset-bottom,0px))`,
-        boxShadow:"0 -12px 60px rgba(0,0,0,0.7)",
-        maxHeight:"90vh",overflowY:"auto"}}>
-        {/* Handle */}
-        <div style={{display:"flex",justifyContent:"center",marginBottom:16}}>
-          <div style={{width:40,height:4,borderRadius:2,background:C.border}}/>
-        </div>
-        <div style={{fontSize:11,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:14}}>Editar ticket</div>
+    <div style={{ minHeight: "100vh", background: C.bg0, padding: "24px 16px 80px" }}>
+      <button onClick={() => setFase("intake")} style={{ background: "none", border: "none", color: C.t3, fontSize: 14, cursor: "pointer", padding: "0 0 20px", fontFamily: "inherit" }}>← Atrás</button>
+      <div style={{ fontSize: 18, fontWeight: 800, color: C.t1, marginBottom: 4 }}>Confirmar operación</div>
+      <div style={{ fontSize: 12, color: C.t3, marginBottom: 20 }}>Revisa y ajusta lo que detectó la IA</div>
 
-        {/* Título */}
-        <div style={{marginBottom:14}}>
-          <label style={labelStyle}>Título</label>
-          <input value={titulo} onChange={e=>setTitulo(e.target.value)} style={inputStyle} placeholder="Descripción del trabajo"/>
-        </div>
-
-        {/* Costo / Precio */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-          <div>
-            <label style={labelStyle}>Costo c/IVA ($)</label>
-            <input type="number" inputMode="decimal" value={costoIVA} onChange={e=>setCostoIVA(e.target.value)} style={inputStyle} placeholder="0"/>
-          </div>
-          <div>
-            <label style={labelStyle}>Precio c/IVA ($)</label>
-            <input type="number" inputMode="decimal" value={precioIVA} onChange={e=>setPrecioIVA(e.target.value)} style={inputStyle} placeholder="0"/>
-          </div>
-        </div>
-
-        {/* Live preview */}
-        {preview&&(
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:14,
-            background:C.bg2,borderRadius:12,padding:"10px 14px",border:`1px solid ${C.border}`}}>
+      {propuesta && (
+        <div style={{ marginBottom: 20, padding: "12px 14px", background: "rgba(10,132,255,0.07)", border: `1px solid ${C.blue}22`, borderRadius: 12 }}>
+          <div style={{ fontSize: 10, color: C.blue, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8, fontWeight: 700 }}>🤖 IA detectó</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {[
-              {l:"Util. neta",  v:mxn(preview.uNeta),              c:preview.uNeta>=0?A.lime:A.red},
-              {l:"Margen",      v:fpct(preview.margenNetoPrecio),   c:preview.margenNetoPrecio>=15?A.lime:A.amber},
-              {l:"Costo base",  v:mxn(preview.costoBase),          c:A.t2},
-            ].map(({l,v,c})=>(
+              { l: "Urgencia", v: URGENCIA[propuesta.urgencia]?.label || propuesta.urgencia },
+              { l: "Tipo", v: TIPO_OP[propuesta.tipo]?.label || propuesta.tipo },
+              { l: "Sistema", v: SISTEMAS[propuesta.diagnostico?.sistema_afectado] || propuesta.diagnostico?.sistema_afectado },
+              { l: "Confianza", v: propuesta.diagnostico?.confianza ? pct(propuesta.diagnostico.confianza * 100) : "—" },
+            ].map(({ l, v }) => (
               <div key={l}>
-                <div style={{fontSize:8,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:3}}>{l}</div>
-                <div style={{fontSize:13,fontWeight:700,color:c,fontVariantNumeric:"tabular-nums"}}>{v}</div>
+                <div style={{ fontSize: 8, color: C.t3, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>{l}</div>
+                <div style={{ fontSize: 12, color: C.t1, fontWeight: 600 }}>{v || "—"}</div>
               </div>
             ))}
           </div>
-        )}
-
-        {/* Notas */}
-        <div style={{marginBottom:14}}>
-          <label style={labelStyle}>Notas</label>
-          <textarea value={notes} onChange={e=>setNotes(e.target.value)}
-            rows={2} style={{...inputStyle, resize:"none"}} placeholder="Observaciones internas"/>
-        </div>
-
-        {/* Prioridad */}
-        <div style={{marginBottom:18}}>
-          <label style={labelStyle}>Prioridad</label>
-          <div style={{display:"flex",gap:6}}>
-            {["P1","P2","P3","P4"].map(p=>{
-              const active = priority===p;
-              const colors = {P1:C.p1,P2:C.p2,P3:C.p3,P4:C.p4};
-              const col = colors[p]||C.border;
-              return (
-                <button key={p} onClick={()=>setPriority(p)}
-                  style={{flex:1,padding:"9px 0",borderRadius:10,
-                    background:active?`${col}22`:"transparent",
-                    border:`1px solid ${active?col:C.border}`,
-                    color:active?col:A.t3,fontSize:12,fontWeight:700,cursor:"pointer"}}>
-                  {p}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div style={{display:"flex",gap:8}}>
-          <button onClick={onClose}
-            style={{flex:1,padding:"13px",borderRadius:14,background:"transparent",
-              border:`1px solid ${C.border}`,color:A.t2,fontSize:13,cursor:"pointer",fontWeight:600}}>
-            Cancelar
-          </button>
-          <button onClick={handleSave}
-            style={{flex:2,padding:"13px",borderRadius:14,
-              background:"linear-gradient(135deg,rgba(60,207,170,0.25),rgba(60,207,170,0.12))",
-              border:"1px solid rgba(60,207,170,0.4)",color:A.mint,
-              fontSize:13,fontWeight:700,cursor:"pointer",letterSpacing:"0.04em"}}>
-            Guardar cambios
-          </button>
-        </div>
-      </div>
-    </>
-  );
-}
-
-// ── MPipeline — Pipeline móvil ───────────────────────────────────────────────
-function MPipeline({state,dispatch,toast}) {
-  const C = React.useContext(ThemeCtx);
-  const {tickets,clients,units} = state;
-  const [filter,setFilter]       = useState("active");
-  const [sortBy,setSortBy]       = useState("priority");
-  const [statusSheet,setStatusSheet] = useState(null);
-  const [editSheet,setEditSheet]  = useState(null);
-  const [expandId,setExpandId]   = useState(null);
-
-  // Accent palette — glassmorphism
-  const A = makeA(C);
-
-  const PIPE_STAGES = ["recibido","validando","sourcing","cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado"];
-  const stageProgress = s => { if(s==="cancelado") return 0; const i=PIPE_STAGES.indexOf(s); return i>=0?((i+1)/PIPE_STAGES.length)*100:0; };
-  const progColor = s => { const i=PIPE_STAGES.indexOf(s); return i<=1?A.amber:i<=4?A.mint:A.lime; };
-
-  const prC = {
-    P1:{dot:C.p1, dim:C.p1dim},
-    P2:{dot:C.p2, dim:C.p2dim},
-    P3:{dot:C.p3, dim:C.p3dim},
-    P4:{dot:C.p4, dim:C.p4dim},
-  };
-
-  const active   = useMemo(()=>tickets.filter(t=>!t._deleted),[tickets]);
-  const filtered = useMemo(()=>{
-    let arr=active;
-    if(filter==="active")   arr=arr.filter(t=>!CLOSED_SET.has(t.status));
-    else if(filter==="p1")  arr=arr.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status));
-    else if(filter==="venc") arr=arr.filter(t=>{
-      if(!t.promesaPago||t.cobrado) return false;
-      const d=parseDateMX(t.promesaPago); return d&&new Date()>d;
-    });
-    else if(filter!=="all") arr=arr.filter(t=>t.status===filter);
-    const pOrd={P1:0,P2:1,P3:2,P4:3};
-    const sOrd=["recibido","validando","sourcing","cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado","cancelado"];
-    return [...arr].sort((a,b)=>{
-      if(sortBy==="status")  return sOrd.indexOf(a.status)-sOrd.indexOf(b.status);
-      if(sortBy==="cartera") return (b.snap?.precioConIVA||0)-(a.snap?.precioConIVA||0);
-      if(sortBy==="date")    return b.date.localeCompare(a.date);
-      // priority: fix — use ?? not || (P1=0 is falsy)
-      const pd=(pOrd[a.priority]??3)-(pOrd[b.priority]??3);
-      return pd!==0?pd:b.date.localeCompare(a.date);
-    });
-  },[active,filter,sortBy]);
-
-  const SORT_OPTS=[["priority","↕ Prioridad"],["date","↕ Fecha"],["cartera","↕ Monto"],["status","↕ Estado"]];
-  const sortLabel = SORT_OPTS.find(s=>s[0]===sortBy)?.[1] ?? "↕";
-
-  const cntOf = st => active.filter(t=>t.status===st).length;
-  const CHIPS=[
-    ["active","Activos", active.filter(t=>!CLOSED_SET.has(t.status)).length, null],
-    ["p1",   "P1 🔴",   active.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status)).length, C.p1],
-    ["venc", "Vencidos",active.filter(t=>{if(!t.promesaPago||t.cobrado)return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}).length, "#e07c00"],
-    ["entregado","Entregado",cntOf("entregado"), A.mint],
-    ["facturado","Facturado",cntOf("facturado"), A.cyan],
-    ["cobrado",  "Cobrado",  cntOf("cobrado"),   A.lime],
-    ["cerrado",  "Cerrado",  cntOf("cerrado"),   A.t2],
-    ["cancelado","Cancelado",cntOf("cancelado"),  C.red],
-    ["all",      "Todos",    active.length, null],
-  ];
-
-  return (
-    <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
-      {statusSheet&&<StatusFlowSheet tkt={statusSheet} dispatch={dispatch} toast={toast} onClose={()=>setStatusSheet(null)}/>}
-      {editSheet&&<MEditSheet ticket={editSheet} state={state} dispatch={dispatch} toast={toast} onClose={()=>setEditSheet(null)}/>}
-
-      <div style={{padding:"0 14px"}}>
-        {/* Filter + sort — single row */}
-        <div style={{display:"flex",alignItems:"center",gap:6,padding:"18px 0 14px",overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
-          {CHIPS.map(([v,l,c,ac])=>{
-            const on=filter===v;
-            const dotColor=ac||(on?A.lime:null);
-            return (
-              <button key={v} onClick={()=>setFilter(v)}
-                style={{
-                  flexShrink:0,display:"flex",alignItems:"center",gap:5,
-                  padding:"7px 13px",borderRadius:20,fontSize:11,fontWeight:700,whiteSpace:"nowrap",
-                  background:on?(ac?ac+"22":A.limeDim):"transparent",
-                  border:`1px solid ${on?(ac||A.lime):A.pillBorderInactive}`,
-                  color:on?(ac||A.lime):A.t3,
-                  cursor:"pointer",transition:"all 0.15s",
-                }}>
-                {l}
-                {c>0&&<span style={{
-                  fontSize:9,fontWeight:800,borderRadius:9,padding:"1px 5px",
-                  background:on?(ac?ac+"33":A.limeDim):C.bg3,
-                  color:on?(ac||A.lime):A.t3,
-                  border:`1px solid ${on?(ac||A.lime)+"50":A.pillBorderInactive}`,
-                }}>{c}</span>}
-              </button>
-            );
-          })}
-          {/* Sort toggle — at end */}
-          <button onClick={()=>{
-            const idx=SORT_OPTS.findIndex(s=>s[0]===sortBy);
-            setSortBy(SORT_OPTS[(idx+1)%SORT_OPTS.length][0]);
-          }} style={{
-            flexShrink:0,padding:"7px 11px",borderRadius:20,fontSize:10,fontWeight:700,
-            background:"transparent",border:`1px solid ${A.pillBorderInactive}`,
-            color:A.t3,cursor:"pointer",whiteSpace:"nowrap",transition:"all 0.15s",
-          }}>{sortLabel}</button>
-        </div>
-
-        {filtered.length===0&&(
-          <div style={{textAlign:"center",padding:"48px 20px"}}>
-            <div style={{fontSize:11,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
-              Sin tickets
+          {propuesta.diagnostico?.causa_probable && (
+            <div style={{ marginTop: 10, fontSize: 11, color: C.t2, lineHeight: 1.4, borderTop: `1px solid ${C.border}`, paddingTop: 8 }}>
+              {propuesta.diagnostico.causa_probable}
             </div>
-            <div style={{fontSize:13,color:A.t3}}>Ajusta el filtro</div>
-          </div>
-        )}
-
-        <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          {filtered.map(t=>{
-            const meta     = TICKET_META[t.status]||{};
-            const pr       = prC[t.priority]||prC.P4;
-            const cl       = clients.find(c=>c.id===t.clientId);
-            const un       = units.find(u=>u.id===t.unitId);
-            const prog     = stageProgress(t.status);
-            const pCol     = progColor(t.status);
-            const isClosed = CLOSED_SET.has(t.status);
-            const isP1     = t.priority==="P1";
-            const isVenc   = !t.cobrado&&t.promesaPago&&(()=>{const d=parseDateMX(t.promesaPago);return d&&new Date()>d;})();
-            const isExp    = expandId===t.id;
-            const price    = safeNumber(t.snap?.precioConIVA);
-            const uNeta    = safeNumber(t.snap?.uNeta);
-
-            return (
-              <div key={t.id} style={{
-                background:isP1?"rgba(239,68,68,0.08)":A.card,
-                borderRadius:A.r,overflow:"hidden",
-                boxShadow:isP1
-                  ? "0 1px 3px rgba(0,0,0,0.3), 0 0 0 1px rgba(239,68,68,0.15)"
-                  : A.shadow,
-              }}>
-                {/* Tap area */}
-                <div onClick={()=>setExpandId(isExp?null:t.id)} style={{padding:"16px 16px 14px",cursor:"pointer"}}>
-                  {/* Row 1: badges + date */}
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                    <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"nowrap"}}>
-                      <span style={{display:"inline-flex",alignItems:"center",gap:4,
-                        fontSize:9,fontWeight:800,padding:"3px 8px",borderRadius:10,
-                        background:pr.dim,color:pr.dot,letterSpacing:"0.08em"}}>
-                        <span style={{width:5,height:5,borderRadius:"50%",background:pr.dot,
-                          boxShadow:isP1?`0 0 6px ${pr.dot}`:"none",display:"inline-block",flexShrink:0}}/>
-                        {t.priority}
-                      </span>
-                      <span style={{fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:10,
-                        background:`${meta.dot||"#8A9AA4"}18`,color:meta.dot||A.t3,letterSpacing:"0.05em"}}>
-                        {meta.label||t.status}
-                      </span>
-                      {isVenc&&<span style={{fontSize:9,fontWeight:800,padding:"3px 7px",borderRadius:10,
-                        background:A.redDim,color:A.red,letterSpacing:"0.06em"}}>VENCIDO</span>}
-                    </div>
-                    <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                      <span style={{fontSize:10,color:A.t3}}>{t.date}</span>
-                      <span style={{fontSize:14,color:A.t3,transform:isExp?"rotate(90deg)":"none",
-                        transition:"transform 200ms",display:"inline-block",lineHeight:1}}>›</span>
-                    </div>
-                  </div>
-                  {/* Title */}
-                  <div style={{fontSize:15,fontWeight:700,color:A.t1,lineHeight:1.3,marginBottom:6}}>{t.titulo}</div>
-                  {/* Client + unit */}
-                  {(cl||un)&&(
-                    <div style={{fontSize:11,color:A.t2,marginBottom:10,
-                      overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                      {cl&&<span>{cl.empresa}</span>}
-                      {cl&&un&&<span style={{color:A.t3,margin:"0 4px"}}>·</span>}
-                      {un&&<span style={{color:A.t3}}>{un.economico?"Eco. "+un.economico:un.marca+" "+un.modelo}</span>}
-                    </div>
-                  )}
-                  {/* Progress */}
-                  {!isClosed&&(
-                    <div>
-                      <div style={{height:2,background:C.border,borderRadius:2,overflow:"hidden",marginBottom:4}}>
-                        <div style={{height:"100%",width:`${prog}%`,background:pCol,borderRadius:2,transition:"width 400ms ease"}}/>
-                      </div>
-                      <div style={{display:"flex",justifyContent:"space-between"}}>
-                        <span style={{fontSize:8,color:A.t3}}>Etapa {PIPE_STAGES.indexOf(t.status)+1}/{PIPE_STAGES.length}</span>
-                        <span style={{fontSize:8,color:pCol,fontWeight:700}}>{prog.toFixed(0)}%</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Expanded */}
-                {isExp&&(
-                  <div style={{borderTop:`1px solid ${C.border}`,padding:"16px",background:C.bg0}}>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
-                      {[
-                        {l:"Precio c/IVA", v:mxn(price),    c:A.t1},
-                        {l:"Util. neta",   v:mxn(uNeta),    c:uNeta>=0?A.lime:A.red},
-                        {l:"Costo total",  v:mxn(safeNumber(t.snap?.costoTotal)), c:A.t2},
-                        {l:"Margen",       v:fpct(safeNumber(t.snap?.margenNetoPrecio)), c:A.t2},
-                      ].map(({l,v,c})=>(
-                        <div key={l}>
-                          <div style={{fontSize:8,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>{l}</div>
-                          <div style={{fontSize:16,fontWeight:700,color:c,fontVariantNumeric:"tabular-nums"}}>{v}</div>
-                        </div>
-                      ))}
-                    </div>
-                    {t.notes&&<div style={{fontSize:11,color:A.t2,padding:"10px 12px",background:C._dark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.03)",
-                      borderRadius:10,marginBottom:12,border:`1px solid ${C.border}`}}>{t.notes}</div>}
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <div style={{fontSize:8,color:A.t3,letterSpacing:"0.08em",textTransform:"uppercase"}}>{t.id}</div>
-                      <div style={{display:"flex",gap:7}}>
-                        <button onClick={e=>{e.stopPropagation();setEditSheet(t);}}
-                          style={{padding:"7px 14px",borderRadius:10,
-                            background:"rgba(60,207,170,0.10)",
-                            border:"1px solid rgba(60,207,170,0.3)",
-                            color:A.mint,fontSize:10,fontWeight:700,
-                            cursor:"pointer",letterSpacing:"0.06em"}}>
-                          Editar ✎
-                        </button>
-                        <button onClick={e=>{e.stopPropagation();
-                          const c2=clients.find(c=>c.id===t.clientId);
-                          const u2=units.find(u=>u.id===t.unitId);
-                          generarCotizacionPDF(t,c2,u2,null).catch(()=>toast("Error PDF","error"));}}
-                          style={{padding:"7px 14px",borderRadius:10,background:"transparent",
-                            border:`1px solid ${C.border}`,color:A.t2,fontSize:10,
-                            fontWeight:600,cursor:"pointer",letterSpacing:"0.06em"}}>
-                          PDF ↗
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Footer */}
-                <div style={{padding:"12px 16px",borderTop:`1px solid ${C.border}`,
-                  display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div>
-                    <div style={{fontSize:22,fontWeight:800,color:A.t1,lineHeight:1,
-                      letterSpacing:"-0.02em",fontVariantNumeric:"tabular-nums"}}>{mxn(price)}</div>
-                    <div style={{fontSize:10,color:uNeta>=0?A.lime:A.red,marginTop:3,fontWeight:600}}>
-                      Util. {mxn(uNeta)}
-                    </div>
-                  </div>
-                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                    {CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t.cobrado&&(
-                      <button onClick={e=>{e.stopPropagation();dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado ✓","success");}}
-                        style={{padding:"10px 14px",borderRadius:12,background:A.mintDim,
-                          border:`1px solid ${C.blue}33`,color:A.mint,
-                          fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:"0.03em",
-                          WebkitTapHighlightColor:"transparent"}}>
-                        Cobrar ✓
-                      </button>
-                    )}
-                    {!isClosed&&(
-                      <button onClick={e=>{e.stopPropagation();setStatusSheet(t);}}
-                        style={{padding:"10px 18px",borderRadius:12,
-                          background:isP1?"rgba(232,72,72,0.15)":A.limeDim,
-                          border:`1px solid ${isP1?"rgba(214,66,66,0.3)":"rgba(255,255,255,0.09)"}`,
-                          color:isP1?A.red:A.lime,fontSize:12,fontWeight:700,cursor:"pointer",
-                          letterSpacing:"0.04em",WebkitTapHighlightColor:"transparent"}}>
-                        Estado →
-                      </button>
-                    )}
-                    {isClosed&&(
-                      <div style={{padding:"8px 14px",borderRadius:12,
-                        background:t.status==="cancelado"?A.redDim:A.mintDim,
-                        border:`1px solid ${t.status==="cancelado"?"rgba(232,72,72,0.25)":"rgba(60,207,170,0.25)"}`}}>
-                        <div style={{fontSize:11,fontWeight:700,
-                          color:t.status==="cancelado"?A.red:A.mint}}>
-                          {t.status==="cancelado"?"Cancelado":t.cobrado?"Cobrado ✓":"Cerrado"}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── MCotizador — Flujo unificado mobile ────────────────────────────────────────
-// ── PartPicker — Autocomplete inteligente del catálogo ──────────────────────
-function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
-  const C = React.useContext(ThemeCtx);
-  const [open, setOpen] = useState(false);
-  const ref  = useRef();
-
-  useEffect(()=>{
-    const h=e=>{if(ref.current&&!ref.current.contains(e.target)){setOpen(false);}};
-    document.addEventListener("mousedown",h);
-    document.addEventListener("touchstart",h,{passive:true});
-    return()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
-  },[]);
-
-  const results = useMemo(()=>{
-    const q=(value||"").toLowerCase().trim();
-    if(!q||q.length<1){
-      // Show most frequent / recently used
-      return [...parts].sort((a,b)=>(b.frecuencia||0)-(a.frecuencia||0)).slice(0,8);
-    }
-    return parts.filter(p=>
-      safeLower(p.nombre).includes(q)||
-      safeLower(p.oem||"").includes(q)||
-      safeLower(p.aftermarket||"").includes(q)||
-      safeLower(p.aplicacion||"").includes(q)
-    ).slice(0,10);
-  },[value,parts]);
-
-  const showDropdown = open && (results.length>0 || (value||"").trim().length>0);
-
-  return (
-    <div ref={ref} style={{position:"relative",flex:1}}>
-      <input
-        value={value||""}
-        onChange={e=>{onChange(e.target.value);setOpen(true);}}
-        onFocus={()=>setOpen(true)}
-        placeholder={placeholder||"Buscar o describir pieza..."}
-        autoComplete="off"
-        style={{width:"100%",background:C.bg2,border:`1px solid ${open?C.t1:C.border}`,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,
-          borderRadius:10,padding:"13px 14px",color:"#F5F5F7",fontSize:16,
-          outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}
-      />
-      {showDropdown&&(
-        <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,zIndex:400,
-          background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:10,
-          boxShadow:"0 8px 32px rgba(13,24,37,0.12)",maxHeight:280,overflowY:"auto",
-          WebkitOverflowScrolling:"touch"}}>
-          {results.map(p=>(
-            <div key={p.id}
-              onMouseDown={e=>{e.preventDefault();onSelect(p);setOpen(false);}}
-              onTouchEnd={e=>{e.preventDefault();onSelect(p);setOpen(false);}}
-              style={{padding:"11px 14px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",
-                display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:700,color:"#F5F5F7",overflow:"hidden",
-                  textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
-                <div style={{fontSize:10,color:"#7E848E",marginTop:1,fontFamily:"'Courier New',monospace"}}>
-                  {p.oem&&<span>OEM: {p.oem}</span>}
-                  {p.oem&&p.ultimoPrecio>0&&<span style={{color:C.border}}> · </span>}
-                  {p.ultimoPrecio>0&&<span style={{color:C.yellow}}>{mxn(p.ultimoPrecio)}</span>}
-                  {p.proveedor&&<span style={{color:C.border}}> · </span>}
-                  {p.proveedor&&<span>{p.proveedor}</span>}
-                </div>
-                {p.aplicacion&&<div style={{fontSize:9,color:C.t3,marginTop:1}}>{p.aplicacion}</div>}
-              </div>
-              {(p.frecuencia||0)>1&&(
-                <div style={{fontSize:9,color:"#F5F5F7",background:C.border,padding:"2px 7px",
-                  borderRadius:10,flexShrink:0,fontWeight:700}}>×{p.frecuencia}</div>
-              )}
-            </div>
-          ))}
-          {(value||"").trim().length>2&&(
-            <div onMouseDown={e=>{e.preventDefault();onSelect({nombre:(value||"").trim(),oem:"",ultimoPrecio:0});setOpen(false);}}
-              onTouchEnd={e=>{e.preventDefault();onSelect({nombre:(value||"").trim(),oem:"",ultimoPrecio:0});setOpen(false);}}
-              style={{padding:"11px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:18,color:"#F5F5F7",lineHeight:1}}>＋</span>
-              <span style={{fontSize:13,color:"#F5F5F7",fontWeight:600}}>Agregar "{(value||"").trim().slice(0,30)}"</span>
+          )}
+          {propuesta.notas_ia && (
+            <div style={{ marginTop: 6, fontSize: 11, color: C.blue, lineHeight: 1.4 }}>
+              {propuesta.notas_ia}
             </div>
           )}
         </div>
       )}
+
+      {error && <div style={{ marginBottom: 16, fontSize: 12, color: C.amber }}>{error}</div>}
+
+      <Input label="Título" value={form.titulo} onChange={sf("titulo")} placeholder="Título de la operación" />
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <Sel label="Urgencia" value={form.urgencia} onChange={sf("urgencia")}
+          options={Object.entries(URGENCIA).map(([k, v]) => ({ value: k, label: v.label }))} />
+        <Sel label="Tipo" value={form.tipo} onChange={sf("tipo")}
+          options={Object.entries(TIPO_OP).map(([k, v]) => ({ value: k, label: v.label }))} />
+      </div>
+
+      <Sel label="Cliente" value={form.clienteId} onChange={sf("clienteId")}
+        options={[{ value: "", label: "— Sin cliente —" }, ...clientes.map(c => ({ value: c.id, label: c.empresa }))]} />
+
+      <Sel label="Unidad" value={form.unidadId} onChange={sf("unidadId")}
+        options={[{ value: "", label: "— Sin unidad —" }, ...unidades.map(u => ({ value: u.id, label: `Eco. ${u.economico} · ${u.marca} ${u.modelo}` }))]} />
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <Sel label="Forma de pago" value={form.pago_tipo} onChange={sf("pago_tipo")}
+          options={[{ value: "contado", label: "Contado" }, { value: "credito", label: "Crédito" }]} />
+      </div>
+
+      <Input label="Notas" value={form.notas} onChange={sf("notas")} placeholder="Notas adicionales..." rows={2} />
+
+      {propuesta?.lineas_sugeridas?.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <Label>Piezas sugeridas por IA (se agregarán a la operación)</Label>
+          {propuesta.lineas_sugeridas.map((l, i) => (
+            <div key={i} style={{
+              display: "flex", justifyContent: "space-between", padding: "8px 12px",
+              background: C.bg1, border: `1px solid ${C.border}`, borderRadius: 8, marginBottom: 5,
+            }}>
+              <span style={{ fontSize: 12, color: C.t1 }}>{l.descripcion}</span>
+              {l.precio_estimado > 0 && <span style={{ fontSize: 11, color: C.t3, fontVariantNumeric: "tabular-nums" }}>~{mxn(l.precio_estimado)}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Btn label={fase === "creando" ? "Creando..." : "Crear operación"} onClick={crear} variant="primary" full disabled={fase === "creando" || !form.titulo.trim()} />
     </div>
   );
 }
 
-// ── MCotizador — Flujo unificado mobile ──────────────────────────────────────
-function MCotizador({state,dispatch,toast}) {
-  const C = React.useContext(ThemeCtx);
-  const {clients,suppliers,units} = state;
+// ─────────────────────────────────────────────────────────────────────────────
+// OPERACIÓN DETAIL
+// ─────────────────────────────────────────────────────────────────────────────
 
-  // Accent palette — Black/white monochrome
-  const A = makeA(C);
-
-  // Priority semantic colors
-  const prColors = {
-    P1:{dot:C.p1, dim:C.p1dim, label:"Unidad detenida"},
-    P2:{dot:C.p2, dim:C.p2dim, label:"Operación comprometida"},
-    P3:{dot:C.p3, dim:C.p3dim, label:"Preventivo urgente"},
-    P4:{dot:C.p4, dim:C.p4dim, label:"Solicitud normal"},
-  };
-
-  const [step,setStep]          = useState(0);
-  const [priority,setPriority]  = useState("P3");
-  const [opType,setOpType]      = useState("consumable");
-  const [activeMods,setActiveMods] = useState([]);
-  const [iva]                   = useState(16);
-  const [isr]                   = useState(20);
-  const [lineas,setLineas]      = useState([emptyLine("consumable","P3",[])]);
-  const [partQ,setPartQ]        = useState({});
-  const [clientId,setClientId]  = useState("");
-  const [unitId,setUnitId]      = useState("");
-  const [supplierId,setSupplierId] = useState("");
-  const [payType,setPayType]    = useState("contado");
-  const [promesa,setPromesa]    = useState("");
-  const [fecha,setFecha]        = useState(todayMX());
-  const [notes,setNotes]        = useState("");
-  const [pdfPending,setPdfPending] = useState(null);
-
-  const sharedMargin = useMemo(()=>effectiveMargin(opType,priority,activeMods,false,27),[opType,priority,activeMods]);
-  const lineSnaps = useMemo(()=>lineas.map(l=>{
-    const mg=l.customMgn?Math.min(l.customVal,100):sharedMargin;
-    const costo=(l.costoUnit||0)*(l.qty||1);
-    return computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,iva,isr,
-      compraConIVA:true,ventaConIVA:true,mode:l.mode||"auto",margin:mg,manualPrice:l.manualPrice||"0"});
-  }),[lineas,sharedMargin,iva,isr]);
-
-  const totalPrecio = lineSnaps.reduce((s,sn)=>s+sn.precioConIVA,0);
-  const totalNeta   = lineSnaps.reduce((s,sn)=>s+sn.uNeta,0);
-  const aggMargen   = lineSnaps.reduce((s,sn)=>s+sn.precioSinIVA,0)>0
-    ?(totalNeta/lineSnaps.reduce((s,sn)=>s+sn.precioSinIVA,0))*100:0;
-
-  const upd = (i,patch)=>setLineas(p=>p.map((l,j)=>j===i?{...l,...patch}:l));
-  const addLine = ()=>setLineas(p=>[...p,emptyLine(opType,priority,[])]);
-  const removeLine = i=>setLineas(p=>p.length>1?p.filter((_,j)=>j!==i):p);
-  const selectPart = (i,p) => {
-    setPartQ(q=>{const nq={...q};delete nq[i];return nq;}); // remove key → falls back to l.titulo
-    upd(i,{titulo:p.nombre,partRef:p.oem||"",costoUnit:p.ultimoPrecio||0,manualPrice:String(p.ultimoPrecio||0)});
-  };
-
-  const cl   = clients.find(c=>c.id===clientId);
-  const un   = units.find(u=>u.id===unitId);
-  const supp = suppliers.find(s=>s.id===supplierId);
-
-  const save = ()=>{
-    if(!lineas.some(l=>l.titulo?.trim())) { toast("Agrega al menos una descripción","error"); return; }
-    const titulo=lineas.map(l=>l.titulo.trim()||"Sin descripción").join(" / ");
-    const lineasConSnap=lineas.map((l,i)=>({titulo:l.titulo||"Sin descripción",partRef:l.partRef||"",snap:lineSnaps[i]}));
-    const pSin=lineSnaps.reduce((s,sn)=>s+sn.precioSinIVA,0);
-    const cTot=lineSnaps.reduce((s,sn)=>s+sn.costoTotal,0);
-    const totalSnap={
-      precioConIVA:totalPrecio,precioSinIVA:pSin,costoTotal:cTot,
-      costoBase:lineSnaps.reduce((s,sn)=>s+sn.costoBase,0),
-      gastos:lineSnaps.reduce((s,sn)=>s+sn.gastos,0),
-      uNeta:totalNeta,uBruta:lineSnaps.reduce((s,sn)=>s+sn.uBruta,0),
-      isr:lineSnaps.reduce((s,sn)=>s+sn.isr,0),
-      ivaTraslad:lineSnaps.reduce((s,sn)=>s+sn.ivaTraslad,0),
-      ivaAcred:lineSnaps.reduce((s,sn)=>s+sn.ivaAcred,0),
-      ivaNeto:lineSnaps.reduce((s,sn)=>s+sn.ivaNeto,0),
-      markupSobre:cTot>0?((pSin-cTot)/cTot)*100:0,
-      margenNetoPrecio:aggMargen,params:{iva,isr},
-    };
-    const tkt={
-      id:mkTicketId(fecha),titulo,
-      opId:opType,opShort:(OP_TYPES.find(o=>o.id===opType)||OP_TYPES[0]).short,
-      priority,clientId,supplierId,unitId,
-      partRef:lineas.map(l=>l.partRef).filter(Boolean).join(", "),
-      date:fecha,status:"recibido",payType,
-      promesaPago:payType==="credit"?promesa:null,cobrado:false,
-      mods:[...activeMods],prob:"high",horasOp:0,notes,
-      mode:"multilinea",lineas:lineasConSnap,snap:totalSnap,
-      timeline:[{ts:nowISO(),evento:"Ticket creado",actor:"Operador"}],
-      history:[mkEvent("created",{titulo,status:"recibido",priority})],
-    };
-    dispatch({type:"TKT_ADD",t:tkt});
-    lineas.forEach(l=>{
-      if(!l.titulo?.trim()) return;
-      const nomNorm=(l.titulo||"").trim().toLowerCase();
-      const oem=(l.partRef||"").trim();
-      const exists=state.parts.find(p=>
-        (oem&&(oem===p.oem||oem===p.aftermarket))||
-        p.nombre.toLowerCase()===nomNorm||
-        (nomNorm.length>6&&p.nombre.toLowerCase().startsWith(nomNorm.slice(0,Math.floor(nomNorm.length*0.75))))
-      );
-      if(!exists&&(safeNumber(l.costoUnit)>0||oem)){
-        dispatch({type:"PART_ADD",p:{id:mkPartId(),nombre:l.titulo.trim(),oem,aftermarket:"",
-          aplicacion:un?`${un.marca} ${un.modelo} ${un.anio||""}`.trim():"",
-          notas:`Auto: ${todayMX()}`,proveedor:supp?.nombre||"",
-          ultimoPrecio:safeNumber(l.costoUnit),ultimaFecha:fecha,frecuencia:1}});
-      } else if(exists){
-        const patch={frecuencia:(exists.frecuencia||1)+1};
-        if(safeNumber(l.costoUnit)>0) patch.ultimoPrecio=safeNumber(l.costoUnit);
-        if(fecha) patch.ultimaFecha=fecha;
-        if(supp?.nombre) patch.proveedor=supp.nombre;
-        dispatch({type:"PART_UPDATE",id:exists.id,patch});
-      }
-    });
-    toast("Ticket: "+tkt.id,"success");
-    setPdfPending({tkt,cl,un,supp});
-    setLineas([emptyLine(opType,priority,[])]);
-    setNotes(""); setPartQ({});
-    setClientId(""); setUnitId(""); setSupplierId("");
-    setPayType("contado"); setPromesa(""); setStep(0);
-  };
-
-  // ── Step bar ──────────────────────────────────────────────────────────────
-  const stepNames=["Tipo","Líneas","Datos"];
-  const StepBar=()=>(
-    <div style={{display:"flex",alignItems:"center",padding:"18px 0 22px",gap:0}}>
-      {stepNames.map((name,i)=>{
-        const done=i<step; const curr=i===step;
+function PipelineSteps({ estado }) {
+  const idx = ESTADOS.indexOf(estado);
+  if (estado === "cancelado") return (
+    <div style={{ padding: "8px 0", fontSize: 11, color: C.red, fontWeight: 700 }}>● Cancelada</div>
+  );
+  return (
+    <div style={{ display: "flex", alignItems: "center", overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
+      {ESTADOS.map((e, i) => {
+        const meta = ESTADO_META[e];
+        const done = i < idx;
+        const current = i === idx;
         return (
-          <React.Fragment key={i}>
-            {i>0&&(
-              <div style={{flex:1,height:2,
-                background:done?A.lime:C.border,
-                borderRadius:1,margin:"0 8px",marginTop:-14}}/>
-            )}
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,
-              cursor:done?"pointer":"default"}}
-              onClick={()=>done&&setStep(i)}>
+          <React.Fragment key={e}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
               <div style={{
-                width:30,height:30,borderRadius:15,
-                background:done?A.lime:curr?"transparent":"transparent",
-                border:`2px solid ${done?A.lime:curr?A.lime:C.border}`,
-                display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:11,fontWeight:800,
-                color:done?"#0A1800":curr?A.lime:A.t3,
-                transition:"all 0.2s",
-              }}>
-                {done?"✓":i+1}
-              </div>
-              <div style={{fontSize:9,fontWeight:curr||done?700:400,
-                color:done?A.lime:curr?A.lime:A.t3,
-                letterSpacing:"0.1em",textTransform:"uppercase"}}>
-                {name}
+                width: 8, height: 8, borderRadius: "50%",
+                background: done || current ? meta.dot : C.t3,
+                boxShadow: current ? `0 0 8px ${meta.dot}88` : "none",
+                border: current ? `2px solid ${meta.dot}` : "none",
+              }} />
+              <div style={{ fontSize: 7, color: current ? meta.dot : C.t3, marginTop: 3, whiteSpace: "nowrap", fontWeight: current ? 700 : 400 }}>
+                {meta.label}
               </div>
             </div>
+            {i < ESTADOS.length - 1 && (
+              <div style={{ flex: 1, height: 1, background: i < idx ? C.t3 : C.border, margin: "0 3px", marginBottom: 14, minWidth: 12 }} />
+            )}
           </React.Fragment>
         );
       })}
     </div>
   );
+}
 
-  // ══ STEP 0 — Tipo / Prioridad / Modificadores ════════════════════════════════
-  if(step===0) return (
-    <div style={{minHeight:"100vh",background:"transparent",padding:"0 16px 32px"}}>
-      {pdfPending&&<PDFConfirm {...pdfPending} onClose={()=>setPdfPending(null)}/>}
-      <StepBar/>
+function LineaRow({ l, opId, dispatch, editable }) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ ...l });
+  const sf = k => v => setForm(p => ({ ...p, [k]: v }));
+  const tipoMeta = TIPO_LINEA[l.tipo] || TIPO_LINEA.refaccion;
 
-      <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",marginBottom:12,textTransform:"uppercase",fontWeight:700}}>Prioridad</div>
-      {Object.entries(prColors).map(([pid,pc])=>{
-        const sel=priority===pid;
-        const pr=PRIORITY[pid]||PRIORITY.P4;
-        return (
-          <div key={pid} onClick={()=>setPriority(pid)}
-            style={{padding:"16px",borderRadius:16,marginBottom:8,cursor:"pointer",
-              background:sel?pc.dim:A.card,
-              boxShadow:sel?`0 2px 20px rgba(0,0,0,0.5), 0 0 0 1.5px ${pc.dot}`:A.shadowSm,
-              display:"flex",alignItems:"center",gap:14,
-              transition:"all 0.15s",WebkitTapHighlightColor:"transparent"}}>
-            <div style={{width:10,height:10,borderRadius:"50%",
-              background:sel?pc.dot:C.border,flexShrink:0,
-              boxShadow:"none",transition:"all 0.15s"}}/>
-            <div style={{flex:1}}>
-              <div style={{fontSize:14,fontWeight:800,color:sel?pc.dot:A.t2,transition:"color 0.15s"}}>
-                {pid} — {pc.label}
-              </div>
+  if (editing) return (
+    <div style={{ padding: "12px", background: "rgba(255,255,255,0.04)", border: `1px solid ${C.blue}33`, borderRadius: 10, marginBottom: 8 }}>
+      <Input label="Descripción" value={form.descripcion} onChange={sf("descripcion")} placeholder="Nombre de la pieza o servicio" />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <Input label="Costo s/IVA" value={String(form.costo_unitario)} onChange={v => sf("costo_unitario")(safeN(v))} type="number" prefix="$" />
+        <Input label="Precio s/IVA" value={String(form.precio_unitario)} onChange={v => sf("precio_unitario")(safeN(v))} type="number" prefix="$" />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+        <Input label="Cantidad" value={String(form.cantidad)} onChange={v => sf("cantidad")(safeN(v, 1))} type="number" />
+        <Sel label="Tipo" value={form.tipo} onChange={sf("tipo")} options={Object.entries(TIPO_LINEA).map(([k, v]) => ({ value: k, label: v.label }))} />
+        <Sel label="Estado" value={form.estado} onChange={sf("estado")} options={["buscando","cotizado","confirmado","entregado"].map(s => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }))} />
+      </div>
+      <Input label="OEM / Referencia" value={form.oem || ""} onChange={sf("oem")} placeholder="Número OEM" />
+      <div style={{ display: "flex", gap: 8 }}>
+        <Btn label="Guardar" onClick={() => { dispatch({ type: "OP_UPDATE_LINEA", opId, lineaId: l.id, patch: form }); setEditing(false); }} variant="primary" small />
+        <Btn label="Cancelar" onClick={() => setEditing(false)} variant="ghost" small />
+        <Btn label="Eliminar" onClick={() => { dispatch({ type: "OP_DELETE_LINEA", opId, lineaId: l.id }); }} variant="danger" small />
+      </div>
+    </div>
+  );
+
+  const margen = l.precio_unitario > 0 && l.costo_unitario > 0
+    ? ((l.precio_unitario - l.costo_unitario) / l.precio_unitario * 100).toFixed(0)
+    : null;
+
+  return (
+    <div onClick={editable ? () => setEditing(true) : undefined}
+      style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        padding: "10px 12px", background: C.bg1, border: `1px solid ${C.border}`,
+        borderRadius: 10, marginBottom: 6, cursor: editable ? "pointer" : "default",
+      }}>
+      <div style={{ flex: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 11 }}>{tipoMeta.icon}</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: C.t1 }}>{l.descripcion}</span>
+          {l.oem && <span style={{ fontSize: 9, color: C.t3 }}>{l.oem}</span>}
+        </div>
+        <div style={{ fontSize: 10, color: C.t3, marginTop: 2 }}>
+          {l.cantidad > 1 && <span>{l.cantidad} × </span>}
+          Costo {mxn(l.costo_unitario)}
+          {margen && <span style={{ color: C.lime, marginLeft: 6 }}>{margen}% margen</span>}
+        </div>
+      </div>
+      <div style={{ textAlign: "right" }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.t1, fontVariantNumeric: "tabular-nums" }}>
+          {mxn(l.precio_unitario * safeN(l.cantidad, 1))}
+        </div>
+        <div style={{
+          fontSize: 8, padding: "2px 6px", borderRadius: 6,
+          background: l.estado === "entregado" ? `${C.green}18` : l.estado === "confirmado" ? `${C.lime}18` : C.bg2,
+          color: l.estado === "entregado" ? C.green : l.estado === "confirmado" ? C.lime : C.t3,
+          marginTop: 2,
+        }}>
+          {l.estado}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OperacionDetail({ opId, state, dispatch, toast, onBack }) {
+  const { operaciones, clientes, unidades, proveedores } = state;
+  const op = operaciones.find(o => o.id === opId);
+  const [addLinea, setAddLinea] = useState(false);
+  const [nuevaLinea, setNuevaLinea] = useState({ descripcion: "", tipo: "refaccion", oem: "", cantidad: 1, costo_unitario: 0, precio_unitario: 0, costo_con_iva: true, estado: "buscando" });
+  const nlSf = k => v => setNuevaLinea(p => ({ ...p, [k]: v }));
+
+  if (!op) return (
+    <div style={{ padding: 40, textAlign: "center", color: C.t3 }}>
+      <p>Operación no encontrada</p>
+      <Btn label="← Volver" onClick={onBack} variant="ghost" />
+    </div>
+  );
+
+  const cli = clientes.find(c => c.id === op.clienteId);
+  const uni = unidades.find(u => u.id === op.unidadId);
+  const prv = proveedores.find(p => p.id === op.proveedorId);
+  const snap = snapOp(op.lineas);
+  const u = URGENCIA[op.urgencia] || URGENCIA.normal;
+  const estadoMeta = ESTADO_META[op.estado] || {};
+  const puedeAvanzar = ACTIVOS.has(op.estado) && op.estado !== "cancelado";
+  const puedeCobrar = op.estado === "resuelto" && !op.pago?.cobrado;
+  const editable = !TERMINAL.has(op.estado);
+  const idx = ESTADOS.indexOf(op.estado);
+  const siguiente = ESTADOS[idx + 1];
+
+  function guardarCampo(campo, valor) {
+    dispatch({ type: "OP_UPDATE", id: op.id, patch: { [campo]: valor } });
+  }
+
+  function agregarLinea() {
+    if (!nuevaLinea.descripcion.trim()) return;
+    dispatch({ type: "OP_ADD_LINEA", id: op.id, linea: nuevaLinea });
+    setNuevaLinea({ descripcion: "", tipo: "refaccion", oem: "", cantidad: 1, costo_unitario: 0, precio_unitario: 0, costo_con_iva: true, estado: "buscando" });
+    setAddLinea(false);
+    toast("Línea agregada", "success");
+  }
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg0, paddingBottom: 100 }}>
+
+      {/* Header */}
+      <div style={{ padding: "20px 16px 0", background: `linear-gradient(180deg, ${u.dim} 0%, transparent 100%)` }}>
+        <button onClick={onBack} style={{ background: "none", border: "none", color: C.t3, fontSize: 14, cursor: "pointer", padding: "0 0 12px", fontFamily: "inherit" }}>← Centro</button>
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+          <div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+              <Pill label={u.label} color={u.color} dim={u.dim} />
+              <Pill label={TIPO_OP[op.tipo]?.label || op.tipo} color={C.t3} dim={C.bg2} />
             </div>
-            {sel&&pr.marginBonus>0&&(
-              <span style={{fontSize:10,color:pc.dot,fontWeight:700,
-                background:`${pc.dot}18`,padding:"3px 10px",borderRadius:10,
-                border:`1px solid ${pc.dot}30`}}>+{pr.marginBonus}% margen</span>
+            <div style={{ fontSize: 8, color: C.t3, letterSpacing: "0.1em", marginBottom: 4 }}>
+              {opCodigo(op.id, op.createdAt)}
+            </div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.t1, fontVariantNumeric: "tabular-nums" }}>
+              {snap.precio_con_iva > 0 ? mxn(snap.precio_con_iva) : "—"}
+            </div>
+            {snap.precio_con_iva > 0 && (
+              <div style={{ fontSize: 10, color: snap.u_neta > 0 ? C.lime : C.red }}>
+                util {mxn(snap.u_neta)} · {pct(snap.margen)}
+              </div>
             )}
           </div>
-        );
-      })}
-
-      <div style={{height:1,background:C.border,margin:"20px 0"}}/>
-
-      <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",marginBottom:12,textTransform:"uppercase",fontWeight:700}}>Tipo de operación</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:20}}>
-        {OP_TYPES.map(op=>{
-          const sel=opType===op.id;
-          return (
-            <div key={op.id} onClick={()=>setOpType(op.id)}
-              style={{padding:"14px",borderRadius:14,cursor:"pointer",
-                background:sel?A.limeDim:A.card,
-                boxShadow:sel?`0 0 0 1.5px ${C.blue}`:A.shadowSm,
-                WebkitTapHighlightColor:"transparent",transition:"all 0.15s"}}>
-              <div style={{fontSize:13,fontWeight:700,color:sel?A.lime:A.t2,marginBottom:4}}>{op.label}</div>
-              <div style={{fontSize:10,color:A.t3}}>{op.baseMin}–{op.baseMax}%</div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",marginBottom:12,textTransform:"uppercase",fontWeight:700}}>Modificadores</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:22}}>
-        {MODIFIERS.map(mod=>{
-          const on=activeMods.includes(mod.id);
-          return (
-            <div key={mod.id}
-              onClick={()=>setActiveMods(p=>p.includes(mod.id)?p.filter(x=>x!==mod.id):[...p,mod.id])}
-              style={{padding:"14px",borderRadius:14,cursor:"pointer",
-                background:on?A.limeDim:A.card,
-                boxShadow:on?`0 0 0 1.5px ${C.blue}`:A.shadowSm,
-                display:"flex",alignItems:"flex-start",gap:10,
-                WebkitTapHighlightColor:"transparent",transition:"all 0.15s"}}>
-              <div style={{width:8,height:8,borderRadius:"50%",marginTop:3,flexShrink:0,
-                background:on?A.lime:C.border,
-                boxShadow:on?"none":"none",transition:"all 0.15s"}}/>
-              <div>
-                <div style={{fontSize:12,fontWeight:700,color:on?A.lime:A.t2,marginBottom:2}}>{mod.label}</div>
-                <div style={{fontSize:10,color:on?A.lime:A.t3,fontWeight:on?700:400}}>+{mod.pct}%</div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="glass-card" style={{padding:"20px 22px",marginBottom:24}}>
-        <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:10}}>Margen efectivo</div>
-        <div style={{fontSize:46,fontWeight:800,color:A.lime,lineHeight:1,letterSpacing:"-0.02em",marginBottom:8}}>
-          {fpct(sharedMargin)}
         </div>
-        <div style={{fontSize:10,color:A.t3}}>
-          {opType} · P{priority.slice(1)} · {activeMods.length>0?activeMods.join(", "):"sin modificadores"}
+
+        <div style={{ fontSize: 16, fontWeight: 800, color: C.t1, lineHeight: 1.3, marginBottom: 10 }}>
+          {op.titulo}
         </div>
+
+        {(cli || uni) && (
+          <div style={{ fontSize: 11, color: C.t2, marginBottom: 12 }}>
+            {cli && <span>{cli.empresa}</span>}
+            {cli && uni && " · "}
+            {uni && <span>Eco. {uni.economico} — {uni.marca} {uni.modelo} {uni.anio}</span>}
+          </div>
+        )}
+
+        <SLABar op={op} />
       </div>
 
-      <button onClick={()=>setStep(1)} style={{
-        width:"100%",padding:"16px",borderRadius:16,
-        background:A.limeFill,
-        border:"none",color:C._dark?"#0A1F14":"#161616",fontSize:14,fontWeight:700,cursor:"pointer",
-        letterSpacing:"0.02em",WebkitTapHighlightColor:"transparent",
-      }}>
-        Siguiente: Líneas →
-      </button>
-    </div>
-  );
+      <div style={{ padding: "16px" }}>
 
-  // ══ STEP 1 — Líneas con PartPicker ══════════════════════════════════════════
-  if(step===1) return (
-    <div style={{minHeight:"100vh",background:"transparent",padding:"0 16px 32px"}}>
-      <StepBar/>
-
-      {lineas.map((l,i)=>{
-        const sn=lineSnaps[i];
-        const isManual=l.mode==="manual";
-        return (
-          <div key={i} className="glass-card" style={{overflow:"hidden",marginBottom:12}}>
-            <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,
-              display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <div style={{fontSize:9,color:A.t3,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase"}}>
-                Línea {i+1}
-              </div>
-              {lineas.length>1&&(
-                <button onClick={()=>removeLine(i)}
-                  style={{background:"transparent",border:"none",color:A.red,
-                    fontSize:18,cursor:"pointer",padding:"0 4px",lineHeight:1,
-                    WebkitTapHighlightColor:"transparent"}}>×</button>
-              )}
-            </div>
-            <div style={{padding:"16px"}}>
-              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.14em",marginBottom:8,textTransform:"uppercase",fontWeight:700}}>
-                Descripción / Pieza
-              </div>
-              <PartPicker
-                parts={state.parts}
-                value={partQ[i]!==undefined?partQ[i]:(l.titulo||"")}
-                onChange={v=>{setPartQ(q=>({...q,[i]:v}));upd(i,{titulo:v});}}
-                onSelect={p=>selectPart(i,p)}
-                mobile
+        {/* Pipeline steps */}
+        <Card style={{ marginBottom: 12, padding: "12px 14px" }}>
+          <Label>Estado de la operación</Label>
+          <PipelineSteps estado={op.estado} />
+          <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {puedeAvanzar && siguiente && (
+              <Btn
+                label={`→ ${ESTADO_META[siguiente]?.label}`}
+                onClick={() => { dispatch({ type: "OP_AVANZAR", id: op.id }); toast(`→ ${ESTADO_META[siguiente]?.label}`, "success"); }}
+                variant="primary"
               />
-              {l.partRef&&(
-                <div style={{fontSize:10,color:A.t3,marginTop:6,marginBottom:10,letterSpacing:"0.04em"}}>
-                  OEM: {l.partRef}
-                </div>
+            )}
+            {puedeCobrar && (
+              <Btn
+                label="✓ Cobrado"
+                onClick={() => { dispatch({ type: "OP_COBRAR", id: op.id }); toast("Cobrado ✓", "success"); }}
+                variant="primary"
+              />
+            )}
+            {editable && (
+              <Btn
+                label="Cancelar operación"
+                onClick={() => { if (confirm("¿Cancelar esta operación?")) { dispatch({ type: "OP_CANCELAR", id: op.id }); onBack(); } }}
+                variant="danger"
+                small
+              />
+            )}
+          </div>
+        </Card>
+
+        {/* AI sugerencia */}
+        {op.ai_sugerencia && (
+          <div style={{
+            marginBottom: 12, padding: "10px 14px", borderRadius: 12,
+            background: "rgba(10,132,255,0.07)", border: `1px solid ${C.blue}22`,
+          }}>
+            <div style={{ fontSize: 9, color: C.blue, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4, fontWeight: 700 }}>🤖 Asistente IA</div>
+            <div style={{ fontSize: 12, color: C.t2, lineHeight: 1.5 }}>{op.ai_sugerencia}</div>
+          </div>
+        )}
+
+        {/* Diagnóstico técnico */}
+        {op.diagnostico && (
+          <Card style={{ marginBottom: 12 }}>
+            <Label>Diagnóstico técnico</Label>
+            {op.diagnostico.falla_reportada && (
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 9, color: C.t3, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 3 }}>Falla reportada</div>
+                <div style={{ fontSize: 13, color: C.t2, lineHeight: 1.4 }}>{op.diagnostico.falla_reportada}</div>
+              </div>
+            )}
+            {op.diagnostico.causa_probable && (
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 9, color: C.t3, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 3 }}>Diagnóstico</div>
+                <div style={{ fontSize: 13, color: C.t1, lineHeight: 1.4 }}>{op.diagnostico.causa_probable}</div>
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8 }}>
+              {op.diagnostico.sistema_afectado && (
+                <Pill label={SISTEMAS[op.diagnostico.sistema_afectado] || op.diagnostico.sistema_afectado} color={C.t2} dim={C.bg2} small />
               )}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 80px",gap:8,marginBottom:8}}>
-                <MField label="Costo unitario (c/IVA)" value={String(l.costoUnit||"")}
-                  type="number" suffix="$"
-                  onChange={v=>upd(i,{costoUnit:safeNumber(v),manualPrice:String(safeNumber(v))})}/>
-                <MField label="Cant." value={String(l.qty||1)} type="number"
-                  onChange={v=>upd(i,{qty:Math.max(1,safeNumber(v,1))||1})}/>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-                <MField label="Gasolina / flete" value={String(l.gasolina||"")} type="number" suffix="$"
-                  onChange={v=>upd(i,{gasolina:safeNumber(v)})}/>
-                <MField label="Otros gastos" value={String(l.otros||"")} type="number" suffix="$"
-                  onChange={v=>upd(i,{otros:safeNumber(v)})}/>
-              </div>
-              <div style={{display:"flex",gap:8,marginBottom:10}}>
-                {[["auto","Auto (margen)"],["manual","Precio fijo"]].map(([m,lbl])=>(
-                  <button key={m} onClick={()=>upd(i,{mode:m})}
-                    style={{flex:1,padding:"9px",borderRadius:10,fontSize:11,fontWeight:700,
-                      border:`1.5px solid ${l.mode===m?"rgba(255,255,255,0.15)":C.border}`,
-                      background:l.mode===m?A.limeDim:"transparent",
-                      color:l.mode===m?A.lime:A.t3,cursor:"pointer",
-                      transition:"all 0.15s",WebkitTapHighlightColor:"transparent"}}>
-                    {lbl}
-                  </button>
-                ))}
-              </div>
-              {isManual?(
-                <MField label="Precio al cliente (c/IVA)" value={l.manualPrice||""} type="number" suffix="$"
-                  onChange={v=>upd(i,{manualPrice:v})} color={A.amber}/>
-              ):(
-                <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
-                  <button onClick={()=>upd(i,{customMgn:!l.customMgn})}
-                    style={{padding:"9px 14px",borderRadius:10,fontSize:10,fontWeight:700,flexShrink:0,
-                      border:`1.5px solid ${l.customMgn?"rgba(255,255,255,0.15)":C.border}`,
-                      background:l.customMgn?A.limeDim:"transparent",
-                      color:l.customMgn?A.lime:A.t3,cursor:"pointer",WebkitTapHighlightColor:"transparent"}}>
-                    Margen personalizado
-                  </button>
-                  {l.customMgn&&(
-                    <MField label="" value={String(l.customVal||27)} type="number" suffix="%"
-                      onChange={v=>upd(i,{customVal:safeNumber(v)})}/>
-                  )}
-                </div>
+              {op.diagnostico.confianza > 0 && (
+                <Pill label={`${pct(op.diagnostico.confianza * 100)} confianza`} color={op.diagnostico.confianza > 0.8 ? C.lime : C.amber} small />
               )}
-              <div style={{background:A.limeDim,borderRadius:12,padding:"12px 14px",
-                display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:10,
-                border:`1px solid ${C.border}`}}>
-                {[
-                  {label:"Precio línea",value:mxn(sn.precioConIVA),color:A.t1},
-                  {label:"Util. neta",  value:mxn(sn.uNeta),       color:sn.uNeta>=0?A.lime:A.red},
-                  {label:"Margen",      value:fpct(sn.margenNetoPrecio||0),
-                    color:sn.margenNetoPrecio>=25?A.lime:sn.margenNetoPrecio>=15?A.mint:A.amber},
-                ].map(({label,value,color})=>(
-                  <div key={label}>
-                    <div style={{fontSize:8,color:A.t3,textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:4}}>{label}</div>
-                    <div style={{fontSize:18,fontWeight:800,color,fontVariantNumeric:"tabular-nums"}}>{value}</div>
-                  </div>
-                ))}
+            </div>
+          </Card>
+        )}
+
+        {/* Líneas */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <Label>Líneas ({op.lineas?.length || 0})</Label>
+            {editable && (
+              <button onClick={() => setAddLinea(p => !p)} style={{
+                background: "none", border: "none", color: C.blue,
+                fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+              }}>+ Agregar</button>
+            )}
+          </div>
+
+          {addLinea && (
+            <div style={{ padding: 12, background: C.bg2, border: `1px solid ${C.blue}33`, borderRadius: 12, marginBottom: 10 }}>
+              <Input label="Descripción" value={nuevaLinea.descripcion} onChange={nlSf("descripcion")} placeholder="Nombre de la pieza o servicio" />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <Input label="Costo s/IVA" value={String(nuevaLinea.costo_unitario)} onChange={v => nlSf("costo_unitario")(safeN(v))} type="number" prefix="$" />
+                <Input label="Precio s/IVA" value={String(nuevaLinea.precio_unitario)} onChange={v => nlSf("precio_unitario")(safeN(v))} type="number" prefix="$" />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <Input label="Cantidad" value={String(nuevaLinea.cantidad)} onChange={v => nlSf("cantidad")(safeN(v, 1))} type="number" />
+                <Sel label="Tipo" value={nuevaLinea.tipo} onChange={nlSf("tipo")} options={Object.entries(TIPO_LINEA).map(([k, v]) => ({ value: k, label: v.label }))} />
+              </div>
+              <Input label="OEM / Referencia" value={nuevaLinea.oem} onChange={nlSf("oem")} placeholder="Número OEM o referencia" />
+              <div style={{ display: "flex", gap: 8 }}>
+                <Btn label="Agregar línea" onClick={agregarLinea} variant="primary" small />
+                <Btn label="Cancelar" onClick={() => setAddLinea(false)} variant="ghost" small />
               </div>
             </div>
-          </div>
-        );
-      })}
-
-      <button onClick={addLine} style={{
-        width:"100%",padding:"14px",borderRadius:16,
-        background:"transparent",border:`2px dashed ${C.border}`,
-        color:A.t3,fontSize:13,fontWeight:700,cursor:"pointer",
-        display:"flex",alignItems:"center",justifyContent:"center",gap:10,
-        marginBottom:16,WebkitTapHighlightColor:"transparent",
-      }}>
-        <span style={{fontSize:22,color:A.lime,lineHeight:1,fontWeight:300}}>+</span>
-        Agregar línea
-      </button>
-
-      <div className="glass-card" style={{padding:"20px 22px",marginBottom:16}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
-          <div>
-            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.14em",marginBottom:8,textTransform:"uppercase"}}>
-              Total · {lineas.length} línea{lineas.length>1?"s":""}
-            </div>
-            <div style={{fontSize:40,fontWeight:800,color:A.t1,lineHeight:1,
-              letterSpacing:"-0.025em",fontVariantNumeric:"tabular-nums"}}>
-              {mxn(totalPrecio)}
-            </div>
-          </div>
-          <div style={{textAlign:"right"}}>
-            <div style={{fontSize:9,color:A.t3,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.12em"}}>Util. neta</div>
-            <div style={{fontSize:26,fontWeight:800,
-              color:totalNeta>=0?A.lime:A.red,letterSpacing:"-0.02em",fontVariantNumeric:"tabular-nums"}}>
-              {mxn(totalNeta)}
-            </div>
-            <div style={{fontSize:12,fontWeight:700,marginTop:4,
-              color:aggMargen>=25?A.lime:aggMargen>=15?A.mint:A.amber}}>
-              {fpct(aggMargen)}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div style={{display:"flex",gap:10}}>
-        <button onClick={()=>setStep(0)}
-          style={{padding:"14px 20px",borderRadius:14,background:"transparent",
-            border:`1px solid ${C.border}`,color:A.t3,fontSize:12,cursor:"pointer",
-            WebkitTapHighlightColor:"transparent"}}>
-          ← Atrás
-        </button>
-        <button onClick={()=>setStep(2)} style={{
-          flex:1,padding:"14px",borderRadius:14,
-          background:A.limeFill,
-          border:"none",color:C._dark?"#0A1F14":"#161616",fontSize:14,fontWeight:700,cursor:"pointer",
-          WebkitTapHighlightColor:"transparent",
-        }}>
-          Siguiente: Datos →
-        </button>
-      </div>
-    </div>
-  );
-
-  // ══ STEP 2 — Datos del ticket ════════════════════════════════════════════════
-  return (
-    <div style={{minHeight:"100vh",background:"transparent",padding:"0 16px 32px"}}>
-      <StepBar/>
-
-      <div className="glass-card" style={{overflow:"hidden",
-        marginBottom:14}}>
-        <div style={{padding:"18px 18px 6px"}}>
-          <MField label="Fecha" value={fecha} onChange={setFecha} placeholder="DD/MM/AAAA"/>
-          <ClientPicker   clients={clients}     value={clientId}    onChange={setClientId}   mobile/>
-          <UnitPicker     units={units}          value={unitId}      onChange={setUnitId}     mobile/>
-          <SupplierPicker suppliers={suppliers}  value={supplierId}  onChange={setSupplierId} mobile/>
-          <MSel label="Pago" value={payType} onChange={setPayType}
-            options={[{value:"contado",label:"Contado — sin seguimiento"},{value:"credit",label:"Crédito — genera cartera"}]}/>
-          {payType==="credit"&&(
-            <MField label="Promesa de pago" value={promesa} onChange={setPromesa}
-              placeholder="DD/MM/AAAA" color={A.amber}/>
           )}
-          <div style={{marginBottom:14}}>
-            <div style={{fontSize:9,color:A.t3,marginBottom:8,letterSpacing:"0.14em",
-              textTransform:"uppercase",fontWeight:700}}>Notas</div>
-            <textarea rows={3} value={notes} onChange={e=>setNotes(e.target.value)}
-              placeholder="Diagnóstico, observaciones..."
-              style={{width:"100%",background:"rgba(255,255,255,0.03)",
-                border:`1px solid ${C.border}`,borderRadius:12,
-                padding:"12px 14px",color:A.t2,fontSize:13,outline:"none",
-                boxSizing:"border-box",fontFamily:"inherit",resize:"vertical"}}/>
-          </div>
-        </div>
-      </div>
 
-      <div className="glass-card" style={{padding:"20px 22px",marginBottom:18}}>
-        <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:14}}>Resumen</div>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:14}}>
-          <div>
-            <div style={{fontSize:9,color:A.t3,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.12em"}}>Total c/IVA</div>
-            <div style={{fontSize:36,fontWeight:800,color:A.t1,lineHeight:1,
-              letterSpacing:"-0.025em",fontVariantNumeric:"tabular-nums"}}>
-              {mxn(totalPrecio)}
-            </div>
-          </div>
-          <div style={{textAlign:"right"}}>
-            <div style={{fontSize:9,color:A.t3,marginBottom:6,textTransform:"uppercase",letterSpacing:"0.12em"}}>Util. neta</div>
-            <div style={{fontSize:24,fontWeight:800,
-              color:totalNeta>=0?A.lime:A.red,fontVariantNumeric:"tabular-nums"}}>
-              {mxn(totalNeta)}
-            </div>
-          </div>
-        </div>
-        <div style={{height:1,background:C.border,marginBottom:14}}/>
-        <div style={{display:"flex",flexDirection:"column",gap:5}}>
-          {lineas.length>1&&<div style={{fontSize:10,color:A.t3}}>{lineas.length} líneas</div>}
-          {cl&&<div style={{fontSize:11,color:A.t2}}>Cliente: <span style={{fontWeight:700,color:A.t1}}>{cl.empresa}</span></div>}
-          {un&&<div style={{fontSize:11,color:A.t2}}>Unidad: <span style={{color:A.t1}}>{un.economico?"Eco. "+un.economico+" ":""}{un.marca} {un.modelo}</span></div>}
-          <div style={{fontSize:10,color:A.t3}}>
-            Pago: {payType==="credit"?`Crédito${promesa?" · "+promesa:""}` : "Contado"}
-          </div>
-        </div>
-      </div>
-
-      <div style={{display:"flex",gap:10}}>
-        <button onClick={()=>setStep(1)}
-          style={{padding:"14px 20px",borderRadius:14,background:"transparent",
-            border:`1px solid ${C.border}`,color:A.t3,fontSize:12,cursor:"pointer",
-            WebkitTapHighlightColor:"transparent"}}>
-          ← Atrás
-        </button>
-        <button onClick={save} style={{
-          flex:1,padding:"16px",borderRadius:14,
-          background:A.limeFill,
-          border:"none",color:C._dark?"#0A1F14":"#161616",fontSize:14,fontWeight:700,cursor:"pointer",
-          letterSpacing:"0.02em",WebkitTapHighlightColor:"transparent",
-        }}>
-          Registrar ticket + PDF →
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── MCartera — Cartera móvil ──────────────────────────────────────────────────
-function MCartera({state,dispatch,toast}) {
-  const C = React.useContext(ThemeCtx);
-  const {tickets,clients} = state;
-  const now = new Date();
-
-  const A = makeA(C);
-
-  const creditTkts = useMemo(()=>tickets.filter(t=>!t._deleted&&t.payType==="credit"&&t.status!=="cancelado"),[tickets]);
-  // Use status as source of truth — ignore cobrado flag (may be stale in DB)
-  const pendientes = useMemo(()=>creditTkts.filter(t=>CARTERA_SET.has(t.status)),[creditTkts]);
-  const cobradas   = useMemo(()=>creditTkts.filter(t=>t.status==="cobrado"),[creditTkts]);
-  const cerradas   = useMemo(()=>creditTkts.filter(t=>t.status==="cerrado"),[creditTkts]);
-  const totalPend  = useMemo(()=>pendientes.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[pendientes]);
-  const totalCob   = useMemo(()=>cobradas.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[cobradas]);
-
-  const msDay    = 86400000;
-  const ageMs    = t => { const d=parseDateMX(t.promesaPago||t.date); return d?(now-d):0; };
-  const daysOver = t => { const d=parseDateMX(t.promesaPago); if(!d) return 0; return Math.floor((now-d)/msDay); };
-
-  const vencidas  = useMemo(()=>pendientes.filter(t=>{const d=parseDateMX(t.promesaPago);return d&&now>d;}),[pendientes]);
-  const corriente = useMemo(()=>pendientes.filter(t=>{const d=parseDateMX(t.promesaPago);return !d||(d&&now<=d);}),[pendientes]);
-  const totalVenc = useMemo(()=>vencidas.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[vencidas]);
-  const totalCorr = useMemo(()=>corriente.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[corriente]);
-
-  const aging = useMemo(()=>{
-    const b=[{label:"0–30 d",min:0,max:30*msDay,monto:0},{label:"30–60 d",min:30*msDay,max:60*msDay,monto:0},{label:">60 d",min:60*msDay,max:Infinity,monto:0}];
-    vencidas.forEach(t=>{const ms=ageMs(t);const bk=b.find(bk=>ms>=bk.min&&ms<bk.max);if(bk) bk.monto+=safeNumber(t.snap?.precioConIVA);});
-    return b;
-  },[vencidas]);
-  const maxAging = Math.max(...aging.map(b=>b.monto),1);
-
-  const cobrar = t => { dispatch({type:"TKT_COBRADO",id:t.id}); toast("Cobrado ✓","success"); };
-
-  return (
-    <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
-
-      {/* Alert banner when vencidas exist */}
-      {vencidas.length>0&&(
-        <div style={{
-          background:"#0D1825",
-          borderBottom:"1px solid rgba(212,146,26,0.3)",
-          padding:"18px 20px 16px",
-        }}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-            <div style={{width:6,height:6,borderRadius:"50%",background:A.amber,flexShrink:0}}/>
-            <span style={{fontSize:10,fontWeight:800,color:A.amber,letterSpacing:"0.16em",textTransform:"uppercase"}}>
-              {vencidas.length} cobro{vencidas.length>1?"s":""} vencido{vencidas.length>1?"s":""}
-            </span>
-          </div>
-          <div style={{fontSize:30,fontWeight:800,color:A.amber,letterSpacing:"-0.02em",
-            fontVariantNumeric:"tabular-nums",marginTop:8,marginBottom:4}}>
-            {mxn(totalVenc)}
-          </div>
-          <div style={{fontSize:11,color:A.t3}}>por cobrar urgente</div>
-        </div>
-      )}
-
-      <div style={{padding:"0 16px"}}>
-        {/* Hero card */}
-        <div className="glass-card" style={{padding:"26px 24px",marginTop:16,marginBottom:12}}>
-          <div style={{fontSize:9,color:A.t3,letterSpacing:"0.18em",textTransform:"uppercase",marginBottom:10}}>
-            Cuentas por cobrar
-          </div>
-          <div style={{fontSize:48,fontWeight:800,color:totalVenc>0?A.amber:A.t1,lineHeight:1,
-            letterSpacing:"-0.025em",fontVariantNumeric:"tabular-nums",marginBottom:20}}>
-            {mxn(totalPend)}
-          </div>
-          <div style={{height:1,background:C.border,marginBottom:20}}/>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0}}>
-            <div>
-              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>Vencido</div>
-              <div style={{fontSize:22,fontWeight:800,color:totalVenc>0?A.red:A.t3,
-                fontVariantNumeric:"tabular-nums",letterSpacing:"-0.01em"}}>
-                {mxn(totalVenc)}
-              </div>
-              <div style={{fontSize:10,color:totalVenc>0?A.red:A.t3,marginTop:4}}>
-                {vencidas.length} factura{vencidas.length!==1?"s":""}
-              </div>
-            </div>
-            <div style={{paddingLeft:16,borderLeft:`1px solid ${C.border}`}}>
-              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:7}}>Al corriente</div>
-              <div style={{fontSize:22,fontWeight:800,color:A.mint,
-                fontVariantNumeric:"tabular-nums",letterSpacing:"-0.01em"}}>
-                {mxn(totalCorr)}
-              </div>
-              <div style={{fontSize:10,color:A.t3,marginTop:4}}>
-                {corriente.length} factura{corriente.length!==1?"s":""}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Aging breakdown */}
-        {vencidas.length>0&&(
-          <div className="glass-card" style={{padding:"20px 22px",marginBottom:12}}>
-            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:16}}>
-              Antigüedad
-            </div>
-            {aging.map((b,i)=>(
-              <div key={i} style={{marginBottom:i<2?14:0}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                  <span style={{fontSize:11,color:b.monto>0?A.t2:A.t3,fontWeight:b.monto>0?600:400}}>
-                    {b.label}
-                  </span>
-                  <span style={{fontSize:12,fontWeight:700,fontVariantNumeric:"tabular-nums",
-                    color:b.monto>0?(i===2?A.red:A.amber):A.t3}}>
-                    {b.monto>0?mxn(b.monto):"—"}
-                  </span>
-                </div>
-                {b.monto>0&&(
-                  <div style={{height:3,background:C.border,borderRadius:2,overflow:"hidden"}}>
-                    <div style={{height:"100%",width:`${(b.monto/maxAging)*100}%`,
-                      background:i===2?A.red:A.amber,borderRadius:2,transition:"width 500ms ease"}}/>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Vencidas section */}
-        {vencidas.length>0&&(
-          <div style={{marginBottom:12}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-              <div style={{width:6,height:6,borderRadius:"50%",background:A.red,flexShrink:0}}/>
-              <span style={{fontSize:10,fontWeight:800,color:A.red,letterSpacing:"0.14em",textTransform:"uppercase"}}>
-                Vencidas · {vencidas.length}
-              </span>
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              {vencidas.map(t=>{
-                const cl=clients.find(c=>c.id===t.clientId);
-                const over=daysOver(t);
-                return (
-                  <div key={t.id} style={{
-                    background:"rgba(239,68,68,0.08)",
-                    borderRadius:A.r,overflow:"hidden",
-                    boxShadow:"0 1px 3px rgba(0,0,0,0.3), 0 0 0 1px rgba(239,68,68,0.15)",
-                  }}>
-                    <div style={{padding:"16px 16px 14px"}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-                        <div style={{fontSize:12,fontWeight:700,color:A.red}}>{cl?.empresa||"Sin cliente"}</div>
-                        <div style={{fontSize:11,fontWeight:700,color:A.red,
-                          background:"rgba(232,72,72,0.12)",padding:"2px 8px",borderRadius:8,
-                          border:"1px solid rgba(232,72,72,0.2)"}}>
-                          +{over}d
-                        </div>
-                      </div>
-                      <div style={{fontSize:14,fontWeight:700,color:A.t1,marginBottom:6,
-                        overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                        {t.titulo}
-                      </div>
-                      <div style={{fontSize:10,color:A.t3}}>Prometido: {t.promesaPago||"—"}</div>
-                    </div>
-                    <div style={{padding:"12px 16px",borderTop:"1px solid rgba(232,72,72,0.12)",
-                      display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <div style={{fontSize:22,fontWeight:800,color:A.red,letterSpacing:"-0.02em",
-                        fontVariantNumeric:"tabular-nums"}}>
-                        {mxn(t.snap?.precioConIVA||0)}
-                      </div>
-                      <button onClick={()=>cobrar(t)} style={{
-                        padding:"10px 18px",borderRadius:12,
-                        background:A.mintDim,border:`1px solid ${C.blue}33`,
-                        color:A.mint,fontSize:12,fontWeight:800,cursor:"pointer",
-                        letterSpacing:"0.04em",WebkitTapHighlightColor:"transparent",
-                      }}>
-                        Cobrar ✓
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Al corriente */}
-        {corriente.length>0&&(
-          <div style={{marginBottom:12}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-              <div style={{width:6,height:6,borderRadius:"50%",background:A.mint,flexShrink:0}}/>
-              <span style={{fontSize:10,fontWeight:800,color:A.mint,letterSpacing:"0.14em",textTransform:"uppercase"}}>
-                Al corriente · {corriente.length}
-              </span>
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              {corriente.map(t=>{
-                const cl=clients.find(c=>c.id===t.clientId);
-                const d=parseDateMX(t.promesaPago);
-                const daysLeft=d?Math.ceil((d-now)/86400000):null;
-                const urgent=daysLeft!==null&&daysLeft<=3;
-                return (
-                  <div key={t.id} className="glass-card-sm" style={{overflow:"hidden"}}>
-                    <div style={{padding:"16px 16px 14px"}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-                        <div style={{fontSize:12,fontWeight:600,color:A.t2}}>{cl?.empresa||"Sin cliente"}</div>
-                        {daysLeft!==null&&(
-                          <div style={{fontSize:10,fontWeight:600,
-                            color:urgent?A.amber:A.t3,
-                            background:urgent?"rgba(240,160,48,0.12)":"transparent",
-                            padding:"2px 8px",borderRadius:8}}>
-                            {daysLeft<=0?"hoy":daysLeft===1?"mañana":`en ${daysLeft}d`}
-                          </div>
-                        )}
-                      </div>
-                      <div style={{fontSize:14,fontWeight:700,color:A.t1,marginBottom:4,
-                        overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                        {t.titulo}
-                      </div>
-                      <div style={{fontSize:10,color:A.t3}}>Vence: {t.promesaPago||"—"}</div>
-                    </div>
-                    <div style={{padding:"12px 16px",borderTop:`1px solid ${C.border}`,
-                      display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <div style={{fontSize:22,fontWeight:800,color:A.t1,letterSpacing:"-0.02em",
-                        fontVariantNumeric:"tabular-nums"}}>
-                        {mxn(t.snap?.precioConIVA||0)}
-                      </div>
-                      <button onClick={()=>cobrar(t)} style={{
-                        padding:"10px 18px",borderRadius:12,
-                        background:A.mintDim,border:`1px solid ${C.blue}33`,
-                        color:A.mint,fontSize:12,fontWeight:800,cursor:"pointer",
-                        letterSpacing:"0.04em",WebkitTapHighlightColor:"transparent",
-                      }}>
-                        Cobrar ✓
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Cobrado */}
-        {cobradas.length>0&&(
-          <div style={{marginBottom:16}}>
-            <div style={{fontSize:9,color:A.lime,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:10}}>
-              Cobrado · {cobradas.length} ops · {mxn(cobradas.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0))}
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {cobradas.slice(0,10).map(t=>{
-                const cl=clients.find(c=>c.id===t.clientId);
-                return (
-                  <div key={t.id} className="glass-card-sm" style={{padding:"12px 16px",
-                    display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div style={{minWidth:0,flex:1}}>
-                      <div style={{fontSize:12,fontWeight:600,color:A.t2,overflow:"hidden",
-                        textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
-                      <div style={{fontSize:10,color:A.t3,marginTop:2}}>{cl?.empresa||""} · {t.date}</div>
-                    </div>
-                    <div style={{fontSize:14,fontWeight:800,color:A.mint,fontVariantNumeric:"tabular-nums",
-                      marginLeft:12,flexShrink:0}}>
-                      {mxn(t.snap?.precioConIVA||0)}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-        {/* Cerrado/Archivado — separado del cobrado */}
-        {cerradas.length>0&&(
-          <div>
-            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:10}}>
-              Archivado · {cerradas.length} ops · {mxn(cerradas.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0))}
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {cerradas.slice(0,5).map(t=>{
-                const cl=clients.find(c=>c.id===t.clientId);
-                return (
-                  <div key={t.id} className="glass-card-sm" style={{padding:"12px 16px",
-                    display:"flex",justifyContent:"space-between",alignItems:"center",opacity:0.6}}>
-                    <div style={{minWidth:0,flex:1}}>
-                      <div style={{fontSize:12,fontWeight:600,color:A.t2,overflow:"hidden",
-                        textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
-                      <div style={{fontSize:10,color:A.t3,marginTop:2}}>{cl?.empresa||""} · {t.date}</div>
-                    </div>
-                    <div style={{fontSize:14,fontWeight:800,color:A.t3,fontVariantNumeric:"tabular-nums",
-                      marginLeft:12,flexShrink:0}}>
-                      {mxn(t.snap?.precioConIVA||0)}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {pendientes.length===0&&cobradas.length===0&&(
-          <div style={{textAlign:"center",padding:"48px 20px"}}>
-            <div style={{fontSize:11,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
-              Sin operaciones a crédito
-            </div>
-            <div style={{fontSize:13,color:A.t3}}>Las ventas a crédito aparecen aquí</div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
-  const C = React.useContext(ThemeCtx);
-  const {tickets,clients,units,suppliers} = state;
-  const [period,setPeriod]   = useState("week");
-  const [search,setSearch]   = useState("");
-  const [expandId,setExpandId] = useState(null);
-  const [editId,setEditId]   = useState(null);
-
-  // ── Period range ──────────────────────────────────────────────────────────
-  const range = useMemo(()=>{
-    const now=new Date(); const from=new Date(now);
-    if(period==="today")       { from.setHours(0,0,0,0); }
-    else if(period==="week")   { from.setDate(now.getDate()-7); }
-    else if(period==="month")  { from.setDate(now.getDate()-30); }
-    else if(period==="3m")     { from.setDate(now.getDate()-90); }
-    else                       { from.setFullYear(2000); } // "all"
-    return {from,to:now};
-  },[period]);
-
-  const inRange = useCallback(t=>{
-    const d=parseDateMX(t.date); return d&&d>=range.from&&d<=range.to;
-  },[range]);
-
-  // ── All non-deleted ───────────────────────────────────────────────────────
-  const allActive = useMemo(()=>tickets.filter(t=>!t._deleted),[tickets]);
-
-  const filtered = useMemo(()=>{
-    let arr=allActive.filter(inRange);
-    if(search.trim()) {
-      const lq=search.toLowerCase();
-      arr=arr.filter(t=>t.titulo?.toLowerCase().includes(lq)||t.id?.toLowerCase().includes(lq)||
-        clients.find(c=>c.id===t.clientId)?.empresa?.toLowerCase().includes(lq));
-    }
-    return [...arr].sort((a,b)=>b.date.localeCompare(a.date));
-  },[allActive,inRange,search,clients]);
-
-  // ── Group by date ─────────────────────────────────────────────────────────
-  const grouped = useMemo(()=>{
-    const groups={};
-    filtered.forEach(t=>{
-      const d=t.date||"Sin fecha";
-      if(!groups[d]) groups[d]=[];
-      groups[d].push(t);
-    });
-    // Sort dates desc
-    return Object.entries(groups).sort((a,b)=>b[0].localeCompare(a[0]));
-  },[filtered]);
-
-  // ── Period summary ────────────────────────────────────────────────────────
-  const periodFact = useMemo(()=>filtered.filter(t=>OPERADO_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[filtered]);
-  const periodNeta = useMemo(()=>filtered.filter(t=>OPERADO_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0),[filtered]);
-
-  const todayStr = todayMX();
-  const yesterdayStr = (()=>{const d=new Date();d.setDate(d.getDate()-1);const dd=String(d.getDate()).padStart(2,"0");const mm=String(d.getMonth()+1).padStart(2,"0");return `${dd}/${mm}/${d.getFullYear()}`;})();
-
-  const dayLabel = d => {
-    if(d===todayStr)     return "Hoy";
-    if(d===yesterdayStr) return "Ayer";
-    return d;
-  };
-
-  // ── Edit form state (lightweight) ────────────────────────────────────────
-  const [ef,setEf]     = useState({});
-  const sfn = k => v => setEf(p=>({...p,[k]:v}));
-
-  const openEdit = t => {
-    const s = t.snap || {};
-    setEf({status:t.status,clientId:t.clientId||"",supplierId:t.supplierId||"",
-           unitId:t.unitId||"",payType:t.payType||"contado",promesaPago:t.promesaPago||"",
-           notes:t.notes||"",priority:t.priority||"P3",
-           costoIVA:String(safeNumber(s.costoTotal+(s.ivaAcred||0))||0),
-           precioIVA:String(safeNumber(s.precioConIVA)||0),
-           _iva:safeNumber(s.params?.iva,16), _isr:safeNumber(s.params?.isr,20),
-           quoteMode:false,
-           opType:t.opId||"consumable",
-           activeMods:[...(t.mods||[])],
-    });
-    setEditId(t.id);
-    setExpandId(null);
-  };
-
-  const saveEdit = t => {
-    const iva = ef._iva||16; const isr = ef._isr||20;
-    let newSnap;
-    if(ef.quoteMode) {
-      const mgn = effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
-      newSnap = computeSnap({costo:safeNumber(ef.costoIVA),compraConIVA:true,
-        mode:"auto",margin:mgn,gasolina:0,otros:0,iva,isr});
-    } else {
-      newSnap = computeSnap({costo:safeNumber(ef.costoIVA),compraConIVA:true,
-        manualPrice:safeNumber(ef.precioIVA),ventaConIVA:true,mode:"manual",
-        gasolina:0,otros:0,iva,isr});
-    }
-    const opMeta = OP_TYPES.find(o=>o.id===(ef.opType||"consumable"))||OP_TYPES[0];
-    const {costoIVA:_c,precioIVA:_p,_iva:_iv,_isr:_is,quoteMode:_q,opType:_ot,activeMods:_am,...rest}=ef;
-    dispatch({type:"TKT_UPDATE",id:t.id,patch:{
-      ...rest,snap:newSnap,
-      opId:ef.opType||"consumable",opShort:opMeta.short,mods:ef.activeMods||[],
-    }});
-    toast("Actualizado","success");
-    setEditId(null);
-  };
-
-  const A = makeA(C);
-  const prC={P1:{dot:C.p1,dim:C.p1dim},P2:{dot:C.p2,dim:C.p2dim},
-             P3:{dot:C.p3,dim:C.p3dim},P4:{dot:C.p4,dim:C.p4dim}};
-
-  return (
-    <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
-      <div style={{padding:"0 14px"}}>
-
-        {/* Period + search */}
-        <div style={{display:"flex",gap:6,padding:"18px 0 12px",overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
-          {[["today","Hoy"],["week","7d"],["month","30d"],["3m","3M"],["all","Todo"]].map(([v,l])=>(
-            <button key={v} onClick={()=>setPeriod(v)}
-              className={period===v?"glass-pill-active":"glass-pill-inactive"}
-              style={{
-                flexShrink:0,padding:"7px 16px",borderRadius:20,fontSize:11,fontWeight:700,
-                color:period===v ? A.pillColor : A.t3,
-                cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.18s",
-              }}>{l}</button>
+          {(op.lineas || []).map(l => (
+            <LineaRow key={l.id} l={l} opId={op.id} dispatch={dispatch} editable={editable} />
           ))}
+
+          {(op.lineas?.length || 0) === 0 && !addLinea && (
+            <div style={{ padding: "20px", textAlign: "center", color: C.t3, fontSize: 12 }}>Sin líneas. Agrega piezas o servicios.</div>
+          )}
         </div>
 
-        <input value={search} onChange={e=>setSearch(e.target.value)}
-          placeholder="Buscar por título, ID, cliente..."
-          style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,
-            border:`1px solid ${C.border}`,borderRadius:12,
-            padding:"12px 16px",color:A.t1,fontSize:16,outline:"none",marginBottom:14,
-            boxSizing:"border-box",fontFamily:"inherit"}}/>
-
-        {/* Period summary */}
-        {filtered.length>0&&(
-          <div className="glass-card" style={{padding:"16px 20px",marginBottom:16,display:"flex",gap:0}}>
-            {[
-              {label:"Facturado",value:mxn(periodFact),color:A.t1},
-              {label:"Util. neta",value:mxn(periodNeta),color:A.lime,border:true},
-              {label:"Ops",value:filtered.length,color:A.t2,border:true},
-            ].map(({label,value,color,border})=>(
-              <div key={label} style={{flex:1,paddingLeft:border?14:0,
-                borderLeft:border?`1px solid ${C.border}`:"none"}}>
-                <div style={{fontSize:8,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>
-                  {label}
+        {/* Financial summary */}
+        {snap.precio_con_iva > 0 && (
+          <Card style={{ marginBottom: 12 }}>
+            <Label>Resumen financiero</Label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+              {[
+                { l: "Precio c/IVA", v: mxn(snap.precio_con_iva), c: C.t1 },
+                { l: "Util. neta", v: mxn(snap.u_neta), c: snap.u_neta > 0 ? C.lime : C.red },
+                { l: "Margen", v: pct(snap.margen), c: snap.margen > 20 ? C.lime : C.amber },
+                { l: "Costo total", v: mxn(snap.costo), c: C.t3 },
+                { l: "IVA", v: mxn(snap.precio_con_iva - snap.precio_sin_iva), c: C.t3 },
+                { l: "Forma pago", v: op.pago?.tipo === "credito" ? "Crédito" : "Contado", c: C.t2 },
+              ].map(({ l, v, c }) => (
+                <div key={l}>
+                  <div style={{ fontSize: 8, color: C.t3, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 3 }}>{l}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: c, fontVariantNumeric: "tabular-nums" }}>{v}</div>
                 </div>
-                <div style={{fontSize:16,fontWeight:800,color,fontVariantNumeric:"tabular-nums"}}>{value}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {filtered.length===0&&(
-          <div style={{textAlign:"center",padding:"48px 20px"}}>
-            <div style={{fontSize:11,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
-              Sin resultados
-            </div>
-            <div style={{fontSize:13,color:A.t3}}>Ajusta el período o la búsqueda</div>
-          </div>
-        )}
-
-        {/* Grouped by day */}
-        {grouped.map(([date,dayTickets])=>{
-          const dayFact=dayTickets.filter(t=>t.status!=="cancelado").reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
-          const dayNeta=dayTickets.filter(t=>OPERADO_SET.has(t.status)).reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0);
-          return (
-            <div key={date} style={{marginBottom:20}}>
-              {/* Day header */}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.08em",
-                  color:date===todayStr?A.lime:A.t2}}>
-                  {dayLabel(date)}
-                </div>
-                {dayFact>0&&(
-                  <div style={{fontSize:10,color:A.t3,fontVariantNumeric:"tabular-nums"}}>
-                    {mxn(dayFact)}{dayNeta>0&&<span style={{color:A.lime}}> · {mxn(dayNeta)}</span>}
-                  </div>
-                )}
-              </div>
-
-              <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                {dayTickets.map(t=>{
-                  const meta   = TICKET_META[t.status]||{};
-                  const pr     = prC[t.priority]||prC.P4;
-                  const cl     = clients.find(c=>c.id===t.clientId);
-                  const un     = units.find(u=>u.id===t.unitId);
-                  const isExp  = expandId===t.id;
-                  const isEdit = editId===t.id;
-                  const isOp   = OPERADO_SET.has(t.status);
-                  const isCan  = t.status==="cancelado";
-                  const price  = safeNumber(t.snap?.precioConIVA);
-                  const uNeta  = safeNumber(t.snap?.uNeta);
-
-                  return (
-                    <div key={t.id} style={{
-                      background:isCan?"rgba(239,68,68,0.06)":A.card,
-                      borderRadius:A.r,overflow:"hidden",
-                      boxShadow:isCan
-                        ?"0 2px 12px rgba(239,68,68,0.08), 0 0 0 1px rgba(239,68,68,0.18)"
-                        :A.shadow,
-                      opacity:isCan?0.85:1,
-                    }}>
-                      {/* Tap to expand */}
-                      <div onClick={()=>{if(!isEdit) setExpandId(isExp?null:t.id);}}
-                        style={{padding:"14px 16px",cursor:"pointer"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-                          <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"nowrap"}}>
-                            <span style={{fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:10,
-                              background:`${meta.dot||"#8A9AA4"}18`,color:meta.dot||A.t3,letterSpacing:"0.05em"}}>
-                              {meta.label||t.status}
-                            </span>
-                            <span style={{fontSize:9,fontWeight:800,padding:"3px 7px",borderRadius:10,
-                              background:pr.dim,color:pr.dot,letterSpacing:"0.06em"}}>
-                              {t.priority}
-                            </span>
-                          </div>
-                          <div style={{display:"flex",alignItems:"center",gap:8}}>
-                            <span style={{fontSize:16,fontWeight:800,
-                              color:isOp?A.t1:A.t3,fontVariantNumeric:"tabular-nums"}}>
-                              {mxn(price)}
-                            </span>
-                            <span style={{fontSize:14,color:A.t3,
-                              transform:isExp?"rotate(90deg)":"none",
-                              transition:"transform 200ms",display:"inline-block",lineHeight:1}}>›</span>
-                          </div>
-                        </div>
-                        <div style={{fontSize:13,fontWeight:700,color:A.t1,lineHeight:1.3,marginBottom:4}}>
-                          {t.titulo}
-                        </div>
-                        {(cl||un)&&(
-                          <div style={{fontSize:10,color:A.t3,
-                            overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                            {cl&&<span style={{color:A.t2}}>{cl.empresa}</span>}
-                            {cl&&un&&<span style={{margin:"0 4px"}}>·</span>}
-                            {un&&<span>{un.economico?"Eco. "+un.economico:un.marca+" "+un.modelo}</span>}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Expanded detail */}
-                      {isExp&&!isEdit&&(
-                        <div style={{borderTop:`1px solid ${C.border}`,
-                          padding:"16px",background:C.bg0}}>
-                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
-                            {[
-                              {l:"Precio",    v:mxn(price),  c:A.t1},
-                              {l:"Util. neta",v:mxn(uNeta),  c:uNeta>=0?A.lime:A.red},
-                              {l:"Costo",     v:mxn(safeNumber(t.snap?.costoTotal)), c:A.t2},
-                              {l:"Margen",    v:fpct(safeNumber(t.snap?.margenNetoPrecio)), c:A.t2},
-                            ].map(({l,v,c})=>(
-                              <div key={l}>
-                                <div style={{fontSize:8,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>{l}</div>
-                                <div style={{fontSize:15,fontWeight:700,color:c,fontVariantNumeric:"tabular-nums"}}>{v}</div>
-                              </div>
-                            ))}
-                          </div>
-                          {t.timeline&&t.timeline.length>0&&(
-                            <div style={{marginBottom:14}}>
-                              <div style={{fontSize:8,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
-                                Últimos eventos
-                              </div>
-                              {[...t.timeline].reverse().slice(0,3).map((ev,i)=>(
-                                <div key={i} style={{display:"flex",gap:8,alignItems:"flex-start",marginBottom:5}}>
-                                  <div style={{width:4,height:4,borderRadius:"50%",
-                                    background:C.border,marginTop:5,flexShrink:0}}/>
-                                  <div style={{fontSize:10,color:A.t3,flex:1}}>
-                                    <span style={{color:A.t2}}>{ev.evento}</span>
-                                    {ev.ts&&<span style={{marginLeft:6,fontSize:9}}>{fmtTS(ev.ts)}</span>}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                            <button onClick={()=>openEdit(t)} style={{
-                              flex:1,padding:"9px 14px",borderRadius:10,background:"transparent",
-                              border:`1px solid ${C.border}`,color:A.t2,
-                              fontSize:11,fontWeight:600,cursor:"pointer",
-                            }}>✏ Editar</button>
-                            <button onClick={()=>{
-                              const c2=clients.find(c=>c.id===t.clientId);
-                              const u2=units.find(u=>u.id===t.unitId);
-                              generarCotizacionPDF(t,c2,u2,null).catch(()=>toast("Error PDF","error"));
-                            }} style={{
-                              flex:1,padding:"9px 14px",borderRadius:10,background:"transparent",
-                              border:`1px solid ${C.border}`,color:A.t2,
-                              fontSize:11,fontWeight:600,cursor:"pointer",
-                            }}>PDF ↗</button>
-                            {CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t.cobrado&&(
-                              <button onClick={()=>{dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado ✓","success");setExpandId(null);}}
-                                style={{flex:1,padding:"9px 14px",borderRadius:10,background:A.mintDim,
-                                  border:`1px solid ${C.blue}33`,color:A.mint,fontSize:11,fontWeight:800,cursor:"pointer"}}>
-                                Cobrar ✓
-                              </button>
-                            )}
-                            {!CLOSED_SET.has(t.status)&&(
-                              <button onClick={()=>{dispatch({type:"TKT_SOFT_DEL",id:t.id});toast("Eliminado","info");setExpandId(null);}}
-                                style={{padding:"9px 12px",borderRadius:10,background:"transparent",
-                                  border:"1px solid rgba(232,72,72,0.25)",color:A.red,fontSize:11,cursor:"pointer"}}>
-                                🗑
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Quick edit form */}
-                      {isEdit&&(
-                        <div style={{borderTop:`1px solid ${C.border}`,
-                          background:C.bg0,padding:"16px"}}>
-                          <div style={{fontSize:9,color:A.lime,letterSpacing:"0.14em",
-                            textTransform:"uppercase",marginBottom:14,fontWeight:800}}>
-                            Editando: {t.titulo?.slice(0,28)}
-                          </div>
-                          <MSel label="Estado" value={ef.status} onChange={sfn("status")}
-                            options={TICKET_ALL.map(s=>({value:s,label:(TICKET_META[s]?.label||s)}))}/>
-                          <ClientPicker clients={clients} value={ef.clientId||""} onChange={sfn("clientId")} mobile/>
-                          <UnitPicker units={units} value={ef.unitId||""} onChange={sfn("unitId")} mobile/>
-                          <MSel label="Pago" value={ef.payType} onChange={sfn("payType")}
-                            options={[{value:"contado",label:"Contado"},{value:"credit",label:"Crédito"}]}/>
-                          {ef.payType==="credit"&&(
-                            <MField label="Promesa de pago" value={ef.promesaPago}
-                              onChange={sfn("promesaPago")} placeholder="DD/MM/AAAA" color={A.amber}/>
-                          )}
-                          {/* ── Costo / Precio ── */}
-                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-                            <div>
-                              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>Costo c/IVA ($)</div>
-                              <input type="number" inputMode="decimal" value={ef.costoIVA||""} onChange={e=>sfn("costoIVA")(e.target.value)}
-                                placeholder="0"
-                                style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.03)",
-                                  border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",
-                                  color:A.t1,fontSize:14,outline:"none",fontFamily:"inherit"}}/>
-                            </div>
-                            <div>
-                              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>
-                                {ef.quoteMode?"Precio calc.":"Precio c/IVA ($)"}
-                              </div>
-                              {ef.quoteMode?(()=>{
-                                const mgn=effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
-                                const calc=safeNumber(ef.costoIVA)>0?computeSnap({costo:safeNumber(ef.costoIVA),compraConIVA:true,mode:"auto",margin:mgn,gasolina:0,otros:0,iva:ef._iva||16,isr:ef._isr||20}).precioConIVA:0;
-                                return <div style={{width:"100%",boxSizing:"border-box",background:"rgba(43,181,160,0.06)",
-                                  border:`1px solid ${C.blue}44`,borderRadius:10,padding:"10px 12px",
-                                  color:A.lime,fontSize:14,fontWeight:700,fontVariantNumeric:"tabular-nums",
-                                  display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                                  <span>{calc>0?mxn(calc):"—"}</span>
-                                  <span style={{fontSize:9,color:A.t3}}>{mgn}%</span>
-                                </div>;
-                              })():(
-                                <input type="number" inputMode="decimal" value={ef.precioIVA||""} onChange={e=>sfn("precioIVA")(e.target.value)}
-                                  placeholder="0"
-                                  style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.03)",
-                                    border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",
-                                    color:A.t1,fontSize:14,outline:"none",fontFamily:"inherit"}}/>
-                              )}
-                            </div>
-                          </div>
-                          {/* ── Modo: Manual / Cotizador ── */}
-                          <div style={{display:"flex",gap:6,marginBottom:12}}>
-                            {[{v:false,l:"Manual"},{v:true,l:"⚙ Cotizador"}].map(({v,l})=>(
-                              <button key={String(v)} onClick={()=>sfn("quoteMode")(v)}
-                                style={{flex:1,padding:"7px 10px",borderRadius:8,fontSize:10,fontWeight:700,
-                                  background:ef.quoteMode===v?"rgba(43,181,160,0.12)":"rgba(255,255,255,0.03)",
-                                  border:`1px solid ${ef.quoteMode===v?C.blue+"55":C.border}`,
-                                  color:ef.quoteMode===v?A.lime:A.t3,cursor:"pointer",
-                                  textTransform:"uppercase",letterSpacing:"0.06em"}}>
-                                {l}
-                              </button>
-                            ))}
-                          </div>
-                          {/* ── Cotizador selectors ── */}
-                          {ef.quoteMode&&(<>
-                            {/* Tipo de operación */}
-                            <div style={{marginBottom:10}}>
-                              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:6}}>Tipo de operación</div>
-                              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:5}}>
-                                {OP_TYPES.map(op=>{const sel=ef.opType===op.id;return(
-                                  <button key={op.id} onClick={()=>sfn("opType")(op.id)}
-                                    style={{padding:"6px 4px",borderRadius:8,textAlign:"center",lineHeight:1.3,cursor:"pointer",
-                                      background:sel?"rgba(43,181,160,0.12)":"rgba(255,255,255,0.03)",
-                                      border:`1px solid ${sel?C.blue+"55":C.border}`,color:sel?A.lime:A.t2}}>
-                                    <div style={{fontSize:9,fontWeight:sel?700:500}}>{op.label}</div>
-                                    <div style={{fontSize:8,color:A.t3}}>{op.baseMin}-{op.baseMax}%</div>
-                                  </button>
-                                );})}
-                              </div>
-                            </div>
-                            {/* Prioridad */}
-                            <div style={{marginBottom:10}}>
-                              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:6}}>Prioridad</div>
-                              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5}}>
-                                {["P1","P2","P3","P4"].map(p=>{
-                                  const pc=prC[p]; const sel=ef.priority===p;
-                                  const bonus=PRIORITY[p].marginBonus;
-                                  return(
-                                    <button key={p} onClick={()=>sfn("priority")(p)}
-                                      style={{padding:"7px 4px",borderRadius:8,textAlign:"center",lineHeight:1.3,cursor:"pointer",
-                                        background:sel?pc.dim:"rgba(255,255,255,0.03)",
-                                        border:`1px solid ${sel?pc.dot+"66":C.border}`,
-                                        color:sel?pc.dot:A.t3,fontSize:10,fontWeight:sel?800:500}}>
-                                      <div>{p}</div>
-                                      {bonus>0&&<div style={{fontSize:7,color:pc.dot}}>+{bonus}%</div>}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                            {/* Modificadores */}
-                            <div style={{marginBottom:12}}>
-                              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:6}}>Modificadores</div>
-                              {MODIFIERS.map(m=>{const on=(ef.activeMods||[]).includes(m.id);return(
-                                <div key={m.id} onClick={()=>{
-                                  const cur=ef.activeMods||[];
-                                  sfn("activeMods")(on?cur.filter(x=>x!==m.id):[...cur,m.id]);
-                                }} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-                                  padding:"8px 12px",borderRadius:8,marginBottom:5,cursor:"pointer",
-                                  background:on?"rgba(43,181,160,0.08)":"rgba(255,255,255,0.02)",
-                                  border:`1px solid ${on?C.blue+"44":C.border}`}}>
-                                  <span style={{fontSize:11,color:on?A.t1:A.t2}}>{m.label}</span>
-                                  <span style={{fontSize:10,fontWeight:700,color:on?A.lime:A.t3}}>+{m.pct}%</span>
-                                </div>
-                              );})}
-                            </div>
-                          </>)}
-                          {/* Live preview */}
-                          {safeNumber(ef.costoIVA)>0&&(()=>{
-                            const mgn=ef.quoteMode?effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27):null;
-                            const prev=computeSnap({costo:safeNumber(ef.costoIVA),compraConIVA:true,
-                              ...(ef.quoteMode?{mode:"auto",margin:mgn}:{mode:"manual",manualPrice:safeNumber(ef.precioIVA),ventaConIVA:true}),
-                              gasolina:0,otros:0,iva:ef._iva||16,isr:ef._isr||20});
-                            const items=[
-                              {l:"Util.",v:mxn(prev.uNeta),c:prev.uNeta>=0?A.lime:A.red},
-                              {l:"Margen",v:fpct(prev.margenNetoPrecio),c:prev.margenNetoPrecio>=15?A.lime:A.amber},
-                              {l:"Costo",v:mxn(prev.costoBase),c:A.t2},
-                              ...(ef.quoteMode?[{l:"Mgn ef.",v:mgn+"%",c:A.lime}]:[]),
-                            ];
-                            return (
-                              <div style={{display:"flex",gap:10,marginBottom:12,
-                                background:"rgba(255,255,255,0.03)",borderRadius:10,
-                                padding:"8px 12px",border:`1px solid ${C.border}`}}>
-                                {items.map(({l,v,c})=>(
-                                  <div key={l} style={{flex:1}}>
-                                    <div style={{fontSize:8,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:2}}>{l}</div>
-                                    <div style={{fontSize:12,fontWeight:700,color:c,fontVariantNumeric:"tabular-nums"}}>{v}</div>
-                                  </div>
-                                ))}
-                              </div>
-                            );
-                          })()}
-                          <div style={{fontSize:9,color:A.t3,marginBottom:6,letterSpacing:"0.12em",textTransform:"uppercase"}}>
-                            Notas
-                          </div>
-                          <textarea rows={2} value={ef.notes} onChange={e=>sfn("notes")(e.target.value)}
-                            placeholder="Notas..."
-                            style={{width:"100%",background:"rgba(255,255,255,0.03)",
-                              border:`1px solid ${C.border}`,borderRadius:10,
-                              padding:"10px 12px",color:A.t2,fontSize:13,outline:"none",
-                              boxSizing:"border-box",fontFamily:"inherit",resize:"none",marginBottom:14}}/>
-                          <div style={{display:"flex",gap:8}}>
-                            <button onClick={()=>saveEdit(t)} style={{
-                              flex:1,padding:"13px",borderRadius:12,
-                              background:"rgba(43,181,160,0.15)",border:"1px solid rgba(43,181,160,0.3)",
-                              color:A.lime,fontSize:13,fontWeight:700,cursor:"pointer",
-                            }}>Guardar</button>
-                            <button onClick={()=>setEditId(null)} style={{
-                              padding:"13px 16px",borderRadius:12,background:"transparent",
-                              border:`1px solid ${C.border}`,color:A.t3,fontSize:13,cursor:"pointer",
-                            }}>Cancelar</button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ── MClientes — Clientes móvil ────────────────────────────────────────────────
-function MClientes({state,dispatch,toast}) {
-  const C = React.useContext(ThemeCtx);
-  const {clients,tickets,units} = state;
-  const [search,setSearch]=useState("");
-  const [sel,setSel]=useState(null);
-  const [editId,setEditId]=useState(null);
-  const [adding,setAdding]=useState(false);
-  const [confirm,setConfirm]=useState(null);
-  const empty={empresa:"",contacto:"",tel:"",correo:"",rfc:"",direccion:"",ciudad:"",estado:"",creditDays:15,category:"B",score:70};
-  const [form,setForm]=useState(empty);
-  const sf=k=>v=>setForm(p=>({...p,[k]:v}));
-  const dSearch=useDebounce(search,250);
-
-  const stats=useCallback(id=>{
-    const co=tickets.filter(t=>t.clientId===id);
-    return{total:co.length,fact:co.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0),neta:co.reduce((s,t)=>s+(t.snap?.uNeta||0),0),pend:co.filter(t=>t.payType==="credit"&&!t.cobrado).reduce((s,t)=>s+(t.snap?.precioConIVA||0),0)};
-  },[tickets]);
-
-  const filtered=useMemo(()=>clients.filter(c=>{
-    if(!dSearch.trim()) return true;
-    const lq=safeLower(dSearch);
-    return safeLower(c.empresa).includes(lq)||safeLower(c.contacto).includes(lq)||safeLower(c.tel).includes(lq);
-  }),[clients,dSearch]);
-
-  const startAdd=()=>{setAdding(true);setEditId(null);setSel(null);setForm(empty);window.scrollTo(0,0);};
-  const startEdit=(c)=>{setEditId(c.id);setAdding(false);setSel(null);setForm({...c});window.scrollTo(0,0);};
-  const cancel=()=>{setAdding(false);setEditId(null);setForm(empty);};
-  const save=()=>{
-    if(editId){dispatch({type:"CLI_UPDATE",id:editId,patch:form});toast("Cliente actualizado","success");}
-    else{dispatch({type:"CLI_ADD",c:{...form,id:genId("CLI"),unidades:[]}});toast("Cliente registrado","success");}
-    cancel();
-  };
-  const del=(c)=>setConfirm(c);
-  const showForm=adding||!!editId;
-
-  return (
-    <div style={{padding:"14px 14px 8px"}}>
-      {confirm&&<Confirm msg={"Eliminar: "+confirm.empresa+"?"} onConfirm={()=>{dispatch({type:"CLI_DELETE",id:confirm.id});setSel(null);setConfirm(null);toast("Eliminado","info");}} onCancel={()=>setConfirm(null)}/>}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <div style={{fontSize:11,color:C.t3,letterSpacing:"0.15em",textTransform:"uppercase",fontWeight:700}}>Clientes · {clients.length}</div>
-        <button onClick={showForm?cancel:startAdd} style={{padding:"7px 14px",background:showForm?"transparent":C.blue,border:`1px solid ${showForm?C.border:C.blue}`,borderRadius:20,color:showForm?C.t2:C.t1,fontSize:12,fontWeight:700,cursor:"pointer",minHeight:36}}>
-          {showForm?"× Cancelar":"+ Nuevo"}
-        </button>
-      </div>
-      {showForm&&(
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:14,padding:16,marginBottom:12}}>
-          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.15em",marginBottom:10}}>{editId?"EDITAR CLIENTE":"NUEVO CLIENTE"}</div>
-          <MField label="Empresa / Razón social" value={form.empresa}       onChange={sf("empresa")}/>
-          <MField label="RFC"                    value={form.rfc||""}       onChange={sf("rfc")}/>
-          <MField label="Contacto"               value={form.contacto}      onChange={sf("contacto")}/>
-          <MField label="Teléfono"               value={form.tel}           onChange={sf("tel")} type="tel"/>
-          <MField label="Correo"                 value={form.correo||""}    onChange={sf("correo")} type="email"/>
-          <MField label="Días crédito"           value={form.creditDays}    onChange={sf("creditDays")} type="number" suffix="días"/>
-          <MField label="Dirección"              value={form.direccion||""} onChange={sf("direccion")}/>
-          <MField label="Ciudad"                 value={form.ciudad||""}    onChange={sf("ciudad")}/>
-          <MField label="Estado"                 value={form.estado||""}    onChange={sf("estado")}/>
-          <MBtn label={editId?"Guardar cambios":"Guardar cliente"} full color={C.t1} bg={C.blue} border={C.blue} onClick={save}/>
-        </div>
-      )}
-      {!showForm&&clients.length>0&&(
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar empresa, contacto, tel..."
-          style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.t1,fontSize:16,outline:"none",marginBottom:12,fontFamily:"inherit"}}/>
-      )}
-      {clients.length===0&&!showForm&&<EmptyState icon="🏢" title="Sin clientes" sub='Agrega el primero con "+ Nuevo"'/>}
-      <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        {filtered.map(c=>{
-          const st=stats(c.id);
-          const pctU=st.fact>0?(st.neta/st.fact)*100:0;
-          const exp=sel===c.id;
-          const cliUnits=units.filter(u=>u.clientId===c.id);
-          return (
-            <div key={c.id} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${exp?C.cyan:C.border}`,borderRadius:14,overflow:"hidden"}}>
-              <div onClick={()=>setSel(exp?null:c.id)} style={{padding:"14px 16px",cursor:"pointer"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
-                  <div style={{fontSize:15,fontWeight:800,color:C.t1,lineHeight:1.2,flex:1,marginRight:8}}>{c.empresa}</div>
-                  <div style={{fontSize:14,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace",flexShrink:0}}>{st.fact>0?mxn(st.fact):"—"}</div>
-                </div>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div style={{fontSize:11,color:C.t3}}>{c.contacto||"—"} · {c.tel||"—"}</div>
-                  <div style={{fontSize:11,color:st.neta>=0?C.green:C.red,fontWeight:600}}>{st.fact>0?fpct(pctU)+" margen":st.total+" ops"}</div>
-                </div>
-                {st.pend>0&&<div style={{marginTop:4,fontSize:10,color:C.yellow,fontWeight:700}}>⚠ {mxn(st.pend)} por cobrar</div>}
-              </div>
-              {exp&&(
-                <div style={{background:C.bg0,borderTop:`1px solid ${C.border}`,padding:"12px 16px"}}>
-                  {c.rfc&&<div style={{fontSize:11,color:C.t3,marginBottom:4}}>RFC: <span style={{color:C.t2,fontFamily:"'Courier New',monospace"}}>{c.rfc}</span></div>}
-                  {c.correo&&<div style={{fontSize:11,color:C.t3,marginBottom:4}}>Email: <span style={{color:C.cyan}}>{c.correo}</span></div>}
-                  {c.direccion&&<div style={{fontSize:11,color:C.t3,marginBottom:4}}>Dir: <span style={{color:C.t2}}>{c.direccion}{c.ciudad?", "+c.ciudad:""}{c.estado?", "+c.estado:""}</span></div>}
-                  <div style={{fontSize:11,color:C.t3,marginBottom:10}}>Crédito: <span style={{color:C.yellow}}>{c.creditDays}d</span> · Tickets: <span style={{color:C.t1}}>{st.total}</span> · Score: <span style={{color:c.score>=80?C.green:c.score>=60?C.yellow:C.red,fontWeight:700}}>{c.score}</span></div>
-                  {cliUnits.length>0&&(
-                    <div style={{marginBottom:10}}>
-                      <div style={{fontSize:9,color:C.t3,marginBottom:4,letterSpacing:"0.1em"}}>FLOTILLA VINCULADA</div>
-                      {cliUnits.map(u=><div key={u.id} style={{fontSize:11,color:C.t2,marginBottom:2}}>🚛 {u.marca} {u.modelo} {u.anio}{u.economico?" · Eco "+u.economico:""}</div>)}
-                    </div>
-                  )}
-                  <div style={{display:"flex",gap:8}}>
-                    <button onClick={()=>startEdit(c)} style={{flex:1,padding:"9px",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,color:C.t1,fontSize:13,cursor:"pointer",fontWeight:600}}>Editar</button>
-                    <button onClick={()=>del(c)} style={{padding:"9px 14px",background:"transparent",border:`1px solid ${C.red}44`,borderRadius:10,color:C.red,fontSize:13,cursor:"pointer"}}>Eliminar</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ── MUnidades — Flotilla móvil ────────────────────────────────────────────────
-function MUnidades({state,dispatch,toast}) {
-  const C = React.useContext(ThemeCtx);
-  const {units,clients,tickets} = state;
-  const [search,setSearch]=useState("");
-  const [sel,setSel]=useState(null);
-  const [editId,setEditId]=useState(null);
-  const [adding,setAdding]=useState(false);
-  const [confirm,setConfirm]=useState(null);
-  const empty={vin:"",marca:"",modelo:"",anio:"",motor:"",transmision:"",config:"",clientId:"",statusOp:"operativa",km:"",notas:"",placa:"",economico:""};
-  const [form,setForm]=useState(empty);
-  const sf=k=>v=>setForm(p=>({...p,[k]:v}));
-  const dSearch=useDebounce(search,250);
-
-  const filtered=useMemo(()=>units.filter(u=>{
-    if(!dSearch.trim()) return true;
-    const lq=safeLower(dSearch);
-    return safeLower(u.vin).includes(lq)||safeLower(u.marca).includes(lq)||safeLower(u.modelo).includes(lq)||safeLower(u.economico||"").includes(lq)||safeLower(u.placa||"").includes(lq);
-  }),[units,dSearch]);
-
-  const startAdd=()=>{setAdding(true);setEditId(null);setSel(null);setForm(empty);window.scrollTo(0,0);};
-  const startEdit=(u)=>{setEditId(u.id);setAdding(false);setSel(null);setForm({...u});window.scrollTo(0,0);};
-  const cancel=()=>{setAdding(false);setEditId(null);setForm(empty);};
-  const save=()=>{
-    const parsed={...form,km:parseInt(form.km)||0};
-    if(editId){dispatch({type:"UNIT_UPDATE",id:editId,patch:parsed});toast("Unidad actualizada","success");}
-    else{dispatch({type:"UNIT_ADD",u:{...parsed,id:mkUnitId()}});toast("Unidad registrada","success");}
-    cancel();
-  };
-  const del=(u)=>setConfirm(u);
-  const showForm=adding||!!editId;
-
-  return (
-    <div style={{padding:"14px 14px 8px"}}>
-      {confirm&&<Confirm msg={"Eliminar: "+confirm.marca+" "+confirm.modelo+"?"} onConfirm={()=>{dispatch({type:"UNIT_DELETE",id:confirm.id});setSel(null);setConfirm(null);toast("Eliminada","info");}} onCancel={()=>setConfirm(null)}/>}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <div style={{fontSize:11,color:C.t3,letterSpacing:"0.15em",textTransform:"uppercase",fontWeight:700}}>Flotilla · {units.length}</div>
-        <button onClick={showForm?cancel:startAdd} style={{padding:"7px 14px",background:showForm?"transparent":C.blue,border:`1px solid ${showForm?C.border:C.blue}`,borderRadius:20,color:showForm?C.t2:C.t1,fontSize:12,fontWeight:700,cursor:"pointer",minHeight:36}}>
-          {showForm?"× Cancelar":"+ Nueva"}
-        </button>
-      </div>
-      {showForm&&(
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:14,padding:16,marginBottom:12}}>
-          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.15em",marginBottom:10}}>{editId?"EDITAR UNIDAD":"NUEVA UNIDAD"}</div>
-          <MField label="No. Económico"   value={form.economico||""} onChange={sf("economico")} placeholder="Ej: 1045"/>
-          <MField label="Placa"           value={form.placa||""}     onChange={sf("placa")} placeholder="Ej: 912FE2"/>
-          <MField label="Marca"           value={form.marca}         onChange={sf("marca")}/>
-          <MField label="Modelo"          value={form.modelo}        onChange={sf("modelo")}/>
-          <MField label="Año"             value={form.anio}          onChange={sf("anio")} type="number"/>
-          <MField label="VIN / Serial"    value={form.vin}           onChange={sf("vin")}/>
-          <MField label="Motor"           value={form.motor}         onChange={sf("motor")}/>
-          <MField label="Transmisión"     value={form.transmision}   onChange={sf("transmision")}/>
-          <MField label="Configuración"   value={form.config}        onChange={sf("config")} placeholder="4x2, 6x4..."/>
-          <MField label="Kilometraje"     value={form.km}            onChange={sf("km")} type="number" suffix="km"/>
-          <ClientPicker clients={clients} value={form.clientId||""} onChange={sf("clientId")} mobile/>
-          <MSel   label="Estado"          value={form.statusOp}      onChange={sf("statusOp")} options={Object.entries(UNIT_STATUS).map(([k,v])=>({value:k,label:v.label}))}/>
-          <MField label="Notas técnicas"  value={form.notas}         onChange={sf("notas")} placeholder="Historial, advertencias..."/>
-          <MBtn label={editId?"Guardar cambios":"Guardar unidad"} full color={C.t1} bg={C.blue} border={C.blue} onClick={save}/>
-        </div>
-      )}
-      {!showForm&&units.length>0&&(
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar eco., placa, VIN, marca..."
-          style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.t1,fontSize:16,outline:"none",marginBottom:12,fontFamily:"inherit"}}/>
-      )}
-      {units.length===0&&!showForm&&<EmptyState icon="🚛" title="Sin unidades" sub='Agrega la primera con "+ Nueva"'/>}
-      <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        {filtered.map(u=>{
-          const st=UNIT_STATUS[u.statusOp]||UNIT_STATUS.operativa;
-          const cl=clients.find(c=>c.id===u.clientId);
-          const openTks=tickets.filter(t=>t.unitId===u.id&&!CLOSED_SET.has(t.status));
-          const allTks=tickets.filter(t=>t.unitId===u.id);
-          const exp=sel===u.id;
-          return (
-            <div key={u.id} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${exp?C.cyan:C.border}`,borderRadius:14,overflow:"hidden",borderLeft:`4px solid ${st.dot}`}}>
-              <div onClick={()=>setSel(exp?null:u.id)} style={{padding:"14px 16px",cursor:"pointer"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
-                  <div>
-                    <span style={{fontSize:16,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",marginRight:8}}>{u.economico||"—"}</span>
-                    <span style={{fontSize:13,fontWeight:700,color:C.t1}}>{u.marca} {u.modelo}</span>
-                  </div>
-                  <span style={{padding:"3px 8px",borderRadius:6,background:st.color+"22",border:`1px solid ${st.color}55`,fontSize:10,color:st.dot,fontWeight:600,flexShrink:0}}>{st.label}</span>
-                </div>
-                <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-                  <span style={{fontSize:11,color:C.t3}}>{u.anio} · {u.placa||"Sin placa"}</span>
-                  {u.km>0&&<span style={{fontSize:11,color:C.t3}}>{u.km.toLocaleString()} km</span>}
-                  {openTks.length>0&&<span style={{fontSize:10,fontWeight:700,color:C.yellow,background:C.yellowDim,border:`1px solid ${C.yellow}44`,borderRadius:4,padding:"1px 6px"}}>{openTks.length} op. abierta{openTks.length>1?"s":""}</span>}
-                </div>
-                {cl&&<div style={{fontSize:11,color:C.t3,marginTop:2}}>🏢 {cl.empresa}</div>}
-              </div>
-              {exp&&(
-                <div style={{background:C.bg0,borderTop:`1px solid ${C.border}`,padding:"12px 16px"}}>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10,fontSize:11}}>
-                    <div style={{color:C.t3}}>VIN: <span style={{color:C.t2,fontFamily:"'Courier New',monospace",fontSize:10}}>{u.vin||"—"}</span></div>
-                    <div style={{color:C.t3}}>Motor: <span style={{color:C.t2}}>{u.motor||"—"}</span></div>
-                    <div style={{color:C.t3}}>Trans: <span style={{color:C.t2}}>{u.transmision||"—"}</span></div>
-                    <div style={{color:C.t3}}>Config: <span style={{color:C.t2}}>{u.config||"—"}</span></div>
-                  </div>
-                  {u.notas&&<div style={{fontSize:11,color:C.t3,fontStyle:"italic",marginBottom:10,lineHeight:1.5}}>"{u.notas}"</div>}
-                  {allTks.length>0&&(
-                    <div style={{marginBottom:10}}>
-                      <div style={{fontSize:9,color:C.t3,marginBottom:4,letterSpacing:"0.1em"}}>HISTORIAL ({allTks.length} tickets)</div>
-                      {allTks.slice(0,3).map(t=>(
-                        <div key={t.id} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:`1px solid ${C.border}`,fontSize:11,alignItems:"center"}}>
-                          <span style={{color:C.t3,fontFamily:"'Courier New',monospace",fontSize:10,flexShrink:0}}>{t.id}</span>
-                          <span style={{color:C.t2,flex:1,marginLeft:8,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</span>
-                          <StatusBadge sid={t.status} meta={TICKET_META} small/>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div style={{display:"flex",gap:8}}>
-                    <button onClick={()=>startEdit(u)} style={{flex:1,padding:"9px",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,color:C.t1,fontSize:13,cursor:"pointer",fontWeight:600}}>Editar</button>
-                    <button onClick={()=>del(u)} style={{padding:"9px 14px",background:"transparent",border:`1px solid ${C.red}44`,borderRadius:10,color:C.red,fontSize:13,cursor:"pointer"}}>Eliminar</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ── MCatalogo — Catálogo móvil ────────────────────────────────────────────────
-function MCatalogo({state,dispatch,toast}) {
-  const C = React.useContext(ThemeCtx);
-  const {parts} = state;
-  const [search,setSearch]=useState("");
-  const [sel,setSel]=useState(null);
-  const [editId,setEditId]=useState(null);
-  const [adding,setAdding]=useState(false);
-  const [confirm,setConfirm]=useState(null);
-  const [view,setView]=useState("frecuentes"); // "frecuentes"|"todos"
-  const empty={nombre:"",oem:"",aftermarket:"",aplicacion:"",notas:"",proveedor:"",ultimoPrecio:"",ultimaFecha:"",frecuencia:0};
-  const [form,setForm]=useState(empty);
-  const sf=k=>v=>setForm(p=>({...p,[k]:v}));
-  const dSearch=useDebounce(search,250);
-
-  const frecuentes=useMemo(()=>[...parts].filter(p=>(p.frecuencia||0)>0).sort((a,b)=>(b.frecuencia||0)-(a.frecuencia||0)).slice(0,10),[parts]);
-
-  const filtered=useMemo(()=>{
-    const base=view==="frecuentes"&&!dSearch.trim()?frecuentes:parts;
-    if(!dSearch.trim()) return base;
-    const lq=safeLower(dSearch);
-    return parts.filter(p=>safeLower(p.nombre).includes(lq)||safeLower(p.oem).includes(lq)||safeLower(p.aftermarket).includes(lq)||safeLower(p.aplicacion).includes(lq)||safeLower(p.proveedor).includes(lq));
-  },[parts,frecuentes,dSearch,view]);
-
-  const startAdd=()=>{setAdding(true);setEditId(null);setSel(null);setForm(empty);window.scrollTo(0,0);};
-  const startEdit=(p)=>{setEditId(p.id);setAdding(false);setSel(null);setForm({...p,ultimoPrecio:String(p.ultimoPrecio||""),frecuencia:String(p.frecuencia||0)});window.scrollTo(0,0);};
-  const cancel=()=>{setAdding(false);setEditId(null);setForm(empty);};
-  const save=()=>{
-    const parsed={...form,ultimoPrecio:parseFloat(form.ultimoPrecio)||0,frecuencia:parseInt(form.frecuencia)||0};
-    if(editId){dispatch({type:"PART_UPDATE",id:editId,patch:parsed});toast("Parte actualizada","success");}
-    else{dispatch({type:"PART_ADD",p:{...parsed,id:mkPartId()}});toast("Parte registrada","success");}
-    cancel();
-  };
-  const del=(p)=>setConfirm(p);
-  const showForm=adding||!!editId;
-  const isSearching=dSearch.trim().length>0;
-
-  return (
-    <div style={{padding:"14px 14px 8px"}}>
-      {confirm&&<Confirm msg={"Eliminar: "+confirm.nombre+"?"} onConfirm={()=>{dispatch({type:"PART_DELETE",id:confirm.id});setSel(null);setConfirm(null);toast("Eliminado","info");}} onCancel={()=>setConfirm(null)}/>}
-
-      {/* ── Header ── */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <div style={{fontSize:11,color:C.t3,letterSpacing:"0.15em",textTransform:"uppercase",fontWeight:700}}>Catálogo · {parts.length}</div>
-        <button onClick={showForm?cancel:startAdd} style={{padding:"7px 14px",background:showForm?"transparent":C.blue,border:`1px solid ${showForm?C.border:C.blue}`,borderRadius:20,color:showForm?C.t2:C.t1,fontSize:12,fontWeight:700,cursor:"pointer",minHeight:36}}>
-          {showForm?"× Cancelar":"+ Nueva parte"}
-        </button>
-      </div>
-
-      {/* ── Add/Edit Form ── */}
-      {showForm&&(
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:14,padding:16,marginBottom:12}}>
-          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.15em",marginBottom:10}}>{editId?"EDITAR PARTE":"NUEVA PARTE"}</div>
-          <MField label="Nombre / descripción"  value={form.nombre}       onChange={sf("nombre")}/>
-          <MField label="Número OEM"            value={form.oem}          onChange={sf("oem")}/>
-          <MField label="Aftermarket / equiv."  value={form.aftermarket}  onChange={sf("aftermarket")} placeholder="Marca · código"/>
-          <MField label="Aplicación / modelos"  value={form.aplicacion}   onChange={sf("aplicacion")} placeholder="Marca modelo año motor"/>
-          <MField label="Último precio (c/IVA)" value={form.ultimoPrecio} onChange={sf("ultimoPrecio")} type="number"/>
-          <MField label="Última fecha"          value={form.ultimaFecha}  onChange={sf("ultimaFecha")} placeholder="DD/MM/AAAA"/>
-          <MField label="Proveedor habitual"    value={form.proveedor}    onChange={sf("proveedor")}/>
-          <MField label="Notas técnicas"        value={form.notas}        onChange={sf("notas")} placeholder="Advertencias, variantes..."/>
-          <MBtn label={editId?"Guardar cambios":"Guardar parte"} full color={C.t1} bg={C.blue} border={C.blue} onClick={save}/>
-        </div>
-      )}
-
-      {/* ── Search & View Tabs ── */}
-      {!showForm&&parts.length>0&&(
-        <>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar nombre, OEM, proveedor, aplicación..."
-            style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",color:C.t1,fontSize:16,outline:"none",marginBottom:10,fontFamily:"inherit",boxSizing:"border-box"}}/>
-          {!isSearching&&frecuentes.length>0&&(
-            <div style={{display:"flex",gap:6,marginBottom:12}}>
-              {[["frecuentes","★ Frecuentes"],["todos","Todos"]].map(([v,l])=>(
-                <button key={v} onClick={()=>setView(v)}
-                  style={{padding:"6px 14px",borderRadius:20,fontSize:11,fontWeight:700,cursor:"pointer",
-                    background:"transparent",border:`1px solid ${view===v?C.cyan:C.border}`,
-                    color:view===v?C.cyan:C.t3}}>
-                  {l}
-                </button>
               ))}
             </div>
-          )}
-        </>
-      )}
+          </Card>
+        )}
 
-      {parts.length===0&&!showForm&&<EmptyState icon="📦" title="Sin partes en catálogo" sub='Agrega la primera con "+ Nueva parte". Las partes que uses en cotizaciones aparecen aquí automáticamente.'/>}
-
-      {/* ── Frecuentes hero banner ── */}
-      {!showForm&&!isSearching&&view==="frecuentes"&&frecuentes.length>0&&(
-        <div style={{background:"linear-gradient(135deg,rgba(15,20,22,0.95) 0%,rgba(20,27,29,0.90) 100%)",
-          backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",
-          border:`1px solid rgba(38,122,144,0.25)`,borderRadius:16,padding:"14px 16px",marginBottom:12,
-          boxShadow:"0 4px 20px rgba(0,0,0,0.4)"}}>
-          <div style={{fontSize:9,color:C.cyan,letterSpacing:"0.16em",textTransform:"uppercase",fontWeight:700,marginBottom:6}}>
-            ★ MÁS USADAS EN COTIZACIONES
-          </div>
-          <div style={{fontSize:11,color:C.t3,lineHeight:1.5}}>
-            Top {frecuentes.length} piezas por frecuencia de uso. El catálogo se sincroniza automáticamente cuando creas una cotización.
-          </div>
-        </div>
-      )}
-
-      {/* ── Parts list ── */}
-      <div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {filtered.map((p,idx)=>{
-          const exp=sel===p.id;
-          const freq=p.frecuencia||0;
-          const isFrecuente=freq>=2;
-          return (
-            <div key={p.id} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,
-              border:`1px solid ${exp?C.cyan:isFrecuente?`rgba(38,122,144,0.2)`:C.border}`,
-              borderRadius:14,overflow:"hidden",
-              boxShadow:isFrecuente?"0 0 0 1px rgba(59,130,246,0.2)":undefined}}>
-              <div onClick={()=>setSel(exp?null:p.id)} style={{padding:"13px 15px",cursor:"pointer"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:3}}>
-                  <div style={{fontSize:13,fontWeight:700,color:C.t1,flex:1,marginRight:8,lineHeight:1.3}}>{p.nombre}</div>
-                  <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                    {freq>0&&(
-                      <div style={{padding:"2px 7px",borderRadius:20,background:freq>=5?`${C.cyan}22`:freq>=2?`${C.blue}22`:`${C.border}`,
-                        border:`1px solid ${freq>=5?C.cyan+"44":freq>=2?C.blueHi+"44":C.border}`,
-                        fontSize:9,fontWeight:800,color:freq>=5?C.cyan:freq>=2?C.blueHi:C.t3,letterSpacing:"0.04em"}}>
-                        ×{freq}
-                      </div>
-                    )}
-                    {p.ultimoPrecio>0&&<div style={{fontSize:12,fontWeight:700,color:C.yellow,fontFamily:"'Courier New',monospace"}}>{mxn(p.ultimoPrecio)}</div>}
-                  </div>
-                </div>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-                  {p.oem&&<div style={{fontSize:10,color:C.cyan,fontFamily:"'Courier New',monospace"}}>OEM: {p.oem}</div>}
-                  {p.proveedor&&<div style={{fontSize:10,color:C.t3}}>· {p.proveedor}</div>}
-                </div>
-                {p.aplicacion&&<div style={{fontSize:10,color:C.t3,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.aplicacion}</div>}
+        {/* Proveedor */}
+        {(editable || prv) && (
+          <Card style={{ marginBottom: 12 }}>
+            <Label>Proveedor asignado</Label>
+            {editable ? (
+              <Sel value={op.proveedorId || ""} onChange={v => dispatch({ type: "OP_UPDATE", id: op.id, patch: { proveedorId: v || null } })}
+                options={[{ value: "", label: "— Sin asignar —" }, ...proveedores.map(p => ({ value: p.id, label: `${p.nombre} · ${p.entrega_hrs}h · ${p.score}pts` }))]} />
+            ) : prv ? (
+              <div style={{ fontSize: 13, color: C.t2 }}>
+                {prv.nombre} · {prv.especialidad}
+                <div style={{ fontSize: 10, color: C.t3, marginTop: 2 }}>Entrega en {prv.entrega_hrs}h · Score: {prv.score}</div>
               </div>
-              {exp&&(
-                <div style={{background:C.bg0,borderTop:`1px solid ${C.border}`,padding:"12px 15px"}}>
-                  {p.aftermarket&&<div style={{fontSize:11,color:C.t3,marginBottom:5}}>Aftermarket: <span style={{color:C.t2}}>{p.aftermarket}</span></div>}
-                  {p.proveedor&&<div style={{fontSize:11,color:C.t3,marginBottom:5}}>Proveedor: <span style={{color:C.t2}}>{p.proveedor}</span></div>}
-                  {p.ultimaFecha&&<div style={{fontSize:11,color:C.t3,marginBottom:5}}>Ult. compra: <span style={{color:C.t2}}>{p.ultimaFecha}</span></div>}
-                  {freq>0&&<div style={{fontSize:11,color:C.t3,marginBottom:5}}>Usado en cotizaciones: <span style={{color:C.cyan,fontWeight:700}}>×{freq} veces</span></div>}
-                  {p.aplicacion&&<div style={{fontSize:11,color:C.t3,marginBottom:8,lineHeight:1.5}}>Aplicación: <span style={{color:C.t1}}>{p.aplicacion}</span></div>}
-                  {p.notas&&<div style={{fontSize:11,color:C.t3,fontStyle:"italic",marginBottom:8,lineHeight:1.5}}>"{p.notas}"</div>}
-                  <div style={{display:"flex",gap:8}}>
-                    <button onClick={()=>startEdit(p)} style={{flex:1,padding:"9px",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,color:C.t1,fontSize:13,cursor:"pointer",fontWeight:600}}>Editar</button>
-                    <button onClick={()=>del(p)} style={{padding:"9px 14px",background:"transparent",border:`1px solid ${C.red}44`,borderRadius:10,color:C.red,fontSize:13,cursor:"pointer"}}>Eliminar</button>
-                  </div>
+            ) : null}
+          </Card>
+        )}
+
+        {/* Timeline */}
+        {(op.eventos || []).length > 0 && (
+          <Card>
+            <Label>Historial</Label>
+            {[...(op.eventos || [])].reverse().slice(0, 5).map((ev, i) => (
+              <div key={i} style={{ display: "flex", gap: 10, marginBottom: 8, alignItems: "flex-start" }}>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.t3, marginTop: 4, flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: 11, color: C.t2 }}>{ev.detalle}</div>
+                  <div style={{ fontSize: 9, color: C.t3, marginTop: 1 }}>{new Date(ev.ts).toLocaleString("es-MX")}</div>
                 </div>
-              )}
+              </div>
+            ))}
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OPERACIONES — List view
+// ─────────────────────────────────────────────────────────────────────────────
+
+function Operaciones({ state, dispatch, toast, onVer }) {
+  const { operaciones, clientes, unidades } = state;
+  const [filtro, setFiltro] = useState("activas");
+  const [busq, setBusq] = useState("");
+
+  const lista = useMemo(() => {
+    let arr = operaciones.filter(o => !o._deleted);
+    if (filtro === "activas")  arr = arr.filter(o => ACTIVOS.has(o.estado));
+    else if (filtro === "cobrar") arr = arr.filter(o => o.estado === "resuelto" && !o.pago?.cobrado);
+    else if (filtro === "cerradas") arr = arr.filter(o => TERMINAL.has(o.estado));
+    if (busq.trim()) {
+      const q = busq.toLowerCase();
+      arr = arr.filter(o =>
+        o.titulo?.toLowerCase().includes(q) ||
+        clientes.find(c => c.id === o.clienteId)?.empresa?.toLowerCase().includes(q)
+      );
+    }
+    return arr.sort((a, b) => {
+      const ua = URGENCIA[a.urgencia]?.orden ?? 99;
+      const ub = URGENCIA[b.urgencia]?.orden ?? 99;
+      return ua !== ub ? ua - ub : new Date(b.createdAt) - new Date(a.createdAt);
+    });
+  }, [operaciones, filtro, busq, clientes]);
+
+  const chips = [
+    { k: "activas", l: "Activas" },
+    { k: "cobrar", l: "Por cobrar" },
+    { k: "cerradas", l: "Cerradas" },
+    { k: "todas", l: "Todas" },
+  ];
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg0, paddingBottom: 80 }}>
+      <div style={{ padding: "24px 16px 0" }}>
+        <div style={{ fontSize: 22, fontWeight: 800, color: C.t1, marginBottom: 16 }}>Operaciones</div>
+
+        <div style={{ display: "flex", gap: 6, marginBottom: 12, overflowX: "auto", scrollbarWidth: "none" }}>
+          {chips.map(({ k, l }) => (
+            <button key={k} onClick={() => setFiltro(k)} style={{
+              flexShrink: 0, padding: "7px 14px", borderRadius: 20,
+              background: filtro === k ? `${C.lime}18` : "transparent",
+              border: `1px solid ${filtro === k ? C.lime + "55" : C.border}`,
+              color: filtro === k ? C.lime : C.t3,
+              fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+            }}>{l}</button>
+          ))}
+        </div>
+
+        <input value={busq} onChange={e => setBusq(e.target.value)}
+          placeholder="Buscar por título o cliente..."
+          style={{
+            width: "100%", boxSizing: "border-box",
+            background: C.bg1, border: `1px solid ${C.border}`,
+            borderRadius: 12, padding: "10px 14px", color: C.t1,
+            fontSize: 14, outline: "none", fontFamily: "inherit", marginBottom: 14,
+          }} />
+      </div>
+
+      <div style={{ padding: "0 16px" }}>
+        {lista.length === 0 && (
+          <div style={{ textAlign: "center", padding: "48px 0", color: C.t3, fontSize: 13 }}>
+            Sin operaciones en este filtro
+          </div>
+        )}
+        {lista.map(op => {
+          const u = URGENCIA[op.urgencia];
+          const cli = clientes.find(c => c.id === op.clienteId);
+          const snap = snapOp(op.lineas);
+          const estadoM = ESTADO_META[op.estado];
+          return (
+            <div key={op.id} onClick={() => onVer(op.id)}
+              style={{
+                background: C.bg1, border: `1px solid ${C.border}`,
+                borderLeft: `3px solid ${u?.color || C.t3}`,
+                borderRadius: C.r, padding: "13px 16px",
+                boxShadow: C.shadow, marginBottom: 10, cursor: "pointer",
+              }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                <div style={{ display: "flex", gap: 5 }}>
+                  <Pill label={u?.label} color={u?.color} dim={u?.dim} small />
+                  <Pill label={estadoM?.label} color={estadoM?.dot} small />
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.t2, fontVariantNumeric: "tabular-nums" }}>
+                  {snap.precio_con_iva > 0 ? mxn(snap.precio_con_iva) : "—"}
+                </span>
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.t1, marginBottom: 3 }}>{op.titulo}</div>
+              {cli && <div style={{ fontSize: 10, color: C.t3 }}>{cli.empresa}</div>}
+              <SLABar op={op} />
             </div>
           );
         })}
-        {filtered.length===0&&isSearching&&(
-          <div style={{textAlign:"center",padding:"32px 16px"}}>
-            <div style={{fontSize:28,marginBottom:8}}>🔍</div>
-            <div style={{fontSize:14,color:C.t2,fontWeight:600,marginBottom:4}}>Sin resultados</div>
-            <div style={{fontSize:12,color:C.t3}}>"{dSearch}" no está en el catálogo</div>
-            <button onClick={()=>{setAdding(true);setForm({...empty,nombre:dSearch.trim()});}}
-              style={{marginTop:14,padding:"10px 20px",background:C.blue,border:`1px solid ${C.blueHi}`,borderRadius:12,color:C.t1,fontSize:12,fontWeight:700,cursor:"pointer"}}>
-              + Agregar "{dSearch.trim()}"
-            </button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CIERRE — Financial overview
+// ─────────────────────────────────────────────────────────────────────────────
+
+function Cierre({ state, dispatch, toast, onVer }) {
+  const { operaciones, clientes } = state;
+
+  const porCobrar = useMemo(() =>
+    operaciones.filter(o => !o._deleted && o.estado === "resuelto" && !o.pago?.cobrado)
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)),
+    [operaciones]);
+
+  const cobradas30 = useMemo(() =>
+    operaciones.filter(o => !o._deleted && o.pago?.cobrado &&
+      o.pago?.fecha_cobro && new Date(o.pago.fecha_cobro) > new Date(Date.now() - 30 * 86400000))
+      .sort((a, b) => new Date(b.pago.fecha_cobro) - new Date(a.pago.fecha_cobro)),
+    [operaciones]);
+
+  const totalPorCobrar = porCobrar.reduce((s, o) => s + safeN(snapOp(o.lineas).precio_con_iva), 0);
+  const totalCobrado30 = cobradas30.reduce((s, o) => s + safeN(snapOp(o.lineas).u_neta), 0);
+  const countCritico   = porCobrar.filter(o => {
+    if (!o.pago?.promesa) return false;
+    return new Date(o.pago.promesa) < new Date();
+  }).length;
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg0, paddingBottom: 80 }}>
+      <div style={{ padding: "24px 16px 0" }}>
+        <div style={{ fontSize: 22, fontWeight: 800, color: C.t1, marginBottom: 16 }}>Cierre</div>
+
+        {/* Summary cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
+          {[
+            { l: "Por cobrar", v: mxn(totalPorCobrar), c: C.amber, sub: `${porCobrar.length} op.${countCritico > 0 ? ` · ${countCritico} vencidas` : ""}` },
+            { l: "Util. 30 días", v: mxn(totalCobrado30), c: C.lime, sub: `${cobradas30.length} cobradas` },
+          ].map(({ l, v, c, sub }) => (
+            <div key={l} style={{ background: C.bg1, border: `1px solid ${C.border}`, borderRadius: 14, padding: "14px 16px" }}>
+              <div style={{ fontSize: 9, color: C.t3, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 6 }}>{l}</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: c, fontVariantNumeric: "tabular-nums", marginBottom: 4 }}>{v}</div>
+              <div style={{ fontSize: 10, color: C.t3 }}>{sub}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Por cobrar */}
+        {porCobrar.length > 0 && (
+          <>
+            <div style={{ fontSize: 10, color: C.t3, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 10, fontWeight: 700 }}>
+              Pendiente cobro
+            </div>
+            {porCobrar.map(op => {
+              const cli = clientes.find(c => c.id === op.clienteId);
+              const snap = snapOp(op.lineas);
+              const vencida = op.pago?.promesa && new Date(op.pago.promesa) < new Date();
+              return (
+                <div key={op.id} style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  padding: "14px 16px", background: C.bg1,
+                  border: `1px solid ${vencida ? C.red + "44" : C.border}`,
+                  borderLeft: `3px solid ${vencida ? C.red : C.amber}`,
+                  borderRadius: 12, marginBottom: 8, cursor: "pointer",
+                }} onClick={() => onVer(op.id)}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: C.t1, marginBottom: 2 }}>{op.titulo}</div>
+                    <div style={{ fontSize: 10, color: C.t3 }}>
+                      {cli?.empresa}
+                      {op.pago?.promesa && <span style={{ color: vencida ? C.red : C.t3, marginLeft: 8 }}>Promesa: {op.pago.promesa}</span>}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: vencida ? C.red : C.amber, fontVariantNumeric: "tabular-nums" }}>
+                        {mxn(snap.precio_con_iva)}
+                      </div>
+                    </div>
+                    <button onClick={e => { e.stopPropagation(); dispatch({ type: "OP_COBRAR", id: op.id }); toast("Cobrado ✓", "success"); }}
+                      style={{
+                        padding: "7px 12px", background: `${C.lime}15`, border: `1px solid ${C.lime}44`,
+                        borderRadius: 8, color: C.lime, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                      }}>✓</button>
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
+
+        {/* Cobradas recientes */}
+        {cobradas30.length > 0 && (
+          <>
+            <div style={{ fontSize: 10, color: C.t3, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 10, fontWeight: 700, marginTop: 20 }}>
+              Cobradas — últimos 30 días
+            </div>
+            {cobradas30.slice(0, 10).map(op => {
+              const cli = clientes.find(c => c.id === op.clienteId);
+              const snap = snapOp(op.lineas);
+              return (
+                <div key={op.id} onClick={() => onVer(op.id)}
+                  style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    padding: "10px 16px", background: C.bg1, border: `1px solid ${C.border}`,
+                    borderLeft: `3px solid ${C.green}`,
+                    borderRadius: 10, marginBottom: 6, cursor: "pointer",
+                  }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.t1 }}>{op.titulo}</div>
+                    <div style={{ fontSize: 9, color: C.t3 }}>{cli?.empresa}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: C.lime, fontVariantNumeric: "tabular-nums" }}>{mxn(snap.u_neta)}</div>
+                    <div style={{ fontSize: 9, color: C.t3 }}>util.</div>
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
+
+        {porCobrar.length === 0 && cobradas30.length === 0 && (
+          <div style={{ textAlign: "center", padding: "48px 0", color: C.t3, fontSize: 13 }}>
+            Sin movimientos en el período
           </div>
         )}
       </div>
@@ -7832,621 +1522,234 @@ function MCatalogo({state,dispatch,toast}) {
   );
 }
 
-// ── MProveedores — Proveedores móvil ─────────────────────────────────────────
-function MProveedores({state,dispatch,toast}) {
-  const C = React.useContext(ThemeCtx);
-  const {suppliers,tickets} = state;
-  const [sel,setSel]=useState(null);
-  const [editId,setEditId]=useState(null);
-  const [adding,setAdding]=useState(false);
-  const [confirm,setConfirm]=useState(null);
-  const empty={nombre:"",categoria:"heavy",especialidad:"",entregaDias:1,confiabilidad:85,contacto:"",correo:"",horario:"",cobertura:"",scoreOp:80,incidencias:0};
-  const [form,setForm]=useState(empty);
-  const sf=k=>v=>setForm(p=>({...p,[k]:v}));
+// ─────────────────────────────────────────────────────────────────────────────
+// FLOTA — Knowledge base
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const stats=useCallback(id=>{
-    const so=tickets.filter(t=>t.supplierId===id);
-    return{total:so.length,neta:so.reduce((s,t)=>s+(t.snap?.uNeta||0),0)};
-  },[tickets]);
+function Flota({ state, dispatch, toast }) {
+  const { clientes, unidades, proveedores, operaciones } = state;
+  const [tab, setTab] = useState("unidades");
 
-  const startAdd=()=>{setAdding(true);setEditId(null);setSel(null);setForm(empty);window.scrollTo(0,0);};
-  const startEdit=(s)=>{setEditId(s.id);setAdding(false);setSel(null);setForm({...s});window.scrollTo(0,0);};
-  const cancel=()=>{setAdding(false);setEditId(null);setForm(empty);};
-  const save=()=>{
-    if(editId){dispatch({type:"SUP_UPDATE",id:editId,patch:form});toast("Proveedor actualizado","success");}
-    else{dispatch({type:"SUP_ADD",s:{...form,id:"PRV-"+Date.now().toString().slice(-5)}});toast("Proveedor registrado","success");}
-    cancel();
-  };
-  const del=(s)=>setConfirm(s);
-  const showForm=adding||!!editId;
-
-  return (
-    <div style={{padding:"14px 14px 8px"}}>
-      {confirm&&<Confirm msg={"Eliminar: "+confirm.nombre+"?"} onConfirm={()=>{dispatch({type:"SUP_DELETE",id:confirm.id});setSel(null);setConfirm(null);toast("Eliminado","info");}} onCancel={()=>setConfirm(null)}/>}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <div style={{fontSize:11,color:C.t3,letterSpacing:"0.15em",textTransform:"uppercase",fontWeight:700}}>Proveedores · {suppliers.length}</div>
-        <button onClick={showForm?cancel:startAdd} style={{padding:"7px 14px",background:showForm?"transparent":C.blue,border:`1px solid ${showForm?C.border:C.blue}`,borderRadius:20,color:showForm?C.t2:C.t1,fontSize:12,fontWeight:700,cursor:"pointer",minHeight:36}}>
-          {showForm?"× Cancelar":"+ Nuevo"}
-        </button>
-      </div>
-      {showForm&&(
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${editId?C.blueHi:C.border}`,borderRadius:14,padding:16,marginBottom:12}}>
-          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.15em",marginBottom:10}}>{editId?"EDITAR PROVEEDOR":"NUEVO PROVEEDOR"}</div>
-          <MField label="Nombre"          value={form.nombre}        onChange={sf("nombre")}/>
-          <MField label="Especialidad"    value={form.especialidad}  onChange={sf("especialidad")}/>
-          <MField label="Contacto"        value={form.contacto}      onChange={sf("contacto")}/>
-          <MField label="Correo"          value={form.correo}        onChange={sf("correo")} type="email"/>
-          <MField label="Horario"         value={form.horario}       onChange={sf("horario")} placeholder="Lun-Sab 07:00-20:00"/>
-          <MField label="Cobertura"       value={form.cobertura}     onChange={sf("cobertura")} placeholder="CDMX, Edomex..."/>
-          <MField label="Entrega (días)"  value={form.entregaDias}   onChange={sf("entregaDias")} type="number"/>
-          <MField label="Confiabilidad"   value={form.confiabilidad} onChange={sf("confiabilidad")} type="number" suffix="/100"/>
-          <MField label="Score operativo" value={form.scoreOp}       onChange={sf("scoreOp")} type="number" suffix="/100"/>
-          <MField label="Incidencias"     value={form.incidencias}   onChange={sf("incidencias")} type="number"/>
-          <MSel   label="Categoría"       value={form.categoria}     onChange={sf("categoria")} options={OP_TYPES.map(o=>({value:o.id,label:o.label}))}/>
-          <MBtn label={editId?"Guardar cambios":"Guardar proveedor"} full color={C.t1} bg={C.blue} border={C.blue} onClick={save}/>
-        </div>
-      )}
-      {suppliers.length===0&&!showForm&&<EmptyState icon="🔧" title="Sin proveedores" sub='Agrega el primero con "+ Nuevo"'/>}
-      <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        {suppliers.map(s=>{
-          const st=stats(s.id);
-          const exp=sel===s.id;
-          const confColor=s.confiabilidad>=90?C.green:s.confiabilidad>=75?C.yellow:C.red;
-          const scoreColor=s.scoreOp>=80?C.green:s.scoreOp>=60?C.yellow:C.red;
-          return (
-            <div key={s.id} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${exp?C.cyan:C.border}`,borderRadius:14,overflow:"hidden"}}>
-              <div onClick={()=>setSel(exp?null:s.id)} style={{padding:"14px 16px",cursor:"pointer"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:14,fontWeight:700,color:C.t1,marginBottom:2}}>{s.nombre}</div>
-                    <div style={{fontSize:11,color:C.t3}}>{s.especialidad||"—"} · {s.cobertura||"—"}</div>
-                  </div>
-                  <div style={{textAlign:"right",flexShrink:0,marginLeft:8}}>
-                    <div style={{fontSize:12,color:confColor,fontWeight:700}}>{s.confiabilidad}%</div>
-                    <div style={{fontSize:10,color:C.t3}}>confiab.</div>
-                  </div>
-                </div>
-                <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-                  <span style={{fontSize:11,color:C.t3}}>{s.entregaDias}d entrega</span>
-                  {st.total>0&&<span style={{fontSize:11,color:C.t3}}>{st.total} ops · <span style={{color:st.neta>=0?C.green:C.red,fontWeight:600}}>{mxn(st.neta)}</span></span>}
-                </div>
-              </div>
-              {exp&&(
-                <div style={{background:C.bg0,borderTop:`1px solid ${C.border}`,padding:"12px 16px"}}>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10,fontSize:11}}>
-                    <div style={{color:C.t3}}>Contacto: <span style={{color:C.t2}}>{s.contacto||"—"}</span></div>
-                    <div style={{color:C.t3}}>Horario: <span style={{color:C.t2}}>{s.horario||"—"}</span></div>
-                    <div style={{color:C.t3}}>Score op: <span style={{color:scoreColor,fontWeight:700}}>{s.scoreOp}</span></div>
-                    <div style={{color:C.t3}}>Incidencias: <span style={{color:s.incidencias>0?C.red:C.green,fontWeight:700}}>{s.incidencias}</span></div>
-                  </div>
-                  {s.correo&&<div style={{fontSize:11,color:C.t3,marginBottom:8}}>Email: <span style={{color:C.cyan}}>{s.correo}</span></div>}
-                  <div style={{display:"flex",gap:8}}>
-                    <button onClick={()=>startEdit(s)} style={{flex:1,padding:"9px",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,color:C.t1,fontSize:13,cursor:"pointer",fontWeight:600}}>Editar</button>
-                    <button onClick={()=>del(s)} style={{padding:"9px 14px",background:"transparent",border:`1px solid ${C.red}44`,borderRadius:10,color:C.red,fontSize:13,cursor:"pointer"}}>Eliminar</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ── MasSheet — bottom sheet del menú "Más" ───────────────────────────────────
-function MasSheet({open,onClose,tab,setTab}) {
-  const C = React.useContext(ThemeCtx);
-  if(!open) return null;
-  const items=[
-    {id:"chat",        label:"Chat IA",     icon:"💬", desc:"Asistente IA"},
-    {id:"sourcing",    label:"Sourcing",   icon:"⚡", desc:"AI Copilot"},
-    {id:"cotizador",  label:"Cotizador",  icon:"🧾", desc:"Nueva cotización"},
-    {id:"cartera",    label:"Cartera",    icon:"💳", desc:"Por cobrar"},
-    {id:"flota",      label:"Flota",      icon:"🚛", desc:"Control flota"},
-    {id:"unidades",   label:"Flotilla",   icon:"🚚", desc:"Vehículos"},
-    {id:"catalogo",   label:"Catálogo",   icon:"📦", desc:"Inventario"},
-    {id:"clientes",   label:"Clientes",   icon:"🏢", desc:"Directorio"},
-    {id:"proveedores",label:"Proveedores",icon:"🔧", desc:"Suppliers"},
-    {id:"ajustes",    label:"Ajustes",    icon:"⚙",  desc:"Config"},
+  const tabs = [
+    { k: "unidades", l: "Unidades" },
+    { k: "clientes", l: "Clientes" },
+    { k: "proveedores", l: "Proveedores" },
   ];
-  return (
-    <>
-      <div onClick={onClose} className="fade-enter" style={{position:"fixed",inset:0,zIndex:150,background:C._dark?"rgba(0,0,0,0.55)":"rgba(0,0,0,0.25)"}}/>
-      <div className="sheet-enter" style={{position:"fixed",bottom:0,left:0,right:0,zIndex:155,
-        background:C._dark?"rgba(14,16,20,0.90)":"rgba(248,247,244,0.94)",backdropFilter:"blur(32px) saturate(1.8)",WebkitBackdropFilter:"blur(32px) saturate(1.8)",
-        borderRadius:"28px 28px 0 0",
-        borderTop:`1px solid ${C.borderHi}`,
-        padding:`0 16px calc(20px + env(safe-area-inset-bottom,0px))`,
-        boxShadow:C._dark?"0 -12px 60px rgba(0,0,0,0.6)":"0 -12px 60px rgba(0,0,0,0.12)"}}>
 
-        <div style={{display:"flex",justifyContent:"center",padding:"14px 0 8px"}}>
-          <div style={{width:36,height:4,borderRadius:2,background:C.border}}/>
-        </div>
-        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.16em",marginBottom:16,
-          textAlign:"center",textTransform:"uppercase",fontWeight:600}}>Más módulos</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:8}}>
-          {items.map(item=>(
-            <button key={item.id} onClick={()=>{setTab(item.id);onClose();}}
-              style={{padding:"18px 10px",
-                background:tab===item.id?C.blueDim:C.bg1,
-                backdropFilter:C.glass,WebkitBackdropFilter:C.glass,
-                border:`1.5px solid ${tab===item.id?C.blueHi:C.border}`,
-                borderRadius:22,cursor:"pointer",
-                display:"flex",flexDirection:"column",alignItems:"center",gap:8,
-                transition:"all 150ms ease",touchAction:"manipulation",
-                WebkitTapHighlightColor:"transparent"}}>
-              <span style={{fontSize:28,lineHeight:1}}>{item.icon}</span>
-              <span style={{fontSize:12,fontWeight:700,color:tab===item.id?C.blue:C.t1,lineHeight:1}}>{item.label}</span>
-              <span style={{fontSize:10,color:C.t3,lineHeight:1}}>{item.desc}</span>
-            </button>
+  const opsActivas = id => operaciones.filter(o => !o._deleted && o.unidadId === id && ACTIVOS.has(o.estado)).length;
+  const opsCliente = id => operaciones.filter(o => !o._deleted && o.clienteId === id).length;
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg0, paddingBottom: 80 }}>
+      <div style={{ padding: "24px 16px 0" }}>
+        <div style={{ fontSize: 22, fontWeight: 800, color: C.t1, marginBottom: 16 }}>Flota</div>
+        <div style={{ display: "flex", gap: 6, marginBottom: 20, borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
+          {tabs.map(({ k, l }) => (
+            <button key={k} onClick={() => setTab(k)} style={{
+              padding: "6px 14px", borderRadius: 8,
+              background: "none", border: "none",
+              color: tab === k ? C.t1 : C.t3,
+              fontSize: 13, fontWeight: tab === k ? 700 : 400,
+              cursor: "pointer", fontFamily: "inherit",
+              borderBottom: tab === k ? `2px solid ${C.lime}` : "2px solid transparent",
+            }}>{l}</button>
           ))}
         </div>
+
+        {tab === "unidades" && (
+          <div>
+            {unidades.map(u => {
+              const cli = clientes.find(c => c.id === u.clienteId);
+              const activas = opsActivas(u.id);
+              const estados = { operativa: C.green, detenida: C.red, preventivo: C.amber, taller: C.amber };
+              return (
+                <Card key={u.id} style={{ marginBottom: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div>
+                      <div style={{ fontSize: 9, color: C.t3, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 3 }}>
+                        Eco. {u.economico}
+                      </div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>
+                        {u.marca} {u.modelo}
+                      </div>
+                      <div style={{ fontSize: 11, color: C.t2, marginTop: 2 }}>
+                        {u.anio} · {u.placa} · {u.km?.toLocaleString()} km
+                      </div>
+                      {cli && <div style={{ fontSize: 10, color: C.t3, marginTop: 2 }}>{cli.empresa}</div>}
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 8, background: `${estados[u.estado_op] || C.t3}18`, color: estados[u.estado_op] || C.t3, marginBottom: 4 }}>
+                        {u.estado_op || "operativa"}
+                      </div>
+                      {activas > 0 && (
+                        <div style={{ fontSize: 10, color: C.amber }}>{activas} op. activa{activas > 1 ? "s" : ""}</div>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+
+        {tab === "clientes" && (
+          <div>
+            {clientes.map(c => {
+              const ops = opsCliente(c.id);
+              const unis = unidades.filter(u => u.clienteId === c.id).length;
+              return (
+                <Card key={c.id} style={{ marginBottom: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>{c.empresa}</div>
+                      <div style={{ fontSize: 11, color: C.t2, marginTop: 2 }}>{c.contacto}</div>
+                      <div style={{ fontSize: 10, color: C.t3, marginTop: 1 }}>{c.tel}</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <Pill label={c.categoria || "B"} color={c.categoria === "A" ? C.lime : C.t2} small />
+                      <div style={{ fontSize: 10, color: C.t3, marginTop: 6 }}>{unis} unidad{unis !== 1 ? "es" : ""} · {ops} op.</div>
+                      <div style={{ fontSize: 10, color: C.t3 }}>Crédito {c.credito_dias}d</div>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+
+        {tab === "proveedores" && (
+          <div>
+            {proveedores.map(p => (
+              <Card key={p.id} style={{ marginBottom: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: C.t1 }}>{p.nombre}</div>
+                    <div style={{ fontSize: 11, color: C.t2, marginTop: 2 }}>{p.especialidad}</div>
+                    <div style={{ fontSize: 10, color: C.t3, marginTop: 1 }}>{p.tel}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: p.score >= 90 ? C.lime : p.score >= 75 ? C.amber : C.red }}>
+                      {p.score}
+                    </div>
+                    <div style={{ fontSize: 9, color: C.t3 }}>score</div>
+                    <div style={{ fontSize: 10, color: C.t3, marginTop: 4 }}>Entrega {p.entrega_hrs}h</div>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
-    </>
+    </div>
   );
 }
 
-const TABS = [
-  {id:"ops",          label:"Centro Ops"},
-  {id:"tickets",      label:"Pipeline"},
-  {id:"historial",    label:"Historial"},
-  {id:"cotizador",    label:"Cotizador"},
-  {id:"refacciones",  label:"Refacciones"},
-  {id:"chat",         label:"💬 Chat IA"},
-  {id:"sourcing",     label:"⚡ Sourcing"},
-  {id:"flota",        label:"Flota"},
-  {id:"unidades",     label:"Unidades"},
-  {id:"catalogo",     label:"Catalogo"},
-  {id:"proveedores",  label:"Proveedores"},
-  {id:"clientes",     label:"Clientes"},
-  {id:"cartera",      label:"Cartera"},
-  {id:"ajustes",      label:"Ajustes"},
-];
+// ─────────────────────────────────────────────────────────────────────────────
+// BOTTOM NAV
+// ─────────────────────────────────────────────────────────────────────────────
 
-// ── ErrorBoundary — catches any render crash, shows recovery screen instead of blank ──
-class ErrorBoundary extends React.Component {
-  constructor(props){ super(props); this.state={error:null}; }
-  static getDerivedStateFromError(e){ return {error:e}; }
-  componentDidCatch(e,info){ console.error("[ErrorBoundary]",e,info); }
-  render(){
-    if(!this.state.error) return this.props.children;
-    const msg = this.state.error?.message||String(this.state.error);
-    return (
-      <div style={{minHeight:"100vh",background:"#0D0F12",color:"#F5F5F7",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:24,fontFamily:"'Trebuchet MS',sans-serif"}}>
-        <div style={{fontSize:28,color:"#F5F5F7"}}>⚠</div>
-        <div style={{fontSize:13,fontWeight:700,color:"#F5F5F7",textAlign:"center"}}>Algo salió mal</div>
-        <div style={{fontSize:10,color:"#4A5568",fontFamily:"monospace",background:"#EEF1F5",padding:"8px 14px",borderRadius:4,maxWidth:320,wordBreak:"break-all",textAlign:"center"}}>{msg}</div>
-        <button onClick={()=>window.location.reload()}
-          style={{marginTop:8,padding:"9px 22px",background:"#F3F4F6",border:"none",borderRadius:4,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",letterSpacing:"0.05em"}}>
-          REINICIAR APP
-        </button>
-      </div>
-    );
-  }
-}
-
-// ── useSyncStatus — estado del sync Supabase ─────────────────────────────────
-function useSyncStatus() {
-  const [status, setStatus] = useState("idle"); // "idle"|"saving"|"saved"|"offline"|"error"
-  const timerRef = useRef(null);
-  const resetToIdle = useCallback((delay=3000) => {
-    if(timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(()=>setStatus("idle"), delay);
-  }, []);
-  const setSaving  = useCallback(()=>{ setStatus("saving");  if(timerRef.current) clearTimeout(timerRef.current); }, []);
-  const setSaved   = useCallback(()=>{ setStatus("saved");   resetToIdle(3000); }, [resetToIdle]);
-  const setOffline = useCallback(()=>{ setStatus("offline"); resetToIdle(8000); }, [resetToIdle]);
-  const setError   = useCallback(()=>{ setStatus("error");   resetToIdle(6000); }, [resetToIdle]);
-  useEffect(()=>()=>{ if(timerRef.current) clearTimeout(timerRef.current); },[]);
-  return { status, setSaving, setSaved, setOffline, setError };
-}
-
-export default function AppRoot(){
-  return <ErrorBoundary><App/></ErrorBoundary>;
-}
-
-function App() {
-  const [state,dispatch]=useReducer(reducer,initialState);
-  const {toasts,push:toast}=useToasts();
-  const { insights, dismiss: dismissInsight, triggerMargin } = useStateEvents(state);
-  const [tab,setTab]=useState("ops");
-  const [search,setSearch]=useState(false);
-  const [loading,setLoading]=useState(true);
-  const [mobileView,setMobileView]=useState(()=>window.innerWidth<768);
-  const [quickOpen,setQuickOpen]=useState(false); // scroll-lock compat
-  const [masOpen,setMasOpen]=useState(false);
-  const [darkMode,setDarkMode]=useState(()=>{
-    try { return localStorage.getItem("logisolve_theme")!=="light"; } catch{ return true; }
-  });
-  const C = darkMode ? C_DARK : C_LIGHT; // local C shadows module-level alias
-  const { status: syncStatus, setSaving, setSaved, setOffline, setError: setSyncError } = useSyncStatus();
-
-  // Double-click / concurrent save protection
-  const savingRef = useRef(false);
-  // Safe soft-delete timers — keyed by ticket ID to allow cancel on restore/undo
-  const deleteTimersRef = useRef({});
-
-  const scheduleHardDelete = useCallback((id) => {
-    // Cancel any existing timer for this ID first
-    if (deleteTimersRef.current[id]) clearTimeout(deleteTimersRef.current[id]);
-    deleteTimersRef.current[id] = setTimeout(() => {
-      delete deleteTimersRef.current[id];
-      dispatch({type:"TKT_DELETE", id});
-    }, 8000);
-  }, []);
-
-  const cancelHardDelete = useCallback((id) => {
-    if (deleteTimersRef.current[id]) {
-      clearTimeout(deleteTimersRef.current[id]);
-      delete deleteTimersRef.current[id];
-    }
-  }, []);
-
-  // Cancel all pending hard deletes on unmount
-  useEffect(() => {
-    return () => {
-      Object.values(deleteTimersRef.current).forEach(clearTimeout);
-    };
-  }, []);
-
-  // Soft-delete trash (restore within session)
-  const [trash, setTrash] = useState([]);
-  const softDelete = useCallback((item, type) => {
-    setTrash(p=>[...p, {item, type, deletedAt: Date.now()}]);
-  }, []);
-
-  // Track deleted IDs so sync can remove them from Supabase
-  const deletedRef = useRef({tickets:new Set(),clients:new Set(),suppliers:new Set(),units:new Set(),parts:new Set()});
-
-  const dispatchWithDelete = useCallback((action)=>{
-    if(action.type==="TKT_DELETE")    { deletedRef.current.tickets.add(action.id); }
-    if(action.type==="CLI_DELETE")    { deletedRef.current.clients.add(action.id); }
-    if(action.type==="SUP_DELETE")    { deletedRef.current.suppliers.add(action.id); }
-    if(action.type==="UNIT_DELETE")   { deletedRef.current.units.add(action.id); }
-    if(action.type==="PART_DELETE")   { deletedRef.current.parts.add(action.id); }
-    opLog.push(action.type, {id: action.id||action.c?.id||action.u?.id||""});
-    dispatch(action);
-  },[]);
-
-  // Load from Supabase on mount
-  useEffect(()=>{
-    (async()=>{
-      const bumpSeq = (tickets=[]) => {
-        const maxSeq = tickets.reduce((m,t)=>{
-          const n=parseInt((t.id||'').split('-').pop())||0; return Math.max(m,n);
-        }, 7);
-        if(maxSeq >= _seq) _seq = maxSeq + 1;
-      };
-      try {
-        await seedIfEmpty();
-        const data = await loadAllFromSupabase();
-        if(data) { dispatch({type:"IMPORT",data}); bumpSeq(data.tickets); opLog.push("LOAD_OK"); }
-        else {
-          const stored = loadFromStorage();
-          if(stored) { dispatch({type:"IMPORT", data:stored}); bumpSeq(stored.tickets); }
-          toast("Sin datos Supabase — usando datos locales del dispositivo","info");
-          opLog.push("LOAD_LOCAL_FALLBACK");
-        }
-      } catch(e){
-        opLog.push("LOAD_ERROR", {error: e?.message});
-        console.warn("Supabase load error:",e);
-        const stored = loadFromStorage();
-        if(stored) { dispatch({type:"IMPORT", data:stored}); bumpSeq(stored.tickets); }
-        toast("Error Supabase: "+e?.message+" — datos locales cargados","error");
-      }
-      finally { setLoading(false); }
-    })();
-  },[]);
-
-  // Sync to Supabase — debounced 1200ms, with status indicator and offline queue
-  const syncRef = useRef(null);
-  useEffect(()=>{
-    if(loading) return;
-    saveToStorage(state);
-    clearTimeout(syncRef.current);
-    syncRef.current = setTimeout(async ()=>{
-      if(savingRef.current) return; // prevent concurrent saves
-      savingRef.current = true;
-      setSaving();
-      try {
-        const online = navigator.onLine !== false;
-        if(!online) {
-          pendingQueue.push({type:"full_sync", ts: Date.now()});
-          setOffline();
-          opLog.push("SYNC_DEFERRED", {reason:"offline"});
-          return;
-        }
-        // Flush any pending queue first
-        pendingQueue.flush();
-        // Upsert current rows
-        await Promise.all([
-          ...state.tickets.map(t=>upsertRow("tickets",t.id,t)),
-          ...state.clients.map(c=>upsertRow("clients",c.id,c)),
-          ...state.suppliers.map(s=>upsertRow("suppliers",s.id,s)),
-          ...state.units.map(u=>upsertRow("units",u.id,u)),
-          ...state.parts.map(p=>upsertRow("parts",p.id,p)),
-        ]);
-        // Delete removed rows
-        deletedRef.current.tickets.forEach(id=>{ deleteRow("tickets",id); deletedRef.current.tickets.delete(id); });
-        deletedRef.current.clients.forEach(id=>{ deleteRow("clients",id); deletedRef.current.clients.delete(id); });
-        deletedRef.current.suppliers.forEach(id=>{ deleteRow("suppliers",id); deletedRef.current.suppliers.delete(id); });
-        deletedRef.current.units.forEach(id=>{ deleteRow("units",id); deletedRef.current.units.delete(id); });
-        deletedRef.current.parts.forEach(id=>{ deleteRow("parts",id); deletedRef.current.parts.delete(id); });
-        setSaved();
-        opLog.push("SYNC_OK");
-      } catch(e) {
-        setSyncError();
-        opLog.push("SYNC_ERROR", {error: e?.message});
-        pendingQueue.push({type:"full_sync", ts: Date.now()});
-      } finally {
-        savingRef.current = false;
-      }
-    },1200);
-  },[state,loading]);
-
-  // Retry pending when back online
-  useEffect(()=>{
-    const onOnline = () => {
-      if(pendingQueue.peek().length > 0) {
-        opLog.push("RETRY_SYNC", {pending: pendingQueue.peek().length});
-        dispatch({type:"NOOP"}); // trigger re-sync
-      }
-    };
-    window.addEventListener("online", onOnline);
-    return ()=>window.removeEventListener("online", onOnline);
-  },[]);
-
-  useEffect(()=>{
-    const h=e=>{if((e.ctrlKey||e.metaKey)&&e.key==="k"){e.preventDefault();setSearch(s=>!s);}};
-    window.addEventListener("keydown",h);
-    return()=>window.removeEventListener("keydown",h);
-  },[]);
-
-  useEffect(()=>{
-    const h=()=>setMobileView(window.innerWidth<768);
-    window.addEventListener("resize",h);
-    return()=>window.removeEventListener("resize",h);
-  },[]);
-
-  // Body scroll lock when a bottom sheet is open on mobile — prevents scroll into empty space on iPhone
-  useEffect(()=>{
-    if(!mobileView||(!quickOpen&&!masOpen)) {
-      document.body.style.overflow="";
-      document.body.style.position="";
-      document.body.style.width="";
-      return;
-    }
-    const y=window.scrollY;
-    document.body.style.overflow="hidden";
-    document.body.style.position="fixed";
-    document.body.style.top=`-${y}px`;
-    document.body.style.width="100%";
-    return()=>{
-      document.body.style.overflow="";
-      document.body.style.position="";
-      document.body.style.top="";
-      document.body.style.width="";
-      window.scrollTo(0,y);
-    };
-  },[mobileView,quickOpen,masOpen]);
-
-  const p1Active  = useMemo(()=>state.tickets.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status)).length,[state.tickets]);
-  const vencidos  = useMemo(()=>state.tickets.filter(t=>{if(!t.promesaPago||t.cobrado||t.status==="cancelado")return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}).length,[state.tickets]);
-  const abiertas  = useMemo(()=>state.tickets.filter(t=>!CLOSED_SET.has(t.status)).length,[state.tickets]);
-
-  // Sync status display config
-  const syncDisplay = {
-    idle:    { label:"",            color:"transparent",  dot:"transparent" },
-    saving:  { label:"Guardando…",  color:C.t3,           dot:C.yellow      },
-    saved:   { label:"Guardado",    color:C.green,        dot:C.green       },
-    offline: { label:"Sin conexión",color:C.yellow,       dot:C.yellow      },
-    error:   { label:"Error sync",  color:C.red,          dot:C.red         },
-  };
-  const sd = syncDisplay[syncStatus] || syncDisplay.idle;
-
-  if(loading) return (
-    <ThemeCtx.Provider value={C}>
-      <div style={{minHeight:"100vh",background:darkMode?"#0D0F12":"linear-gradient(180deg,#F7F6F3 0%,#ECE9E4 100%)",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
-        <Logo/>
-        <div style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",letterSpacing:"0.2em",marginTop:8}}>CARGANDO DATOS...</div>
-      </div>
-    </ThemeCtx.Provider>
-  );
+function BottomNav({ tab, onChange, kpi }) {
+  const items = [
+    { k: "centro", icon: "⚡", label: "Centro", badge: kpi.criticas > 0 ? kpi.criticas : null },
+    { k: "ops", icon: "📋", label: "Ops", badge: kpi.activas > 0 ? kpi.activas : null },
+    { k: "cierre", icon: "💰", label: "Cierre", badge: kpi.pendiente_cobro > 0 ? "·" : null },
+    { k: "flota", icon: "🚛", label: "Flota" },
+  ];
 
   return (
-    <ThemeCtx.Provider value={C}>
-    <div data-theme={darkMode?"dark":"light"} style={{minHeight:"100vh",
-      background: darkMode
-        ? "radial-gradient(ellipse 80% 60% at 50% -10%,rgba(143,227,190,0.07) 0%,transparent 60%),radial-gradient(ellipse 50% 40% at 85% 80%,rgba(143,227,190,0.04) 0%,transparent 50%),#0D0F12"
-        : "radial-gradient(ellipse 60% 50% at 15% 20%,rgba(159,224,190,0.28) 0%,transparent 55%),radial-gradient(ellipse 50% 45% at 88% 60%,rgba(185,215,255,0.20) 0%,transparent 50%),radial-gradient(ellipse 45% 40% at 55% 90%,rgba(220,200,255,0.14) 0%,transparent 50%),radial-gradient(ellipse 35% 30% at 75% 10%,rgba(255,220,180,0.12) 0%,transparent 45%),linear-gradient(160deg,#F5F4F0 0%,#E8E3DB 100%)",
-      color:C.t1,fontFamily:"'Trebuchet MS',sans-serif",fontSize:13,
-      transition:"background 350ms ease"}}>
-      {search&&<SearchPalette state={state} onNavigate={t=>{setTab(t);}} onClose={()=>setSearch(false)}/>}
-
-      {/* NAV */}
-      <div style={{background:darkMode?"rgba(13,15,18,0.85)":"rgba(255,255,255,0.88)",backdropFilter:"blur(44px) saturate(2.8) brightness(1.01)",WebkitBackdropFilter:"blur(44px) saturate(2.8) brightness(1.01)",borderBottom:`1px solid ${darkMode?C.borderHi:"rgba(0,0,0,0.08)"}`,padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,flexWrap:"wrap",gap:4,boxShadow:darkMode?"none":"0 2px 16px rgba(0,0,0,0.06), 0 1px 0 rgba(255,255,255,1) inset"}}>
-        <Logo/>
-        <div style={{display:"flex",gap:2,alignItems:"center",flexWrap:"wrap"}}>
-          {/* Desktop tabs — hidden on mobile view */}
-          {!mobileView && TABS.map(t=>{
-            const badge=t.id==="cartera"&&vencidos>0?vencidos:t.id==="tickets"&&abiertas>0?abiertas:t.id==="ops"&&p1Active>0?p1Active:0;
-            const isP1Tab=t.id==="ops"&&p1Active>0;
-            return (
-              <button key={t.id} onClick={()=>setTab(t.id)}
-                style={{padding:"3px 9px",borderRadius:6,cursor:"pointer",fontSize:10,fontWeight:600,
-                  background:tab===t.id?C.blueDim:"transparent",
-                  border:`1px solid ${tab===t.id?C.blueHi:C.border}`,
-                  color:tab===t.id?C.blue:C.t2,position:"relative",letterSpacing:"0.04em"}}>
-                {t.label}
-                {badge>0&&<span style={{position:"absolute",top:-4,right:-4,width:13,height:13,borderRadius:"50%",background:isP1Tab?C.p1dot:t.id==="cartera"?C.red:C.yellow,fontSize:7,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",color:"#0D0F12"}}>{badge}</span>}
-              </button>
-            );
-          })}
-          <div style={{width:1,height:12,background:C.border,margin:"0 3px"}}/>
-          {!mobileView&&<button onClick={()=>setSearch(true)} style={{padding:"3px 8px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:6,color:C.t2,fontSize:10,cursor:"pointer",touchAction:"manipulation"}}>
-            &#9906; <span style={{fontSize:7,color:C.t3}}>Ctrl+K</span>
-          </button>}
-          {/* Sync status indicator */}
-          {syncStatus!=="idle"&&(
-            <div style={{display:"flex",alignItems:"center",gap:4,padding:"2px 8px",borderRadius:6,border:`1px solid ${C.border}`}}>
-              <span style={{width:6,height:6,borderRadius:"50%",background:sd.dot,flexShrink:0,
-                animation:syncStatus==="saving"?"pulse 1s infinite":"none"}}/>
-              <span style={{fontSize:8,color:sd.color,letterSpacing:"0.06em"}}>{sd.label}</span>
-            </div>
+    <div style={{
+      position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100,
+      display: "flex",
+      background: "rgba(7,9,9,0.92)", backdropFilter: "blur(20px) saturate(1.8)",
+      WebkitBackdropFilter: "blur(20px) saturate(1.8)",
+      borderTop: `1px solid ${C.border}`,
+      paddingBottom: "env(safe-area-inset-bottom)",
+    }}>
+      {items.map(({ k, icon, label, badge }) => (
+        <button key={k} onClick={() => onChange(k)} style={{
+          flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
+          gap: 2, padding: "10px 0",
+          background: "none", border: "none",
+          color: tab === k ? C.lime : C.t3,
+          fontSize: 10, fontWeight: tab === k ? 700 : 400,
+          cursor: "pointer", fontFamily: "inherit", position: "relative",
+        }}>
+          <div style={{ fontSize: 20, lineHeight: 1 }}>{icon}</div>
+          {label}
+          {badge !== null && badge !== undefined && (
+            <div style={{
+              position: "absolute", top: 6, right: "calc(50% - 18px)",
+              background: C.red, color: "#fff",
+              fontSize: 8, fontWeight: 800,
+              padding: "1px 4px", borderRadius: 6, minWidth: 14, textAlign: "center",
+            }}>{badge}</div>
           )}
-          {/* Mobile/Desktop toggle */}
-          <button onClick={()=>setMobileView(v=>!v)}
-            style={{padding:"3px 9px",background:mobileView?C.blueDim:"transparent",border:`1px solid ${mobileView?C.blueHi:C.border}`,borderRadius:6,color:mobileView?C.blue:C.t3,fontSize:10,cursor:"pointer",letterSpacing:"0.04em",touchAction:"manipulation"}}>
-            {mobileView?"[ ] Escritorio":"[=] Movil"}
-          </button>
-          {/* Theme toggle */}
-          <button onClick={()=>{ const v=!darkMode; setDarkMode(v); try{localStorage.setItem("logisolve_theme",v?"dark":"light");}catch{} }}
-            style={{padding:"3px 9px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:6,color:C.blue,fontSize:11,cursor:"pointer",letterSpacing:"0.02em",touchAction:"manipulation",minWidth:36}}>
-            {darkMode?"☀":"🌙"}
-          </button>
-        </div>
-      </div>
-
-      {/* ── Nav móvil nativa — 4 tabs + FAB ── */}
-      {mobileView&&(
-        <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:150,
-          paddingBottom:"env(safe-area-inset-bottom,0px)"}}>
-          <div style={{
-            margin:"0 12px 10px",
-            background: darkMode ? "rgba(15,17,22,0.78)" : "rgba(255,255,255,0.92)",
-            backdropFilter:"blur(44px) saturate(2.8) brightness(1.01)",WebkitBackdropFilter:"blur(44px) saturate(2.8) brightness(1.01)",
-            border: darkMode ? "1px solid rgba(255,255,255,0.09)" : "1px solid rgba(0,0,0,0.10)",
-            borderRadius:28,
-            display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",
-            boxShadow: darkMode
-              ? "0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.06) inset"
-              : "0 4px 24px rgba(0,0,0,0.10), 0 1px 0 rgba(255,255,255,1) inset"}}>
-          {[
-            {id:"ops",      label:"Centro",  icon:"⊙"},
-            {id:"tickets",  label:"Pipeline",icon:"◈"},
-            {id:"historial",label:"Historial",icon:"☰"},
-            {id:"__mas__",  label:"Más",     icon:"···"},
-          ].map(t=>{
-            const isMore = t.id==="__mas__";
-            const badge = t.id==="tickets"&&abiertas>0?abiertas : t.id==="ops"&&p1Active>0?p1Active : isMore&&vencidos>0?vencidos : 0;
-            const moreActive = ["unidades","catalogo","proveedores","clientes","ajustes","cartera","cotizador","refacciones","sourcing","chat"].includes(tab);
-            const active = isMore ? (moreActive||masOpen) : tab===t.id;
-            return (
-              <button key={t.id}
-                onClick={()=>{ if(isMore){setMasOpen(v=>!v);}else{setTab(t.id);setMasOpen(false);} }}
-                style={{padding:"10px 4px",
-                  border:"none",cursor:"pointer",
-                  background:"transparent",
-                  borderTop:`2px solid ${active?(darkMode?C.blue:"#2A9768"):"transparent"}`,
-                  position:"relative",display:"flex",flexDirection:"column",alignItems:"center",gap:3,
-                  minHeight:52,touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
-                <span style={{fontSize:20,lineHeight:1,color:active?(darkMode?C.blue:"#2A9768"):C.t3,
-                  fontWeight:active?700:400}}>{t.icon}</span>
-                <span style={{fontSize:10,color:active?(darkMode?C.blue:"#2A9768"):C.t3,
-                  letterSpacing:"0.03em",fontWeight:active?600:400}}>{t.label}</span>
-                {badge>0&&<span style={{position:"absolute",top:8,right:"calc(50% - 18px)",
-                  minWidth:16,height:16,borderRadius:8,padding:"0 3px",
-                  background:t.id==="ops"?C.p1dot:isMore?C.p1dot:C.p2dot,
-                  fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",color:darkMode?"#0D0F12":"#fff"}}>{badge}</span>}
-              </button>
-            );
-          })}
-          </div>
-        </div>
-      )}
-
-      {/* Theme toggle — mobile floating button */}
-      {mobileView&&(
-        <button onClick={()=>{ const v=!darkMode; setDarkMode(v); try{localStorage.setItem("logisolve_theme",v?"dark":"light");}catch{} }}
-          style={{position:"fixed",
-            left:20,bottom:`calc(76px + env(safe-area-inset-bottom,0px) + 10px)`,
-            zIndex:160,width:42,height:42,borderRadius:21,
-            background:C._dark?"rgba(255,255,255,0.10)":"rgba(255,255,255,0.90)",
-            border:C._dark?`1px solid ${C.border}`:"1px solid rgba(0,0,0,0.12)",
-            backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",
-            boxShadow:C._dark?"0 4px 16px rgba(0,0,0,0.4)":"0 4px 16px rgba(0,0,0,0.12), 0 1px 0 rgba(255,255,255,1) inset",
-            display:"flex",alignItems:"center",justifyContent:"center",
-            cursor:"pointer",fontSize:18,
-            touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
-          {darkMode?"☀":"🌙"}
         </button>
-      )}
-
-      {/* FAB — Nueva cotización */}
-      {mobileView&&tab!=="cotizador"&&(
-        <button className="fab-liquid"
-          onClick={()=>setTab("cotizador")}
-          style={{position:"fixed",
-            right:20,bottom:`calc(76px + env(safe-area-inset-bottom,0px) + 10px)`,
-            zIndex:160}}>
-          +
-        </button>
-      )}
-
-      {/* MasSheet — bottom sheet for "Más" modules */}
-      {mobileView&&<MasSheet open={masOpen} onClose={()=>setMasOpen(false)} tab={tab} setTab={t=>{setTab(t);setMasOpen(false);}}/>}
-
-      {/* Content */}
-      <div style={{paddingBottom:mobileView?"calc(90px + env(safe-area-inset-bottom,0px))":0,
-        WebkitOverflowScrolling:"touch"}}>
-        {tab==="ops"        &&(mobileView?<MOps       state={state} setTab={setTab} triggerMargin={triggerMargin}/>      :<CentroOps   state={state}/>)}
-        {tab==="tickets"    &&(mobileView?<MPipeline  state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Tickets     state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete}/>)}
-        {tab==="historial"  &&(mobileView?<MHistorial state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>:<Historial   state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>)}
-        {tab==="cotizador"  &&(mobileView?<MCotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Cotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
-        {tab==="refacciones"&&(mobileView?<MCotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>:<CotizadorRefacciones state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
-        {tab==="cartera"    &&(mobileView?<MCartera   state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Cartera     state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
-        {tab==="unidades"   &&(mobileView?<MUnidades   state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Unidades    state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
-        {tab==="catalogo"   &&(mobileView?<MCatalogo   state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Catalogo    state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
-        {tab==="proveedores"&&(mobileView?<MProveedores state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Proveedores state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
-        {tab==="clientes"   &&(mobileView?<MClientes   state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Clientes    state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
-        {tab==="ajustes"    &&(mobileView?<MAjustes state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Ajustes state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
-        {tab==="chat"       &&<MChat state={state} dispatch={dispatchWithDelete} C={C} toast={toast}/>}
-        {tab==="sourcing"   &&<SourcingCopilot state={state} dispatch={dispatchWithDelete} C={C} toast={toast}/>}
-        {tab==="flota"      &&<FlotaModule darkMode={darkMode}/>}
-      </div>
-
-      <Toasts items={toasts}/>
-
-      <style>{`
-        :root{color-scheme:${darkMode?"dark":"light"}}
-        html{background:${darkMode?"#0D0F12":"#E8E3DB"};transition:background 350ms ease}
-        html,body{overscroll-behavior:none;overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;touch-action:pan-y;}
-        body{background:${darkMode
-          ? "radial-gradient(ellipse 80% 60% at 50% -10%,rgba(143,227,190,0.07) 0%,transparent 60%),radial-gradient(ellipse 50% 40% at 85% 80%,rgba(143,227,190,0.04) 0%,transparent 50%),#0D0F12"
-          : "linear-gradient(180deg,#F7F6F3 0%,#ECE9E4 100%)"
-        };color:${C.t1};min-height:100vh;transition:background 350ms ease}
-        .scroll-touch{-webkit-overflow-scrolling:touch;overflow-y:auto}
-        input[type=number]::-webkit-inner-spin-button{opacity:.3}
-        input::placeholder,textarea::placeholder{color:${C.t4}}
-        select option{background:${C.bgSolid};color:${C.t1}}
-        *{box-sizing:border-box}
-        button{transition:opacity 120ms ease,background 120ms ease,border-color 120ms ease;-webkit-tap-highlight-color:transparent}
-        button:active{opacity:.8;}
-        ::-webkit-scrollbar{width:4px;height:4px}
-        ::-webkit-scrollbar-track{background:transparent}
-        ::-webkit-scrollbar-thumb{background:${darkMode?"rgba(255,255,255,0.10)":"rgba(0,0,0,0.12)"};border-radius:4px}
-        textarea{color:${C.t2};resize:vertical;font-family:'Courier New',monospace}
-        input,select,textarea{transition:border-color 150ms ease}
-        @media(max-width:640px){
-          .ref-grid{grid-template-columns:1fr!important}
-          .ref-hdr-grid{grid-template-columns:1fr 1fr!important}
-          .ref-half-grid{grid-template-columns:1fr!important}
-          .ref-line-row1{grid-template-columns:1fr 1fr!important}
-          .ref-line-row2{grid-template-columns:80px 1fr!important}
-        }
-        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-        @keyframes spin{to{transform:rotate(360deg)}}
-        @keyframes slideUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
-        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-        .sheet-enter{animation:slideUp 280ms cubic-bezier(.22,.8,.22,1) both}
-        .fade-enter{animation:fadeIn 200ms ease both}
-      `}</style>
-
-      {/* ── AutoInsight — insights IA automáticos (WhatsApp, margen) ─────────────── */}
-      <AutoInsight insights={insights} onDismiss={dismissInsight} C={C} />
-
+      ))}
     </div>
-    </ThemeCtx.Provider>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// APP ROOT
+// ─────────────────────────────────────────────────────────────────────────────
+
+export default function App() {
+  const saved = loadState();
+  const [state, dispatch] = useReducer(reducer, saved || INITIAL_STATE);
+  const [tab, setTab] = useState("centro");
+  const [view, setView] = useState(null); // { type: "op", id } | { type: "nueva" }
+  const { toasts, toast } = useToast();
+
+  useEffect(() => { saveState(state); }, [state]);
+
+  const kpi = useKPIs(state.operaciones);
+
+  function navigate(type, id) {
+    setView(type === null ? null : { type, id });
+  }
+
+  // ── View routing ─────────────────────────────────────────────────
+  if (view?.type === "nueva") return (
+    <>
+      <NuevaOperacion
+        state={state} dispatch={dispatch} toast={toast}
+        onBack={() => setView(null)}
+        onCreated={() => { setView(null); setTab("ops"); }}
+      />
+      <Toast toasts={toasts} />
+    </>
+  );
+
+  if (view?.type === "op") return (
+    <>
+      <OperacionDetail
+        opId={view.id} state={state} dispatch={dispatch} toast={toast}
+        onBack={() => setView(null)}
+      />
+      <Toast toasts={toasts} />
+    </>
+  );
+
+  const screenProps = { state, dispatch, toast, onVer: id => navigate("op", id) };
+
+  return (
+    <div style={{ background: C.bg0, minHeight: "100vh" }}>
+      {tab === "centro" && (
+        <Centro {...screenProps} onNueva={() => navigate("nueva")} />
+      )}
+      {tab === "ops" && (
+        <Operaciones {...screenProps} />
+      )}
+      {tab === "cierre" && (
+        <Cierre {...screenProps} />
+      )}
+      {tab === "flota" && (
+        <Flota {...screenProps} />
+      )}
+
+      <BottomNav tab={tab} onChange={setTab} kpi={kpi} />
+      <Toast toasts={toasts} />
+    </div>
   );
 }
