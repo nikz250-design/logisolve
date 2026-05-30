@@ -4494,12 +4494,17 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
     let lineas;
     if(t.lineas&&t.lineas.length>0) {
       lineas = t.lineas.map(l=>({
-        titulo:l.titulo||"", partRef:l.partRef||"",
-        qty:l.qty||1, costoUnit:toConIVA(l.snap),
-        gasolina:l.snap?.gastos||0, otros:0,
-        mode:"manual", manualPrice:(l.snap?.precioConIVA||0).toFixed(2),
-        customMgn:false, customVal:27,
-        descripcionPDF:l.descripcionPDF||"",
+        titulo:       l.titulo||"",
+        partRef:      l.partRef||"",
+        qty:          safeNumber(l.qty,1)||1,
+        costoUnit:    safeNumber(l.costoUnit, toConIVA(l.snap)),
+        gasolina:     safeNumber(l.gasolina, l.snap?.gastos||0),
+        otros:        safeNumber(l.otros, 0),
+        mode:         l.mode||"manual",
+        manualPrice:  l.manualPrice||(l.snap?.precioConIVA||0).toFixed(2),
+        customMgn:    !!l.customMgn,
+        customVal:    safeNumber(l.customVal, 27),
+        descripcionPDF: l.descripcionPDF||"",
       }));
     } else {
       const parts=(t.titulo||"").split(" / ").filter(Boolean);
@@ -4508,7 +4513,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
         const costoXLinea=toConIVA(t.snap)/parts.length;
         lineas=parts.map(p=>({titulo:p.trim(),partRef:"",qty:1,costoUnit:costoXLinea,gasolina:0,otros:0,mode:"manual",manualPrice:pxLinea,customMgn:false,customVal:27,descripcionPDF:""}));
       } else {
-        lineas=[{titulo:t.titulo||"",partRef:t.partRef||"",qty:1,costoUnit:toConIVA(t.snap),gasolina:t.snap?.gastos||0,otros:0,mode:"manual",manualPrice:(t.snap?.precioConIVA||0).toFixed(2),customMgn:false,customVal:27,descripcionPDF:""}];
+        lineas=[{titulo:t.titulo||"",partRef:t.partRef||"",qty:1,costoUnit:safeNumber(t.costoUnit,toConIVA(t.snap)),gasolina:safeNumber(t.gasolina,t.snap?.gastos||0),otros:safeNumber(t.otros,0),mode:t.mode||"manual",manualPrice:t.manualPrice||(t.snap?.precioConIVA||0).toFixed(2),customMgn:!!t.customMgn,customVal:safeNumber(t.customVal,27),descripcionPDF:""}];
       }
     }
     setEditLineas(lineas);
