@@ -7023,10 +7023,14 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
 
   const openEdit = t => {
     const s = t.snap || {};
+    const ivaR_e = safeNumber(s.params?.iva,16)/100;
+    // Product costo con IVA = costoBase*(1+iva) — excluye gastos operativos
+    const productoCostoIVA = ((s.costoBase||0)*(1+ivaR_e)).toFixed(2);
     setEf({status:t.status,clientId:t.clientId||"",supplierId:t.supplierId||"",
            unitId:t.unitId||"",payType:t.payType||"contado",promesaPago:t.promesaPago||"",
            notes:t.notes||"",priority:t.priority||"P3",
-           costoIVA:String(safeNumber(s.costoTotal+(s.ivaAcred||0))||0),
+           costoIVA:String(safeNumber(productoCostoIVA)||0),
+           _gastos:String(safeNumber(s.gastos)||0),
            precioIVA:String(safeNumber(s.precioConIVA)||0),
            _iva:safeNumber(s.params?.iva,16), _isr:safeNumber(s.params?.isr,20),
            quoteMode:false,
@@ -7039,18 +7043,19 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
 
   const saveEdit = t => {
     const iva = ef._iva||16; const isr = ef._isr||20;
+    const gastos = safeNumber(ef._gastos);
     let newSnap;
     if(ef.quoteMode) {
       const mgn = effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
       newSnap = computeSnap({costo:safeNumber(ef.costoIVA),compraConIVA:true,
-        mode:"auto",margin:mgn,gasolina:0,otros:0,iva,isr});
+        mode:"auto",margin:mgn,gasolina:gastos,otros:0,iva,isr});
     } else {
       newSnap = computeSnap({costo:safeNumber(ef.costoIVA),compraConIVA:true,
         manualPrice:safeNumber(ef.precioIVA),ventaConIVA:true,mode:"manual",
-        gasolina:0,otros:0,iva,isr});
+        gasolina:gastos,otros:0,iva,isr});
     }
     const opMeta = OP_TYPES.find(o=>o.id===(ef.opType||"consumable"))||OP_TYPES[0];
-    const {costoIVA:_c,precioIVA:_p,_iva:_iv,_isr:_is,quoteMode:_q,opType:_ot,activeMods:_am,...rest}=ef;
+    const {costoIVA:_c,precioIVA:_p,_iva:_iv,_isr:_is,quoteMode:_q,opType:_ot,activeMods:_am,_gastos:_g,...rest}=ef;
     dispatch({type:"TKT_UPDATE",id:t.id,patch:{
       ...rest,snap:newSnap,
       opId:ef.opType||"consumable",opShort:opMeta.short,mods:ef.activeMods||[],
@@ -7294,7 +7299,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                               </div>
                               {ef.quoteMode?(()=>{
                                 const mgn=effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
-                                const calc=safeNumber(ef.costoIVA)>0?computeSnap({costo:safeNumber(ef.costoIVA),compraConIVA:true,mode:"auto",margin:mgn,gasolina:0,otros:0,iva:ef._iva||16,isr:ef._isr||20}).precioConIVA:0;
+                                const calc=safeNumber(ef.costoIVA)>0?computeSnap({costo:safeNumber(ef.costoIVA),compraConIVA:true,mode:"auto",margin:mgn,gasolina:safeNumber(ef._gastos),otros:0,iva:ef._iva||16,isr:ef._isr||20}).precioConIVA:0;
                                 return <div style={{width:"100%",boxSizing:"border-box",background:"rgba(43,181,160,0.06)",
                                   border:`1px solid ${C.blue}44`,borderRadius:10,padding:"10px 12px",
                                   color:A.lime,fontSize:14,fontWeight:700,fontVariantNumeric:"tabular-nums",
@@ -7310,6 +7315,15 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                                     color:A.t1,fontSize:14,outline:"none",fontFamily:"inherit"}}/>
                               )}
                             </div>
+                          </div>
+                          {/* ── Gasolina / Flete / Otros ── */}
+                          <div style={{marginBottom:8}}>
+                            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>Gasolina / Flete / Otros ($)</div>
+                            <input type="number" inputMode="decimal" value={ef._gastos||""} onChange={e=>sfn("_gastos")(e.target.value)}
+                              placeholder="0"
+                              style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.03)",
+                                border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",
+                                color:A.amber,fontSize:14,outline:"none",fontFamily:"inherit"}}/>
                           </div>
                           {/* ── Modo: Manual / Cotizador ── */}
                           <div style={{display:"flex",gap:6,marginBottom:12}}>
@@ -7383,11 +7397,12 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                             const mgn=ef.quoteMode?effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27):null;
                             const prev=computeSnap({costo:safeNumber(ef.costoIVA),compraConIVA:true,
                               ...(ef.quoteMode?{mode:"auto",margin:mgn}:{mode:"manual",manualPrice:safeNumber(ef.precioIVA),ventaConIVA:true}),
-                              gasolina:0,otros:0,iva:ef._iva||16,isr:ef._isr||20});
+                              gasolina:safeNumber(ef._gastos),otros:0,iva:ef._iva||16,isr:ef._isr||20});
                             const items=[
                               {l:"Util.",v:mxn(prev.uNeta),c:prev.uNeta>=0?A.lime:A.red},
                               {l:"Margen",v:fpct(prev.margenNetoPrecio),c:prev.margenNetoPrecio>=15?A.lime:A.amber},
                               {l:"Costo",v:mxn(prev.costoBase),c:A.t2},
+                              ...(safeNumber(ef._gastos)>0?[{l:"Gastos",v:mxn(prev.gastos),c:A.amber}]:[]),
                               ...(ef.quoteMode?[{l:"Mgn ef.",v:mgn+"%",c:A.lime}]:[]),
                             ];
                             return (
