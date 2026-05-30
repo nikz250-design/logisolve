@@ -8,7 +8,8 @@
     "api/ai/debug.ts":    { "maxDuration": 30 },
     "api/ai/modules.ts":  { "maxDuration": 30 },
     "api/ai/sourcing.ts": { "maxDuration": 45 },
-    "api/ai/chat.ts":    { "maxDuration": 30 }
+    "api/ai/chat.ts":    { "maxDuration": 30 },
+    "api/ai/intake.ts":  { "maxDuration": 30 }
   },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
