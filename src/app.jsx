@@ -8280,7 +8280,7 @@ function App() {
   const [tab,setTab]=useState("ops");
   const [search,setSearch]=useState(false);
   const [loading,setLoading]=useState(true);
-  const [mobileView,setMobileView]=useState(()=>window.innerWidth<768);
+  const [mobileView,setMobileView]=useState(()=>window.innerWidth<1024);
   const [quickOpen,setQuickOpen]=useState(false); // scroll-lock compat
   const [masOpen,setMasOpen]=useState(false);
   const [darkMode,setDarkMode]=useState(()=>{
@@ -8431,7 +8431,7 @@ function App() {
   },[]);
 
   useEffect(()=>{
-    const h=()=>setMobileView(window.innerWidth<768);
+    const h=()=>setMobileView(window.innerWidth<1024);
     window.addEventListener("resize",h);
     return()=>window.removeEventListener("resize",h);
   },[]);
@@ -8540,7 +8540,8 @@ function App() {
         <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:150,
           paddingBottom:"env(safe-area-inset-bottom,0px)"}}>
           <div style={{
-            margin:"0 12px 10px",
+            margin:"0 auto 10px",maxWidth:660,padding:"0 12px",boxSizing:"border-box"}}>
+          <div style={{
             background: darkMode ? "rgba(15,17,22,0.78)" : "rgba(255,255,255,0.92)",
             backdropFilter:"blur(44px) saturate(2.8) brightness(1.01)",WebkitBackdropFilter:"blur(44px) saturate(2.8) brightness(1.01)",
             border: darkMode ? "1px solid rgba(255,255,255,0.09)" : "1px solid rgba(0,0,0,0.10)",
@@ -8580,6 +8581,7 @@ function App() {
             );
           })}
           </div>
+          </div>
         </div>
       )}
 
@@ -8616,7 +8618,8 @@ function App() {
 
       {/* Content */}
       <div style={{paddingBottom:mobileView?"calc(90px + env(safe-area-inset-bottom,0px))":0,
-        WebkitOverflowScrolling:"touch"}}>
+        WebkitOverflowScrolling:"touch",
+        maxWidth:mobileView?680:undefined,margin:mobileView?"0 auto":undefined}}>
         {tab==="ops"        &&(mobileView?<MOps       state={state} setTab={setTab} triggerMargin={triggerMargin}/>      :<CentroOps   state={state}/>)}
         {tab==="tickets"    &&(mobileView?<MPipeline  state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Tickets     state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete}/>)}
         {tab==="historial"  &&(mobileView?<MHistorial state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>:<Historial   state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>)}
