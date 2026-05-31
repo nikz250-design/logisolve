@@ -5010,6 +5010,7 @@ function MOps({state,setTab,triggerMargin}) {
   const {tickets,clients} = state;
   const [period,setPeriod]     = useState("month");
   const [heatMetric,setHeatMetric] = useState("venta");
+  const [heatDay,setHeatDay]       = useState(null); // {dn,yr,mo}
 
   // ── Accent palette — Black/white monochrome
   const A = makeA(C);
@@ -5427,16 +5428,26 @@ function MOps({state,setTab,triggerMargin}) {
           const refDate = range.to;
           const yr = refDate.getFullYear();
           const mo = refDate.getMonth();
-          // Build day → {venta,neta,ops} for this month
+          // Build day → {venta,neta,ops,solic,tkts[]} for this month
           const dmap={};
+          const operadosSet=new Set(sel_operados(tickets).map(t=>t.id));
           sel_operados(tickets).forEach(t=>{
             const d=parseDateMX(t.date);
             if(!d||d.getFullYear()!==yr||d.getMonth()!==mo) return;
             const k=d.getDate();
-            if(!dmap[k]) dmap[k]={venta:0,neta:0,ops:0};
+            if(!dmap[k]) dmap[k]={venta:0,neta:0,ops:0,solic:0,tkts:[]};
             dmap[k].venta+=safeNumber(t.snap?.precioConIVA);
             dmap[k].neta +=safeNumber(t.snap?.uNeta);
             dmap[k].ops  +=1;
+            dmap[k].tkts.push(t);
+          });
+          tickets.forEach(t=>{
+            const d=parseDateMX(t.date);
+            if(!d||d.getFullYear()!==yr||d.getMonth()!==mo) return;
+            const k=d.getDate();
+            if(!dmap[k]) dmap[k]={venta:0,neta:0,ops:0,solic:0,tkts:[]};
+            dmap[k].solic+=1;
+            if(!operadosSet.has(t.id)) dmap[k].tkts.push(t);
           });
           const daysInMo = new Date(yr,mo+1,0).getDate();
           // Start offset (Mon=0)
@@ -5456,13 +5467,20 @@ function MOps({state,setTab,triggerMargin}) {
           const maxV=Math.max(...vals.map(d=>d.venta),1);
           const maxN=Math.max(...vals.map(d=>Math.max(d.neta,0)),1);
           const maxO=Math.max(...vals.map(d=>d.ops),1);
-          const getVal=data=>{if(!data)return 0;return heatMetric==="venta"?data.venta:heatMetric==="neta"?Math.max(data.neta,0):data.ops;};
-          const getMax=()=>heatMetric==="venta"?maxV:heatMetric==="neta"?maxN:maxO;
-          const hC=heatMetric==="ops"?"#60A5FA":"#8FE3BE";
-          const hBg=heatMetric==="ops"?"rgba(96,165,250,0.15)":"rgba(143,227,190,0.12)";
-          const hBd=heatMetric==="ops"?"rgba(96,165,250,0.4)":"rgba(143,227,190,0.4)";
+          const maxS=Math.max(...vals.map(d=>d.solic),1);
+          const METRICS=[
+            {v:"venta",l:"Venta",      hC:"#8FE3BE",hBg:"rgba(143,227,190,0.12)",hBd:"rgba(143,227,190,0.4)"},
+            {v:"neta", l:"Util. neta", hC:"#8FE3BE",hBg:"rgba(143,227,190,0.12)",hBd:"rgba(143,227,190,0.4)"},
+            {v:"ops",  l:"Ops",        hC:"#60A5FA",hBg:"rgba(96,165,250,0.15)", hBd:"rgba(96,165,250,0.4)"},
+            {v:"solic",l:"Solicitudes",hC:"#C084FC",hBg:"rgba(192,132,252,0.15)",hBd:"rgba(192,132,252,0.4)"},
+          ];
+          const mCfg=METRICS.find(m=>m.v===heatMetric)||METRICS[0];
+          const getVal=data=>{if(!data)return 0;return heatMetric==="venta"?data.venta:heatMetric==="neta"?Math.max(data.neta,0):heatMetric==="ops"?data.ops:data.solic;};
+          const getMax=()=>heatMetric==="venta"?maxV:heatMetric==="neta"?maxN:heatMetric==="ops"?maxO:maxS;
           const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
           const todayStr=new Date().toDateString();
+          const selData=heatDay&&heatDay.yr===yr&&heatDay.mo===mo?(dmap[heatDay.dn]||null):null;
+          const selDateStr=heatDay?`${String(heatDay.dn).padStart(2,"0")}/${String(mo+1).padStart(2,"0")}/${yr}`:"";
           return (
             <div className="glass-card" style={{padding:"22px 24px",marginBottom:12}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
@@ -5472,10 +5490,10 @@ function MOps({state,setTab,triggerMargin}) {
                 </div>
               </div>
               {/* Metric toggles */}
-              <div style={{display:"flex",gap:6,marginBottom:16}}>
-                {[{v:"venta",l:"Venta"},{v:"neta",l:"Util. neta"},{v:"ops",l:"Ops"}].map(({v,l})=>(
-                  <button key={v} onClick={()=>setHeatMetric(v)}
-                    style={{padding:"5px 14px",borderRadius:20,fontSize:10,fontWeight:700,cursor:"pointer",
+              <div style={{display:"flex",gap:5,marginBottom:16,flexWrap:"wrap"}}>
+                {METRICS.map(({v,l,hC,hBg,hBd})=>(
+                  <button key={v} onClick={()=>{setHeatMetric(v);setHeatDay(null);}}
+                    style={{padding:"5px 12px",borderRadius:20,fontSize:10,fontWeight:700,cursor:"pointer",
                       letterSpacing:"0.04em",textTransform:"uppercase",
                       background:heatMetric===v?hBg:"rgba(255,255,255,0.03)",
                       border:`1px solid ${heatMetric===v?hBd:C.border}`,
@@ -5498,23 +5516,22 @@ function MOps({state,setTab,triggerMargin}) {
                     const val=getVal(cell.data);
                     const pct=val>0?Math.max(0.18,val/getMax()):0;
                     const isToday=!cell.fut&&new Date(yr,mo,cell.dn).toDateString()===todayStr;
+                    const isSel=heatDay&&heatDay.dn===cell.dn&&heatDay.yr===yr&&heatDay.mo===mo;
                     const hexA=pct>0?Math.round(pct*255).toString(16).padStart(2,"0"):"";
                     const bg=cell.fut
                       ?(C._dark?"rgba(255,255,255,0.02)":"rgba(0,0,0,0.02)")
-                      :pct>0
-                        ?`${hC}${hexA}`
-                        :(C._dark?"rgba(255,255,255,0.05)":"rgba(0,0,0,0.06)");
+                      :pct>0?`${mCfg.hC}${hexA}`
+                      :(C._dark?"rgba(255,255,255,0.05)":"rgba(0,0,0,0.06)");
                     const textC=pct>0.5?(C._dark?"rgba(0,0,0,0.85)":"rgba(255,255,255,0.9)"):A.t3;
-                    const tooltip=cell.data?`${cell.dn}/${mo+1}: ${
-                      heatMetric==="venta"?mxn(cell.data.venta):
-                      heatMetric==="neta" ?mxn(cell.data.neta) :
-                      cell.data.ops+" ops"}`:"";
                     return (
-                      <div key={ci} title={tooltip}
+                      <div key={ci}
+                        onClick={()=>cell.data?setHeatDay(isSel?null:{dn:cell.dn,yr,mo}):null}
                         style={{aspectRatio:"1",borderRadius:5,background:bg,
-                          border:isToday?`1.5px solid ${hC}99`:"none",
-                          display:"flex",alignItems:"center",justifyContent:"center"}}>
-                        <span style={{fontSize:9,fontWeight:isToday?800:400,color:textC,userSelect:"none"}}>
+                          border:isSel?`2px solid ${mCfg.hC}`
+                            :isToday?`1.5px solid ${mCfg.hC}88`:"none",
+                          display:"flex",alignItems:"center",justifyContent:"center",
+                          cursor:cell.data?"pointer":"default"}}>
+                        <span style={{fontSize:9,fontWeight:(isToday||isSel)?800:400,color:textC,userSelect:"none"}}>
                           {cell.dn}
                         </span>
                       </div>
@@ -5527,10 +5544,86 @@ function MOps({state,setTab,triggerMargin}) {
                 <span style={{fontSize:8,color:A.t3}}>Menos</span>
                 {[0.18,0.38,0.58,0.78,1].map((i,idx)=>(
                   <div key={idx} style={{width:11,height:11,borderRadius:2,
-                    background:`${hC}${Math.round(i*255).toString(16).padStart(2,"0")}`}}/>
+                    background:`${mCfg.hC}${Math.round(i*255).toString(16).padStart(2,"0")}`}}/>
                 ))}
                 <span style={{fontSize:8,color:A.t3}}>Más</span>
               </div>
+              {/* ── Day detail panel ─────────────────────────────────────── */}
+              {heatDay&&heatDay.yr===yr&&heatDay.mo===mo&&(
+                <div style={{marginTop:16,borderTop:`1px solid ${C.border}`,paddingTop:16}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                    <div>
+                      <div style={{fontSize:9,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:2}}>Detalle del día</div>
+                      <div style={{fontSize:13,fontWeight:700,color:mCfg.hC}}>{selDateStr}</div>
+                    </div>
+                    <button onClick={()=>setHeatDay(null)}
+                      style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:8,
+                        padding:"4px 10px",color:A.t3,fontSize:11,cursor:"pointer"}}>✕</button>
+                  </div>
+                  {selData&&(
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:14}}>
+                      {[
+                        {l:"Solicitudes",v:selData.solic,   c:"#C084FC"},
+                        {l:"Operadas",   v:selData.ops,     c:A.lime},
+                        {l:"Venta",      v:mxn(selData.venta),c:A.t1},
+                        {l:"Util.",      v:mxn(selData.neta), c:selData.neta>=0?A.lime:A.red},
+                      ].map(({l,v,c})=>(
+                        <div key={l} style={{background:"rgba(255,255,255,0.03)",borderRadius:8,padding:"8px 6px",textAlign:"center"}}>
+                          <div style={{fontSize:8,color:A.t3,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:4}}>{l}</div>
+                          <div style={{fontSize:12,fontWeight:800,color:c,fontVariantNumeric:"tabular-nums"}}>{v}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {selData&&selData.tkts.length>0?(
+                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                      {selData.tkts.map(t=>{
+                        const sm=TICKET_META[t.status]||{};
+                        return (
+                          <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,
+                            padding:"10px 12px",borderRadius:10,
+                            background:"rgba(255,255,255,0.03)",border:`1px solid ${C.border}`}}>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontSize:12,fontWeight:600,color:A.t1,
+                                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>
+                                {t.titulo||"Sin título"}
+                              </div>
+                              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                                <span style={{fontSize:9,color:sm.color||A.t3,letterSpacing:"0.06em"}}>
+                                  {sm.label||t.status}
+                                </span>
+                                {t.priority&&(
+                                  <span style={{fontSize:9,fontWeight:700,
+                                    color:t.priority==="P1"?A.red:t.priority==="P2"?A.amber:A.t3}}>
+                                    {t.priority}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div style={{textAlign:"right",flexShrink:0}}>
+                              {safeNumber(t.snap?.precioConIVA)>0&&(
+                                <div style={{fontSize:12,fontWeight:700,color:A.t1,fontVariantNumeric:"tabular-nums"}}>
+                                  {mxn(safeNumber(t.snap?.precioConIVA))}
+                                </div>
+                              )}
+                              {safeNumber(t.snap?.uNeta)!==0&&(
+                                <div style={{fontSize:10,fontVariantNumeric:"tabular-nums",
+                                  color:safeNumber(t.snap?.uNeta)>=0?A.lime:A.red}}>
+                                  {mxn(safeNumber(t.snap?.uNeta))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ):(
+                    <div style={{textAlign:"center",padding:"16px 0",fontSize:12,color:A.t3}}>
+                      Sin tickets registrados este día
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })()}
