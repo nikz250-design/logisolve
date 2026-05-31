@@ -5441,7 +5441,7 @@ function MOps({state,setTab,triggerMargin}) {
             dmap[k].ops  +=1;
             dmap[k].tkts.push(t);
           });
-          tickets.forEach(t=>{
+          tickets.filter(t=>!t._deleted).forEach(t=>{
             const d=parseDateMX(t.date);
             if(!d||d.getFullYear()!==yr||d.getMonth()!==mo) return;
             const k=d.getDate();
