@@ -5008,7 +5008,8 @@ function MSel({label,value,onChange,options}) {
 function MOps({state,setTab,triggerMargin}) {
   const C = React.useContext(ThemeCtx);
   const {tickets,clients} = state;
-  const [period,setPeriod] = useState("month");
+  const [period,setPeriod]     = useState("month");
+  const [heatMetric,setHeatMetric] = useState("venta");
 
   // ── Accent palette — Black/white monochrome
   const A = makeA(C);
@@ -5420,6 +5421,119 @@ function MOps({state,setTab,triggerMargin}) {
             ))}
           </div>
         </div>
+
+        {/* ══ MAPA DE CALOR — MENSUAL ══════════════════════════════════════════ */}
+        {(()=>{
+          const refDate = range.to;
+          const yr = refDate.getFullYear();
+          const mo = refDate.getMonth();
+          // Build day → {venta,neta,ops} for this month
+          const dmap={};
+          sel_operados(tickets).forEach(t=>{
+            const d=parseDateMX(t.date);
+            if(!d||d.getFullYear()!==yr||d.getMonth()!==mo) return;
+            const k=d.getDate();
+            if(!dmap[k]) dmap[k]={venta:0,neta:0,ops:0};
+            dmap[k].venta+=safeNumber(t.snap?.precioConIVA);
+            dmap[k].neta +=safeNumber(t.snap?.uNeta);
+            dmap[k].ops  +=1;
+          });
+          const daysInMo = new Date(yr,mo+1,0).getDate();
+          // Start offset (Mon=0)
+          const rawDow = new Date(yr,mo,1).getDay();
+          const offset = rawDow===0?6:rawDow-1;
+          const totalCells = Math.ceil((offset+daysInMo)/7)*7;
+          const cells=[];
+          for(let i=0;i<totalCells;i++){
+            const dn=i-offset+1;
+            const valid=dn>=1&&dn<=daysInMo;
+            const fut=valid&&new Date(yr,mo,dn)>new Date();
+            cells.push({dn,valid,fut,data:valid?(dmap[dn]||null):null});
+          }
+          const rows=[];
+          for(let r=0;r<totalCells/7;r++) rows.push(cells.slice(r*7,(r+1)*7));
+          const vals=Object.values(dmap);
+          const maxV=Math.max(...vals.map(d=>d.venta),1);
+          const maxN=Math.max(...vals.map(d=>Math.max(d.neta,0)),1);
+          const maxO=Math.max(...vals.map(d=>d.ops),1);
+          const getVal=data=>{if(!data)return 0;return heatMetric==="venta"?data.venta:heatMetric==="neta"?Math.max(data.neta,0):data.ops;};
+          const getMax=()=>heatMetric==="venta"?maxV:heatMetric==="neta"?maxN:maxO;
+          const hC=heatMetric==="ops"?"#60A5FA":"#8FE3BE";
+          const hBg=heatMetric==="ops"?"rgba(96,165,250,0.15)":"rgba(143,227,190,0.12)";
+          const hBd=heatMetric==="ops"?"rgba(96,165,250,0.4)":"rgba(143,227,190,0.4)";
+          const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+          const todayStr=new Date().toDateString();
+          return (
+            <div className="glass-card" style={{padding:"22px 24px",marginBottom:12}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                <div>
+                  <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:3}}>Mapa de calor</div>
+                  <div style={{fontSize:13,fontWeight:700,color:A.t1}}>{MESES[mo]} {yr}</div>
+                </div>
+              </div>
+              {/* Metric toggles */}
+              <div style={{display:"flex",gap:6,marginBottom:16}}>
+                {[{v:"venta",l:"Venta"},{v:"neta",l:"Util. neta"},{v:"ops",l:"Ops"}].map(({v,l})=>(
+                  <button key={v} onClick={()=>setHeatMetric(v)}
+                    style={{padding:"5px 14px",borderRadius:20,fontSize:10,fontWeight:700,cursor:"pointer",
+                      letterSpacing:"0.04em",textTransform:"uppercase",
+                      background:heatMetric===v?hBg:"rgba(255,255,255,0.03)",
+                      border:`1px solid ${heatMetric===v?hBd:C.border}`,
+                      color:heatMetric===v?hC:A.t3}}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+              {/* Day-of-week headers */}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:5}}>
+                {["L","M","X","J","V","S","D"].map(d=>(
+                  <div key={d} style={{textAlign:"center",fontSize:8,color:A.t3,letterSpacing:"0.06em",fontWeight:600}}>{d}</div>
+                ))}
+              </div>
+              {/* Calendar rows */}
+              {rows.map((row,ri)=>(
+                <div key={ri} style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:4}}>
+                  {row.map((cell,ci)=>{
+                    if(!cell.valid) return <div key={ci} style={{aspectRatio:"1",borderRadius:5}}/>;
+                    const val=getVal(cell.data);
+                    const pct=val>0?Math.max(0.18,val/getMax()):0;
+                    const isToday=!cell.fut&&new Date(yr,mo,cell.dn).toDateString()===todayStr;
+                    const hexA=pct>0?Math.round(pct*255).toString(16).padStart(2,"0"):"";
+                    const bg=cell.fut
+                      ?(C._dark?"rgba(255,255,255,0.02)":"rgba(0,0,0,0.02)")
+                      :pct>0
+                        ?`${hC}${hexA}`
+                        :(C._dark?"rgba(255,255,255,0.05)":"rgba(0,0,0,0.06)");
+                    const textC=pct>0.5?(C._dark?"rgba(0,0,0,0.85)":"rgba(255,255,255,0.9)"):A.t3;
+                    const tooltip=cell.data?`${cell.dn}/${mo+1}: ${
+                      heatMetric==="venta"?mxn(cell.data.venta):
+                      heatMetric==="neta" ?mxn(cell.data.neta) :
+                      cell.data.ops+" ops"}`:"";
+                    return (
+                      <div key={ci} title={tooltip}
+                        style={{aspectRatio:"1",borderRadius:5,background:bg,
+                          border:isToday?`1.5px solid ${hC}99`:"none",
+                          display:"flex",alignItems:"center",justifyContent:"center"}}>
+                        <span style={{fontSize:9,fontWeight:isToday?800:400,color:textC,userSelect:"none"}}>
+                          {cell.dn}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+              {/* Legend */}
+              <div style={{display:"flex",alignItems:"center",gap:5,marginTop:10,justifyContent:"flex-end"}}>
+                <span style={{fontSize:8,color:A.t3}}>Menos</span>
+                {[0.18,0.38,0.58,0.78,1].map((i,idx)=>(
+                  <div key={idx} style={{width:11,height:11,borderRadius:2,
+                    background:`${hC}${Math.round(i*255).toString(16).padStart(2,"0")}`}}/>
+                ))}
+                <span style={{fontSize:8,color:A.t3}}>Más</span>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ══ SALUD FINANCIERA ══════════════════════════════════════════════════ */}
         {operados.length>0&&(
