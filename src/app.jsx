@@ -7231,14 +7231,17 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
   const openEdit = t => {
     const s = t.snap || {};
     const ivaR_e = safeNumber(s.params?.iva,16)/100;
-    // Product costo con IVA = costoBase*(1+iva) — excluye gastos operativos
-    const productoCostoIVA = ((s.costoBase||0)*(1+ivaR_e)).toFixed(2);
+    const savedQty = Math.max(1, safeNumber(t.qty,1)||1);
+    // Unit costs — divide stored totals by qty to show per-piece values
+    const unitCostoIVA = (((s.costoBase||0)*(1+ivaR_e)) / savedQty).toFixed(2);
+    const unitPrecioIVA = ((safeNumber(s.precioConIVA)||0) / savedQty).toFixed(2);
     setEf({status:t.status,clientId:t.clientId||"",supplierId:t.supplierId||"",
            unitId:t.unitId||"",payType:t.payType||"contado",promesaPago:t.promesaPago||"",
            notes:t.notes||"",priority:t.priority||"P3",
-           costoIVA:String(safeNumber(productoCostoIVA)||0),
+           costoIVA:String(safeNumber(unitCostoIVA)||0),
            _gastos:String(safeNumber(s.gastos)||0),
-           precioIVA:String(safeNumber(s.precioConIVA)||0),
+           precioIVA:String(safeNumber(unitPrecioIVA)||0),
+           qty:String(savedQty),
            _iva:safeNumber(s.params?.iva,16), _isr:safeNumber(s.params?.isr,20),
            quoteMode:false,
            opType:t.opId||"consumable",
@@ -7251,20 +7254,22 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
   const saveEdit = t => {
     const iva = ef._iva||16; const isr = ef._isr||20;
     const gastos = safeNumber(ef._gastos);
+    const qty = Math.max(1, Math.round(safeNumber(ef.qty)||1));
+    const totalCosto = safeNumber(ef.costoIVA) * qty;
     let newSnap;
     if(ef.quoteMode) {
       const mgn = effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
-      newSnap = computeSnap({costo:safeNumber(ef.costoIVA),compraConIVA:true,
+      newSnap = computeSnap({costo:totalCosto,compraConIVA:true,
         mode:"auto",margin:mgn,gasolina:gastos,otros:0,iva,isr});
     } else {
-      newSnap = computeSnap({costo:safeNumber(ef.costoIVA),compraConIVA:true,
-        manualPrice:safeNumber(ef.precioIVA),ventaConIVA:true,mode:"manual",
+      newSnap = computeSnap({costo:totalCosto,compraConIVA:true,
+        manualPrice:safeNumber(ef.precioIVA)*qty,ventaConIVA:true,mode:"manual",
         gasolina:gastos,otros:0,iva,isr});
     }
     const opMeta = OP_TYPES.find(o=>o.id===(ef.opType||"consumable"))||OP_TYPES[0];
-    const {costoIVA:_c,precioIVA:_p,_iva:_iv,_isr:_is,quoteMode:_q,opType:_ot,activeMods:_am,_gastos:_g,...rest}=ef;
+    const {costoIVA:_c,precioIVA:_p,_iva:_iv,_isr:_is,quoteMode:_q,opType:_ot,activeMods:_am,_gastos:_g,qty:_qty,...rest}=ef;
     dispatch({type:"TKT_UPDATE",id:t.id,patch:{
-      ...rest,snap:newSnap,
+      ...rest,qty,snap:newSnap,
       opId:ef.opType||"consumable",opShort:opMeta.short,mods:ef.activeMods||[],
     }});
     toast("Actualizado","success");
@@ -7490,10 +7495,39 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                             <MField label="Promesa de pago" value={ef.promesaPago}
                               onChange={sfn("promesaPago")} placeholder="DD/MM/AAAA" color={A.amber}/>
                           )}
+                          {/* ── Cantidad ── */}
+                          <div style={{marginBottom:8}}>
+                            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>Cantidad (piezas)</div>
+                            <div style={{display:"flex",alignItems:"center",gap:6}}>
+                              <button onClick={()=>sfn("qty")(String(Math.max(1,(safeNumber(ef.qty)||1)-1)))}
+                                style={{width:38,height:38,borderRadius:8,flexShrink:0,
+                                  background:"rgba(255,255,255,0.05)",border:`1px solid ${C.border}`,
+                                  color:A.t1,fontSize:20,lineHeight:1,cursor:"pointer",
+                                  display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
+                              <input type="number" inputMode="numeric" min="1" value={ef.qty||"1"}
+                                onChange={e=>sfn("qty")(e.target.value)}
+                                style={{flex:1,textAlign:"center",background:"rgba(255,255,255,0.03)",
+                                  border:`1px solid ${C.borderHi}`,borderRadius:10,padding:"9px 6px",
+                                  color:A.lime,fontSize:16,fontWeight:800,outline:"none",fontFamily:"inherit",
+                                  fontVariantNumeric:"tabular-nums"}}/>
+                              <button onClick={()=>sfn("qty")(String((safeNumber(ef.qty)||1)+1))}
+                                style={{width:38,height:38,borderRadius:8,flexShrink:0,
+                                  background:"rgba(255,255,255,0.05)",border:`1px solid ${C.border}`,
+                                  color:A.t1,fontSize:20,lineHeight:1,cursor:"pointer",
+                                  display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+                            </div>
+                            {(safeNumber(ef.qty)||1)>1&&(
+                              <div style={{fontSize:10,color:A.t3,marginTop:4,letterSpacing:"0.04em"}}>
+                                Precio unitario · costos unitarios abajo
+                              </div>
+                            )}
+                          </div>
                           {/* ── Costo / Precio ── */}
                           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
                             <div>
-                              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>Costo c/IVA ($)</div>
+                              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>
+                                Costo c/IVA {(safeNumber(ef.qty)||1)>1?"(unitario)":"($)"}
+                              </div>
                               <input type="number" inputMode="decimal" value={ef.costoIVA||""} onChange={e=>sfn("costoIVA")(e.target.value)}
                                 placeholder="0"
                                 style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.03)",
@@ -7502,16 +7536,19 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                             </div>
                             <div>
                               <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>
-                                {ef.quoteMode?"Precio calc.":"Precio c/IVA ($)"}
+                                {ef.quoteMode
+                                  ?(safeNumber(ef.qty||1)>1?"Precio calc. (unit)":"Precio calc.")
+                                  :(safeNumber(ef.qty||1)>1?"Precio c/IVA (unit)":"Precio c/IVA ($)")}
                               </div>
                               {ef.quoteMode?(()=>{
                                 const mgn=effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
-                                const calc=safeNumber(ef.costoIVA)>0?computeSnap({costo:safeNumber(ef.costoIVA),compraConIVA:true,mode:"auto",margin:mgn,gasolina:safeNumber(ef._gastos),otros:0,iva:ef._iva||16,isr:ef._isr||20}).precioConIVA:0;
+                                const qty=Math.max(1,safeNumber(ef.qty)||1);
+                                const unitCalc=safeNumber(ef.costoIVA)>0?computeSnap({costo:safeNumber(ef.costoIVA),compraConIVA:true,mode:"auto",margin:mgn,gasolina:0,otros:0,iva:ef._iva||16,isr:ef._isr||20}).precioConIVA:0;
                                 return <div style={{width:"100%",boxSizing:"border-box",background:"rgba(43,181,160,0.06)",
                                   border:`1px solid ${C.blue}44`,borderRadius:10,padding:"10px 12px",
                                   color:A.lime,fontSize:14,fontWeight:700,fontVariantNumeric:"tabular-nums",
                                   display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                                  <span>{calc>0?mxn(calc):"—"}</span>
+                                  <span>{unitCalc>0?(qty>1?`${mxn(unitCalc)} ×${qty}`:mxn(unitCalc)):"—"}</span>
                                   <span style={{fontSize:9,color:A.t3}}>{mgn}%</span>
                                 </div>;
                               })():(
@@ -7601,14 +7638,16 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                           </>)}
                           {/* Live preview */}
                           {safeNumber(ef.costoIVA)>0&&(()=>{
+                            const qty=Math.max(1,safeNumber(ef.qty)||1);
+                            const totalCosto=safeNumber(ef.costoIVA)*qty;
                             const mgn=ef.quoteMode?effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27):null;
-                            const prev=computeSnap({costo:safeNumber(ef.costoIVA),compraConIVA:true,
-                              ...(ef.quoteMode?{mode:"auto",margin:mgn}:{mode:"manual",manualPrice:safeNumber(ef.precioIVA),ventaConIVA:true}),
+                            const prev=computeSnap({costo:totalCosto,compraConIVA:true,
+                              ...(ef.quoteMode?{mode:"auto",margin:mgn}:{mode:"manual",manualPrice:safeNumber(ef.precioIVA)*qty,ventaConIVA:true}),
                               gasolina:safeNumber(ef._gastos),otros:0,iva:ef._iva||16,isr:ef._isr||20});
                             const items=[
+                              {l:qty>1?"Total venta":"Venta",v:mxn(prev.precioConIVA),c:A.t1},
                               {l:"Util.",v:mxn(prev.uNeta),c:prev.uNeta>=0?A.lime:A.red},
                               {l:"Margen",v:fpct(prev.margenNetoPrecio),c:prev.margenNetoPrecio>=15?A.lime:A.amber},
-                              {l:"Costo",v:mxn(prev.costoBase),c:A.t2},
                               ...(safeNumber(ef._gastos)>0?[{l:"Gastos",v:mxn(prev.gastos),c:A.amber}]:[]),
                               ...(ef.quoteMode?[{l:"Mgn ef.",v:mgn+"%",c:A.lime}]:[]),
                             ];
