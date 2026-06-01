@@ -6451,7 +6451,16 @@ function MCotizador({state,dispatch,toast}) {
     const titulo=kitMode&&kitTitle.trim()
       ? kitTitle.trim()
       : lineas.map(l=>l.titulo.trim()||"Sin descripción").join(" / ");
-    const lineasConSnap=lineas.map((l,i)=>({titulo:l.titulo||"Sin descripción",partRef:l.partRef||"",snap:lineSnaps[i]}));
+    const lineasConSnap=lineas.map((l,i)=>({
+      titulo:l.titulo||"Sin descripción",partRef:l.partRef||"",
+      qty:safeNumber(l.qty,1)||1,
+      costoUnit:safeNumber(l.costoUnit),
+      gasolina:safeNumber(l.gasolina),otros:safeNumber(l.otros),
+      mode:l.mode||"auto",manualPrice:l.manualPrice||"0",
+      customMgn:!!l.customMgn,customVal:safeNumber(l.customVal,27),
+      descripcionPDF:l.descripcionPDF||"",
+      snap:lineSnaps[i],
+    }));
     const pSin=lineSnaps.reduce((s,sn)=>s+sn.precioSinIVA,0);
     const cTot=lineSnaps.reduce((s,sn)=>s+sn.costoTotal,0);
     const totalSnap={
