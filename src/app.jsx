@@ -495,6 +495,29 @@ function calculateTicketTotals(ticket) {
   const markupSobre = costoTotal > 0 ? ((subtotal - costoTotal) / costoTotal) * 100 : 0;
   const margenNeto  = subtotal > 0 ? (uNeta / subtotal) * 100 : 0;
 
+  // Guard: if lineas are stale (ticket was manually edited in Historial after creation),
+  // snap.precioConIVA is the authoritative total — fall back to legacy single-snap path.
+  const snapTotal = safeNumber(snap.precioConIVA);
+  if (snapTotal > 0) {
+    const diff = Math.abs(total - snapTotal);
+    if (diff > 50 && diff / snapTotal > 0.05) {
+      return {
+        lineas: [],
+        subtotal:    safeNumber(snap.precioSinIVA),
+        ivaAmt:      safeNumber(snap.ivaTraslad),
+        total:       snapTotal,
+        costoTotal:  safeNumber(snap.costoTotal),
+        uNeta:       safeNumber(snap.uNeta),
+        uBruta:      safeNumber(snap.uBruta),
+        isrAmt:      safeNumber(snap.isr),
+        ivaNeto:     safeNumber(snap.ivaNeto),
+        markupSobre: calcMarkup(snap.precioSinIVA, snap.costoTotal),
+        margenNeto:  safeNumber(snap.margenNetoPrecio),
+        ivaPct: iva, isrPct: isr,
+      };
+    }
+  }
+
   return {
     lineas: lineasCalc,
     subtotal, ivaAmt, total,
@@ -797,9 +820,15 @@ function buildCotizacionHTML(tkt, cl, un, supp) {
   const clLine = cl ? cl.empresa+(clDirParts.length?" · "+clDirParts.join(", "):"") : "—";
   const fmtMXN = n=>safeNumber(n).toLocaleString("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2});
   const notaLine = tkt.notes?`<li>${tkt.notes}</li>`:"";
-  const conceptos = tkt.lineas&&tkt.lineas.length>0
-    ? tkt.lineas
-    : [{titulo:tkt.titulo,partRef:tkt.partRef||"",snap:tkt.snap,qty:1,descripcionPDF:""}];
+  const conceptos = (()=>{
+    const ls = tkt.lineas||[];
+    if (!ls.length) return [{titulo:tkt.titulo,partRef:tkt.partRef||"",snap:tkt.snap,qty:1,descripcionPDF:""}];
+    const lSum = ls.reduce((s,l)=>s+(l.lineTotal||l.snap?.precioConIVA||0),0);
+    const sTotal = tkt.snap?.precioConIVA||0;
+    if (sTotal>0 && Math.abs(lSum-sTotal)>50 && Math.abs(lSum-sTotal)/sTotal>0.05)
+      return [{titulo:tkt.titulo,partRef:tkt.partRef||"",snap:tkt.snap,qty:1,descripcionPDF:""}];
+    return ls;
+  })();
   const filas = conceptos.map((c,i)=>{
     const ml=migrateLinea(c,tkt.snap); const qty=safeNumber(ml.qty,1)||1;
     const fin=resolveLineFinancials(ml,tkt.snap,qty);
@@ -928,10 +957,15 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
 
   const notaLine = tkt.notes ? `<li>${tkt.notes}</li>` : "";
 
-  const conceptos =
-    tkt.lineas && tkt.lineas.length > 0
-      ? tkt.lineas
-      : [{ titulo:tkt.titulo, partRef:tkt.partRef||"", snap:tkt.snap, qty:1, descripcionPDF:"" }];
+  const conceptos = (()=>{
+    const ls = tkt.lineas||[];
+    if (!ls.length) return [{titulo:tkt.titulo,partRef:tkt.partRef||"",snap:tkt.snap,qty:1,descripcionPDF:""}];
+    const lSum = ls.reduce((s,l)=>s+(l.lineTotal||l.snap?.precioConIVA||0),0);
+    const sTotal = tkt.snap?.precioConIVA||0;
+    if (sTotal>0 && Math.abs(lSum-sTotal)>50 && Math.abs(lSum-sTotal)/sTotal>0.05)
+      return [{titulo:tkt.titulo,partRef:tkt.partRef||"",snap:tkt.snap,qty:1,descripcionPDF:""}];
+    return ls;
+  })();
 
   const filas = tkt.kitMode
     // ── KIT MODE: una sola fila con título del kit y componentes como lista ──
@@ -7344,7 +7378,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
     const opMeta = OP_TYPES.find(o=>o.id===(ef.opType||"consumable"))||OP_TYPES[0];
     const {costoIVA:_c,precioIVA:_p,_iva:_iv,_isr:_is,quoteMode:_q,opType:_ot,activeMods:_am,_gastos:_g,qty:_qty,...rest}=ef;
     dispatch({type:"TKT_UPDATE",id:t.id,patch:{
-      ...rest,qty,snap:newSnap,
+      ...rest,qty,snap:newSnap,lineas:[],
       opId:ef.opType||"consumable",opShort:opMeta.short,mods:ef.activeMods||[],
     }});
     toast("Actualizado","success");
