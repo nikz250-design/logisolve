@@ -1012,44 +1012,43 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
   const innerHTML = `
     <style>
       *{box-sizing:border-box;margin:0;padding:0}
-      .page{width:794px;background:#fff;padding:34px 44px 28px;font-family:-apple-system,Helvetica Neue,Arial,sans-serif;color:#1a1a1a;font-size:11px;line-height:1.45}
+      .page{width:794px;background:#fff;padding:50px;font-family:Arial,Helvetica,sans-serif;color:#111;font-size:14px;line-height:1.5}
       /* ── HEADER ── */
-      .top-header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:2px solid #0a0a0a;margin-bottom:0}
-      .brand h1{font-size:26px;font-weight:900;margin:0;letter-spacing:-0.02em;color:#0a0a0a}
-      .brand p{font-size:9px;color:#888;font-weight:500;margin-top:3px;letter-spacing:0.06em}
-      .issuer{text-align:right;font-size:10px;line-height:1.55;color:#444}
-      .issuer strong{color:#0a0a0a;font-size:11px}
+      .top-header{border:1px solid #dcdcdc;padding:20px;display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0}
+      .brand h1{font-size:28px;font-weight:800;margin:0;color:#0a0a0a}
+      .brand p{font-size:10px;color:#666;font-weight:700;margin-top:4px}
+      .issuer{text-align:right;font-size:11px;line-height:1.6;color:#444}
+      .issuer strong{color:#0a0a0a}
       /* ── HERO BAR ── */
-      .hero{background:#0a0a0a;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:14px 18px;margin-top:14px;border-radius:4px}
-      .hero-title{font-size:18px;font-weight:900;letter-spacing:0.05em}
+      .hero{background:#000;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:20px;margin-top:14px}
+      .hero-title{font-size:22px;font-weight:800}
       .hero-meta{text-align:right}
-      .hero-meta .lbl{font-size:9px;color:rgba(255,255,255,0.6);letter-spacing:0.04em;font-weight:500}
-      .hero-meta .folio{font-size:16px;font-weight:800;letter-spacing:0.02em}
-      .hero-meta .date{font-size:10px;color:rgba(255,255,255,0.75);font-weight:500}
+      .hero-meta .lbl{font-size:9px;color:rgba(255,255,255,0.6)}
+      .hero-meta .folio{font-size:18px;font-weight:800}
+      .hero-meta .date{font-size:13px;font-weight:700}
       /* ── META TABLE ── */
-      .meta-table{width:100%;border-collapse:collapse;margin-top:12px}
-      .meta-table td{border:1px solid #e8e8e8;padding:7px 11px;font-size:10px;color:#1a1a1a}
-      .meta-table td:first-child{width:84px;background:#f5f5f5;font-weight:700;color:#555;font-size:9px;letter-spacing:0.04em;text-transform:uppercase}
+      .meta-table{width:100%;border-collapse:collapse;margin-top:14px}
+      .meta-table td{border:1px solid #e3e3e3;padding:10px 12px;font-size:11px}
+      .meta-table td:first-child{width:100px;background:#fafafa;font-weight:700}
       /* ── DETAIL TABLE ── */
-      .section-title{margin-top:16px;margin-bottom:8px;font-size:10px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#555}
+      .section-title{margin-top:22px;margin-bottom:10px;font-size:13px;font-weight:800}
       .detail-table{width:100%;border-collapse:collapse}
-      .detail-table th{background:#0a0a0a;color:#fff;padding:8px 10px;text-align:left;font-size:9px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase}
-      .detail-table td{border:1px solid #e8e8e8;padding:9px 10px;vertical-align:top;font-size:10px;line-height:1.45;color:#1a1a1a}
+      .detail-table th{background:#000;color:#fff;padding:10px 12px;text-align:left;font-size:10px}
+      .detail-table td{border:1px solid #e5e5e5;padding:12px;vertical-align:top;font-size:11px;line-height:1.6}
       .money{text-align:right;white-space:nowrap;font-weight:700}
       /* ── TOTALS ── */
-      .totals{width:270px;margin-left:auto;margin-top:10px;border-collapse:collapse}
-      .totals td{border:1px solid #e8e8e8;padding:7px 11px;font-size:10px}
+      .totals{width:300px;margin-left:auto;margin-top:16px;border-collapse:collapse}
+      .totals td{border:1px solid #e3e3e3;padding:10px 12px;font-size:11px}
       .totals td:last-child{text-align:right;font-weight:700}
-      .grand-total td{background:#0a0a0a;color:#fff;font-weight:800;font-size:11px}
+      .grand-total td{background:#000;color:#fff;font-weight:800}
       /* ── STACKED SECTIONS ── */
-      .blocks-row{margin-top:16px;padding-top:14px;border-top:1px solid #e8e8e8}
+      .blocks-row{margin-top:22px}
       .block{margin-bottom:14px}
-      .block h3{font-size:10px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;color:#1a1a1a;margin-bottom:6px}
-      .block ul{list-style:none;padding:0}
-      .block li{font-size:9.5px;line-height:1.5;color:#444;margin-bottom:3px;padding-left:12px;position:relative}
-      .block li::before{content:"·";position:absolute;left:2px;color:#aaa}
+      .block h3{font-size:13px;font-weight:800;margin-bottom:8px}
+      .block ul{padding-left:16px}
+      .block li{font-size:11px;line-height:1.6;margin-bottom:5px}
       /* ── FOOTER ── */
-      .footer{margin-top:14px;padding-top:8px;border-top:1px solid #e8e8e8;display:flex;justify-content:space-between;font-size:8.5px;color:#999;letter-spacing:0.02em}
+      .footer{margin-top:28px;border-top:1px solid #e5e5e5;padding-top:10px;display:flex;justify-content:space-between;font-size:10px;color:#444}
     </style>
     <div class="page">
       <div class="top-header">
@@ -1089,11 +1088,11 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
       <table class="totals">
         <tr><td>Subtotal</td><td>${fmtMXN(totals.subtotal)} MXN</td></tr>
         <tr><td>IVA (${totals.ivaPct}%)</td><td>${fmtMXN(totals.ivaAmt)} MXN</td></tr>
-        <tr class="grand-total"><td>Total &middot; IVA incluido</td><td>${fmtMXN(totals.total)} MXN</td></tr>
+        <tr class="grand-total"><td>TOTAL &middot; IVA INCLUIDO</td><td>${fmtMXN(totals.total)} MXN</td></tr>
       </table>
       <div class="blocks-row">
         <div class="block">
-          <h3>Alcance del servicio</h3>
+          <h3>ALCANCE DEL SERVICIO</h3>
           <ul>
             <li>Integraci&oacute;n y coordinaci&oacute;n de componente requerido para continuidad operativa.</li>
             <li>Validaci&oacute;n y coordinaci&oacute;n operativa.</li>
@@ -1102,7 +1101,7 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
           </ul>
         </div>
         <div class="block">
-          <h3>Condiciones comerciales</h3>
+          <h3>CONDICIONES COMERCIALES</h3>
           <ul>
             <li>Precio IVA incluido en el total.</li>
             <li>Forma de pago: ${formaPago}.</li>
@@ -1113,7 +1112,7 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
           </ul>
         </div>
         <div class="block">
-          <h3>Observaciones</h3>
+          <h3>OBSERVACIONES</h3>
           <ul>
             <li>Tiempo estimado de entrega: ${entrega}, sujeto a disponibilidad.</li>
             <li>La validaci&oacute;n t&eacute;cnica final de compatibilidad corresponde al cliente.</li>
