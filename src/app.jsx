@@ -3350,7 +3350,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
                       )}
 
                       <input value={l.notas} onChange={e=>updateLinea(i,{notas:e.target.value})}
-                        placeholder="Aplicación, compatibilidad, notas internas..."
+                        placeholder="Descripción en PDF — dejar vacío para usar texto genérico"
                         style={{width:"100%",background:"transparent",border:"none",borderBottom:`1px solid ${C.border}`,outline:"none",color:C.t3,fontSize:8,padding:"5px 0",marginTop:6,fontFamily:"inherit",boxSizing:"border-box"}}/>
                     </div>
                   </div>
