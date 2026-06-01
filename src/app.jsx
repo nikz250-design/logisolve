@@ -957,9 +957,12 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
       "Atenci\u00f3n correctiva para continuidad operativa de unidad en CEDIS SMO. Incluye integraci\u00f3n de componente compatible, validaci\u00f3n operativa y seguimiento log\u00edstico.";
     const unTag   = unidadStr && i === 0 ? `<br><br><strong>Unidad:</strong> ${unidadStr}` : "";
     const refTag  = ml.partRef ? `<br><br><strong>Clave:</strong> ${ml.partRef}` : "";
+    const qtyTag  = qty > 1
+      ? `<br><span style="font-size:9px;color:#666">${qty} pzs &times; ${fmtMXN(fin.unitPrice)} c/u</span>`
+      : "";
     return `<tr>
       <td>${String(i+1).padStart(2,"0")}</td>
-      <td>${ml.titulo||"Sin descripcion"}</td>
+      <td>${ml.titulo||"Sin descripcion"}${qtyTag}</td>
       <td>${desc}${unTag}${refTag}</td>
       <td class="money">${fmtMXN(fin.lineTotal)}</td>
     </tr>`;
@@ -6451,16 +6454,25 @@ function MCotizador({state,dispatch,toast}) {
     const titulo=kitMode&&kitTitle.trim()
       ? kitTitle.trim()
       : lineas.map(l=>l.titulo.trim()||"Sin descripción").join(" / ");
-    const lineasConSnap=lineas.map((l,i)=>({
-      titulo:l.titulo||"Sin descripción",partRef:l.partRef||"",
-      qty:safeNumber(l.qty,1)||1,
-      costoUnit:safeNumber(l.costoUnit),
-      gasolina:safeNumber(l.gasolina),otros:safeNumber(l.otros),
-      mode:l.mode||"auto",manualPrice:l.manualPrice||"0",
-      customMgn:!!l.customMgn,customVal:safeNumber(l.customVal,27),
-      descripcionPDF:l.descripcionPDF||"",
-      snap:lineSnaps[i],
-    }));
+    const lineasConSnap=lineas.map((l,i)=>{
+      const sn=lineSnaps[i];
+      const qty=safeNumber(l.qty,1)||1;
+      return {
+        titulo:l.titulo||"Sin descripción",partRef:l.partRef||"",
+        qty,
+        costoUnit:safeNumber(l.costoUnit),
+        gasolina:safeNumber(l.gasolina),otros:safeNumber(l.otros),
+        mode:l.mode||"auto",manualPrice:l.manualPrice||"0",
+        customMgn:!!l.customMgn,customVal:safeNumber(l.customVal,27),
+        descripcionPDF:l.descripcionPDF||"",
+        // Explicit totals prevent double-multiplication in resolveLineFinancials
+        lineTotal:sn.precioConIVA,
+        lineTotalSinIVA:sn.precioSinIVA,
+        unitPrice:qty>1?sn.precioConIVA/qty:sn.precioConIVA,
+        unitSinIVA:qty>1?sn.precioSinIVA/qty:sn.precioSinIVA,
+        snap:sn,
+      };
+    });
     const pSin=lineSnaps.reduce((s,sn)=>s+sn.precioSinIVA,0);
     const cTot=lineSnaps.reduce((s,sn)=>s+sn.costoTotal,0);
     const totalSnap={
