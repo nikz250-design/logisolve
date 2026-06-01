@@ -933,7 +933,23 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
       ? tkt.lineas
       : [{ titulo:tkt.titulo, partRef:tkt.partRef||"", snap:tkt.snap, qty:1, descripcionPDF:"" }];
 
-  const filas = conceptos.map((c,i) => {
+  const filas = tkt.kitMode
+    // ── KIT MODE: una sola fila con título del kit y componentes como lista ──
+    ? (()=>{
+        const componentList = conceptos.map((c,i)=>{
+          const ml = migrateLinea(c, tkt.snap);
+          return `${i+1}. ${ml.titulo||"Componente"}`;
+        }).join("<br>");
+        const unTag = unidadStr ? `<br><br><strong>Unidad:</strong> ${unidadStr}` : "";
+        return `<tr>
+          <td>01</td>
+          <td>${tkt.titulo||"Kit"}</td>
+          <td>${componentList}${unTag}</td>
+          <td class="money">${fmtMXN(totals.total)}</td>
+        </tr>`;
+      })()
+    // ── NORMAL MODE: una fila por componente ────────────────────────────────
+    : conceptos.map((c,i) => {
     const ml      = migrateLinea(c, tkt.snap);
     const qty     = safeNumber(ml.qty, 1) || 1;
     const fin     = resolveLineFinancials(ml, tkt.snap, qty);
@@ -6401,6 +6417,8 @@ function MCotizador({state,dispatch,toast}) {
   const [fecha,setFecha]        = useState(todayMX());
   const [notes,setNotes]        = useState("");
   const [pdfPending,setPdfPending] = useState(null);
+  const [kitMode,setKitMode]       = useState(false);
+  const [kitTitle,setKitTitle]     = useState("");
 
   const sharedMargin = useMemo(()=>effectiveMargin(opType,priority,activeMods,false,27),[opType,priority,activeMods]);
   const lineSnaps = useMemo(()=>lineas.map(l=>{
@@ -6429,7 +6447,10 @@ function MCotizador({state,dispatch,toast}) {
 
   const save = ()=>{
     if(!lineas.some(l=>l.titulo?.trim())) { toast("Agrega al menos una descripción","error"); return; }
-    const titulo=lineas.map(l=>l.titulo.trim()||"Sin descripción").join(" / ");
+    if(kitMode&&!kitTitle.trim()) { toast("Escribe el nombre del kit","error"); return; }
+    const titulo=kitMode&&kitTitle.trim()
+      ? kitTitle.trim()
+      : lineas.map(l=>l.titulo.trim()||"Sin descripción").join(" / ");
     const lineasConSnap=lineas.map((l,i)=>({titulo:l.titulo||"Sin descripción",partRef:l.partRef||"",snap:lineSnaps[i]}));
     const pSin=lineSnaps.reduce((s,sn)=>s+sn.precioSinIVA,0);
     const cTot=lineSnaps.reduce((s,sn)=>s+sn.costoTotal,0);
@@ -6453,7 +6474,7 @@ function MCotizador({state,dispatch,toast}) {
       date:fecha,status:"recibido",payType,
       promesaPago:payType==="credit"?promesa:null,cobrado:false,
       mods:[...activeMods],prob:"high",horasOp:0,notes,
-      mode:"multilinea",lineas:lineasConSnap,snap:totalSnap,
+      mode:"multilinea",lineas:lineasConSnap,snap:totalSnap,kitMode,
       timeline:[{ts:nowISO(),evento:"Ticket creado",actor:"Operador"}],
       history:[mkEvent("created",{titulo,status:"recibido",priority})],
     };
@@ -6486,6 +6507,7 @@ function MCotizador({state,dispatch,toast}) {
     setNotes(""); setPartQ({});
     setClientId(""); setUnitId(""); setSupplierId("");
     setPayType("contado"); setPromesa(""); setStep(0);
+    setKitMode(false); setKitTitle("");
   };
 
   // ── Step bar ──────────────────────────────────────────────────────────────
@@ -6736,6 +6758,36 @@ function MCotizador({state,dispatch,toast}) {
         <span style={{fontSize:22,color:A.lime,lineHeight:1,fontWeight:300}}>+</span>
         Agregar línea
       </button>
+
+      {/* ── Agrupar como Kit ── */}
+      {lineas.length>1&&(
+        <div className="glass-card" style={{padding:"16px 18px",marginBottom:12}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:kitMode?12:0}}>
+            <div>
+              <div style={{fontSize:12,fontWeight:700,color:kitMode?A.lime:A.t1}}>Agrupar como kit</div>
+              <div style={{fontSize:10,color:A.t3,marginTop:2}}>El PDF muestra un solo precio sin desglosar componentes</div>
+            </div>
+            <div onClick={()=>setKitMode(v=>!v)}
+              style={{width:44,height:26,borderRadius:13,cursor:"pointer",flexShrink:0,
+                background:kitMode?"rgba(143,227,190,0.3)":"rgba(255,255,255,0.07)",
+                border:`1px solid ${kitMode?A.lime:C.border}`,
+                position:"relative",transition:"background 0.2s"}}>
+              <div style={{position:"absolute",top:3,
+                left:kitMode?20:3,width:18,height:18,borderRadius:9,
+                background:kitMode?A.lime:"rgba(255,255,255,0.3)",
+                transition:"left 0.2s"}}/>
+            </div>
+          </div>
+          {kitMode&&(
+            <input
+              value={kitTitle} onChange={e=>setKitTitle(e.target.value)}
+              placeholder="Nombre del kit (ej. Kit eléctrico de protección...)"
+              style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.04)",
+                border:`1px solid ${A.lime}55`,borderRadius:10,padding:"11px 14px",
+                color:A.t1,fontSize:13,outline:"none",fontFamily:"inherit"}}/>
+          )}
+        </div>
+      )}
 
       <div className="glass-card" style={{padding:"20px 22px",marginBottom:16}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
