@@ -7269,19 +7269,21 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
       arr=arr.filter(t=>t.titulo?.toLowerCase().includes(lq)||t.id?.toLowerCase().includes(lq)||
         clients.find(c=>c.id===t.clientId)?.empresa?.toLowerCase().includes(lq));
     }
-    return [...arr].sort((a,b)=>b.date.localeCompare(a.date));
+    const toS = (d="") => { const p=d.split("/"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; };
+    return [...arr].sort((a,b)=>toS(b.date).localeCompare(toS(a.date)));
   },[allActive,inRange,search,clients]);
 
   // ── Group by date ─────────────────────────────────────────────────────────
   const grouped = useMemo(()=>{
+    const toS = (d="") => { const p=d.split("/"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; };
     const groups={};
     filtered.forEach(t=>{
       const d=t.date||"Sin fecha";
       if(!groups[d]) groups[d]=[];
       groups[d].push(t);
     });
-    // Sort dates desc
-    return Object.entries(groups).sort((a,b)=>b[0].localeCompare(a[0]));
+    // Sort dates desc (convert DD/MM/YYYY → YYYY/MM/DD for correct cross-month ordering)
+    return Object.entries(groups).sort((a,b)=>toS(b[0]).localeCompare(toS(a[0])));
   },[filtered]);
 
   // ── Period summary ────────────────────────────────────────────────────────
