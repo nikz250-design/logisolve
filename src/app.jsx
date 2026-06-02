@@ -5374,24 +5374,31 @@ function MOps({state,setTab,triggerMargin}) {
   },[tickets]);
   const maxSpark = Math.max(...sparkData.map(d=>d.val),1);
 
-  // Monthly sparkline (last 12 months)
+  // Monthly sparkline — day by day for current month
   const sparkMonthData = useMemo(()=>{
-    const months=[];
     const now=new Date();
-    for(let i=11;i>=0;i--){
-      const d=new Date(now.getFullYear(),now.getMonth()-i,1);
-      const yr=d.getFullYear(), mo=d.getMonth();
-      const val=sumSnap(sel_operados(tickets).filter(t=>{
-        const td=parseDateMX(t.date);
-        return td&&td.getFullYear()===yr&&td.getMonth()===mo;
-      }),"uNeta");
-      const MESES_SHORT=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-      const isCurrent=i===0;
-      months.push({val,yr,mo,label:MESES_SHORT[mo]+(i===11||mo===0?` ${yr}`:""),isCurrent});
+    const yr=now.getFullYear(), mo=now.getMonth();
+    const todayDn=now.getDate();
+    const days=[];
+    for(let dn=1;dn<=todayDn;dn++){
+      const dd=String(dn).padStart(2,"0");
+      const mm=String(mo+1).padStart(2,"0");
+      const ds=`${dd}/${mm}/${yr}`;
+      const val=sumSnap(sel_operados(tickets).filter(t=>t.date===ds),"uNeta");
+      const isToday=dn===todayDn;
+      days.push({val,dn,isToday,label:isToday?"Hoy":`${dn}/${mm}`});
     }
-    return months;
+    return days;
   },[tickets]);
-  const maxSparkMonth = Math.max(...sparkMonthData.map(d=>d.val),1);
+  const maxSparkMonth = Math.max(...sparkMonthData.map(d=>Math.max(d.val,0)),1);
+  const sparkMonthPath = useMemo(()=>{
+    const W=280,H=50,pts=sparkMonthData.length;
+    if(pts<2) return {line:"",area:""};
+    const xs=sparkMonthData.map((_,i)=>(i/(pts-1))*W);
+    const ys=sparkMonthData.map(d=>H-(Math.max(d.val,0)/maxSparkMonth)*(H-6)-3);
+    const line=xs.map((x,i)=>`${i===0?"M":"L"}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(" ");
+    return {line, area:line+` L${W},${H} L0,${H} Z`, xs, ys};
+  },[sparkMonthData,maxSparkMonth]);
 
   // SVG sparkline path (280×52 viewBox)
   const sparkPath = useMemo(()=>{
@@ -5727,31 +5734,34 @@ function MOps({state,setTab,triggerMargin}) {
             </>
           ):(
             <>
-              {/* Monthly bar chart */}
-              <svg viewBox="0 0 280 60" style={{width:"100%",height:60,display:"block",overflow:"visible"}}>
+              {/* Monthly line chart — day by day */}
+              <svg viewBox="0 0 280 52" style={{width:"100%",height:52,display:"block",overflow:"visible"}}>
+                <defs>
+                  <linearGradient id="mops-mg" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"   stopColor={A.lime} stopOpacity="0.25"/>
+                    <stop offset="100%" stopColor={A.lime} stopOpacity="0.02"/>
+                  </linearGradient>
+                </defs>
+                {sparkMonthPath.area&&<path d={sparkMonthPath.area} fill="url(#mops-mg)"/>}
+                {sparkMonthPath.line&&<path d={sparkMonthPath.line} fill="none" stroke={A.lime} strokeWidth="1.6"
+                  strokeLinecap="round" strokeLinejoin="round"/>}
                 {sparkMonthData.map((d,i)=>{
-                  const bw=17, gap=5.5;
-                  const x=i*(bw+gap);
-                  const barH=d.val>0?Math.max(3,Math.round((d.val/maxSparkMonth)*52)):0;
-                  const y=56-barH;
-                  const col=d.val<0?A.red:d.isCurrent?A.lime:"rgba(143,227,190,0.45)";
-                  const negH=d.val<0?Math.max(3,Math.round((Math.abs(d.val)/maxSparkMonth)*52)):0;
+                  if(!d.isToday||!sparkMonthPath.xs) return null;
+                  const x=sparkMonthPath.xs[i], y=sparkMonthPath.ys[i];
                   return (
-                    <g key={i}>
-                      {d.val>=0
-                        ? <rect x={x} y={y} width={bw} height={barH} rx={2.5} fill={col} opacity={d.isCurrent?1:0.7}/>
-                        : <rect x={x} y={56} width={bw} height={negH} rx={2.5} fill={col} opacity={0.8}/>
-                      }
+                    <g key="td">
+                      <circle cx={x} cy={y} r={10} fill={A.lime} opacity={0.1}/>
+                      <circle cx={x} cy={y} r={5}  fill={A.lime} opacity={0.85}/>
                     </g>
                   );
                 })}
               </svg>
-              <div style={{display:"flex",justifyContent:"space-between",marginTop:6}}>
-                {sparkMonthData.map((d,i)=>(
-                  <div key={i} style={{fontSize:7,color:d.isCurrent?A.lime:A.t3,
-                    fontWeight:d.isCurrent?800:400,textAlign:"center",lineHeight:1.2,
-                    width:17,flexShrink:0}}>
-                    {d.label}
+              {/* X-axis: show every ~5 days + today */}
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:10,position:"relative"}}>
+                {sparkMonthData.filter((_,i)=>i===0||i===sparkMonthData.length-1||(i+1)%5===0).map((d,i)=>(
+                  <div key={i} style={{fontSize:8,color:d.isToday?A.lime:A.t3,
+                    fontWeight:d.isToday?800:400,textAlign:"center",letterSpacing:"0.02em"}}>
+                    {d.isToday?"Hoy":d.dn}
                   </div>
                 ))}
               </div>
