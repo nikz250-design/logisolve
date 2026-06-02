@@ -8521,12 +8521,12 @@ function MCobranza({state, dispatch, toast}) {
     tickets.filter(t => !t._deleted), [tickets]);
 
   const cartera = React.useMemo(() =>
-    active.filter(t => CARTERA_SET.has(t.status) && !t.cobrado)
+    active.filter(t => CARTERA_SET.has(t.status))
       .sort((a,b) => (b.snap?.precioConIVA||0) - (a.snap?.precioConIVA||0)),
     [active]);
 
   const cobrados = React.useMemo(() =>
-    active.filter(t => PAID_SET.has(t.status) || t.cobrado)
+    active.filter(t => PAID_SET.has(t.status))
       .sort((a,b) => {
         const toS = d => { const p=(d||"").split("/"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; };
         return toS(b.date).localeCompare(toS(a.date));
