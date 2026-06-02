@@ -227,6 +227,57 @@ async function sbFetch(path, opts={}) {
   } catch(e) { console.warn("sbFetch:",e); return null; }
 }
 
+// ── Supabase Storage — file attachments ───────────────────────────────────────
+const SB_BUCKET = "logisolve-docs";
+
+async function sbUploadFile(ticketId, file, category) {
+  const ext = file.name.split('.').pop() || 'bin';
+  const path = `${ticketId}/${category}_${Date.now()}.${ext}`;
+  // Try upload; if bucket missing, create it and retry once
+  const doUpload = () => fetch(`${SB_URL}/storage/v1/object/${SB_BUCKET}/${path}`, {
+    method: 'POST',
+    headers: {
+      'apikey': SB_KEY,
+      'Authorization': `Bearer ${SB_KEY}`,
+      'Content-Type': file.type || 'application/octet-stream',
+      'x-upsert': 'true',
+    },
+    body: file,
+  });
+  let res = await doUpload();
+  if (!res.ok && res.status === 404) {
+    // Bucket doesn't exist — create it
+    await fetch(`${SB_URL}/storage/v1/bucket`, {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: SB_BUCKET, name: SB_BUCKET, public: true }),
+    });
+    res = await doUpload();
+  }
+  if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+  return {
+    id: path,
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    category,
+    uploadedAt: new Date().toISOString(),
+    url: `${SB_URL}/storage/v1/object/public/${SB_BUCKET}/${path}`,
+  };
+}
+
+async function sbDeleteFile(path) {
+  try {
+    await fetch(`${SB_URL}/storage/v1/object/${SB_BUCKET}`, {
+      method: 'DELETE',
+      headers: {
+        'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prefixes: [path] }),
+    });
+  } catch(e) { console.warn('sbDeleteFile:', e); }
+}
+
 async function loadTable(table) {
   const PAGE = 1000;
   let all = [];
@@ -7270,6 +7321,103 @@ function MCartera({state,dispatch,toast}) {
   );
 }
 
+const DOC_CATS = [
+  {id:"factura",    label:"Factura",              icon:"🧾"},
+  {id:"carta_rec",  label:"Carta de recepción",   icon:"📋"},
+  {id:"acta_rec",   label:"Acta de recepción",    icon:"📄"},
+  {id:"otro",       label:"Otro",                 icon:"📎"},
+];
+
+function MAttachments({ticket, dispatch, toast}) {
+  const C = React.useContext(ThemeCtx);
+  const [uploading, setUploading] = React.useState(null); // category being uploaded
+  const [selCat, setSelCat] = React.useState("factura");
+  const attachments = ticket.attachments || [];
+
+  const handleUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) { toast("Archivo muy grande (máx 20 MB)", "error"); return; }
+    setUploading(selCat);
+    try {
+      const att = await sbUploadFile(ticket.id, file, selCat);
+      dispatch({ type: "TKT_UPDATE", id: ticket.id, patch: {
+        attachments: [...attachments, att],
+      }});
+      toast("Archivo adjuntado ✓", "success");
+    } catch(err) {
+      console.error(err);
+      toast("Error al subir archivo", "error");
+    } finally {
+      setUploading(null);
+      e.target.value = "";
+    }
+  };
+
+  const handleDelete = async (att) => {
+    await sbDeleteFile(att.id);
+    dispatch({ type: "TKT_UPDATE", id: ticket.id, patch: {
+      attachments: attachments.filter(a => a.id !== att.id),
+    }});
+    toast("Eliminado", "info");
+  };
+
+  const fmtSize = (b) => b > 1024*1024 ? `${(b/1024/1024).toFixed(1)} MB` : `${Math.round(b/1024)} KB`;
+
+  return (
+    <div style={{borderTop:`1px solid ${C.border}`, padding:"14px 16px"}}>
+      <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:10,fontWeight:700}}>
+        Adjuntos ({attachments.length})
+      </div>
+
+      {/* Existing attachments */}
+      {attachments.map(att => {
+        const cat = DOC_CATS.find(d=>d.id===att.category) || DOC_CATS[3];
+        return (
+          <div key={att.id} style={{display:"flex",alignItems:"center",gap:8,
+            padding:"8px 10px",borderRadius:8,background:C.bg1,border:`1px solid ${C.border}`,
+            marginBottom:6}}>
+            <span style={{fontSize:16,flexShrink:0}}>{cat.icon}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:10,fontWeight:700,color:C.t1,
+                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{att.name}</div>
+              <div style={{fontSize:9,color:C.t3}}>{cat.label} · {fmtSize(att.size)}</div>
+            </div>
+            <a href={att.url} target="_blank" rel="noreferrer"
+              style={{fontSize:9,color:C.cyan,fontWeight:700,textDecoration:"none",
+                padding:"4px 8px",borderRadius:6,background:`${C.cyan}18`,flexShrink:0}}>
+              Ver ↗
+            </a>
+            <button onClick={()=>handleDelete(att)}
+              style={{border:"none",background:"transparent",color:C.red,fontSize:14,
+                cursor:"pointer",padding:"2px 4px",flexShrink:0}}>×</button>
+          </div>
+        );
+      })}
+
+      {/* Upload row */}
+      <div style={{display:"flex",gap:6,alignItems:"center",marginTop:8}}>
+        <select value={selCat} onChange={e=>setSelCat(e.target.value)}
+          style={{flex:1,background:C.bg1,border:`1px solid ${C.border}`,borderRadius:8,
+            color:C.t2,fontSize:10,padding:"7px 8px",outline:"none"}}>
+          {DOC_CATS.map(d=><option key={d.id} value={d.id}>{d.icon} {d.label}</option>)}
+        </select>
+        <label style={{padding:"7px 12px",borderRadius:8,
+          background:uploading?C.bg1:C.blueDim,
+          border:`1px solid ${uploading?C.border:C.blueHi}`,
+          color:uploading?C.t3:C.cyan,fontSize:10,fontWeight:700,
+          cursor:uploading?"not-allowed":"pointer",whiteSpace:"nowrap",flexShrink:0}}>
+          {uploading ? "Subiendo…" : "+ Adjuntar"}
+          <input type="file" disabled={!!uploading}
+            accept=".pdf,.jpg,.jpeg,.png,.heic,.doc,.docx,.xml"
+            onChange={handleUpload}
+            style={{display:"none"}}/>
+        </label>
+      </div>
+    </div>
+  );
+}
+
 function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
   const C = React.useContext(ThemeCtx);
   const {tickets,clients,units,suppliers} = state;
@@ -7553,7 +7701,8 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                               ))}
                             </div>
                           )}
-                          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                          <MAttachments ticket={t} dispatch={dispatch} toast={toast}/>
+                          <div style={{display:"flex",gap:8,flexWrap:"wrap",padding:"0 16px 14px"}}>
                             <button onClick={()=>openEdit(t)} style={{
                               flex:1,padding:"9px 14px",borderRadius:10,background:"transparent",
                               border:`1px solid ${C.border}`,color:A.t2,
@@ -8362,6 +8511,195 @@ function MasSheet({open,onClose,tab,setTab}) {
   );
 }
 
+function MCobranza({state, dispatch, toast}) {
+  const C = React.useContext(ThemeCtx);
+  const A = makeA(C);
+  const {tickets, clients} = state;
+  const [tab, setTab] = React.useState("por_cobrar"); // "por_cobrar" | "cobrado"
+
+  const active = React.useMemo(() =>
+    tickets.filter(t => !t._deleted), [tickets]);
+
+  const cartera = React.useMemo(() =>
+    active.filter(t => CARTERA_SET.has(t.status) && !t.cobrado)
+      .sort((a,b) => (b.snap?.precioConIVA||0) - (a.snap?.precioConIVA||0)),
+    [active]);
+
+  const cobrados = React.useMemo(() =>
+    active.filter(t => PAID_SET.has(t.status) || t.cobrado)
+      .sort((a,b) => {
+        const toS = d => { const p=(d||"").split("/"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; };
+        return toS(b.date).localeCompare(toS(a.date));
+      })
+      .slice(0, 40),
+    [active]);
+
+  const pendiente = cartera.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0);
+  const porFacturar = cartera.filter(t=>t.status==="entregado");
+  const porCobrar   = cartera.filter(t=>t.status==="facturado");
+
+  const mxn = n => safeNumber(n).toLocaleString("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2});
+  const daysSince = dateStr => {
+    if(!dateStr) return null;
+    const p=dateStr.split("/"); if(p.length!==3) return null;
+    const d=new Date(`${p[2]}-${p[1]}-${p[0]}`);
+    return Math.floor((Date.now()-d.getTime())/(1000*60*60*24));
+  };
+
+  const mkAdvance = (tkt, nextStatus) => () => {
+    dispatch({type:"TKT_UPDATE", id:tkt.id, patch:{status:nextStatus,
+      timeline:[...tkt.timeline,{ts:new Date().toISOString(),evento:`Marcado como ${nextStatus}`,actor:"Operador"}],
+    }});
+    toast(`${nextStatus === "facturado" ? "Facturado" : "Cobrado"} ✓`, "success");
+  };
+
+  const mkCobrar = (tkt) => () => {
+    dispatch({type:"TKT_COBRADO", id:tkt.id});
+    toast("Cobrado ✓", "success");
+  };
+
+  const listItems = tab === "por_cobrar" ? cartera : cobrados;
+
+  return (
+    <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
+      <div style={{padding:"18px 14px 0"}}>
+        <div style={{fontSize:22,fontWeight:900,color:A.t1,letterSpacing:"-0.02em",marginBottom:2}}>
+          Cobranza
+        </div>
+
+        {/* Summary cards */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,margin:"14px 0"}}>
+          {[
+            {label:"Por cobrar",value:mxn(pendiente),color:cartera.length>0?A.red:A.t3},
+            {label:"Por facturar",value:porFacturar.length,suffix:" ops",color:A.amber||"#F59E0B"},
+            {label:"Facturado",value:porCobrar.length,suffix:" ops",color:A.cyan},
+          ].map(card=>(
+            <div key={card.label} style={{background:C.bg1,border:`1px solid ${C.border}`,
+              borderRadius:12,padding:"10px 12px"}}>
+              <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>{card.label}</div>
+              <div style={{fontSize:card.value&&typeof card.value==="string"&&card.value.length>8?13:16,
+                fontWeight:800,color:card.color,letterSpacing:"-0.01em"}}>
+                {card.value}{card.suffix||""}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Tab selector */}
+        <div style={{display:"flex",gap:6,marginBottom:14}}>
+          {[["por_cobrar","Por cobrar"],["cobrado","Ya cobrado"]].map(([id,label])=>(
+            <button key={id} onClick={()=>setTab(id)}
+              style={{padding:"6px 12px",borderRadius:20,fontSize:10,fontWeight:700,
+                cursor:"pointer",border:`1px solid ${tab===id?C.blueHi:C.border}`,
+                background:tab===id?C.blueDim:"transparent",
+                color:tab===id?C.cyan:C.t3}}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{padding:"0 14px"}}>
+        {listItems.length === 0 && (
+          <div style={{textAlign:"center",padding:"48px 0",color:C.t3,fontSize:13}}>
+            {tab==="por_cobrar" ? "🎉 No hay pendientes de cobro" : "Sin operaciones cobradas"}
+          </div>
+        )}
+
+        {tab==="por_cobrar" && listItems.length > 0 && (
+          <>
+            {porFacturar.length > 0 && (
+              <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase",
+                marginBottom:8,fontWeight:700}}>
+                Por facturar ({porFacturar.length})
+              </div>
+            )}
+            {porFacturar.map(t => <CobranzaCard key={t.id} t={t} clients={clients} C={C} A={A}
+              mxn={mxn} daysSince={daysSince}
+              action={<button onClick={mkAdvance(t,"facturado")}
+                style={{padding:"6px 12px",borderRadius:8,background:`${A.amber||"#F59E0B"}18`,
+                  border:`1px solid ${A.amber||"#F59E0B"}44`,color:A.amber||"#F59E0B",
+                  fontSize:10,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap"}}>
+                Facturar ↗
+              </button>}
+              dispatch={dispatch} toast={toast}
+            />)}
+
+            {porCobrar.length > 0 && (
+              <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase",
+                margin:`${porFacturar.length>0?"16px":0} 0 8px`,fontWeight:700}}>
+                Por cobrar ({porCobrar.length})
+              </div>
+            )}
+            {porCobrar.map(t => <CobranzaCard key={t.id} t={t} clients={clients} C={C} A={A}
+              mxn={mxn} daysSince={daysSince}
+              action={<button onClick={mkCobrar(t)}
+                style={{padding:"6px 12px",borderRadius:8,background:`${A.mint||"#3CCFAA"}18`,
+                  border:`1px solid ${A.mint||"#3CCFAA"}44`,color:A.mint||"#3CCFAA",
+                  fontSize:10,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap"}}>
+                Cobrar ✓
+              </button>}
+              dispatch={dispatch} toast={toast}
+            />)}
+          </>
+        )}
+
+        {tab==="cobrado" && listItems.map(t => <CobranzaCard key={t.id} t={t} clients={clients}
+          C={C} A={A} mxn={mxn} daysSince={daysSince} action={null}
+          dispatch={dispatch} toast={toast}
+        />)}
+      </div>
+    </div>
+  );
+}
+
+function CobranzaCard({t, clients, C, A, mxn, daysSince, action, dispatch, toast}) {
+  const [showAtt, setShowAtt] = React.useState(false);
+  const cl = clients.find(c=>c.id===t.clientId);
+  const days = daysSince(t.date);
+  const meta = TICKET_META[t.status] || {};
+  const price = t.snap?.precioConIVA || 0;
+
+  return (
+    <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:14,
+      marginBottom:10,overflow:"hidden"}}>
+      <div style={{padding:"12px 14px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:6}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:800,color:A.t1,
+              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:2}}>
+              {t.titulo}
+            </div>
+            <div style={{fontSize:10,color:A.t3}}>
+              {cl?.empresa || "Sin cliente"} · {t.date}
+              {days!=null&&<span style={{color:days>30?A.red:days>14?A.amber||"#F59E0B":A.t3,
+                marginLeft:6}}>({days}d)</span>}
+            </div>
+          </div>
+          <div style={{textAlign:"right",flexShrink:0}}>
+            <div style={{fontSize:16,fontWeight:800,color:A.t1}}>{mxn(price)}</div>
+            <span style={{fontSize:9,padding:"2px 7px",borderRadius:10,
+              background:`${meta.dot||C.border}18`,color:meta.dot||C.t3,fontWeight:700}}>
+              {meta.label||t.status}
+            </span>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:6,alignItems:"center",justifyContent:"space-between"}}>
+          <button onClick={()=>setShowAtt(v=>!v)}
+            style={{fontSize:10,color:C.t3,background:"transparent",border:"none",
+              cursor:"pointer",padding:"4px 0"}}>
+            📎 {(t.attachments||[]).length} adjunto{(t.attachments||[]).length!==1?"s":""}
+          </button>
+          {action}
+        </div>
+      </div>
+      {showAtt && (
+        <MAttachments ticket={t} dispatch={dispatch} toast={toast}/>
+      )}
+    </div>
+  );
+}
+
 const TABS = [
   {id:"ops",          label:"Centro Ops"},
   {id:"tickets",      label:"Pipeline"},
@@ -8694,15 +9032,16 @@ function App() {
             backdropFilter:"blur(44px) saturate(2.8) brightness(1.01)",WebkitBackdropFilter:"blur(44px) saturate(2.8) brightness(1.01)",
             border: darkMode ? "1px solid rgba(255,255,255,0.09)" : "1px solid rgba(0,0,0,0.10)",
             borderRadius:28,
-            display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",
+            display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",
             boxShadow: darkMode
               ? "0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.06) inset"
               : "0 4px 24px rgba(0,0,0,0.10), 0 1px 0 rgba(255,255,255,1) inset"}}>
           {[
-            {id:"ops",      label:"Centro",  icon:"⊙"},
-            {id:"tickets",  label:"Pipeline",icon:"◈"},
-            {id:"historial",label:"Historial",icon:"☰"},
-            {id:"__mas__",  label:"Más",     icon:"···"},
+            {id:"ops",        label:"Centro",   icon:"⊙"},
+            {id:"tickets",    label:"Pipeline", icon:"◈"},
+            {id:"historial",  label:"Historial",icon:"☰"},
+            {id:"cobranza",   label:"Cobros",   icon:"$"},
+            {id:"__mas__",    label:"Más",      icon:"···"},
           ].map(t=>{
             const isMore = t.id==="__mas__";
             const badge = t.id==="tickets"&&abiertas>0?abiertas : t.id==="ops"&&p1Active>0?p1Active : isMore&&vencidos>0?vencidos : 0;
@@ -8779,6 +9118,7 @@ function App() {
         {tab==="proveedores"&&(mobileView?<MProveedores state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Proveedores state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="clientes"   &&(mobileView?<MClientes   state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Clientes    state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="ajustes"    &&(mobileView?<MAjustes state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Ajustes state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
+        {tab==="cobranza"   &&<MCobranza state={state} dispatch={dispatchWithDelete} toast={toast}/>}
         {tab==="chat"       &&<MChat state={state} dispatch={dispatchWithDelete} C={C} toast={toast}/>}
         {tab==="sourcing"   &&<SourcingCopilot state={state} dispatch={dispatchWithDelete} C={C} toast={toast}/>}
         {tab==="flota"      &&<FlotaModule darkMode={darkMode}/>}
