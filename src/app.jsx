@@ -785,7 +785,10 @@ function reducer(state,action) {
     case "TKT_RESTORE":  return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,_deleted:false,_deletedAt:null})};
     case "TKT_COBRADO": return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,cobrado:true,status:"cobrado",timeline:[...(t.timeline||[]),{ts:nowISO(),evento:"Cobrado",actor:"Operador"}],history:[...(t.history||[]),mkEvent("cobrado")]})};
     case "TKT_TIMELINE": return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,timeline:[...(t.timeline||[]),{ts:nowISO(),evento:action.evento,actor:action.actor||"Operador"}]})};
-    // CLIENTS
+    case "TKT_BULK_RENAME": { // action.map: [{oldId,newId}]
+      const idMap=new Map(action.map.map(({oldId,newId})=>[oldId,newId]));
+      return {...state,tickets:state.tickets.map(t=>idMap.has(t.id)?{...t,id:idMap.get(t.id)}:t)};
+    }
     case "CLI_ADD":    return {...state,clients:[...state.clients,action.c]};
     case "CLI_UPDATE": return {...state,clients:state.clients.map(c=>c.id===action.id?{...c,...action.patch}:c)};
     case "CLI_DELETE": return {...state,clients:state.clients.filter(c=>c.id!==action.id)};
@@ -9479,10 +9482,27 @@ function App() {
   useEffect(()=>{
     (async()=>{
       const bumpSeq = (tickets=[]) => {
-        const maxSeq = tickets.reduce((m,t)=>{
-          const n=parseInt((t.id||'').split('-').pop())||0; return Math.max(m,n);
-        }, 7);
-        if(maxSeq >= _seq) _seq = maxSeq + 1;
+        // One-time migration: rename TKT-YYYYMMDD-NNN → LS-XXXX (globally unique sequential)
+        const oldFmt = tickets.filter(t=>/^TKT-\d{8}-/.test(t.id));
+        if(oldFmt.length > 0) {
+          const sortKey = t => {
+            const p=(t.date||"").split("/");
+            const dk=p.length===3?`${p[2]}${p[1]}${p[0]}`:t.id;
+            const sq=parseInt((t.id||"").split("-").pop())||0;
+            return `${dk}-${String(sq).padStart(3,"0")}`;
+          };
+          oldFmt.sort((a,b)=>sortKey(a).localeCompare(sortKey(b)));
+          let ctr=0;
+          const renameMap=oldFmt.map(t=>{ctr++;return{oldId:t.id,newId:`LS-${String(ctr).padStart(4,"0")}`};});
+          dispatch({type:"TKT_BULK_RENAME",map:renameMap});
+          renameMap.forEach(({oldId})=>deletedRef.current.tickets.add(oldId));
+          if(ctr>_seq){_seq=ctr;try{localStorage.setItem("logisolve_seq",String(_seq));}catch{}}
+        } else {
+          const maxSeq=tickets.reduce((m,t)=>{
+            const n=parseInt((t.id||"").replace(/^LS-/,""))||0;return Math.max(m,n);
+          },0);
+          if(maxSeq>=_seq){_seq=maxSeq+1;try{localStorage.setItem("logisolve_seq",String(_seq));}catch{}}
+        }
       };
       try {
         await seedIfEmpty();
