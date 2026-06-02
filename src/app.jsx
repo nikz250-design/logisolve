@@ -4495,6 +4495,20 @@ function MAjustes({state,dispatch,toast}) {
         </div>
       </Card>
 
+      <Card title="STORAGE — ADJUNTOS">
+        <div style={{fontSize:13,color:C.t2,marginBottom:8}}>Para subir adjuntos (facturas, cartas de recepción, etc.) necesitas crear el bucket <span style={{color:C.cyan,fontFamily:"'Courier New',monospace"}}>logisolve-docs</span> en Supabase Storage.</div>
+        <a href="https://supabase.com/dashboard/project/ecxqxspphoehmkvlmbtv/storage/buckets"
+          target="_blank" rel="noreferrer"
+          style={{display:"block",textDecoration:"none",padding:"10px 14px",borderRadius:10,
+            background:C.blueDim,border:`1px solid ${C.blueHi}`,color:C.cyan,
+            fontSize:12,fontWeight:700,textAlign:"center"}}>
+          Abrir Supabase Storage ↗
+        </a>
+        <div style={{fontSize:10,color:C.t3,marginTop:8,lineHeight:1.5}}>
+          Pasos: New bucket → nombre: <b style={{color:C.t2}}>logisolve-docs</b> → activar <b style={{color:C.t2}}>Public bucket</b> → Create bucket. Luego en Policies agrega INSERT para el rol anon.
+        </div>
+      </Card>
+
       <Card title="EXPORTAR BACKUP">
         <div style={{fontSize:13,color:C.t2,marginBottom:12}}>Exporta todos los datos como JSON y guarda copia en localStorage.</div>
         <MBtn label={exporting?"Exportando…":"⬇ Exportar JSON"} full color={C.t1} bg={exporting?C.bg2:C.blue} border={exporting?C.border:C.blue} onClick={exportData}/>
