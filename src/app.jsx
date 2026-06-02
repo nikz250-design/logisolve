@@ -5282,6 +5282,7 @@ function MOps({state,setTab,triggerMargin}) {
   const [heatDay,setHeatDay]       = useState(null); // {dn,yr,mo}
   const [heatViewDate,setHeatViewDate] = useState(()=>new Date());
   const [sparkMode,setSparkMode]   = useState("week"); // "week" | "month"
+  const [sparkMonthDate,setSparkMonthDate] = useState(()=>new Date());
 
   // ── Accent palette — Black/white monochrome
   const A = makeA(C);
@@ -5375,22 +5376,24 @@ function MOps({state,setTab,triggerMargin}) {
   },[tickets]);
   const maxSpark = Math.max(...sparkData.map(d=>d.val),1);
 
-  // Monthly sparkline — day by day for current month
+  // Monthly sparkline — day by day for selected month
   const sparkMonthData = useMemo(()=>{
     const now=new Date();
-    const yr=now.getFullYear(), mo=now.getMonth();
-    const todayDn=now.getDate();
+    const yr=sparkMonthDate.getFullYear(), mo=sparkMonthDate.getMonth();
+    const isCurrentMonth=yr===now.getFullYear()&&mo===now.getMonth();
+    const daysInMo=new Date(yr,mo+1,0).getDate();
+    const lastDay=isCurrentMonth?now.getDate():daysInMo;
     const days=[];
-    for(let dn=1;dn<=todayDn;dn++){
+    for(let dn=1;dn<=lastDay;dn++){
       const dd=String(dn).padStart(2,"0");
       const mm=String(mo+1).padStart(2,"0");
       const ds=`${dd}/${mm}/${yr}`;
       const val=sumSnap(sel_operados(tickets).filter(t=>t.date===ds),"uNeta");
-      const isToday=dn===todayDn;
+      const isToday=isCurrentMonth&&dn===now.getDate();
       days.push({val,dn,isToday,label:isToday?"Hoy":`${dn}/${mm}`});
     }
     return days;
-  },[tickets]);
+  },[tickets,sparkMonthDate]);
   const maxSparkMonth = Math.max(...sparkMonthData.map(d=>Math.max(d.val,0)),1);
   const sparkMonthPath = useMemo(()=>{
     const W=280,H=50,pts=sparkMonthData.length;
@@ -5678,8 +5681,34 @@ function MOps({state,setTab,triggerMargin}) {
           padding:"22px 24px",marginBottom:12,
         }}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase"}}>
-              Utilidad neta
+            <div>
+              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:sparkMode==="month"?3:0}}>
+                Utilidad neta
+              </div>
+              {sparkMode==="month"&&(()=>{
+                const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+                const yr=sparkMonthDate.getFullYear(), mo=sparkMonthDate.getMonth();
+                const now=new Date();
+                const isCurrent=yr===now.getFullYear()&&mo===now.getMonth();
+                const goPrev=()=>setSparkMonthDate(new Date(yr,mo-1,1));
+                const goNext=()=>{const n=new Date(yr,mo+1,1);if(n<=now)setSparkMonthDate(n);};
+                return (
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <button onClick={goPrev}
+                      style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:6,
+                        width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",
+                        color:A.t2,fontSize:13,cursor:"pointer",flexShrink:0,padding:0}}>‹</button>
+                    <span style={{fontSize:12,fontWeight:700,color:A.t1}}>
+                      {MESES[mo]} {yr}
+                    </span>
+                    <button onClick={goNext} disabled={isCurrent}
+                      style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:6,
+                        width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",
+                        color:isCurrent?A.t3:A.t2,fontSize:13,cursor:isCurrent?"default":"pointer",
+                        opacity:isCurrent?0.35:1,flexShrink:0,padding:0}}>›</button>
+                  </div>
+                );
+              })()}
             </div>
             <div style={{display:"flex",gap:5,alignItems:"center"}}>
               {growth!==null&&sparkMode==="week"&&(
