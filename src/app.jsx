@@ -500,7 +500,7 @@ function calculateTicketTotals(ticket) {
   const snapTotal = safeNumber(snap.precioConIVA);
   if (snapTotal > 0) {
     const diff = Math.abs(total - snapTotal);
-    if (diff > 50 && diff / snapTotal > 0.05) {
+    if (diff > 0.5) {
       return {
         lineas: [],
         subtotal:    safeNumber(snap.precioSinIVA),
@@ -825,7 +825,7 @@ function buildCotizacionHTML(tkt, cl, un, supp) {
     if (!ls.length) return [{titulo:tkt.titulo,partRef:tkt.partRef||"",snap:tkt.snap,qty:1,descripcionPDF:""}];
     const lSum = ls.reduce((s,l)=>s+(l.lineTotal||l.snap?.precioConIVA||0),0);
     const sTotal = tkt.snap?.precioConIVA||0;
-    if (sTotal>0 && Math.abs(lSum-sTotal)>50 && Math.abs(lSum-sTotal)/sTotal>0.05)
+    if (sTotal>0 && Math.abs(lSum-sTotal)>0.5)
       return [{titulo:tkt.titulo,partRef:tkt.partRef||"",snap:tkt.snap,qty:1,descripcionPDF:""}];
     return ls;
   })();
@@ -962,7 +962,7 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
     if (!ls.length) return [{titulo:tkt.titulo,partRef:tkt.partRef||"",snap:tkt.snap,qty:1,descripcionPDF:""}];
     const lSum = ls.reduce((s,l)=>s+(l.lineTotal||l.snap?.precioConIVA||0),0);
     const sTotal = tkt.snap?.precioConIVA||0;
-    if (sTotal>0 && Math.abs(lSum-sTotal)>50 && Math.abs(lSum-sTotal)/sTotal>0.05)
+    if (sTotal>0 && Math.abs(lSum-sTotal)>0.5)
       return [{titulo:tkt.titulo,partRef:tkt.partRef||"",snap:tkt.snap,qty:1,descripcionPDF:""}];
     return ls;
   })();
@@ -1042,13 +1042,13 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
       .totals td:last-child{text-align:right;font-weight:700}
       .grand-total td{background:#000;color:#fff;font-weight:800}
       /* ── STACKED SECTIONS ── */
-      .blocks-row{margin-top:16px}
-      .block{margin-bottom:10px}
-      .block h3{font-size:11px;font-weight:800;margin-bottom:5px}
-      .block ul{padding-left:14px}
-      .block li{font-size:10px;line-height:1.5;margin-bottom:3px}
+      .blocks-row{margin-top:14px}
+      .block{margin-bottom:8px}
+      .block h3{font-size:9.5px;font-weight:800;margin-bottom:4px;letter-spacing:0.03em}
+      .block ul{padding-left:12px}
+      .block li{font-size:9px;line-height:1.45;margin-bottom:2px}
       /* ── FOOTER ── */
-      .footer{margin-top:16px;border-top:1px solid #e5e5e5;padding-top:8px;display:flex;justify-content:space-between;font-size:9px;color:#777}
+      .footer{margin-top:12px;border-top:1px solid #e5e5e5;padding-top:7px;display:flex;justify-content:space-between;font-size:8.5px;color:#777}
     </style>
     <div class="page">
       <div class="top-header">
@@ -1108,7 +1108,6 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
             <li>Entrega conforme a disponibilidad confirmada al momento de autorizaci&oacute;n.</li>
             <li>Precios sujetos a cambio y disponibilidad al momento de confirmar.</li>
             <li>Vigencia: 3 d&iacute;as naturales a partir de la fecha de emisi&oacute;n.</li>
-            ${notaLine}
           </ul>
         </div>
         <div class="block">
@@ -1117,6 +1116,7 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
             <li>Tiempo estimado de entrega: ${entrega}, sujeto a disponibilidad.</li>
             <li>La validaci&oacute;n t&eacute;cnica final de compatibilidad corresponde al cliente.</li>
             <li>La garant&iacute;a aplica conforme a pol&iacute;ticas del fabricante o proveedor.</li>
+            ${notaLine}
           </ul>
         </div>
       </div>
