@@ -1257,51 +1257,20 @@ function generarActaRecepcionPDF(tkt, cl, un) {
     </tr>`).join('');
 
   const blue = '#1a3a6b';
-  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#111}
-.page{width:794px;padding:28px 36px 32px;background:#fff}
-.main-title{text-align:center;margin-bottom:6px}
-.main-title h1{font-size:16px;font-weight:900;letter-spacing:0.02em}
-.main-title p{font-size:10px;font-weight:600;color:#333}
-.header-bar{display:flex;border:1px solid #ccc;margin-bottom:0}
-.header-bar .left{background:${blue};color:#fff;font-size:10px;font-weight:800;
-  padding:8px 12px;flex:1;display:flex;align-items:center;letter-spacing:0.04em}
-.header-bar .right{font-size:9px;padding:5px 10px;line-height:1.7;min-width:130px;border-left:1px solid #ccc}
-.header-bar .right b{font-weight:700}
-table.section{width:100%;border-collapse:collapse;margin-bottom:0}
-table.section th.sec-hd{background:${blue};color:#fff;font-size:9px;font-weight:800;
-  padding:5px 8px;letter-spacing:0.06em;text-align:left}
-table.section td{border:1px solid #ccc;padding:5px 8px;font-size:9.5px;vertical-align:middle}
-table.section td.lbl{background:#eef1f7;font-weight:700;width:130px;white-space:nowrap}
-table.section td.val{background:#fff}
-.detail-table{width:100%;border-collapse:collapse;margin-bottom:0}
-.detail-table th{background:${blue};color:#fff;font-size:9px;font-weight:800;padding:5px 8px;text-align:left}
-.detail-table td{border:1px solid #ccc;padding:5px 8px;font-size:9.5px}
-.detail-table tr:nth-child(even) td{background:#f9f9f9}
-.obs-box{border:1px solid #ccc;min-height:52px;padding:6px 8px;font-size:9.5px;color:#666}
-.obs-photo{border:1px solid #ccc;min-height:34px;padding:5px 8px;font-size:9px;color:#999;font-style:italic}
-.decl{font-size:8.5px;line-height:1.55;margin:8px 0;text-align:justify}
-.decl b{font-weight:800}
-.sig-table{width:100%;border-collapse:collapse;margin-top:6px}
-.sig-table th{background:#dde3ee;font-size:9px;font-weight:800;padding:5px 8px;text-align:left;letter-spacing:0.05em;border:1px solid #ccc}
-.sig-table td{border:1px solid #ccc;padding:36px 10px 5px;font-size:9px;color:#444}
-.spacer{height:6px}
-</style></head><body><div class="page">
+  const html = `<style>*{box-sizing:border-box;margin:0;padding:0}.page{width:794px;padding:28px 36px 32px;background:#fff;font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#111}.main-title{text-align:center;margin-bottom:6px}.main-title h1{font-size:16px;font-weight:900;letter-spacing:0.02em}.main-title p{font-size:10px;font-weight:600;color:#333}.header-bar{display:flex;border:1px solid #ccc;margin-bottom:0}.hb-left{background:${blue};color:#fff;font-size:10px;font-weight:800;padding:8px 12px;flex:1;display:flex;align-items:center;letter-spacing:0.04em}.hb-right{font-size:9px;padding:5px 10px;line-height:1.7;min-width:130px;border-left:1px solid #ccc}.hb-right b{font-weight:700}table.section{width:100%;border-collapse:collapse;margin-bottom:0}table.section .sec-hd{background:${blue};color:#fff;font-size:9px;font-weight:800;padding:5px 8px;letter-spacing:0.06em;text-align:left}table.section td{border:1px solid #ccc;padding:5px 8px;font-size:9.5px;vertical-align:middle}table.section .lbl{background:#eef1f7;font-weight:700;width:130px;white-space:nowrap}table.section .val{background:#fff}.dt{width:100%;border-collapse:collapse}.dt th{background:${blue};color:#fff;font-size:9px;font-weight:800;padding:5px 8px;text-align:left}.dt td{border:1px solid #ccc;padding:5px 8px;font-size:9.5px}.obs-box{border:1px solid #ccc;min-height:52px;padding:6px 8px;font-size:9.5px;color:#666}.obs-photo{border:1px solid #ccc;min-height:34px;padding:5px 8px;font-size:9px;color:#999;font-style:italic}.decl{font-size:8.5px;line-height:1.55;margin:8px 0;text-align:justify}.sig-table{width:100%;border-collapse:collapse;margin-top:6px}.sig-table th{background:#dde3ee;font-size:9px;font-weight:800;padding:5px 8px;text-align:left;letter-spacing:0.05em;border:1px solid #ccc}.sig-table td{border:1px solid #ccc;padding:36px 10px 5px;font-size:9px;color:#444}.sp{height:6px}</style><div class="page">
   <div class="main-title">
     <h1>LOGISOLVE</h1>
     <p>Log&iacute;stica, Suministro y Soporte Automotriz Integrado</p>
   </div>
   <div class="header-bar">
-    <div class="left">ACTA DE ENTREGA, RECEPCI&Oacute;N Y CONFORMIDAD</div>
-    <div class="right">
+    <div class="hb-left">ACTA DE ENTREGA, RECEPCI&Oacute;N Y CONFORMIDAD</div>
+    <div class="hb-right">
       <b>Folio:</b> ${folio}<br>
       <b>Fecha:</b> ${fechaHoy}<br>
       <b>Hora:</b> ${horaHoy}
     </div>
   </div>
-  <div class="spacer"></div>
+  <div class="sp"></div>
 
   <table class="section">
     <tr><th class="sec-hd" colspan="4">1. DATOS DEL CLIENTE</th></tr>
@@ -1320,7 +1289,7 @@ table.section td.val{background:#fff}
       <td class="lbl">Ubicaci&oacute;n de entrega</td><td class="val" colspan="3"></td>
     </tr>
   </table>
-  <div class="spacer"></div>
+  <div class="sp"></div>
 
   <table class="section">
     <tr><th class="sec-hd" colspan="6">2. DATOS DE LA UNIDAD (SI APLICA)</th></tr>
@@ -1338,9 +1307,9 @@ table.section td.val{background:#fff}
       <td class="lbl">Kilometraje</td><td class="val" colspan="5">${un?.km ? un.km.toLocaleString('es-MX')+' km' : ''}</td>
     </tr>
   </table>
-  <div class="spacer"></div>
+  <div class="sp"></div>
 
-  <table class="detail-table">
+  <table class="dt">
     <thead>
       <tr>
         <th style="width:38px;text-align:center">Cant.</th>
@@ -1356,7 +1325,7 @@ table.section td.val{background:#fff}
       <tr><td></td><td></td><td></td><td></td><td></td></tr>
     </tbody>
   </table>
-  <div class="spacer"></div>
+  <div class="sp"></div>
 
   <table class="section">
     <tr><th class="sec-hd" colspan="1">4. OBSERVACIONES Y EVIDENCIA</th></tr>
@@ -1365,7 +1334,7 @@ table.section td.val{background:#fff}
       <div style="margin-top:6px" class="obs-photo">Espacio para evidencia fotogr&aacute;fica (opcional)</div>
     </td></tr>
   </table>
-  <div class="spacer"></div>
+  <div class="sp"></div>
 
   <div class="decl"><b>DECLARACI&Oacute;N DE CONFORMIDAD.</b> El cliente declara haber recibido y verificado los bienes, componentes, refacciones y/o servicios descritos en el presente documento, manifestando su conformidad respecto a cantidad, identificaci&oacute;n y estado f&iacute;sico aparente. Cualquier garant&iacute;a aplicable estar&aacute; sujeta a las pol&iacute;ticas del fabricante, proveedor o LogiSolve seg&uacute;n corresponda.</div>
 
@@ -1379,7 +1348,7 @@ table.section td.val{background:#fff}
       <td>Nombre, Cargo y Firma</td>
     </tr>
   </table>
-</div></body></html>`;
+</div>`;
 
   const container = document.createElement('div');
   container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px';
@@ -1396,7 +1365,7 @@ table.section td.val{background:#fff}
         html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff', logging:false, scrollX:0, scrollY:0 },
         jsPDF: { unit:'mm', format:'a4', orientation:'portrait' },
       })
-      .from(container.firstElementChild)
+      .from(container.querySelector('.page') || container.firstElementChild)
       .save()
       .finally(() => { container.remove(); });
   };
