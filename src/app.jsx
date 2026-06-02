@@ -233,8 +233,7 @@ const SB_BUCKET = "logisolve-docs";
 async function sbUploadFile(ticketId, file, category) {
   const ext = file.name.split('.').pop() || 'bin';
   const path = `${ticketId}/${category}_${Date.now()}.${ext}`;
-  // Try upload; if bucket missing, create it and retry once
-  const doUpload = () => fetch(`${SB_URL}/storage/v1/object/${SB_BUCKET}/${path}`, {
+  const res = await fetch(`${SB_URL}/storage/v1/object/${SB_BUCKET}/${path}`, {
     method: 'POST',
     headers: {
       'apikey': SB_KEY,
@@ -244,17 +243,14 @@ async function sbUploadFile(ticketId, file, category) {
     },
     body: file,
   });
-  let res = await doUpload();
-  if (!res.ok && res.status === 404) {
-    // Bucket doesn't exist — create it
-    await fetch(`${SB_URL}/storage/v1/bucket`, {
-      method: 'POST',
-      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: SB_BUCKET, name: SB_BUCKET, public: true }),
-    });
-    res = await doUpload();
+  if (!res.ok) {
+    let detail = res.status;
+    try { const j = await res.json(); detail = j.message || j.error || res.status; } catch(_) {}
+    if (res.status === 400 || res.status === 404) {
+      throw new Error(`El bucket "${SB_BUCKET}" no existe. Créalo en Supabase → Storage antes de subir archivos. (${detail})`);
+    }
+    throw new Error(`Error al subir: ${detail}`);
   }
-  if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
   return {
     id: path,
     name: file.name,
@@ -7347,7 +7343,7 @@ function MAttachments({ticket, dispatch, toast}) {
       toast("Archivo adjuntado ✓", "success");
     } catch(err) {
       console.error(err);
-      toast("Error al subir archivo", "error");
+      toast(err.message || "Error al subir archivo", "error");
     } finally {
       setUploading(null);
       e.target.value = "";
