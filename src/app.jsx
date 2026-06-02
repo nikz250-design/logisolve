@@ -7796,11 +7796,11 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
           qty:l.qty||1,
           // l.costoUnit is stored with IVA (per-unit); fall back to snap derivation for old tickets
           costoUnit: l.costoUnit!=null
-            ? String(l.costoUnit)
+            ? String(Math.round(Number(l.costoUnit)*100)/100)
             : String(((l.snap?.costoBase||0) * (1 + (l.snap?.params?.iva||16)/100) / Math.max(1,l.qty||1)).toFixed(2)),
           // l.unitPrice is per-unit price; fall back for old tickets
           precioUnit: l.unitPrice!=null
-            ? String(l.unitPrice)
+            ? String(Math.round(Number(l.unitPrice)*100)/100)
             : String(((l.snap?.precioConIVA||0) / Math.max(1,l.qty||1)).toFixed(2)),
           descripcionPDF:l.descripcionPDF||"",
         }))
