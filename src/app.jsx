@@ -7656,8 +7656,12 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
   };
 
   // ── Edit form state (lightweight) ────────────────────────────────────────
-  const [ef,setEf]     = useState({});
+  const [ef,setEf]       = useState({});
   const sfn = k => v => setEf(p=>({...p,[k]:v}));
+  const [mLineas,setMLineas] = useState([]);
+  const mLsfn = (idx,k) => v => setMLineas(ls=>ls.map((l,i)=>i===idx?{...l,[k]:v}:l));
+  const addMLinea = () => setMLineas(ls=>[...ls,{titulo:"",partRef:"",qty:1,costoUnit:"",precioUnit:"",descripcionPDF:""}]);
+  const delMLinea = idx => setMLineas(ls=>ls.filter((_,i)=>i!==idx));
 
   const openEdit = t => {
     const s = t.snap || {};
@@ -7666,7 +7670,8 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
     // Unit costs — divide stored totals by qty to show per-piece values
     const unitCostoIVA = (((s.costoBase||0)*(1+ivaR_e)) / savedQty).toFixed(2);
     const unitPrecioIVA = ((safeNumber(s.precioConIVA)||0) / savedQty).toFixed(2);
-    setEf({status:t.status,clientId:t.clientId||"",supplierId:t.supplierId||"",
+    setEf({titulo:t.titulo||"",kitMode:t.kitMode||false,
+           status:t.status,clientId:t.clientId||"",supplierId:t.supplierId||"",
            unitId:t.unitId||"",payType:t.payType||"contado",promesaPago:t.promesaPago||"",
            notes:t.notes||"",priority:t.priority||"P3",
            costoIVA:String(safeNumber(unitCostoIVA)||0),
@@ -7678,6 +7683,19 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
            opType:t.opId||"consumable",
            activeMods:[...(t.mods||[])],
     });
+    // Restore existing lines if present and valid
+    const existingLineas = (t.lineas||[]).filter(l=>l.titulo);
+    setMLineas(existingLineas.length > 0
+      ? existingLineas.map(l=>({
+          titulo:l.titulo||"",
+          partRef:l.partRef||"",
+          qty:l.qty||1,
+          costoUnit:String(l.snap?.costoBase||0),
+          precioUnit:String(l.snap?.precioConIVA||0),
+          descripcionPDF:l.descripcionPDF||"",
+        }))
+      : []
+    );
     setEditId(t.id);
     setExpandId(null);
   };
@@ -7685,23 +7703,55 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
   const saveEdit = t => {
     const iva = ef._iva||16; const isr = ef._isr||20;
     const gastos = safeNumber(ef._gastos);
-    const qty = Math.max(1, Math.round(safeNumber(ef.qty)||1));
-    const totalCosto = safeNumber(ef.costoIVA) * qty;
-    let newSnap;
-    if(ef.quoteMode) {
-      const mgn = effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
-      newSnap = computeSnap({costo:totalCosto,compraConIVA:true,
-        mode:"auto",margin:mgn,gasolina:gastos,otros:0,iva,isr});
-    } else {
-      newSnap = computeSnap({costo:totalCosto,compraConIVA:true,
-        manualPrice:safeNumber(ef.precioIVA)*qty,ventaConIVA:true,mode:"manual",
-        gasolina:gastos,otros:0,iva,isr});
-    }
     const opMeta = OP_TYPES.find(o=>o.id===(ef.opType||"consumable"))||OP_TYPES[0];
-    const {costoIVA:_c,precioIVA:_p,_iva:_iv,_isr:_is,quoteMode:_q,opType:_ot,activeMods:_am,_gastos:_g,qty:_qty,...rest}=ef;
+    const mgn = effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
+
+    let newSnap, newLineas, newTitulo, newQty;
+
+    if (mLineas.length > 0) {
+      // Multilinea mode — compute per-line snaps and aggregate
+      const lineasConSnap = mLineas.map(l => {
+        const qL = Math.max(1, Math.round(safeNumber(l.qty)||1));
+        const costo = safeNumber(l.costoUnit) * qL;
+        const snap = computeSnap({costo, compraConIVA:true,
+          mode:"manual", manualPrice:safeNumber(l.precioUnit)*qL, ventaConIVA:true,
+          gasolina:0, otros:0, iva, isr});
+        return {titulo:l.titulo||"Sin descripción", partRef:l.partRef||"",
+                snap, qty:qL, descripcionPDF:l.descripcionPDF||"",
+                costoUnit:safeNumber(l.costoUnit),
+                unitPrice:safeNumber(l.precioUnit),
+                lineTotal:snap.precioConIVA};
+      });
+      const totalPrecio = lineasConSnap.reduce((s,l)=>s+l.snap.precioConIVA,0);
+      const totalCosto  = lineasConSnap.reduce((s,l)=>s+l.snap.costoTotal,0);
+      newSnap = computeSnap({costo:totalCosto,compraConIVA:false,
+        mode:"manual",manualPrice:totalPrecio,ventaConIVA:true,
+        gasolina:gastos,otros:0,iva,isr});
+      newLineas = lineasConSnap;
+      newTitulo = ef.titulo || lineasConSnap.map(l=>l.titulo).join(" / ");
+      newQty = lineasConSnap.reduce((s,l)=>s+l.qty,0);
+    } else {
+      // Single-line mode (legacy)
+      newQty = Math.max(1, Math.round(safeNumber(ef.qty)||1));
+      const totalCosto = safeNumber(ef.costoIVA) * newQty;
+      if(ef.quoteMode) {
+        newSnap = computeSnap({costo:totalCosto,compraConIVA:true,
+          mode:"auto",margin:mgn,gasolina:gastos,otros:0,iva,isr});
+      } else {
+        newSnap = computeSnap({costo:totalCosto,compraConIVA:true,
+          manualPrice:safeNumber(ef.precioIVA)*newQty,ventaConIVA:true,mode:"manual",
+          gasolina:gastos,otros:0,iva,isr});
+      }
+      newLineas = [];
+      newTitulo = ef.titulo || t.titulo;
+    }
+
+    const {costoIVA:_c,precioIVA:_p,_iva:_iv,_isr:_is,quoteMode:_q,opType:_ot,
+           activeMods:_am,_gastos:_g,qty:_qty,titulo:_ti,kitMode:_km,...rest}=ef;
     dispatch({type:"TKT_UPDATE",id:t.id,patch:{
-      ...rest,qty,snap:newSnap,lineas:[],
-      opId:ef.opType||"consumable",opShort:opMeta.short,mods:ef.activeMods||[],
+      ...rest, titulo:newTitulo, qty:newQty, snap:newSnap, lineas:newLineas,
+      kitMode:ef.kitMode||false,
+      opId:ef.opType||"consumable", opShort:opMeta.short, mods:ef.activeMods||[],
     }});
     toast("Actualizado","success");
     setEditId(null);
@@ -7926,6 +7976,34 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                             textTransform:"uppercase",marginBottom:14,fontWeight:800}}>
                             Editando: {t.titulo?.slice(0,28)}
                           </div>
+
+                          {/* ── Título ── */}
+                          <div style={{marginBottom:10}}>
+                            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>Título de la operación</div>
+                            <input value={ef.titulo||""} onChange={e=>sfn("titulo")(e.target.value)}
+                              placeholder="Ej: Horquilla clutch Freightliner M2 106"
+                              style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.03)",
+                                border:`1px solid ${C.borderHi}`,borderRadius:10,padding:"10px 12px",
+                                color:A.t1,fontSize:13,outline:"none",fontFamily:"inherit"}}/>
+                          </div>
+
+                          {/* ── Kit mode ── */}
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+                            padding:"9px 12px",borderRadius:10,marginBottom:10,
+                            background:ef.kitMode?"rgba(43,181,160,0.08)":"rgba(255,255,255,0.03)",
+                            border:`1px solid ${ef.kitMode?C.blue+"55":C.border}`,cursor:"pointer"}}
+                            onClick={()=>sfn("kitMode")(!ef.kitMode)}>
+                            <div>
+                              <div style={{fontSize:11,fontWeight:600,color:ef.kitMode?A.lime:A.t2}}>Integrar como kit</div>
+                              <div style={{fontSize:9,color:A.t3,marginTop:2}}>Agrupa las líneas como un paquete en el PDF</div>
+                            </div>
+                            <div style={{width:36,height:20,borderRadius:10,background:ef.kitMode?C.blue:"rgba(255,255,255,0.1)",
+                              position:"relative",flexShrink:0,transition:"background 150ms"}}>
+                              <div style={{position:"absolute",top:2,left:ef.kitMode?18:2,width:16,height:16,
+                                borderRadius:"50%",background:"#fff",transition:"left 150ms"}}/>
+                            </div>
+                          </div>
+
                           <MSel label="Estado" value={ef.status} onChange={sfn("status")}
                             options={TICKET_ALL.map(s=>({value:s,label:(TICKET_META[s]?.label||s)}))}/>
                           <ClientPicker clients={clients} value={ef.clientId||""} onChange={sfn("clientId")} mobile/>
@@ -8114,6 +8192,103 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                               border:`1px solid ${C.border}`,borderRadius:10,
                               padding:"10px 12px",color:A.t2,fontSize:13,outline:"none",
                               boxSizing:"border-box",fontFamily:"inherit",resize:"none",marginBottom:14}}/>
+
+                          {/* ── Líneas / Productos ── */}
+                          <div style={{height:1,background:C.border,marginBottom:12}}/>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",fontWeight:700}}>
+                              Líneas ({mLineas.length})
+                            </div>
+                            <button onClick={addMLinea}
+                              style={{padding:"5px 12px",borderRadius:8,fontSize:10,fontWeight:700,
+                                background:C.blueDim,border:`1px solid ${C.blueHi}`,
+                                color:A.cyan,cursor:"pointer"}}>
+                              + Agregar producto/servicio
+                            </button>
+                          </div>
+                          {mLineas.map((l,idx)=>(
+                            <div key={idx} style={{background:"rgba(255,255,255,0.02)",
+                              border:`1px solid ${C.borderHi}`,borderRadius:10,
+                              padding:"10px 12px",marginBottom:8}}>
+                              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                                <span style={{fontSize:9,color:A.cyan,fontWeight:700,letterSpacing:"0.1em"}}>
+                                  LÍNEA {idx+1}
+                                </span>
+                                <button onClick={()=>delMLinea(idx)}
+                                  style={{padding:"2px 8px",borderRadius:6,background:"transparent",
+                                    border:`1px solid ${C.red}44`,color:A.red,fontSize:9,cursor:"pointer",fontWeight:700}}>
+                                  × Eliminar
+                                </button>
+                              </div>
+                              <input value={l.titulo} onChange={e=>mLsfn(idx,"titulo")(e.target.value)}
+                                placeholder="Descripción del producto/servicio"
+                                style={{width:"100%",boxSizing:"border-box",marginBottom:6,
+                                  background:"rgba(255,255,255,0.03)",border:`1px solid ${C.border}`,
+                                  borderRadius:8,padding:"8px 10px",color:A.t1,fontSize:12,
+                                  outline:"none",fontFamily:"inherit"}}/>
+                              <input value={l.partRef} onChange={e=>mLsfn(idx,"partRef")(e.target.value)}
+                                placeholder="No. parte / referencia"
+                                style={{width:"100%",boxSizing:"border-box",marginBottom:6,
+                                  background:"rgba(255,255,255,0.03)",border:`1px solid ${C.border}`,
+                                  borderRadius:8,padding:"7px 10px",color:A.t2,fontSize:11,
+                                  outline:"none",fontFamily:"inherit"}}/>
+                              <div style={{display:"grid",gridTemplateColumns:"60px 1fr 1fr",gap:6}}>
+                                <div>
+                                  <div style={{fontSize:8,color:A.t3,marginBottom:3}}>Cant.</div>
+                                  <input type="number" inputMode="numeric" min="1" value={l.qty}
+                                    onChange={e=>mLsfn(idx,"qty")(Number(e.target.value)||1)}
+                                    style={{width:"100%",boxSizing:"border-box",
+                                      background:"rgba(255,255,255,0.03)",border:`1px solid ${C.border}`,
+                                      borderRadius:8,padding:"8px 6px",color:A.lime,fontSize:13,
+                                      fontWeight:700,outline:"none",textAlign:"center",fontFamily:"inherit"}}/>
+                                </div>
+                                <div>
+                                  <div style={{fontSize:8,color:A.t3,marginBottom:3}}>Costo unit. c/IVA</div>
+                                  <input type="number" inputMode="decimal" value={l.costoUnit}
+                                    onChange={e=>mLsfn(idx,"costoUnit")(e.target.value)}
+                                    placeholder="0"
+                                    style={{width:"100%",boxSizing:"border-box",
+                                      background:"rgba(255,255,255,0.03)",border:`1px solid ${C.border}`,
+                                      borderRadius:8,padding:"8px 10px",color:A.t1,fontSize:12,
+                                      outline:"none",fontFamily:"inherit"}}/>
+                                </div>
+                                <div>
+                                  <div style={{fontSize:8,color:A.t3,marginBottom:3}}>Precio unit. c/IVA</div>
+                                  <input type="number" inputMode="decimal" value={l.precioUnit}
+                                    onChange={e=>mLsfn(idx,"precioUnit")(e.target.value)}
+                                    placeholder="0"
+                                    style={{width:"100%",boxSizing:"border-box",
+                                      background:"rgba(255,255,255,0.03)",border:`1px solid ${C.border}`,
+                                      borderRadius:8,padding:"8px 10px",color:A.cyan,fontSize:12,
+                                      outline:"none",fontFamily:"inherit"}}/>
+                                </div>
+                              </div>
+                              {(safeNumber(l.precioUnit)>0||safeNumber(l.costoUnit)>0)&&(
+                                <div style={{marginTop:6,fontSize:9,color:A.t3,fontVariantNumeric:"tabular-nums"}}>
+                                  Total línea: <span style={{color:A.t1,fontWeight:700}}>
+                                    {mxn(safeNumber(l.precioUnit)*Math.max(1,safeNumber(l.qty)||1))}
+                                  </span>
+                                  {safeNumber(l.costoUnit)>0&&(
+                                    <span style={{color:A.lime,marginLeft:8}}>
+                                      Util: {mxn((safeNumber(l.precioUnit)-safeNumber(l.costoUnit)*1.16)*Math.max(1,safeNumber(l.qty)||1))}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                          {mLineas.length>0&&(
+                            <div style={{padding:"8px 12px",borderRadius:8,marginBottom:12,
+                              background:"rgba(255,255,255,0.03)",border:`1px solid ${C.border}`,
+                              fontSize:10,color:A.t2,fontVariantNumeric:"tabular-nums"}}>
+                              <span style={{color:A.t3}}>Total {mLineas.length} líneas: </span>
+                              <span style={{fontWeight:800,color:A.t1}}>
+                                {mxn(mLineas.reduce((s,l)=>s+safeNumber(l.precioUnit)*Math.max(1,safeNumber(l.qty)||1),0))}
+                              </span>
+                              <span style={{fontSize:9,color:A.t3,marginLeft:6}}>(reemplaza costo/precio de arriba)</span>
+                            </div>
+                          )}
+
                           <div style={{display:"flex",gap:8}}>
                             <button onClick={()=>saveEdit(t)} style={{
                               flex:1,padding:"13px",borderRadius:12,
