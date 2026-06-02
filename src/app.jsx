@@ -1012,43 +1012,43 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
   const innerHTML = `
     <style>
       *{box-sizing:border-box;margin:0;padding:0}
-      .page{width:794px;background:#fff;padding:50px;font-family:Arial,Helvetica,sans-serif;color:#111;font-size:14px;line-height:1.5}
+      .page{width:794px;background:#fff;padding:36px 46px 28px;font-family:Arial,Helvetica,sans-serif;color:#111;font-size:12px;line-height:1.45}
       /* ── HEADER ── */
-      .top-header{border:1px solid #dcdcdc;padding:20px;display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0}
-      .brand h1{font-size:28px;font-weight:800;margin:0;color:#0a0a0a}
-      .brand p{font-size:10px;color:#666;font-weight:700;margin-top:4px}
-      .issuer{text-align:right;font-size:11px;line-height:1.6;color:#444}
+      .top-header{border:1px solid #dcdcdc;padding:16px 20px;display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0}
+      .brand h1{font-size:26px;font-weight:800;margin:0;color:#0a0a0a}
+      .brand p{font-size:9px;color:#666;font-weight:700;margin-top:3px}
+      .issuer{text-align:right;font-size:10px;line-height:1.55;color:#444}
       .issuer strong{color:#0a0a0a}
       /* ── HERO BAR ── */
-      .hero{background:#000;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:20px;margin-top:14px}
-      .hero-title{font-size:22px;font-weight:800}
+      .hero{background:#000;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:14px 18px;margin-top:12px}
+      .hero-title{font-size:20px;font-weight:800}
       .hero-meta{text-align:right}
-      .hero-meta .lbl{font-size:9px;color:rgba(255,255,255,0.6)}
-      .hero-meta .folio{font-size:18px;font-weight:800}
-      .hero-meta .date{font-size:13px;font-weight:700}
+      .hero-meta .lbl{font-size:8px;color:rgba(255,255,255,0.6)}
+      .hero-meta .folio{font-size:15px;font-weight:800}
+      .hero-meta .date{font-size:11px;font-weight:700}
       /* ── META TABLE ── */
-      .meta-table{width:100%;border-collapse:collapse;margin-top:14px}
-      .meta-table td{border:1px solid #e3e3e3;padding:10px 12px;font-size:11px}
-      .meta-table td:first-child{width:100px;background:#fafafa;font-weight:700}
+      .meta-table{width:100%;border-collapse:collapse;margin-top:12px}
+      .meta-table td{border:1px solid #e3e3e3;padding:7px 11px;font-size:10px}
+      .meta-table td:first-child{width:90px;background:#fafafa;font-weight:700}
       /* ── DETAIL TABLE ── */
-      .section-title{margin-top:22px;margin-bottom:10px;font-size:13px;font-weight:800}
+      .section-title{margin-top:16px;margin-bottom:8px;font-size:12px;font-weight:800}
       .detail-table{width:100%;border-collapse:collapse}
-      .detail-table th{background:#000;color:#fff;padding:10px 12px;text-align:left;font-size:10px}
-      .detail-table td{border:1px solid #e5e5e5;padding:12px;vertical-align:top;font-size:11px;line-height:1.6}
+      .detail-table th{background:#000;color:#fff;padding:8px 10px;text-align:left;font-size:9.5px}
+      .detail-table td{border:1px solid #e5e5e5;padding:9px 10px;vertical-align:top;font-size:10.5px;line-height:1.5}
       .money{text-align:right;white-space:nowrap;font-weight:700}
       /* ── TOTALS ── */
-      .totals{width:300px;margin-left:auto;margin-top:16px;border-collapse:collapse}
-      .totals td{border:1px solid #e3e3e3;padding:10px 12px;font-size:11px}
+      .totals{width:280px;margin-left:auto;margin-top:10px;border-collapse:collapse}
+      .totals td{border:1px solid #e3e3e3;padding:7px 11px;font-size:10px}
       .totals td:last-child{text-align:right;font-weight:700}
       .grand-total td{background:#000;color:#fff;font-weight:800}
       /* ── STACKED SECTIONS ── */
-      .blocks-row{margin-top:22px}
-      .block{margin-bottom:14px}
-      .block h3{font-size:13px;font-weight:800;margin-bottom:8px}
-      .block ul{padding-left:16px}
-      .block li{font-size:11px;line-height:1.6;margin-bottom:5px}
+      .blocks-row{margin-top:16px}
+      .block{margin-bottom:10px}
+      .block h3{font-size:11px;font-weight:800;margin-bottom:5px}
+      .block ul{padding-left:14px}
+      .block li{font-size:10px;line-height:1.5;margin-bottom:3px}
       /* ── FOOTER ── */
-      .footer{margin-top:28px;border-top:1px solid #e5e5e5;padding-top:10px;display:flex;justify-content:space-between;font-size:10px;color:#444}
+      .footer{margin-top:16px;border-top:1px solid #e5e5e5;padding-top:8px;display:flex;justify-content:space-between;font-size:9px;color:#777}
     </style>
     <div class="page">
       <div class="top-header">
