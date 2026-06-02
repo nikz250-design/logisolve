@@ -1047,7 +1047,7 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
       .block h3{font-size:10px;font-weight:800;margin-bottom:5px}
       .block ul{list-style:none;padding:0}
       .block li{font-size:9.5px;line-height:1.5;margin-bottom:3px;padding-left:12px;position:relative}
-      .block li::before{content:"\00B7";position:absolute;left:2px;color:#555}
+      .block li::before{content:"·";position:absolute;left:2px;color:#555}
       /* ── FOOTER ── */
       .footer{margin-top:12px;border-top:1px solid #e5e5e5;padding-top:7px;display:flex;justify-content:space-between;font-size:8.5px;color:#777}
     </style>
