@@ -7663,6 +7663,30 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
   const addMLinea = () => setMLineas(ls=>[...ls,{titulo:"",partRef:"",qty:1,costoUnit:"",precioUnit:"",descripcionPDF:""}]);
   const delMLinea = idx => setMLineas(ls=>ls.filter((_,i)=>i!==idx));
 
+  // Catalog search for mobile line editing
+  const [mCatalogIdx, setMCatalogIdx] = useState(null);
+  const [mCatalogQ,   setMCatalogQ]   = useState("");
+  const mCatalogResults = React.useMemo(()=>{
+    if(mCatalogIdx===null) return [];
+    const q=(mCatalogQ||"").toLowerCase().trim();
+    if(!q) return (state.parts||[]).slice(0,14);
+    return (state.parts||[]).filter(p=>
+      (p.nombre||"").toLowerCase().includes(q)||
+      (p.oem||"").toLowerCase().includes(q)||
+      (p.aftermarket||"").toLowerCase().includes(q)||
+      (p.aplicacion||"").toLowerCase().includes(q)
+    ).slice(0,14);
+  },[mCatalogQ,mCatalogIdx,state.parts]);
+  const mSelectCatalog = p => {
+    setMLineas(ls=>ls.map((l,i)=>i===mCatalogIdx?{
+      ...l,
+      titulo:   p.nombre||l.titulo,
+      partRef:  p.oem||p.aftermarket||l.partRef,
+      costoUnit:String(p.ultimoPrecio||0),
+    }:l));
+    setMCatalogIdx(null); setMCatalogQ("");
+  };
+
   const openEdit = t => {
     const s = t.snap || {};
     const ivaR_e = safeNumber(s.params?.iva,16)/100;
@@ -7763,6 +7787,74 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
 
   return (
     <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
+
+      {/* Catalog search modal for line editing */}
+      {mCatalogIdx!==null&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.82)",zIndex:600,
+          display:"flex",alignItems:"flex-end",justifyContent:"center"}}
+          onClick={()=>{setMCatalogIdx(null);setMCatalogQ("");}}>
+          <div style={{background:C.bg1,border:`1px solid ${C.borderHi}`,
+            borderRadius:"16px 16px 0 0",width:"100%",maxWidth:560,
+            maxHeight:"75vh",display:"flex",flexDirection:"column",overflow:"hidden"}}
+            onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"14px 16px 10px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
+              <div style={{fontSize:9,color:A.cyan,letterSpacing:"0.12em",textTransform:"uppercase",
+                fontWeight:800,marginBottom:8}}>
+                Catálogo — Línea {(mCatalogIdx+1)}
+              </div>
+              <input autoFocus value={mCatalogQ} onChange={e=>setMCatalogQ(e.target.value)}
+                placeholder="Buscar por nombre, OEM, aplicación..."
+                style={{width:"100%",boxSizing:"border-box",background:C.bg0,
+                  border:`1px solid ${C.borderHi}`,borderRadius:10,padding:"10px 14px",
+                  color:A.t1,fontSize:14,outline:"none",fontFamily:"inherit"}}/>
+            </div>
+            <div style={{overflowY:"auto",flex:1}}>
+              {(state.parts||[]).length===0&&(
+                <div style={{padding:"28px",textAlign:"center",color:A.t3,fontSize:12}}>
+                  Sin partes en el catálogo. Agrégalas en el módulo Catálogo.
+                </div>
+              )}
+              {mCatalogResults.map((p,i)=>(
+                <div key={p.id} onClick={()=>mSelectCatalog(p)}
+                  style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                    padding:"12px 16px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",
+                    background:i%2===0?C.bg1:C.bg0,activeStyle:{background:C.bg3}}}>
+                  <div style={{flex:1,minWidth:0,marginRight:12}}>
+                    <div style={{fontSize:13,fontWeight:700,color:A.t1,
+                      overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
+                    <div style={{fontSize:10,color:A.t3,marginTop:2,
+                      overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                      {p.oem&&<span style={{color:A.cyan,fontFamily:"'Courier New',monospace"}}>{p.oem}</span>}
+                      {p.oem&&p.aplicacion&&" · "}
+                      {p.aplicacion}
+                    </div>
+                  </div>
+                  <div style={{textAlign:"right",flexShrink:0}}>
+                    {p.ultimoPrecio>0&&(
+                      <div style={{fontSize:13,fontWeight:800,color:A.amber,
+                        fontVariantNumeric:"tabular-nums"}}>{mxn(p.ultimoPrecio)}</div>
+                    )}
+                    {p.ultimaFecha&&<div style={{fontSize:9,color:A.t3}}>{p.ultimaFecha}</div>}
+                  </div>
+                </div>
+              ))}
+              {mCatalogResults.length===0&&mCatalogQ&&(
+                <div style={{padding:"24px",textAlign:"center",color:A.t3,fontSize:12}}>
+                  Sin resultados para "{mCatalogQ}"
+                </div>
+              )}
+            </div>
+            <div style={{padding:"10px 16px",borderTop:`1px solid ${C.border}`,flexShrink:0}}>
+              <button onClick={()=>{setMCatalogIdx(null);setMCatalogQ("");}}
+                style={{width:"100%",padding:"10px",borderRadius:10,background:"transparent",
+                  border:`1px solid ${C.border}`,color:A.t3,fontSize:13,cursor:"pointer"}}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{padding:"0 14px"}}>
 
         {/* Period + search */}
@@ -8214,11 +8306,18 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                                 <span style={{fontSize:9,color:A.cyan,fontWeight:700,letterSpacing:"0.1em"}}>
                                   LÍNEA {idx+1}
                                 </span>
-                                <button onClick={()=>delMLinea(idx)}
-                                  style={{padding:"2px 8px",borderRadius:6,background:"transparent",
-                                    border:`1px solid ${C.red}44`,color:A.red,fontSize:9,cursor:"pointer",fontWeight:700}}>
-                                  × Eliminar
-                                </button>
+                                <div style={{display:"flex",gap:6}}>
+                                  <button onClick={()=>{setMCatalogIdx(idx);setMCatalogQ("");}}
+                                    style={{padding:"4px 10px",borderRadius:6,background:C.blueDim,
+                                      border:`1px solid ${C.blueHi}`,color:A.cyan,fontSize:9,cursor:"pointer",fontWeight:700}}>
+                                    🔍 Catálogo
+                                  </button>
+                                  <button onClick={()=>delMLinea(idx)}
+                                    style={{padding:"4px 8px",borderRadius:6,background:"transparent",
+                                      border:`1px solid ${C.red}44`,color:A.red,fontSize:9,cursor:"pointer",fontWeight:700}}>
+                                    × Eliminar
+                                  </button>
+                                </div>
                               </div>
                               <input value={l.titulo} onChange={e=>mLsfn(idx,"titulo")(e.target.value)}
                                 placeholder="Descripción del producto/servicio"
