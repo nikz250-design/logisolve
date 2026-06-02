@@ -5333,7 +5333,7 @@ function MOps({state,setTab,triggerMargin}) {
   },[operados]);
   const cobradosTkts  = useMemo(()=>sel_cobrados(tickets),[tickets]);
   const cashTotal     = useMemo(()=>sumSnap(cobradosTkts,"precioConIVA"),[cobradosTkts]);
-  const cxp           = useMemo(()=>sel_active(tickets).filter(t=>!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap?.costoTotal),0),[tickets]);
+  const cxp           = useMemo(()=>sel_active(tickets).filter(t=>OPERADO_SET.has(t.status)&&!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap?.costoTotal),0),[tickets]);
   const flujoOp       = carteraMonto - cargaFiscal - cxp;
   const forecastTkts  = useMemo(()=>sel_forecast(tickets),[tickets]);
   const forecastMonto = useMemo(()=>sumSnap(forecastTkts,"precioConIVA"),[forecastTkts]);
