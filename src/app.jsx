@@ -1229,6 +1229,189 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
     document.head.appendChild(script);
   }
 }
+// ── Acta de Entrega, Recepción y Conformidad ─────────────────────────────────
+function generarActaRecepcionPDF(tkt, cl, un) {
+  const folio = tkt.id.replace(/^TKT-/, 'LS-');
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const fechaHoy = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()}`;
+  const horaHoy  = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+  // Detalle rows
+  const conceptos = (()=>{
+    const ls = tkt.lineas||[];
+    if (!ls.length) return [{titulo:tkt.titulo, partRef:tkt.partRef||'', qty:1}];
+    const lSum = ls.reduce((s,l)=>s+(l.lineTotal||l.snap?.precioConIVA||0),0);
+    const sTotal = tkt.snap?.precioConIVA||0;
+    if (sTotal>0 && Math.abs(lSum-sTotal)>0.5) return [{titulo:tkt.titulo, partRef:tkt.partRef||'', qty:1}];
+    return ls;
+  })();
+  const unLabel = un ? `${un.marca} ${un.modelo}` : '';
+  const filas = conceptos.map(c=>`
+    <tr>
+      <td style="text-align:center">${c.qty||1}</td>
+      <td>${unLabel}</td>
+      <td>${c.titulo||c.descripcionPDF||''}</td>
+      <td>${c.partRef||''}</td>
+      <td style="text-align:center">Nuevo</td>
+    </tr>`).join('');
+
+  const blue = '#1a3a6b';
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#111}
+.page{width:794px;padding:28px 36px 32px;background:#fff}
+.main-title{text-align:center;margin-bottom:6px}
+.main-title h1{font-size:16px;font-weight:900;letter-spacing:0.02em}
+.main-title p{font-size:10px;font-weight:600;color:#333}
+.header-bar{display:flex;border:1px solid #ccc;margin-bottom:0}
+.header-bar .left{background:${blue};color:#fff;font-size:10px;font-weight:800;
+  padding:8px 12px;flex:1;display:flex;align-items:center;letter-spacing:0.04em}
+.header-bar .right{font-size:9px;padding:5px 10px;line-height:1.7;min-width:130px;border-left:1px solid #ccc}
+.header-bar .right b{font-weight:700}
+table.section{width:100%;border-collapse:collapse;margin-bottom:0}
+table.section th.sec-hd{background:${blue};color:#fff;font-size:9px;font-weight:800;
+  padding:5px 8px;letter-spacing:0.06em;text-align:left}
+table.section td{border:1px solid #ccc;padding:5px 8px;font-size:9.5px;vertical-align:middle}
+table.section td.lbl{background:#eef1f7;font-weight:700;width:130px;white-space:nowrap}
+table.section td.val{background:#fff}
+.detail-table{width:100%;border-collapse:collapse;margin-bottom:0}
+.detail-table th{background:${blue};color:#fff;font-size:9px;font-weight:800;padding:5px 8px;text-align:left}
+.detail-table td{border:1px solid #ccc;padding:5px 8px;font-size:9.5px}
+.detail-table tr:nth-child(even) td{background:#f9f9f9}
+.obs-box{border:1px solid #ccc;min-height:52px;padding:6px 8px;font-size:9.5px;color:#666}
+.obs-photo{border:1px solid #ccc;min-height:34px;padding:5px 8px;font-size:9px;color:#999;font-style:italic}
+.decl{font-size:8.5px;line-height:1.55;margin:8px 0;text-align:justify}
+.decl b{font-weight:800}
+.sig-table{width:100%;border-collapse:collapse;margin-top:6px}
+.sig-table th{background:#dde3ee;font-size:9px;font-weight:800;padding:5px 8px;text-align:left;letter-spacing:0.05em;border:1px solid #ccc}
+.sig-table td{border:1px solid #ccc;padding:36px 10px 5px;font-size:9px;color:#444}
+.spacer{height:6px}
+</style></head><body><div class="page">
+  <div class="main-title">
+    <h1>LOGISOLVE</h1>
+    <p>Log&iacute;stica, Suministro y Soporte Automotriz Integrado</p>
+  </div>
+  <div class="header-bar">
+    <div class="left">ACTA DE ENTREGA, RECEPCI&Oacute;N Y CONFORMIDAD</div>
+    <div class="right">
+      <b>Folio:</b> ${folio}<br>
+      <b>Fecha:</b> ${fechaHoy}<br>
+      <b>Hora:</b> ${horaHoy}
+    </div>
+  </div>
+  <div class="spacer"></div>
+
+  <table class="section">
+    <tr><th class="sec-hd" colspan="4">1. DATOS DEL CLIENTE</th></tr>
+    <tr>
+      <td class="lbl">Cliente / Empresa</td><td class="val" colspan="3">${cl?.empresa||''}</td>
+    </tr>
+    <tr>
+      <td class="lbl">Contacto</td><td class="val">${cl?.contacto||''}</td>
+      <td class="lbl" style="width:80px">Correo</td><td class="val">${cl?.correo||''}</td>
+    </tr>
+    <tr>
+      <td class="lbl">Tel&eacute;fono</td><td class="val">${cl?.tel||''}</td>
+      <td class="lbl" style="width:80px">RFC</td><td class="val">${cl?.rfc||''}</td>
+    </tr>
+    <tr>
+      <td class="lbl">Ubicaci&oacute;n de entrega</td><td class="val" colspan="3"></td>
+    </tr>
+  </table>
+  <div class="spacer"></div>
+
+  <table class="section">
+    <tr><th class="sec-hd" colspan="6">2. DATOS DE LA UNIDAD (SI APLICA)</th></tr>
+    <tr>
+      <td class="lbl">Marca</td><td class="val">${un?.marca||''}</td>
+      <td class="lbl">Modelo</td><td class="val">${un?.modelo||''}</td>
+      <td class="lbl">A&ntilde;o</td><td class="val">${un?.anio||''}</td>
+    </tr>
+    <tr>
+      <td class="lbl">Placas</td><td class="val">${un?.placa||''}</td>
+      <td class="lbl">No. Econ&oacute;mico</td><td class="val">${un?.economico||''}</td>
+      <td class="lbl">VIN</td><td class="val">${un?.vin||''}</td>
+    </tr>
+    <tr>
+      <td class="lbl">Kilometraje</td><td class="val" colspan="5">${un?.km ? un.km.toLocaleString('es-MX')+' km' : ''}</td>
+    </tr>
+  </table>
+  <div class="spacer"></div>
+
+  <table class="detail-table">
+    <thead>
+      <tr>
+        <th style="width:38px;text-align:center">Cant.</th>
+        <th style="width:110px">Unidad</th>
+        <th>Descripci&oacute;n</th>
+        <th style="width:100px">No. Parte</th>
+        <th style="width:65px;text-align:center">Estado</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${filas}
+      <tr><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td></td><td></td><td></td><td></td><td></td></tr>
+    </tbody>
+  </table>
+  <div class="spacer"></div>
+
+  <table class="section">
+    <tr><th class="sec-hd" colspan="1">4. OBSERVACIONES Y EVIDENCIA</th></tr>
+    <tr><td><div style="font-size:9px;margin-bottom:2px;font-weight:600">Observaciones:</div>
+      <div class="obs-box">${tkt.notes||''}</div>
+      <div style="margin-top:6px" class="obs-photo">Espacio para evidencia fotogr&aacute;fica (opcional)</div>
+    </td></tr>
+  </table>
+  <div class="spacer"></div>
+
+  <div class="decl"><b>DECLARACI&Oacute;N DE CONFORMIDAD.</b> El cliente declara haber recibido y verificado los bienes, componentes, refacciones y/o servicios descritos en el presente documento, manifestando su conformidad respecto a cantidad, identificaci&oacute;n y estado f&iacute;sico aparente. Cualquier garant&iacute;a aplicable estar&aacute; sujeta a las pol&iacute;ticas del fabricante, proveedor o LogiSolve seg&uacute;n corresponda.</div>
+
+  <table class="sig-table">
+    <tr>
+      <th style="width:50%">ENTREGA</th>
+      <th style="width:50%">RECEPCI&Oacute;N CONFORME</th>
+    </tr>
+    <tr>
+      <td>Nombre y Firma</td>
+      <td>Nombre, Cargo y Firma</td>
+    </tr>
+  </table>
+</div></body></html>`;
+
+  const container = document.createElement('div');
+  container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px';
+  container.innerHTML = html;
+  document.body.appendChild(container);
+
+  const generate = () => {
+    // eslint-disable-next-line no-undef
+    html2pdf()
+      .set({
+        margin: 0,
+        filename: `${folio}-acta.pdf`,
+        image: { type:'jpeg', quality:0.98 },
+        html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff', logging:false, scrollX:0, scrollY:0 },
+        jsPDF: { unit:'mm', format:'a4', orientation:'portrait' },
+      })
+      .from(container.firstElementChild)
+      .save()
+      .finally(() => { container.remove(); });
+  };
+
+  const go = () => requestAnimationFrame(() => requestAnimationFrame(generate));
+  if (typeof html2pdf !== 'undefined') {
+    go();
+  } else {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+    script.onload = go;
+    script.onerror = () => { container.remove(); alert('No se pudo cargar html2pdf.js.'); };
+    document.head.appendChild(script);
+  }
+}
 // Modal de confirmacion PDF
 function PDFConfirm({tkt,cl,un,supp,onClose}) {
   const C = React.useContext(ThemeCtx);
@@ -6343,7 +6526,16 @@ function MPipeline({state,dispatch,toast}) {
                           style={{padding:"7px 14px",borderRadius:10,background:"transparent",
                             border:`1px solid ${C.border}`,color:A.t2,fontSize:10,
                             fontWeight:600,cursor:"pointer",letterSpacing:"0.06em"}}>
-                          PDF ↗
+                          COT ↗
+                        </button>
+                        <button onClick={e=>{e.stopPropagation();
+                          const c2=clients.find(c=>c.id===t.clientId);
+                          const u2=units.find(u=>u.id===t.unitId);
+                          generarActaRecepcionPDF(t,c2,u2);}}
+                          style={{padding:"7px 14px",borderRadius:10,background:"transparent",
+                            border:`1px solid ${C.border}`,color:A.t2,fontSize:10,
+                            fontWeight:600,cursor:"pointer",letterSpacing:"0.06em"}}>
+                          Acta ↗
                         </button>
                       </div>
                     </div>
@@ -7729,7 +7921,16 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                               flex:1,padding:"9px 14px",borderRadius:10,background:"transparent",
                               border:`1px solid ${C.border}`,color:A.t2,
                               fontSize:11,fontWeight:600,cursor:"pointer",
-                            }}>PDF ↗</button>
+                            }}>COT ↗</button>
+                            <button onClick={()=>{
+                              const c2=clients.find(c=>c.id===t.clientId);
+                              const u2=units.find(u=>u.id===t.unitId);
+                              generarActaRecepcionPDF(t,c2,u2);
+                            }} style={{
+                              flex:1,padding:"9px 14px",borderRadius:10,background:"transparent",
+                              border:`1px solid ${C.border}`,color:A.t2,
+                              fontSize:11,fontWeight:600,cursor:"pointer",
+                            }}>Acta ↗</button>
                             {CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t.cobrado&&(
                               <button onClick={()=>{dispatch({type:"TKT_COBRADO",id:t.id});toast("Cobrado ✓","success");setExpandId(null);}}
                                 style={{flex:1,padding:"9px 14px",borderRadius:10,background:A.mintDim,
