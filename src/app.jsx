@@ -5780,10 +5780,16 @@ function MOps({state,setTab,triggerMargin}) {
           // Build day → {venta,neta,ops,solic,tkts[]} for this month
           const dmap={};
           const operadosSet=new Set(sel_operados(tickets).map(t=>t.id));
+          const parseDN=(s)=>{
+            if(!s) return null;
+            const p=s.split("/");
+            if(p.length!==3) return null;
+            return {dn:parseInt(p[0]),mo:parseInt(p[1])-1,yr:parseInt(p[2])};
+          };
           sel_operados(tickets).forEach(t=>{
-            const d=parseDateMX(t.date);
-            if(!d||d.getFullYear()!==yr||d.getMonth()!==mo) return;
-            const k=d.getDate();
+            const p=parseDN(t.date);
+            if(!p||p.yr!==yr||p.mo!==mo) return;
+            const k=p.dn;
             if(!dmap[k]) dmap[k]={venta:0,neta:0,ops:0,solic:0,tkts:[]};
             dmap[k].venta+=safeNumber(t.snap?.precioConIVA);
             dmap[k].neta +=safeNumber(t.snap?.uNeta);
@@ -5791,9 +5797,9 @@ function MOps({state,setTab,triggerMargin}) {
             dmap[k].tkts.push(t);
           });
           tickets.filter(t=>!t._deleted).forEach(t=>{
-            const d=parseDateMX(t.date);
-            if(!d||d.getFullYear()!==yr||d.getMonth()!==mo) return;
-            const k=d.getDate();
+            const p=parseDN(t.date);
+            if(!p||p.yr!==yr||p.mo!==mo) return;
+            const k=p.dn;
             if(!dmap[k]) dmap[k]={venta:0,neta:0,ops:0,solic:0,tkts:[]};
             dmap[k].solic+=1;
             if(!operadosSet.has(t.id)) dmap[k].tkts.push(t);
