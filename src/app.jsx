@@ -1959,7 +1959,7 @@ function CentroOps({state}) {
   // ── LAYER 3: CARTERA — shared selector (business rule defined once) ─────────
   const cartera     = useMemo(()=>sel_cartera(tickets),[tickets]);
   const carteraMonto= useMemo(()=>sumSnap(cartera,"precioConIVA"),[cartera]);
-  const cxp         = useMemo(()=>active.filter(t=>OPERADO_SET.has(t.status)&&!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap?.costoTotal),0),[active]);
+  const cxp         = useMemo(()=>cartera.reduce((s,t)=>s+safeNumber(t.snap?.costoTotal),0),[cartera]);
   const flujoOp     = carteraMonto - cargaFiscal - cxp;
   const vencidos    = useMemo(()=>sel_vencidos(tickets),[tickets]);
 
@@ -5333,7 +5333,8 @@ function MOps({state,setTab,triggerMargin}) {
   },[operados]);
   const cobradosTkts  = useMemo(()=>sel_cobrados(tickets),[tickets]);
   const cashTotal     = useMemo(()=>sumSnap(cobradosTkts,"precioConIVA"),[cobradosTkts]);
-  const cxp           = useMemo(()=>sel_active(tickets).filter(t=>OPERADO_SET.has(t.status)&&!t.pagadoProveedor).reduce((s,t)=>s+safeNumber(t.snap?.costoTotal),0),[tickets]);
+  // CxP: only current cartera tickets (same set as carteraMonto) to avoid accumulating all historical unpaid suppliers
+  const cxp           = useMemo(()=>sel_cartera(tickets).reduce((s,t)=>s+safeNumber(t.snap?.costoTotal),0),[tickets]);
   const flujoOp       = carteraMonto - cargaFiscal - cxp;
   const forecastTkts  = useMemo(()=>sel_forecast(tickets),[tickets]);
   const forecastMonto = useMemo(()=>sumSnap(forecastTkts,"precioConIVA"),[forecastTkts]);
