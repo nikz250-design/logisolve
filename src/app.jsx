@@ -8122,10 +8122,11 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                           padding:"16px",background:C.bg0}}>
                           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
                             {[
-                              {l:"Precio",    v:mxn(price),  c:A.t1},
-                              {l:"Util. neta",v:mxn(uNeta),  c:uNeta>=0?A.lime:A.red},
-                              {l:"Costo",     v:mxn(safeNumber(t.snap?.costoTotal)), c:A.t2},
-                              {l:"Margen",    v:fpct(safeNumber(t.snap?.margenNetoPrecio)), c:A.t2},
+                              {l:"Precio",       v:mxn(price),  c:A.t1},
+                              {l:"Util. neta",   v:mxn(uNeta),  c:uNeta>=0?A.lime:A.red},
+                              {l:"Costo s/IVA",  v:mxn(safeNumber(t.snap?.costoTotal)), c:A.t2},
+                              {l:"Costo c/IVA",  v:mxn(safeNumber(t.snap?.costoTotal)+safeNumber(t.snap?.ivaAcred)), c:A.t1},
+                              {l:"Margen",       v:fpct(safeNumber(t.snap?.margenNetoPrecio)), c:A.t2},
                             ].map(({l,v,c})=>(
                               <div key={l}>
                                 <div style={{fontSize:8,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>{l}</div>
