@@ -8164,7 +8164,11 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                             padding:"9px 12px",borderRadius:10,marginBottom:10,
                             background:ef.kitMode?"rgba(43,181,160,0.08)":"rgba(255,255,255,0.03)",
                             border:`1px solid ${ef.kitMode?C.blue+"55":C.border}`,cursor:"pointer"}}
-                            onClick={()=>sfn("kitMode")(!ef.kitMode)}>
+                            onClick={()=>{
+                              const next=!ef.kitMode;
+                              sfn("kitMode")(next);
+                              if(next) setMLineas([]);
+                            }}>
                             <div>
                               <div style={{fontSize:11,fontWeight:600,color:ef.kitMode?A.lime:A.t2}}>Integrar como kit</div>
                               <div style={{fontSize:9,color:A.t3,marginTop:2}}>Agrupa las líneas como un paquete en el PDF</div>
@@ -8186,6 +8190,8 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                             <MField label="Promesa de pago" value={ef.promesaPago}
                               onChange={sfn("promesaPago")} placeholder="DD/MM/AAAA" color={A.amber}/>
                           )}
+                          {/* ── Campos individuales (ocultos en kit mode) ── */}
+                          {!ef.kitMode&&(<>
                           {/* ── Cantidad ── */}
                           <div style={{marginBottom:8}}>
                             <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>Cantidad (piezas)</div>
@@ -8355,6 +8361,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                               </div>
                             );
                           })()}
+                          </>)}
                           <div style={{fontSize:9,color:A.t3,marginBottom:6,letterSpacing:"0.12em",textTransform:"uppercase"}}>
                             Notas
                           </div>
