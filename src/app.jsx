@@ -244,10 +244,13 @@ async function sbUploadFile(ticketId, file, category) {
     body: file,
   });
   if (!res.ok) {
-    let detail = res.status;
-    try { const j = await res.json(); detail = j.message || j.error || res.status; } catch(_) {}
-    if (res.status === 400 || res.status === 404) {
-      throw new Error(`El bucket "${SB_BUCKET}" no existe. Créalo en Supabase → Storage antes de subir archivos. (${detail})`);
+    let detail = String(res.status);
+    try { const j = await res.json(); detail = j.message || j.error || detail; } catch(_) {}
+    if (typeof detail === "string" && detail.includes("row-level security")) {
+      throw new Error("Sin permiso para subir archivos. Ejecuta las políticas RLS en Supabase → Editor SQL.");
+    }
+    if (res.status === 404) {
+      throw new Error(`El bucket "${SB_BUCKET}" no existe. Créalo en Supabase → Almacenamiento.`);
     }
     throw new Error(`Error al subir: ${detail}`);
   }
