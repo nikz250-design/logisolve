@@ -8107,6 +8107,9 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                         <div style={{fontSize:13,fontWeight:700,color:A.t1,lineHeight:1.3,marginBottom:4}}>
                           {t.titulo}
                         </div>
+                        <div style={{fontSize:9,color:A.t3,fontFamily:"'Courier New',monospace",marginBottom:3,letterSpacing:"0.04em"}}>
+                          {t.id}
+                        </div>
                         {(cl||un)&&(
                           <div style={{fontSize:10,color:A.t3,
                             overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
