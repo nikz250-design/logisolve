@@ -5280,6 +5280,8 @@ function MOps({state,setTab,triggerMargin}) {
   const [period,setPeriod]     = useState("month");
   const [heatMetric,setHeatMetric] = useState("venta");
   const [heatDay,setHeatDay]       = useState(null); // {dn,yr,mo}
+  const [heatViewDate,setHeatViewDate] = useState(()=>new Date());
+  const [sparkMode,setSparkMode]   = useState("week"); // "week" | "month"
 
   // ── Accent palette — Black/white monochrome
   const A = makeA(C);
@@ -5371,6 +5373,25 @@ function MOps({state,setTab,triggerMargin}) {
     return days;
   },[tickets]);
   const maxSpark = Math.max(...sparkData.map(d=>d.val),1);
+
+  // Monthly sparkline (last 12 months)
+  const sparkMonthData = useMemo(()=>{
+    const months=[];
+    const now=new Date();
+    for(let i=11;i>=0;i--){
+      const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+      const yr=d.getFullYear(), mo=d.getMonth();
+      const val=sumSnap(sel_operados(tickets).filter(t=>{
+        const td=parseDateMX(t.date);
+        return td&&td.getFullYear()===yr&&td.getMonth()===mo;
+      }),"uNeta");
+      const MESES_SHORT=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+      const isCurrent=i===0;
+      months.push({val,yr,mo,label:MESES_SHORT[mo]+(i===11||mo===0?` ${yr}`:""),isCurrent});
+    }
+    return months;
+  },[tickets]);
+  const maxSparkMonth = Math.max(...sparkMonthData.map(d=>d.val),1);
 
   // SVG sparkline path (280×52 viewBox)
   const sparkPath = useMemo(()=>{
@@ -5644,59 +5665,108 @@ function MOps({state,setTab,triggerMargin}) {
           </div>
         </div>
 
-        {/* ══ SPARKLINE — 7-day util trend ══════════════════════════════════════ */}
+        {/* ══ SPARKLINE — util trend ══════════════════════════════════════════ */}
         <div className="glass-card" style={{
           padding:"22px 24px",marginBottom:12,
         }}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
             <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase"}}>
-              Utilidad neta · 7 días
+              Utilidad neta
             </div>
-            {growth!==null&&(
-              <span style={{fontSize:10,fontWeight:700,color:growthUp?A.lime:A.red}}>
-                {growthUp?"+":""}{growth.toFixed(0)}% sem. anterior
-              </span>
-            )}
+            <div style={{display:"flex",gap:5,alignItems:"center"}}>
+              {growth!==null&&sparkMode==="week"&&(
+                <span style={{fontSize:10,fontWeight:700,color:growthUp?A.lime:A.red,marginRight:6}}>
+                  {growthUp?"+":""}{growth.toFixed(0)}%
+                </span>
+              )}
+              {[["week","7 días"],["month","Por mes"]].map(([v,l])=>(
+                <button key={v} onClick={()=>setSparkMode(v)}
+                  style={{padding:"4px 10px",borderRadius:14,fontSize:9,fontWeight:700,cursor:"pointer",
+                    letterSpacing:"0.04em",
+                    background:sparkMode===v?"rgba(143,227,190,0.12)":"transparent",
+                    border:`1px solid ${sparkMode===v?"rgba(143,227,190,0.4)":C.border}`,
+                    color:sparkMode===v?A.lime:A.t3}}>
+                  {l}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <svg viewBox="0 0 280 52" style={{width:"100%",height:52,display:"block",overflow:"visible"}}>
-            <defs>
-              <linearGradient id="mops-sg" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%"   stopColor={A.lime} stopOpacity="0.25"/>
-                <stop offset="100%" stopColor={A.lime} stopOpacity="0.02"/>
-              </linearGradient>
-            </defs>
-            <path d={sparkPath.area} fill="url(#mops-sg)"/>
-            <path d={sparkPath.line} fill="none" stroke={A.lime} strokeWidth="1.6"
-              strokeLinecap="round" strokeLinejoin="round"/>
-            {sparkData.map((d,i)=>{
-              if(!d.today) return null;
-              const x=(i/(sparkData.length-1))*280;
-              const y=50-(Math.max(d.val,0)/maxSpark)*(50-6)-3;
-              return (
-                <g key="td">
-                  <circle cx={x} cy={y} r={10} fill={A.lime} opacity={0.1}/>
-                  <circle cx={x} cy={y} r={5}  fill={A.lime} opacity={0.85}/>
-                </g>
-              );
-            })}
-          </svg>
-
-          <div style={{display:"flex",justifyContent:"space-between",marginTop:10}}>
-            {sparkData.map((d,i)=>(
-              <div key={i} style={{fontSize:8,color:d.today?A.lime:A.t3,
-                fontWeight:d.today?800:400,textAlign:"center",letterSpacing:"0.02em"}}>
-                {d.label}
+          {sparkMode==="week"?(
+            <>
+              <svg viewBox="0 0 280 52" style={{width:"100%",height:52,display:"block",overflow:"visible"}}>
+                <defs>
+                  <linearGradient id="mops-sg" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"   stopColor={A.lime} stopOpacity="0.25"/>
+                    <stop offset="100%" stopColor={A.lime} stopOpacity="0.02"/>
+                  </linearGradient>
+                </defs>
+                <path d={sparkPath.area} fill="url(#mops-sg)"/>
+                <path d={sparkPath.line} fill="none" stroke={A.lime} strokeWidth="1.6"
+                  strokeLinecap="round" strokeLinejoin="round"/>
+                {sparkData.map((d,i)=>{
+                  if(!d.today) return null;
+                  const x=(i/(sparkData.length-1))*280;
+                  const y=50-(Math.max(d.val,0)/maxSpark)*(50-6)-3;
+                  return (
+                    <g key="td">
+                      <circle cx={x} cy={y} r={10} fill={A.lime} opacity={0.1}/>
+                      <circle cx={x} cy={y} r={5}  fill={A.lime} opacity={0.85}/>
+                    </g>
+                  );
+                })}
+              </svg>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:10}}>
+                {sparkData.map((d,i)=>(
+                  <div key={i} style={{fontSize:8,color:d.today?A.lime:A.t3,
+                    fontWeight:d.today?800:400,textAlign:"center",letterSpacing:"0.02em"}}>
+                    {d.label}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          ):(
+            <>
+              {/* Monthly bar chart */}
+              <svg viewBox="0 0 280 60" style={{width:"100%",height:60,display:"block",overflow:"visible"}}>
+                {sparkMonthData.map((d,i)=>{
+                  const bw=17, gap=5.5;
+                  const x=i*(bw+gap);
+                  const barH=d.val>0?Math.max(3,Math.round((d.val/maxSparkMonth)*52)):0;
+                  const y=56-barH;
+                  const col=d.val<0?A.red:d.isCurrent?A.lime:"rgba(143,227,190,0.45)";
+                  const negH=d.val<0?Math.max(3,Math.round((Math.abs(d.val)/maxSparkMonth)*52)):0;
+                  return (
+                    <g key={i}>
+                      {d.val>=0
+                        ? <rect x={x} y={y} width={bw} height={barH} rx={2.5} fill={col} opacity={d.isCurrent?1:0.7}/>
+                        : <rect x={x} y={56} width={bw} height={negH} rx={2.5} fill={col} opacity={0.8}/>
+                      }
+                    </g>
+                  );
+                })}
+              </svg>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:6}}>
+                {sparkMonthData.map((d,i)=>(
+                  <div key={i} style={{fontSize:7,color:d.isCurrent?A.lime:A.t3,
+                    fontWeight:d.isCurrent?800:400,textAlign:"center",lineHeight:1.2,
+                    width:17,flexShrink:0}}>
+                    {d.label}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         {/* ══ MAPA DE CALOR — MENSUAL ══════════════════════════════════════════ */}
         {(()=>{
-          const refDate = range.to;
+          const refDate = heatViewDate;
           const yr = refDate.getFullYear();
           const mo = refDate.getMonth();
+          const goHeatPrev=()=>{ setHeatViewDate(new Date(yr,mo-1,1)); setHeatDay(null); };
+          const goHeatNext=()=>{ const n=new Date(yr,mo+1,1); if(n<=new Date()) { setHeatViewDate(n); setHeatDay(null); } };
+          const isHeatCurrent=yr===new Date().getFullYear()&&mo===new Date().getMonth();
           // Build day → {venta,neta,ops,solic,tkts[]} for this month
           const dmap={};
           const operadosSet=new Set(sel_operados(tickets).map(t=>t.id));
@@ -5756,6 +5826,17 @@ function MOps({state,setTab,triggerMargin}) {
                 <div>
                   <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:3}}>Mapa de calor</div>
                   <div style={{fontSize:13,fontWeight:700,color:A.t1}}>{MESES[mo]} {yr}</div>
+                </div>
+                <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                  <button onClick={goHeatPrev}
+                    style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:8,
+                      width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",
+                      color:A.t2,fontSize:16,cursor:"pointer",flexShrink:0}}>‹</button>
+                  <button onClick={goHeatNext} disabled={isHeatCurrent}
+                    style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:8,
+                      width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",
+                      color:isHeatCurrent?A.t3:A.t2,fontSize:16,cursor:isHeatCurrent?"default":"pointer",
+                      opacity:isHeatCurrent?0.35:1,flexShrink:0}}>›</button>
                 </div>
               </div>
               {/* Metric toggles */}
