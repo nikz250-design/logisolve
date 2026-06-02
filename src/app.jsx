@@ -651,13 +651,22 @@ function daysFromNow(s) {
 function canTransition(from,to) { return (TICKET_TRANSITIONS[from]||[]).includes(to); }
 function mkEvent(type,detail={}) { return {type,ts:nowISO(),...detail}; }
 
+// Folio for PDFs: COT-YYYYMMDD-XXXX (works for both LS-XXXX and TKT-YYYYMMDD-NNN ids)
+function mkFolio(tkt, prefix="COT") {
+  const p=(tkt.date||"").split("/"); // DD/MM/YYYY
+  const dateStr=p.length===3?`${p[2]}${p[1]}${p[0]}`:"000000";
+  const m=/^(?:LS|OP)-(\d+)$/.exec(tkt.id);
+  if(m) return `${prefix}-${dateStr}-${m[1]}`;
+  return tkt.id.replace(/^(TKT|LS|OP)-/,`${prefix}-`);
+}
+
 let _seq = (() => {
   try { const n = parseInt(localStorage.getItem("logisolve_seq")||"0",10); return isNaN(n)?0:n; } catch { return 0; }
 })();
 function mkTicketId() {
   _seq++;
   try { localStorage.setItem("logisolve_seq", String(_seq)); } catch {}
-  return `LS-${String(_seq).padStart(4,"0")}`;
+  return `OP-${String(_seq).padStart(4,"0")}`;
 }
 function mkUnitId() { return genId("UNI"); }
 function mkPartId() { return `PRT-${Date.now().toString().slice(-5)}`; }
@@ -854,7 +863,7 @@ function useToasts() {
 // ── buildCotizacionHTML — genera HTML del documento (usado en preview y download) ─
 function buildCotizacionHTML(tkt, cl, un, supp) {
   const totals = calculateTicketTotals(tkt);
-  const folio  = tkt.id.replace(/^(TKT|LS)-/,"COT-");
+  const folio  = mkFolio(tkt,"COT");
   const fechaLarga=(()=>{
     const p=tkt.date.split("/"); if(p.length!==3) return tkt.date;
     const m=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
@@ -973,7 +982,7 @@ function PDFPreviewModal({tkt,cl,un,supp,onClose}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 function generarCotizacionPDF(tkt, cl, un, supp) {
   const totals = calculateTicketTotals(tkt);
-  const folio = tkt.id.replace(/^(TKT|LS)-/,"COT-");
+  const folio = mkFolio(tkt,"COT");
 
   const fechaLarga = (()=>{
     const p = tkt.date.split("/");
@@ -1234,7 +1243,7 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
 }
 // ── Acta de Entrega, Recepción y Conformidad ─────────────────────────────────
 function generarActaRecepcionPDF(tkt, cl, un) {
-  const folio = tkt.id.replace(/^TKT-/, 'LS-');
+  const folio = mkFolio(tkt,"ACT");
   const now = new Date();
   const pad = n => String(n).padStart(2,'0');
   const fechaHoy = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()}`;
@@ -9482,7 +9491,7 @@ function App() {
   useEffect(()=>{
     (async()=>{
       const bumpSeq = (tickets=[]) => {
-        // One-time migration: rename TKT-YYYYMMDD-NNN → LS-XXXX (globally unique sequential)
+        // One-time migration: rename TKT-YYYYMMDD-NNN → OP-XXXX (globally unique sequential)
         const oldFmt = tickets.filter(t=>/^TKT-\d{8}-/.test(t.id));
         if(oldFmt.length > 0) {
           const sortKey = t => {
@@ -9493,13 +9502,13 @@ function App() {
           };
           oldFmt.sort((a,b)=>sortKey(a).localeCompare(sortKey(b)));
           let ctr=0;
-          const renameMap=oldFmt.map(t=>{ctr++;return{oldId:t.id,newId:`LS-${String(ctr).padStart(4,"0")}`};});
+          const renameMap=oldFmt.map(t=>{ctr++;return{oldId:t.id,newId:`OP-${String(ctr).padStart(4,"0")}`};});
           dispatch({type:"TKT_BULK_RENAME",map:renameMap});
           renameMap.forEach(({oldId})=>deletedRef.current.tickets.add(oldId));
           if(ctr>_seq){_seq=ctr;try{localStorage.setItem("logisolve_seq",String(_seq));}catch{}}
         } else {
           const maxSeq=tickets.reduce((m,t)=>{
-            const n=parseInt((t.id||"").replace(/^LS-/,""))||0;return Math.max(m,n);
+            const n=parseInt((t.id||"").replace(/^(?:LS|OP)-/,""))||0;return Math.max(m,n);
           },0);
           if(maxSeq>=_seq){_seq=maxSeq+1;try{localStorage.setItem("logisolve_seq",String(_seq));}catch{}}
         }
