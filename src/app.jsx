@@ -651,13 +651,13 @@ function daysFromNow(s) {
 function canTransition(from,to) { return (TICKET_TRANSITIONS[from]||[]).includes(to); }
 function mkEvent(type,detail={}) { return {type,ts:nowISO(),...detail}; }
 
-let _seq=8;
-function mkTicketId(dateStr) {
-  const p=(dateStr||"").replace(/\//g,"-").split("-");
-  let y,m,d;
-  if(p.length===3){p[0].length===4?([y,m,d]=p):([d,m,y]=p);}
-  else{const n=new Date();y=n.getFullYear();m=String(n.getMonth()+1).padStart(2,"0");d=String(n.getDate()).padStart(2,"0");}
-  return `TKT-${y}${String(m).padStart(2,"0")}${String(d).padStart(2,"0")}-${String(_seq++).padStart(3,"0")}`;
+let _seq = (() => {
+  try { const n = parseInt(localStorage.getItem("logisolve_seq")||"0",10); return isNaN(n)?0:n; } catch { return 0; }
+})();
+function mkTicketId() {
+  _seq++;
+  try { localStorage.setItem("logisolve_seq", String(_seq)); } catch {}
+  return `LS-${String(_seq).padStart(4,"0")}`;
 }
 function mkUnitId() { return genId("UNI"); }
 function mkPartId() { return `PRT-${Date.now().toString().slice(-5)}`; }
@@ -851,7 +851,7 @@ function useToasts() {
 // ── buildCotizacionHTML — genera HTML del documento (usado en preview y download) ─
 function buildCotizacionHTML(tkt, cl, un, supp) {
   const totals = calculateTicketTotals(tkt);
-  const folio  = tkt.id.replace("TKT","COT");
+  const folio  = tkt.id.replace(/^(TKT|LS)-/,"COT-");
   const fechaLarga=(()=>{
     const p=tkt.date.split("/"); if(p.length!==3) return tkt.date;
     const m=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
@@ -970,7 +970,7 @@ function PDFPreviewModal({tkt,cl,un,supp,onClose}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 function generarCotizacionPDF(tkt, cl, un, supp) {
   const totals = calculateTicketTotals(tkt);
-  const folio = tkt.id.replace("TKT", "COT");
+  const folio = tkt.id.replace(/^(TKT|LS)-/,"COT-");
 
   const fechaLarga = (()=>{
     const p = tkt.date.split("/");
