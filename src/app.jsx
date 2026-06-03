@@ -9128,7 +9128,7 @@ function MProveedores({state,dispatch,toast}) {
 // MInteligencia — Inteligencia Operativa IA
 // ══════════════════════════════════════════════════════════════════════════════
 function MInteligencia({state}) {
-  const C = useContext(ThemeCtx);
+  const C = React.useContext(ThemeCtx);
   const A = makeA(C);
   const {tickets=[], clients=[], suppliers=[], units=[]} = state;
 
