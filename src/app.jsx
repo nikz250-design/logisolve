@@ -187,6 +187,22 @@ const PAID_SET      = new Set(["cobrado","cerrado"]);
 // Legacy alias — kept for backward compat
 const REVENUE_SET   = OPERADO_SET;
 
+const FAMILIAS_DEF = [
+  {key:"clutch",       label:"Clutch",       kw:["clutch","embrague"]},
+  {key:"frenos",       label:"Frenos",       kw:["freno","balata","disco","caliper","pastilla"]},
+  {key:"suspension",   label:"Suspensión",   kw:["suspens","amort","resorte","horquil","rotula","muñon"]},
+  {key:"motor",        label:"Motor",        kw:["motor","piston","cigueñ","biela","junta","carter","valvula","culata"]},
+  {key:"electrico",    label:"Eléctrico",    kw:["electr","sensor","alternador","arrancador","bujia","bobina","fusible","abs","ecu"]},
+  {key:"hidraulico",   label:"Hidráulico",   kw:["hidraul","bomba","cilindro","manguer","direccion"]},
+  {key:"iluminacion",  label:"Iluminación",  kw:["faro","luz","lampar","led","plafon"]},
+  {key:"transmision",  label:"Transmisión",  kw:["transmis","caja","diferencial","cardan","flecha"]},
+];
+const classifyFamilia = titulo => {
+  const t=(titulo||"").toLowerCase();
+  for(const f of FAMILIAS_DEF) { if(f.kw.some(k=>t.includes(k))) return f.key; }
+  return "otros";
+};
+
 const PROB = [
   { id:"high",   label:"Alta",  pct:90 },
   { id:"medium", label:"Media", pct:60 },
@@ -786,7 +802,8 @@ function reducer(state,action) {
         if(t.id!==id) return t;
         if(!canTransition(t.status,to)) return t;
         const tlEvent = {ts:nowISO(),evento:"Estado: "+TICKET_META[to].label,actor:"Operador"};
-        return {...t,status:to,cobrado:PAID_SET.has(to),timeline:[...(t.timeline||[]),tlEvent],history:[...(t.history||[]),mkEvent("status_changed",{from:t.status,to})]};
+        const extra = to==="cancelado" && action.cancelReason ? {cancelReason:action.cancelReason} : {};
+        return {...t,...extra,status:to,cobrado:PAID_SET.has(to),timeline:[...(t.timeline||[]),tlEvent],history:[...(t.history||[]),mkEvent("status_changed",{from:t.status,to})]};
       })};
     }
     case "TKT_DELETE":   return {...state,tickets:state.tickets.filter(t=>t.id!==action.id)};
@@ -6198,8 +6215,12 @@ function MOps({state,setTab,triggerMargin}) {
 }
 
 // ── StatusFlowSheet — bottom sheet para cambiar estado de ticket en mobile ────
+const MOTIVOS_CANCEL = ["Precio","Sin disponibilidad","Cliente desistió","Tiempo de entrega","Proveedor falló","Duplicado","Otro"];
+
 function StatusFlowSheet({tkt, dispatch, toast, onClose}) {
   const C = React.useContext(ThemeCtx);
+  const [cancelMotivo, setCancelMotivo] = useState(null);
+  const [showCancelPicker, setShowCancelPicker] = useState(false);
   if(!tkt) return null;
   const nexts = TICKET_TRANSITIONS[tkt.status] || [];
   const meta  = TICKET_META[tkt.status] || {};
@@ -6221,45 +6242,86 @@ function StatusFlowSheet({tkt, dispatch, toast, onClose}) {
           <div style={{fontSize:13,fontWeight:700,color:meta.dot||C.t2}}>{meta.label||tkt.status}</div>
           <div style={{fontSize:11,color:C.t3,marginTop:2,marginBottom:16}}>{tkt.titulo}</div>
         </div>
-        {/* Transitions */}
-        {nexts.length===0?(
-          <div style={{textAlign:"center",padding:"16px 0",color:C.t3,fontSize:13}}>
-            Ticket en estado final — sin transiciones disponibles
-          </div>
-        ):(
+        {/* Cancel picker */}
+        {showCancelPicker ? (
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
             <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>
-              Mover a:
+              Motivo de cancelación:
             </div>
-            {nexts.map(to=>{
-              const m=TICKET_META[to]||{};
-              const isCancel=to==="cancelado";
-              return (
-                <button key={to} onClick={()=>{
-                  dispatch({type:"TKT_STATUS",id:tkt.id,to});
-                  toast(`${meta.label||tkt.status} → ${m.label||to}`,"success");
-                  onClose();
-                }}
-                  style={{padding:"14px 18px",borderRadius:14,cursor:"pointer",
-                    background:isCancel?C.redDim:C.bg2,
-                    border:`1px solid ${isCancel?C.red+"50":m.dot||C.border}`,
-                    display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
-                  <div style={{width:10,height:10,borderRadius:5,background:m.dot||C.border,flexShrink:0}}/>
-                  <div>
-                    <div style={{fontSize:14,fontWeight:700,color:isCancel?C.red:C.t1}}>{m.label||to}</div>
-                    {to==="cancelado"&&<div style={{fontSize:10,color:C.red,marginTop:1}}>Esta acción no se puede deshacer</div>}
-                  </div>
-                </button>
-              );
-            })}
+            {MOTIVOS_CANCEL.map(m=>(
+              <button key={m} onClick={()=>setCancelMotivo(m)}
+                style={{padding:"12px 16px",borderRadius:12,cursor:"pointer",textAlign:"left",
+                  background:cancelMotivo===m?`${C.red}22`:C.bg2,
+                  border:`1px solid ${cancelMotivo===m?C.red:C.border}`,
+                  fontSize:13,fontWeight:cancelMotivo===m?700:500,color:cancelMotivo===m?C.red:C.t1}}>
+                {m}
+              </button>
+            ))}
+            <div style={{display:"flex",gap:8,marginTop:4}}>
+              <button onClick={()=>{setShowCancelPicker(false);setCancelMotivo(null);}}
+                style={{flex:1,padding:"12px",borderRadius:12,background:"transparent",
+                  border:`1px solid ${C.border}`,color:C.t2,fontSize:13,cursor:"pointer",fontWeight:600}}>
+                Atrás
+              </button>
+              <button onClick={()=>{
+                if(!cancelMotivo) return;
+                dispatch({type:"TKT_STATUS",id:tkt.id,to:"cancelado",cancelReason:cancelMotivo});
+                toast(`Cancelado · ${cancelMotivo}`,"success");
+                onClose();
+              }}
+                disabled={!cancelMotivo}
+                style={{flex:1,padding:"12px",borderRadius:12,cursor:cancelMotivo?"pointer":"not-allowed",
+                  background:cancelMotivo?`${C.red}22`:"transparent",
+                  border:`1px solid ${cancelMotivo?C.red:C.border}`,
+                  color:cancelMotivo?C.red:C.t3,fontSize:13,fontWeight:700}}>
+                Confirmar
+              </button>
+            </div>
           </div>
+        ) : (
+          <>
+            {/* Transitions */}
+            {nexts.length===0?(
+              <div style={{textAlign:"center",padding:"16px 0",color:C.t3,fontSize:13}}>
+                Ticket en estado final — sin transiciones disponibles
+              </div>
+            ):(
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>
+                  Mover a:
+                </div>
+                {nexts.map(to=>{
+                  const m=TICKET_META[to]||{};
+                  const isCancel=to==="cancelado";
+                  return (
+                    <button key={to} onClick={()=>{
+                      if(isCancel){ setShowCancelPicker(true); return; }
+                      dispatch({type:"TKT_STATUS",id:tkt.id,to});
+                      toast(`${meta.label||tkt.status} → ${m.label||to}`,"success");
+                      onClose();
+                    }}
+                      style={{padding:"14px 18px",borderRadius:14,cursor:"pointer",
+                        background:isCancel?C.redDim:C.bg2,
+                        border:`1px solid ${isCancel?C.red+"50":m.dot||C.border}`,
+                        display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
+                      <div style={{width:10,height:10,borderRadius:5,background:m.dot||C.border,flexShrink:0}}/>
+                      <div>
+                        <div style={{fontSize:14,fontWeight:700,color:isCancel?C.red:C.t1}}>{m.label||to}</div>
+                        {to==="cancelado"&&<div style={{fontSize:10,color:C.red,marginTop:1}}>Esta acción no se puede deshacer</div>}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <button onClick={onClose}
+              style={{marginTop:16,width:"100%",padding:"12px",borderRadius:12,
+                background:"transparent",border:`1px solid ${C.border}`,
+                color:C.t2,fontSize:13,cursor:"pointer",fontWeight:600}}>
+              Cancelar
+            </button>
+          </>
         )}
-        <button onClick={onClose}
-          style={{marginTop:16,width:"100%",padding:"12px",borderRadius:12,
-            background:"transparent",border:`1px solid ${C.border}`,
-            color:C.t2,fontSize:13,cursor:"pointer",fontWeight:600}}>
-          Cancelar
-        </button>
       </div>
     </>
   );
@@ -9160,6 +9222,7 @@ function MInteligencia({state}) {
     return units.map(u => {
       const uTickets = concretadas.filter(t => t.unitId === u.id);
       const gastoAcum = uTickets.reduce((s,t)=>s+safeNumber(t.snap?.costoTotal),0);
+      const desembolsoAcum = uTickets.reduce((s,t)=>s+safeNumber(t.snap?.costoTotal)+safeNumber(t.snap?.ivaAcred),0);
       const utilidadGen = uTickets.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0);
       const revenueAcum = uTickets.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
       const dates = uTickets.map(t=>parseDate(t.date)).filter(Boolean).sort((a,b)=>a-b);
@@ -9177,7 +9240,7 @@ function MInteligencia({state}) {
         const da=parseDate(a.date), db=parseDate(b.date);
         return db-da;
       });
-      return {unit:u, cl, ticketCount:uTickets.length, gastoAcum, utilidadGen, revenueAcum,
+      return {unit:u, cl, ticketCount:uTickets.length, gastoAcum, desembolsoAcum, utilidadGen, revenueAcum,
               lastIncident, incidentes90d, avgDaysBetween, alert, ops:sortedOps};
     }).sort((a,b)=>b.gastoAcum-a.gastoAcum);
   }, [tickets, units, clients, now]);
