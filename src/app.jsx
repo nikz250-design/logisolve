@@ -9534,6 +9534,98 @@ function MInteligencia({state}) {
     return alerts;
   }, [tickets, clients, suppliers, units, now]);
 
+  // ── PANEL 9: Sourceabilidad ───────────────────────────────────────────────
+  const sourceoData = useMemo(() => {
+    const parseTS = ts => { try { return new Date(ts); } catch{ return null; } };
+    const findTL = (tl,kw) => (tl||[]).find(e=>(e.evento||"").toLowerCase().includes(kw.toLowerCase()));
+    const active = tickets.filter(t=>!t._deleted);
+    const sourceoTimes = [];
+
+    active.forEach(t => {
+      if(!t.supplierId) return;
+      const tl = t.timeline||[];
+      const creadoEv = findTL(tl,"creado") || findTL(tl,"solicitud recibida");
+      const provEv   = findTL(tl,"proveedor") || findTL(tl,"localizado") || findTL(tl,"sourcing");
+      const creadoTS = creadoEv ? parseTS(creadoEv.ts) : (parseDate(t.date) ? (() => { const d=parseDate(t.date); return new Date(d.getFullYear(),d.getMonth(),d.getDate(),8,0); })() : null);
+      const provTS   = provEv ? parseTS(provEv.ts) : null;
+      if(creadoTS && provTS && provTS > creadoTS) {
+        const horas = (provTS - creadoTS) / 3600000;
+        if(horas < 168) sourceoTimes.push({horas, titulo:t.titulo||"", id:t.id, supplierId:t.supplierId});
+      }
+    });
+
+    const avg = arr => arr.length ? arr.reduce((s,v)=>s+v,0)/arr.length : null;
+    const med = arr => { if(!arr.length) return null; const s=[...arr].sort((a,b)=>a-b); const m=Math.floor(s.length/2); return s.length%2?s[m]:(s[m-1]+s[m])/2; };
+    const fmtH = h => h===null?"—":h<48?`${h.toFixed(1)}h`:`${(h/24).toFixed(1)}d`;
+    const horas = sourceoTimes.map(s=>s.horas);
+
+    // Por parte: agrupar por titulo normalizado
+    const norm = s=>(s||"").toLowerCase().trim().replace(/\s+/g," ");
+    const parteMap = {};
+    sourceoTimes.forEach(({horas:h,titulo}) => {
+      const k=norm(titulo); if(!k||k.length<3) return;
+      if(!parteMap[k]) parteMap[k]={name:k,times:[],freq:0};
+      parteMap[k].times.push(h); parteMap[k].freq++;
+    });
+    const partesSorted = Object.values(parteMap).map(p=>({...p,avgH:avg(p.times)||0})).sort((a,b)=>b.avgH-a.avgH);
+
+    // Familias
+    const familias = {};
+    FAMILIAS_DEF.forEach(f=>{familias[f.key]={label:f.label,ops:0,revenue:0,utilidad:0,times:[]};});
+    familias["otros"]={label:"Otros",ops:0,revenue:0,utilidad:0,times:[]};
+    active.filter(t=>OPERADO_SET.has(t.status)).forEach(t=>{
+      const fk = classifyFamilia(t.titulo);
+      if(!familias[fk]) familias[fk]={label:fk,ops:0,revenue:0,utilidad:0,times:[]};
+      familias[fk].ops++;
+      familias[fk].revenue+=safeNumber(t.snap?.precioConIVA);
+      familias[fk].utilidad+=safeNumber(t.snap?.uNeta);
+      const st=sourceoTimes.find(s=>s.id===t.id);
+      if(st) familias[fk].times.push(st.horas);
+    });
+    const familiasArr = Object.entries(familias).map(([k,v])=>({...v,key:k,avgSourcH:avg(v.times)})).filter(f=>f.ops>0).sort((a,b)=>b.revenue-a.revenue);
+
+    return {
+      promedio:avg(horas), mediana:med(horas), mejor:horas.length?Math.min(...horas):null,
+      peor:horas.length?Math.max(...horas):null, n:horas.length,
+      fmtH, partesDificiles:partesSorted.slice(0,10), familias:familiasArr,
+      masResueltas: Object.values(parteMap).sort((a,b)=>b.freq-a.freq).slice(0,10),
+    };
+  }, [tickets]);
+
+  // ── PANEL 12: Oportunidad Perdida ─────────────────────────────────────────
+  const cancelData = useMemo(() => {
+    const cancelled = tickets.filter(t=>!t._deleted && t.status==="cancelado");
+    const byMotivo = {};
+    cancelled.forEach(t => {
+      const m = t.cancelReason || "sin motivo";
+      if(!byMotivo[m]) byMotivo[m]={motivo:m,count:0,revenue:0};
+      byMotivo[m].count++;
+      byMotivo[m].revenue+=safeNumber(t.snap?.precioConIVA);
+    });
+    const sorted = Object.values(byMotivo).sort((a,b)=>b.revenue-a.revenue);
+    const totalRevLost = cancelled.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
+    return {cancelled, sorted, total:cancelled.length, totalRevLost};
+  }, [tickets]);
+
+  // ── Global KPIs ───────────────────────────────────────────────────────────
+  const gKpi_concretadas = useMemo(()=>tickets.filter(t=>!t._deleted&&OPERADO_SET.has(t.status)).length,[tickets]);
+  const gKpi_total       = useMemo(()=>tickets.filter(t=>!t._deleted).length,[tickets]);
+  const gKpi_resolucion  = gKpi_total>0 ? (gKpi_concretadas/gKpi_total)*100 : 0;
+  const gKpi_primeraResp = useMemo(()=>{
+    const parseTS = ts=>{try{return new Date(ts);}catch{return null;}};
+    const times=[];
+    tickets.filter(t=>!t._deleted).forEach(t=>{
+      const tl=t.timeline||[];
+      if(tl.length<2) return;
+      const t0=parseTS(tl[0].ts);
+      const t1=parseTS(tl[1].ts);
+      if(t0&&t1&&t1>t0){const h=(t1-t0)/3600000;if(h<168)times.push(h);}
+    });
+    if(!times.length) return null;
+    return times.reduce((s,v)=>s+v,0)/times.length;
+  },[tickets]);
+  const fmtH_global = h=>h===null?"—":h<48?`${h.toFixed(1)}h`:`${(h/24).toFixed(1)}d`;
+
   // ── AI payload — enriched with panel context ──────────────────────────────
   const aiPayload = useMemo(() => {
     const active = tickets.filter(t=>!t._deleted);
@@ -9576,13 +9668,15 @@ function MInteligencia({state}) {
     const deliveryKpi = kpisOpData.find(k=>k.key==="entrega");
 
     const questions = [
-      "1. ¿Cuál es el principal riesgo operativo?",
-      "2. ¿Cuál es el principal riesgo financiero?",
-      "3. ¿Cuál es el cliente más importante y qué hacer para retenerlo?",
-      "4. ¿Cuál es la unidad más problemática?",
-      "5. ¿Qué pieza debería convertirse en inventario permanente?",
-      "6. ¿Cuál es el cuello de botella del pipeline?",
-      "7. ¿Qué acción generaría más utilidad los próximos 30 días?",
+      "1. ¿Qué categoría de refacciones/familias dominamos mejor?",
+      "2. ¿Qué proveedor es estratégico y no podemos perder?",
+      "3. ¿Qué proveedor deberíamos reemplazar o reducir dependencia?",
+      "4. ¿Qué cliente tiene el mayor potencial de crecimiento?",
+      "5. ¿Qué causa más pérdida de operaciones (revenue perdido)?",
+      "6. ¿Qué componente deberíamos almacenar en inventario permanente?",
+      "7. ¿Qué componente es el más difícil de conseguir y qué hacer?",
+      "8. ¿Dónde estamos perdiendo más tiempo en el proceso?",
+      "9. ¿Cuál es nuestra verdadera ventaja competitiva operativa?",
     ];
 
     return {
@@ -9601,8 +9695,14 @@ function MInteligencia({state}) {
         avgTimeToDeliver: deliveryKpi ? deliveryKpi.fmt : null,
       },
       analysisQuestions: questions,
+      resolucionOperativa: `${gKpi_resolucion.toFixed(0)}%`,
+      timeraPrimeraRespuesta: fmtH_global(gKpi_primeraResp),
+      sourceoPromedio: sourceoData ? sourceoData.fmtH(sourceoData.promedio) : null,
+      familiaDominante: sourceoData?.familias?.[0]?.label || null,
+      cancelaciones: cancelData.total,
+      principalMotivoCancelacion: cancelData.sorted?.[0]?.motivo || null,
     };
-  }, [tickets, clients, unidadesData, clientesData, pipelineData, partesData, alertasData, kpisOpData]);
+  }, [tickets, clients, unidadesData, clientesData, pipelineData, partesData, alertasData, kpisOpData, sourceoData, cancelData, gKpi_resolucion, gKpi_primeraResp]);
 
   // ── Streaming AI call ─────────────────────────────────────────────────────
   const runAnalysis = async () => {
@@ -9646,14 +9746,16 @@ function MInteligencia({state}) {
 
   // ── Inner tab pills ───────────────────────────────────────────────────────
   const ITABS = [
-    {id:"unidades",   label:"Unidades"},
-    {id:"proveedores",label:"Proveedores"},
-    {id:"clientes",   label:"Clientes"},
-    {id:"pipeline",   label:"Pipeline"},
-    {id:"partes",     label:"Partes"},
-    {id:"kpis",       label:"KPIs"},
-    {id:"alertas",    label:"Alertas"},
-    {id:"ia",         label:"IA"},
+    {id:"unidades",       label:"Unidades"},
+    {id:"proveedores",    label:"Proveedores"},
+    {id:"clientes",       label:"Clientes"},
+    {id:"pipeline",       label:"Pipeline"},
+    {id:"partes",         label:"Partes"},
+    {id:"sourceabilidad", label:"Sourcing"},
+    {id:"oportunidad",    label:"Oportunidad"},
+    {id:"kpis",           label:"KPIs"},
+    {id:"alertas",        label:"Alertas"},
+    {id:"ia",             label:"IA"},
   ];
 
   const categoriaColor = cat => ({financiero:C.blue,operativo:C.cyan,cliente:C.yellow,crecimiento:C.green,riesgo:C.red}[cat]||C.t3);
@@ -9673,7 +9775,20 @@ function MInteligencia({state}) {
             Inteligencia Operativa
           </h2>
         </div>
-        <p style={{margin:0,fontSize:11,color:C.t3}}>V6 · INTELIGENCIA — análisis sin dependencias externas</p>
+        <p style={{margin:"0 0 12px",fontSize:11,color:C.t3}}>V7 · Capacidad de resolución operativa</p>
+        {/* Global KPIs */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px"}}>
+            <div style={{fontSize:8,fontWeight:700,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>Resolución Operativa</div>
+            <div style={{fontSize:24,fontWeight:800,color:gKpi_resolucion>=70?C.green:gKpi_resolucion>=50?C.yellow:C.red,lineHeight:1.1}}>{gKpi_resolucion.toFixed(0)}%</div>
+            <div style={{fontSize:9,color:C.t3,marginTop:2}}>{gKpi_concretadas} de {gKpi_total} solicitudes</div>
+          </div>
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 14px"}}>
+            <div style={{fontSize:8,fontWeight:700,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>1ª Respuesta</div>
+            <div style={{fontSize:24,fontWeight:800,color:C.blue,lineHeight:1.1}}>{fmtH_global(gKpi_primeraResp)}</div>
+            <div style={{fontSize:9,color:C.t3,marginTop:2}}>tiempo promedio</div>
+          </div>
+        </div>
       </div>
 
       {/* Inner tab navigation */}
@@ -9702,7 +9817,7 @@ function MInteligencia({state}) {
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
           <div style={{...label10,marginBottom:4}}>Rendimiento por Unidad · solo operaciones concretadas</div>
           {unidadesData.length===0 && <div style={{color:C.t3,fontSize:13}}>Sin unidades registradas.</div>}
-          {unidadesData.map(({unit,cl,ticketCount,gastoAcum,utilidadGen,incidentes90d,avgDaysBetween,alert,ops})=>{
+          {unidadesData.map(({unit,cl,ticketCount,gastoAcum,desembolsoAcum,utilidadGen,incidentes90d,avgDaysBetween,alert,ops})=>{
             const isOpen = selectedUnitId === unit.id;
             return (
               <div key={unit.id}>
@@ -9731,18 +9846,22 @@ function MInteligencia({state}) {
                       <span style={{fontSize:14,color:C.t3,transform:isOpen?"rotate(180deg)":"none",transition:"transform 0.2s",display:"inline-block"}}>▾</span>
                     </div>
                   </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8}}>
                     <div>
-                      <div style={{...label10,fontSize:9}}>Gasto acum.</div>
-                      <div style={{fontSize:13,fontWeight:700,color:C.red,marginTop:2}}>{mxn(gastoAcum)}</div>
+                      <div style={{...label10,fontSize:9}}>Costo Op. <span style={{color:C.t3,fontSize:8}}>(s/IVA)</span></div>
+                      <div style={{fontSize:12,fontWeight:700,color:C.red,marginTop:2}}>{mxn(gastoAcum)}</div>
                     </div>
                     <div>
-                      <div style={{...label10,fontSize:9}}>Utilidad gen.</div>
-                      <div style={{fontSize:13,fontWeight:700,color:C.green,marginTop:2}}>{mxn(utilidadGen)}</div>
+                      <div style={{...label10,fontSize:9,color:C.yellow}}>Desembolso</div>
+                      <div style={{fontSize:12,fontWeight:700,color:C.yellow,marginTop:2}}>{mxn(desembolsoAcum)}</div>
                     </div>
                     <div>
-                      <div style={{...label10,fontSize:9}}>Frec. prom.</div>
-                      <div style={{fontSize:13,fontWeight:700,color:C.t2,marginTop:2}}>
+                      <div style={{...label10,fontSize:9,color:C.green}}>Utilidad</div>
+                      <div style={{fontSize:12,fontWeight:700,color:C.green,marginTop:2}}>{mxn(utilidadGen)}</div>
+                    </div>
+                    <div>
+                      <div style={{...label10,fontSize:9}}>Frec.</div>
+                      <div style={{fontSize:12,fontWeight:700,color:C.t2,marginTop:2}}>
                         {avgDaysBetween!==null ? `${avgDaysBetween.toFixed(0)}d` : "—"}
                       </div>
                     </div>
@@ -9836,6 +9955,32 @@ function MInteligencia({state}) {
                   <div style={{fontSize:12,fontWeight:700,color:C.green,marginTop:2}}>{mxn(utilidad)}</div>
                 </div>
               </div>
+              {/* Tasa de éxito */}
+              {(() => {
+                const asignados = tickets.filter(t=>!t._deleted&&t.supplierId===supplier.id).length;
+                const entregados = tickets.filter(t=>!t._deleted&&t.supplierId===supplier.id&&OPERADO_SET.has(t.status)).length;
+                const tasa = asignados>0?(entregados/asignados)*100:0;
+                const score = tasa>=85&&revenue>10000?"A":tasa>=70?"B":tasa>=50?"C":"D";
+                return (
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr auto",gap:8,marginTop:8,paddingTop:8,borderTop:`1px solid ${C.border}`}}>
+                    <div>
+                      <div style={{...label10,fontSize:8}}>Tasa de éxito</div>
+                      <div style={{fontSize:13,fontWeight:800,color:tasa>=80?C.green:tasa>=60?C.yellow:C.red,marginTop:1}}>{tasa.toFixed(0)}%</div>
+                      <div style={{fontSize:9,color:C.t3}}>{entregados}/{asignados}</div>
+                    </div>
+                    <div>
+                      <div style={{...label10,fontSize:8}}>Tickets</div>
+                      <div style={{fontSize:13,fontWeight:700,color:C.t1,marginTop:1}}>{ticketCount}</div>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"center",
+                      width:32,height:32,borderRadius:16,flexShrink:0,alignSelf:"center",
+                      background:`${scoreColor(score)}18`,border:`1.5px solid ${scoreColor(score)}`,
+                      fontSize:13,fontWeight:800,color:scoreColor(score)}}>
+                      {score}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           ))}
         </div>
@@ -9844,6 +9989,52 @@ function MInteligencia({state}) {
       {/* ── PANEL 3: Clientes ───────────────────────────────────────────────── */}
       {iTab==="clientes" && (
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
+          {/* Score V2 */}
+          <div style={{marginBottom:16}}>
+            <div style={{...label10,marginBottom:8}}>Score V2 · Revenue + Utilidad + Frecuencia + Pago</div>
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {[...clientesData].sort((a,b)=>{
+                const scoreV2 = d => {
+                  const revS = Math.min(d.revenue/1000,40);
+                  const utilS = Math.min(d.utilidad/200,30);
+                  const freqS = Math.min(d.ticketCount*3,20);
+                  return revS+utilS+freqS;
+                };
+                return scoreV2(b)-scoreV2(a);
+              }).slice(0,5).map(({cl,revenue,utilidad,ticketCount,cartPending})=>{
+                const revS = Math.min(revenue/1000,40);
+                const utilS = Math.min(utilidad/200,30);
+                const freqS = Math.min(ticketCount*3,20);
+                const total = revS+utilS+freqS;
+                const scoreV2 = total>=75?"A":total>=50?"B":total>=25?"C":"D";
+                // Tasa de cierre
+                const solics = tickets.filter(t=>!t._deleted&&t.clientId===cl.id).length;
+                const autorizados = tickets.filter(t=>!t._deleted&&t.clientId===cl.id&&new Set(["autorizado","comprado","transito","entregado","facturado","cobrado","cerrado"]).has(t.status)).length;
+                const tasaCierre = solics>0?(autorizados/solics)*100:0;
+                return (
+                  <div key={cl.id} style={{...cardStyle,padding:"10px 14px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                      <div style={{width:28,height:28,borderRadius:14,flexShrink:0,
+                        background:`${scoreColor(scoreV2)}18`,border:`1.5px solid ${scoreColor(scoreV2)}`,
+                        display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:scoreColor(scoreV2)}}>
+                        {scoreV2}
+                      </div>
+                      <span style={{fontSize:13,fontWeight:700,color:C.t1,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                        {cl.empresa||cl.id}
+                      </span>
+                      <span style={{fontSize:10,color:C.t3,flexShrink:0}}>{ticketCount} ops</span>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+                      <div><div style={{...label10,fontSize:8}}>Revenue</div><div style={{fontSize:11,fontWeight:700,color:C.t1,marginTop:1}}>{mxn(revenue)}</div></div>
+                      <div><div style={{...label10,fontSize:8}}>Utilidad</div><div style={{fontSize:11,fontWeight:700,color:C.green,marginTop:1}}>{mxn(utilidad)}</div></div>
+                      <div><div style={{...label10,fontSize:8}}>T. cierre</div><div style={{fontSize:11,fontWeight:700,color:tasaCierre>=60?C.green:C.yellow,marginTop:1}}>{tasaCierre.toFixed(0)}%</div></div>
+                    </div>
+                    {cartPending>0&&<div style={{marginTop:6,fontSize:10,color:C.yellow}}>Cartera: {mxn(cartPending)}</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
           {[
             {title:"Por Revenue", sorted:[...clientesData].sort((a,b)=>b.revenue-a.revenue), valKey:"revenue", valFmt:mxn, color:C.blue},
             {title:"Por Utilidad", sorted:[...clientesData].sort((a,b)=>b.utilidad-a.utilidad), valKey:"utilidad", valFmt:mxn, color:C.green},
@@ -9974,6 +10165,145 @@ function MInteligencia({state}) {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── PANEL 9: Sourceabilidad ─────────────────────────────────────────── */}
+      {iTab==="sourceabilidad" && (
+        <div style={{display:"flex",flexDirection:"column",gap:16}}>
+          {/* KPIs globales de sourceo */}
+          <div>
+            <div style={{...label10,marginBottom:8}}>Tiempo de Sourceo · ticket creado → proveedor identificado</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+              {[
+                {l:"Promedio",h:sourceoData.promedio},
+                {l:"Mediana",h:sourceoData.mediana},
+                {l:"Mejor",h:sourceoData.mejor},
+                {l:"Peor",h:sourceoData.peor},
+              ].map(({l,h})=>(
+                <div key={l} style={{...cardStyle,textAlign:"center",padding:"12px 10px"}}>
+                  <div style={{fontSize:20,fontWeight:800,color:h===null?C.t3:h<2?C.green:h<6?C.yellow:C.red,lineHeight:1.1}}>
+                    {sourceoData.fmtH(h)}
+                  </div>
+                  <div style={{fontSize:10,color:C.t3,marginTop:3}}>{l}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{fontSize:10,color:C.t3,textAlign:"center"}}>
+              Basado en {sourceoData.n} operaciones con proveedor identificado
+            </div>
+          </div>
+
+          {/* Componentes más difíciles */}
+          <div>
+            <div style={{...label10,marginBottom:8}}>Componentes más difíciles de sourcear</div>
+            <div style={{...cardStyle,padding:0,overflow:"hidden"}}>
+              {sourceoData.partesDificiles.length===0 && (
+                <div style={{padding:14,color:C.t3,fontSize:12}}>Sin datos suficientes.</div>
+              )}
+              {sourceoData.partesDificiles.map((p,i)=>(
+                <div key={p.name} style={{display:"grid",gridTemplateColumns:"20px 1fr auto auto",gap:8,alignItems:"center",
+                  padding:"9px 14px",borderBottom:i<sourceoData.partesDificiles.length-1?`1px solid ${C.border}`:"none"}}>
+                  <span style={{fontSize:9,color:C.t3,fontWeight:700}}>#{i+1}</span>
+                  <span style={{fontSize:12,color:C.t1,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</span>
+                  <span style={{fontSize:10,color:C.t3,flexShrink:0}}>{p.freq}x</span>
+                  <span style={{fontSize:12,fontWeight:700,color:p.avgH<2?C.green:p.avgH<6?C.yellow:C.red,flexShrink:0}}>
+                    {sourceoData.fmtH(p.avgH)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Familias dominadas */}
+          <div>
+            <div style={{...label10,marginBottom:8}}>Familias Dominadas</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {sourceoData.familias.map((f,i)=>(
+                <div key={f.key} style={{...cardStyle}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                    <div style={{width:24,height:24,borderRadius:12,background:`${C.blue}18`,border:`1px solid ${C.blue}33`,
+                      display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:C.blue,flexShrink:0}}>
+                      {i+1}
+                    </div>
+                    <span style={{fontSize:13,fontWeight:700,color:C.t1,flex:1}}>{f.label}</span>
+                    <span style={{fontSize:11,color:C.t3}}>{f.ops} ops</span>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+                    <div>
+                      <div style={{...label10,fontSize:8}}>Revenue</div>
+                      <div style={{fontSize:11,fontWeight:700,color:C.t1,marginTop:1}}>{mxn(f.revenue)}</div>
+                    </div>
+                    <div>
+                      <div style={{...label10,fontSize:8}}>Utilidad</div>
+                      <div style={{fontSize:11,fontWeight:700,color:C.green,marginTop:1}}>{mxn(f.utilidad)}</div>
+                    </div>
+                    <div>
+                      <div style={{...label10,fontSize:8}}>T. Sourceo</div>
+                      <div style={{fontSize:11,fontWeight:700,color:f.avgSourcH===null?C.t3:f.avgSourcH<2?C.green:C.yellow,marginTop:1}}>
+                        {f.avgSourcH===null?"—":sourceoData.fmtH(f.avgSourcH)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {sourceoData.familias.length===0 && <div style={{color:C.t3,fontSize:12}}>Sin datos de familias.</div>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── PANEL 12: Oportunidad Perdida ───────────────────────────────────── */}
+      {iTab==="oportunidad" && (
+        <div style={{display:"flex",flexDirection:"column",gap:16}}>
+          {/* Resumen */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <div style={{...cardStyle,textAlign:"center"}}>
+              <div style={{fontSize:24,fontWeight:800,color:C.red,lineHeight:1.1}}>{cancelData.total}</div>
+              <div style={{fontSize:10,color:C.t3,marginTop:3}}>ops canceladas</div>
+            </div>
+            <div style={{...cardStyle,textAlign:"center"}}>
+              <div style={{fontSize:18,fontWeight:800,color:C.red,lineHeight:1.1}}>{mxn(cancelData.totalRevLost)}</div>
+              <div style={{fontSize:10,color:C.t3,marginTop:3}}>revenue perdido</div>
+            </div>
+          </div>
+
+          {/* Por motivo */}
+          <div>
+            <div style={{...label10,marginBottom:8}}>Revenue Perdido por Motivo</div>
+            {cancelData.sorted.length===0 && (
+              <div style={{...cardStyle,color:C.t3,fontSize:12}}>
+                Sin cancelaciones registradas. Los motivos se capturan al cambiar el estado a "Cancelado".
+              </div>
+            )}
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {cancelData.sorted.map((d,i)=>{
+                const pct = cancelData.totalRevLost>0 ? (d.revenue/cancelData.totalRevLost)*100 : 0;
+                return (
+                  <div key={d.motivo} style={{...cardStyle,padding:"10px 14px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                      <span style={{fontSize:12,fontWeight:700,color:C.t1,flex:1}}>{d.motivo}</span>
+                      <span style={{fontSize:11,color:C.t3}}>{d.count} ops</span>
+                      <span style={{fontSize:12,fontWeight:700,color:C.red,flexShrink:0}}>{mxn(d.revenue)}</span>
+                    </div>
+                    <div style={{height:4,background:C.border,borderRadius:2,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${pct}%`,background:C.red,borderRadius:2}}/>
+                    </div>
+                    <div style={{fontSize:9,color:C.t3,marginTop:3,textAlign:"right"}}>{pct.toFixed(0)}%</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {cancelData.sorted.length>0 && cancelData.sorted.find(d=>d.motivo==="sin motivo") && (
+            <div style={{...cardStyle,background:`${C.yellow}08`,border:`1px solid ${C.yellow}33`}}>
+              <div style={{fontSize:11,color:C.yellow,fontWeight:700,marginBottom:4}}>Sin motivo registrado</div>
+              <div style={{fontSize:11,color:C.t2}}>
+                Hay cancelaciones sin motivo capturado. Los nuevos tickets cancelados pedirán el motivo automáticamente.
+              </div>
+            </div>
+          )}
         </div>
       )}
 
