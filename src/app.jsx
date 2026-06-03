@@ -9790,16 +9790,18 @@ function MInteligencia({state}) {
   const label10 = {fontSize:10,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase",fontWeight:600};
   const scoreColor = s => ({A:C.green,B:C.blue,C:C.yellow,D:C.red}[s]||C.t3);
 
-  // ── Inner tab pills ───────────────────────────────────────────────────────
+  // ── Inner tab pills ─────────────────────────────────────────────────────
   const ITABS = [
-    {id:"control",     label:"Control"},
-    {id:"dinero",      label:"Dinero"},
-    {id:"operacion",   label:"Operación"},
-    {id:"clientes",    label:"Clientes"},
-    {id:"proveedores", label:"Proveedores"},
-    {id:"demanda",     label:"Demanda"},
-    {id:"riesgos",     label:"Riesgos"},
-    {id:"ia",          label:"IA"},
+    {id:"unidades",       label:"Unidades"},
+    {id:"proveedores",    label:"Proveedores"},
+    {id:"clientes",       label:"Clientes"},
+    {id:"pipeline",       label:"Pipeline"},
+    {id:"partes",         label:"Partes"},
+    {id:"sourceabilidad", label:"Sourcing"},
+    {id:"oportunidad",    label:"Oportunidad"},
+    {id:"kpis",           label:"KPIs"},
+    {id:"alertas",        label:"Alertas"},
+    {id:"ia",             label:"IA"},
   ];
 
   const categoriaColor = cat => ({financiero:C.blue,operativo:C.cyan,cliente:C.yellow,crecimiento:C.green,riesgo:C.red}[cat]||C.t3);
@@ -9856,269 +9858,195 @@ function MInteligencia({state}) {
         </div>
       </div>
 
-      {/* ── CONTROL ─────────────────────────────────────────────────────────── */}
-      {iTab==="control" && (
+      {/* ── PANEL 1: Unidades ───────────────────────────────────────────────── */}
+      {iTab==="unidades" && (
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          <div style={{...label10,marginBottom:4}}>Centro de Control · preguntas clave del negocio</div>
-
-          {/* 1. ¿Dónde está el dinero? */}
-          <div style={{...cardStyle,border:`1.5px solid ${C.green}33`}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.green,marginBottom:8}}>¿Dónde está el dinero?</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-              <div>
-                <div style={{...label10,fontSize:9}}>Rev. 30d</div>
-                <div style={{fontSize:13,fontWeight:800,color:C.t1,marginTop:2}}>{mxn(dineroData.rev30)}</div>
-              </div>
-              <div>
-                <div style={{...label10,fontSize:9}}>Margen 30d</div>
-                <div style={{fontSize:13,fontWeight:800,color:dineroData.avgMargen30>=20?C.green:C.yellow,marginTop:2}}>{fpct(dineroData.avgMargen30)}</div>
-              </div>
-              <div>
-                <div style={{...label10,fontSize:9}}>Cartera</div>
-                <div style={{fontSize:13,fontWeight:800,color:C.yellow,marginTop:2}}>{mxn(dineroData.cartera)}</div>
-                <div style={{fontSize:9,color:C.t3}}>{dineroData.carteraCount} clientes</div>
-              </div>
-            </div>
-          </div>
-
-          {/* 2. ¿Qué requiere atención hoy? */}
-          <div style={{...cardStyle,border:`1.5px solid ${C.red}33`}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.red,marginBottom:8}}>¿Qué requiere atención hoy?</div>
-            {(()=>{
-              const stalled = operacionData.filter(d=>d.stalled);
-              if(stalled.length===0) return <div style={{fontSize:12,color:C.t3}}>Sin tickets estancados. Operacion fluye bien.</div>;
-              return stalled.slice(0,3).map(d=>(
-                <div key={d.t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
-                  <span style={{fontSize:9,fontWeight:700,color:C.red,background:`${C.red}18`,borderRadius:5,padding:"2px 6px",flexShrink:0}}>
-                    {d.diasSinMovimiento}d sin mov.
-                  </span>
-                  <span style={{fontSize:12,color:C.t1,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                    {d.t.titulo||"Sin título"}
-                  </span>
-                  <span style={{fontSize:10,color:C.t3,flexShrink:0}}>{d.cl?.empresa||"—"}</span>
-                </div>
-              ));
-            })()}
-          </div>
-
-          {/* 3. ¿Qué riesgo amenaza la operación? */}
-          <div style={{...cardStyle,border:`1.5px solid ${C.yellow}33`}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.yellow,marginBottom:8}}>¿Qué riesgo amenaza la operación?</div>
-            {alertasData.length===0
-              ? <div style={{fontSize:12,color:C.t3}}>Sin alertas activas. Todos los indicadores normales.</div>
-              : alertasData.slice(0,2).map((a,i)=>{
-                  const sevColor = a.sev==="red"?C.red:C.yellow;
-                  return (
-                    <div key={i} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"6px 0",borderBottom:i<1?`1px solid ${C.border}`:"none"}}>
-                      <span style={{fontSize:14,flexShrink:0}}>{a.icon}</span>
-                      <div style={{flex:1}}>
-                        <div style={{fontSize:12,fontWeight:700,color:sevColor}}>{a.title}</div>
-                        <div style={{fontSize:10,color:C.t3,marginTop:2}}>{a.desc}</div>
+          <div style={{...label10,marginBottom:4}}>Rendimiento por Unidad · solo operaciones concretadas</div>
+          {unidadesData.length===0 && <div style={{color:C.t3,fontSize:13}}>Sin unidades registradas.</div>}
+          {unidadesData.map(({unit,cl,ticketCount,gastoAcum,desembolsoAcum,utilidadGen,incidentes90d,avgDaysBetween,alert,ops})=>{
+            const isOpen = selectedUnitId === unit.id;
+            return (
+              <div key={unit.id}>
+                <div
+                  onClick={()=>setSelectedUnitId(isOpen ? null : unit.id)}
+                  style={{
+                    ...cardStyle,
+                    border:`1.5px solid ${alert?C.red:isOpen?C.blue:C.border}`,
+                    cursor:"pointer",
+                    WebkitTapHighlightColor:"transparent",
+                  }}>
+                  <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,marginBottom:8}}>
+                    <div>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <span style={{fontSize:13,fontWeight:700,color:C.t1}}>{unit.economico}</span>
+                        <span style={{fontSize:11,color:C.t3}}>{unit.marca} {unit.modelo}</span>
+                        {alert && <span style={{fontSize:9,fontWeight:700,color:C.red,background:`${C.red}18`,border:`1px solid ${C.red}44`,borderRadius:6,padding:"2px 6px"}}>ALERTA</span>}
+                      </div>
+                      <div style={{fontSize:11,color:C.t3,marginTop:2}}>{cl?.empresa||"Sin cliente"} · {unit.anio||"—"}</div>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:13,fontWeight:700,color:C.t1}}>{ticketCount} ops</div>
+                        <div style={{fontSize:10,color:C.t3}}>{incidentes90d} en 90d</div>
+                      </div>
+                      <span style={{fontSize:14,color:C.t3,transform:isOpen?"rotate(180deg)":"none",transition:"transform 0.2s",display:"inline-block"}}>▾</span>
+                    </div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8}}>
+                    <div>
+                      <div style={{...label10,fontSize:9}}>Costo Op. <span style={{color:C.t3,fontSize:8}}>(s/IVA)</span></div>
+                      <div style={{fontSize:12,fontWeight:700,color:C.red,marginTop:2}}>{mxn(gastoAcum)}</div>
+                    </div>
+                    <div>
+                      <div style={{...label10,fontSize:9,color:C.yellow}}>Desembolso</div>
+                      <div style={{fontSize:12,fontWeight:700,color:C.yellow,marginTop:2}}>{mxn(desembolsoAcum)}</div>
+                    </div>
+                    <div>
+                      <div style={{...label10,fontSize:9,color:C.green}}>Utilidad</div>
+                      <div style={{fontSize:12,fontWeight:700,color:C.green,marginTop:2}}>{mxn(utilidadGen)}</div>
+                    </div>
+                    <div>
+                      <div style={{...label10,fontSize:9}}>Frec.</div>
+                      <div style={{fontSize:12,fontWeight:700,color:C.t2,marginTop:2}}>
+                        {avgDaysBetween!==null ? `${avgDaysBetween.toFixed(0)}d` : "—"}
                       </div>
                     </div>
-                  );
-                })
-            }
-          </div>
-
-          {/* 4. ¿Qué oportunidad tiene mayor retorno? */}
-          <div style={{...cardStyle,border:`1.5px solid ${C.blue}33`}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.blue,marginBottom:8}}>¿Qué oportunidad tiene mayor retorno?</div>
-            {(()=>{
-              const forecasts = tickets.filter(t=>!t._deleted&&FORECAST_SET.has(t.status));
-              if(forecasts.length===0) return <div style={{fontSize:12,color:C.t3}}>Sin oportunidades en forecast.</div>;
-              const top = forecasts.reduce((best,t)=>{
-                const v = safeNumber(t.snap?.precioConIVA);
-                return v > safeNumber(best.snap?.precioConIVA) ? t : best;
-              }, forecasts[0]);
-              const precio = safeNumber(top.snap?.precioConIVA);
-              const uNeta = safeNumber(top.snap?.uNeta);
-              const margen = precio>0?(uNeta/precio)*100:0;
-              return (
-                <div>
-                  <div style={{fontSize:13,fontWeight:700,color:C.t1,marginBottom:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                    {top.titulo||"Sin título"}
                   </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
-                    <div>
-                      <div style={{...label10,fontSize:9}}>Valor</div>
-                      <div style={{fontSize:12,fontWeight:700,color:C.t1,marginTop:1}}>{mxn(precio)}</div>
-                    </div>
-                    <div>
-                      <div style={{...label10,fontSize:9}}>Utilidad</div>
-                      <div style={{fontSize:12,fontWeight:700,color:C.green,marginTop:1}}>{mxn(uNeta)}</div>
-                    </div>
-                    <div>
-                      <div style={{...label10,fontSize:9}}>Margen</div>
-                      <div style={{fontSize:12,fontWeight:700,color:margen>=20?C.green:C.yellow,marginTop:1}}>{fpct(margen)}</div>
-                    </div>
-                  </div>
-                  <div style={{fontSize:10,color:C.t3,marginTop:6}}>
-                    Estado: <span style={{fontWeight:600,color:C.blue}}>{top.status}</span>
-                    {top.clientId && clients.find(c=>c.id===top.clientId) && (
-                      <span> · {clients.find(c=>c.id===top.clientId).empresa}</span>
+                </div>
+                {isOpen && (
+                  <div style={{marginTop:6,marginLeft:8,display:"flex",flexDirection:"column",gap:6}}>
+                    {ops.length===0 && (
+                      <div style={{color:C.t3,fontSize:12,padding:"10px 14px",background:C.card,borderRadius:10,border:`1px solid ${C.border}`}}>
+                        Sin operaciones concretadas para esta unidad.
+                      </div>
                     )}
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-      )}
-
-      {/* ── DINERO ──────────────────────────────────────────────────────────── */}
-      {iTab==="dinero" && (
-        <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          {/* ¿Cuánto he vendido? */}
-          <div style={cardStyle}>
-            <div style={{fontSize:11,fontWeight:700,color:C.t1,marginBottom:10}}>¿Cuánto he vendido?</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-              {[
-                {label:"30 días",rev:dineroData.rev30,util:dineroData.util30,margen:dineroData.avgMargen30},
-                {label:"90 días",rev:dineroData.rev90,util:dineroData.util90,margen:null},
-                {label:"Histórico",rev:dineroData.totalRevenue,util:dineroData.totalUtilidad,margen:dineroData.avgMargen},
-              ].map(({label,rev,util,margen})=>(
-                <div key={label} style={{background:C.bg2,borderRadius:10,padding:"10px 10px"}}>
-                  <div style={{...label10,fontSize:8,marginBottom:6}}>{label}</div>
-                  <div style={{fontSize:13,fontWeight:800,color:C.t1,marginBottom:2}}>{mxn(rev)}</div>
-                  <div style={{fontSize:11,fontWeight:700,color:C.green}}>{mxn(util)}</div>
-                  {margen!==null && <div style={{fontSize:9,color:C.t3,marginTop:2}}>{fpct(margen)} margen</div>}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* ¿Cuánto me deben? */}
-          <div style={cardStyle}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-              <div style={{fontSize:11,fontWeight:700,color:C.t1}}>¿Cuánto me deben?</div>
-              <div style={{fontSize:14,fontWeight:800,color:C.yellow}}>{mxn(dineroData.cartera)}</div>
-            </div>
-            <div style={{fontSize:10,color:C.t3,marginBottom:8}}>{dineroData.carteraCount} clientes con saldo pendiente · CARTERA_SET</div>
-            {[...clientesData].filter(d=>d.cartPending>0).sort((a,b)=>b.cartPending-a.cartPending).slice(0,5).map(({cl,cartPending})=>(
-              <div key={cl.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderBottom:`1px solid ${C.border}`}}>
-                <span style={{fontSize:12,color:C.t1,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.empresa||cl.id}</span>
-                <span style={{fontSize:12,fontWeight:700,color:C.yellow,flexShrink:0}}>{mxn(cartPending)}</span>
-              </div>
-            ))}
-            {clientesData.filter(d=>d.cartPending>0).length===0 && (
-              <div style={{fontSize:12,color:C.green}}>Sin cartera pendiente.</div>
-            )}
-          </div>
-
-          {/* Flujo esperado + Capital en proceso */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <div style={{...cardStyle,textAlign:"center"}}>
-              <div style={{...label10,fontSize:9,marginBottom:6}}>Flujo esperado</div>
-              <div style={{fontSize:18,fontWeight:800,color:C.cyan,lineHeight:1.1}}>{mxn(dineroData.flujoForecast)}</div>
-              <div style={{fontSize:10,color:C.t3,marginTop:4}}>{dineroData.flujoForecastCount} tickets FORECAST</div>
-            </div>
-            <div style={{...cardStyle,textAlign:"center"}}>
-              <div style={{...label10,fontSize:9,marginBottom:6}}>Capital en proceso</div>
-              <div style={{fontSize:18,fontWeight:800,color:C.blue,lineHeight:1.1}}>{mxn(dineroData.costoEnProceso)}</div>
-              <div style={{fontSize:10,color:C.t3,marginTop:4}}>costo en ops activas</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── OPERACION ───────────────────────────────────────────────────────── */}
-      {iTab==="operacion" && (
-        <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          {(()=>{
-            const stalled = operacionData.filter(d=>d.stalled).sort((a,b)=>b.diasSinMovimiento-a.diasSinMovimiento);
-            const inProcess = operacionData.filter(d=>!d.stalled).sort((a,b)=>b.horasSinMovimiento-a.horasSinMovimiento);
-            return (
-              <>
-                {/* Estancados */}
-                <div>
-                  <div style={{...label10,marginBottom:6,color:C.red}}>Estancados &gt;72h sin movimiento · {stalled.length} tickets</div>
-                  {stalled.length===0
-                    ? <div style={{fontSize:12,color:C.t3,padding:"10px 0"}}>Sin tickets estancados.</div>
-                    : stalled.map(({t,cl,diasSinMovimiento,horasSinMovimiento})=>(
+                    {ops.map(t=>{
+                      const folio = mkFolio(t,"OP");
+                      const precio = safeNumber(t.snap?.precioConIVA);
+                      const uNeta = safeNumber(t.snap?.uNeta);
+                      const margen = precio>0 ? (uNeta/precio)*100 : 0;
+                      const meta = TICKET_META[t.status]||{};
+                      return (
                         <div key={t.id} style={{
-                          ...cardStyle,
-                          marginBottom:6,
-                          background:`${C.red}06`,
-                          border:`1.5px solid ${C.red}44`,
+                          background:C.card,borderRadius:10,padding:"10px 14px",
+                          border:`1px solid ${C.border}`,
                         }}>
-                          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,marginBottom:6}}>
-                            <div style={{flex:1,minWidth:0}}>
-                              <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                                {t.titulo||"Sin título"}
-                              </div>
-                              <div style={{fontSize:10,color:C.t3,marginTop:2}}>{cl?.empresa||"—"} · {t.status}</div>
-                            </div>
-                            <div style={{flexShrink:0,textAlign:"right"}}>
-                              <div style={{fontSize:14,fontWeight:800,color:C.red}}>{diasSinMovimiento}d</div>
-                              <div style={{fontSize:9,color:C.t3}}>sin mov.</div>
-                            </div>
-                          </div>
-                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-                            <div>
-                              <div style={{...label10,fontSize:8}}>Valor</div>
-                              <div style={{fontSize:11,fontWeight:700,color:C.t1,marginTop:1}}>{mxn(safeNumber(t.snap?.precioConIVA))}</div>
-                            </div>
-                            <div>
-                              <div style={{...label10,fontSize:8}}>Horas parado</div>
-                              <div style={{fontSize:11,fontWeight:700,color:C.red,marginTop:1}}>{horasSinMovimiento.toFixed(0)}h</div>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                  }
-                </div>
-
-                {/* En proceso */}
-                <div>
-                  <div style={{...label10,marginBottom:6}}>En proceso · {inProcess.length} tickets activos</div>
-                  {inProcess.length===0
-                    ? <div style={{fontSize:12,color:C.t3}}>Sin tickets en proceso.</div>
-                    : inProcess.map(({t,cl,horasSinMovimiento})=>(
-                        <div key={t.id} style={{...cardStyle,marginBottom:6}}>
                           <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
                             <div style={{flex:1,minWidth:0}}>
-                              <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                              <div style={{fontSize:9,color:C.t3,fontFamily:"'Courier New',monospace",letterSpacing:"0.04em",marginBottom:2}}>
+                                {folio}
+                              </div>
+                              <div style={{fontSize:12,fontWeight:600,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                                 {t.titulo||"Sin título"}
                               </div>
-                              <div style={{fontSize:10,color:C.t3,marginTop:2}}>{cl?.empresa||"—"} · {t.status}</div>
+                              <div style={{fontSize:10,color:C.t3,marginTop:2}}>{t.date||"—"}</div>
                             </div>
-                            <div style={{flexShrink:0,textAlign:"right"}}>
-                              <div style={{fontSize:12,fontWeight:700,color:horasSinMovimiento>48?C.yellow:C.t2}}>{horasSinMovimiento.toFixed(0)}h</div>
-                              <div style={{fontSize:9,color:C.t3}}>sin mov.</div>
+                            <div style={{textAlign:"right",flexShrink:0}}>
+                              <div style={{fontSize:12,fontWeight:700,color:C.t1}}>{mxn(precio)}</div>
+                              <div style={{fontSize:10,color:margen>=20?C.green:C.yellow,marginTop:1}}>
+                                {fpct(margen)} margen
+                              </div>
+                              <div style={{
+                                marginTop:3,fontSize:8,fontWeight:700,
+                                color:meta.dot||C.t3,
+                                background:meta.color||`${C.t3}18`,
+                                border:`1px solid ${meta.dot||C.t3}44`,
+                                borderRadius:5,padding:"1px 5px",display:"inline-block",
+                              }}>
+                                {meta.label||t.status}
+                              </div>
                             </div>
                           </div>
                         </div>
-                      ))
-                  }
-                </div>
-              </>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
-          })()}
+          })}
         </div>
       )}
 
-      {/* ── CLIENTES ────────────────────────────────────────────────────────── */}
+      {/* ── PANEL 2: Proveedores ────────────────────────────────────────────── */}
+      {iTab==="proveedores" && (
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          <div style={{...label10,marginBottom:4}}>Ranking de Proveedores</div>
+          {proveedoresData.length===0 && <div style={{color:C.t3,fontSize:13}}>Sin datos de proveedores.</div>}
+          {proveedoresData.map(({supplier,ticketCount,concretadosCount,revenue,utilidad,tasaExito},idx)=>{
+            const score = tasaExito>=85&&revenue>10000?"A":tasaExito>=70?"B":tasaExito>=50?"C":"D";
+            return (
+            <div key={supplier.id} style={cardStyle}>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                <div style={{width:28,height:28,borderRadius:14,background:`${C.blue}18`,border:`1px solid ${C.blue}33`,
+                  display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:C.blue,flexShrink:0}}>
+                  {idx+1}
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {supplier.nombre||supplier.id}
+                  </div>
+                  <div style={{fontSize:11,color:C.t3}}>{ticketCount} asignados · {concretadosCount} concretados</div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"center",
+                  width:32,height:32,borderRadius:16,flexShrink:0,
+                  background:`${scoreColor(score)}18`,border:`1.5px solid ${scoreColor(score)}`,
+                  fontSize:13,fontWeight:800,color:scoreColor(score)}}>
+                  {score}
+                </div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                <div>
+                  <div style={{...label10,fontSize:8}}>Revenue <span style={{color:C.t3,fontSize:7,textTransform:"none",letterSpacing:0}}>(concretadas)</span></div>
+                  <div style={{fontSize:12,fontWeight:700,color:C.t1,marginTop:2}}>{mxn(revenue)}</div>
+                </div>
+                <div>
+                  <div style={{...label10,fontSize:9}}>Utilidad</div>
+                  <div style={{fontSize:12,fontWeight:700,color:C.green,marginTop:2}}>{mxn(utilidad)}</div>
+                </div>
+                <div>
+                  <div style={{...label10,fontSize:8}}>Tasa éxito</div>
+                  <div style={{fontSize:13,fontWeight:800,color:tasaExito>=80?C.green:tasaExito>=60?C.yellow:C.red,marginTop:1}}>{tasaExito.toFixed(0)}%</div>
+                </div>
+              </div>
+            </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── PANEL 3: Clientes ───────────────────────────────────────────────── */}
       {iTab==="clientes" && (
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
-          {/* Ranking por utilidad */}
-          <div>
-            <div style={{...label10,marginBottom:8}}>Ranking por Utilidad · clientes que generan ganancia real</div>
+          {/* Score V2 */}
+          <div style={{marginBottom:16}}>
+            <div style={{...label10,marginBottom:8}}>Score V2 · Revenue + Utilidad + Frecuencia + Pago</div>
             <div style={{display:"flex",flexDirection:"column",gap:6}}>
-              {[...clientesData].sort((a,b)=>b.utilidad-a.utilidad).map(({cl,revenue,utilidad,ticketCount,puntualidad,cartPending},idx)=>{
+              {[...clientesData].sort((a,b)=>{
+                const scoreV2 = d => {
+                  const revS = Math.min(d.revenue/1000,40);
+                  const utilS = Math.min(d.utilidad/200,30);
+                  const freqS = Math.min(d.ticketCount*3,20);
+                  return revS+utilS+freqS;
+                };
+                return scoreV2(b)-scoreV2(a);
+              }).slice(0,5).map(({cl,revenue,utilidad,ticketCount,cartPending})=>{
                 const revS = Math.min(revenue/1000,40);
                 const utilS = Math.min(utilidad/200,30);
                 const freqS = Math.min(ticketCount*3,20);
                 const total = revS+utilS+freqS;
-                const score = total>=75?"A":total>=50?"B":total>=25?"C":"D";
+                const scoreV2 = total>=75?"A":total>=50?"B":total>=25?"C":"D";
+                // Tasa de cierre
+                const solics = tickets.filter(t=>!t._deleted&&t.clientId===cl.id).length;
+                const autorizados = tickets.filter(t=>!t._deleted&&t.clientId===cl.id&&new Set(["autorizado","comprado","transito","entregado","facturado","cobrado","cerrado"]).has(t.status)).length;
+                const tasaCierre = solics>0?(autorizados/solics)*100:0;
                 return (
                   <div key={cl.id} style={{...cardStyle,padding:"10px 14px"}}>
                     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                      <span style={{fontSize:10,color:C.t3,width:18,flexShrink:0}}>#{idx+1}</span>
-                      <div style={{width:26,height:26,borderRadius:13,flexShrink:0,
-                        background:`${scoreColor(score)}18`,border:`1.5px solid ${scoreColor(score)}`,
-                        display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:scoreColor(score)}}>
-                        {score}
+                      <div style={{width:28,height:28,borderRadius:14,flexShrink:0,
+                        background:`${scoreColor(scoreV2)}18`,border:`1.5px solid ${scoreColor(scoreV2)}`,
+                        display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:scoreColor(scoreV2)}}>
+                        {scoreV2}
                       </div>
                       <span style={{fontSize:13,fontWeight:700,color:C.t1,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                         {cl.empresa||cl.id}
@@ -10126,119 +10054,373 @@ function MInteligencia({state}) {
                       <span style={{fontSize:10,color:C.t3,flexShrink:0}}>{ticketCount} ops</span>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
-                      <div>
-                        <div style={{...label10,fontSize:8}}>Utilidad</div>
-                        <div style={{fontSize:12,fontWeight:700,color:C.green,marginTop:1}}>{mxn(utilidad)}</div>
-                      </div>
-                      <div>
-                        <div style={{...label10,fontSize:8}}>Revenue</div>
-                        <div style={{fontSize:12,fontWeight:700,color:C.t1,marginTop:1}}>{mxn(revenue)}</div>
-                      </div>
-                      <div>
-                        <div style={{...label10,fontSize:8}}>Puntualidad</div>
-                        <div style={{fontSize:12,fontWeight:700,color:puntualidad>=80?C.green:puntualidad>=50?C.yellow:C.t3,marginTop:1}}>
-                          {puntualidad!=null?`${puntualidad.toFixed(0)}%`:"—"}
-                        </div>
-                      </div>
+                      <div><div style={{...label10,fontSize:8}}>Revenue</div><div style={{fontSize:11,fontWeight:700,color:C.t1,marginTop:1}}>{mxn(revenue)}</div></div>
+                      <div><div style={{...label10,fontSize:8}}>Utilidad</div><div style={{fontSize:11,fontWeight:700,color:C.green,marginTop:1}}>{mxn(utilidad)}</div></div>
+                      <div><div style={{...label10,fontSize:8}}>T. cierre</div><div style={{fontSize:11,fontWeight:700,color:tasaCierre>=60?C.green:C.yellow,marginTop:1}}>{tasaCierre.toFixed(0)}%</div></div>
                     </div>
-                    {cartPending>0 && (
-                      <div style={{marginTop:6,fontSize:10,color:C.yellow,fontWeight:600}}>
-                        Cartera pendiente: {mxn(cartPending)}
-                      </div>
-                    )}
+                    {cartPending>0&&<div style={{marginTop:6,fontSize:10,color:C.yellow}}>Cartera: {mxn(cartPending)}</div>}
                   </div>
                 );
               })}
-              {clientesData.length===0 && <div style={{color:C.t3,fontSize:12}}>Sin datos de clientes.</div>}
+            </div>
+          </div>
+          {[
+            {title:"Por Revenue", sorted:[...clientesData].sort((a,b)=>b.revenue-a.revenue), valKey:"revenue", valFmt:mxn, color:C.blue},
+            {title:"Por Utilidad", sorted:[...clientesData].sort((a,b)=>b.utilidad-a.utilidad), valKey:"utilidad", valFmt:mxn, color:C.green},
+            {title:"Cartera Pendiente", sorted:[...clientesData].sort((a,b)=>b.cartPending-a.cartPending).filter(d=>d.cartPending>0), valKey:"cartPending", valFmt:mxn, color:C.yellow},
+            {title:"Ticket Promedio", sorted:[...clientesData].sort((a,b)=>b.ticketPromedio-a.ticketPromedio), valKey:"ticketPromedio", valFmt:mxn, color:C.cyan},
+          ].map(({title,sorted,valKey,valFmt,color})=>(
+            <div key={title}>
+              <div style={{...label10,marginBottom:8}}>{title}</div>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {sorted.slice(0,5).map(({cl,score,...rest},idx)=>(
+                  <div key={cl.id} style={{...cardStyle,padding:"10px 14px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:11,color:C.t3,width:16,flexShrink:0}}>#{idx+1}</span>
+                      <span style={{
+                        fontSize:9,fontWeight:700,color:scoreColor(score),
+                        background:`${scoreColor(score)}18`,border:`1px solid ${scoreColor(score)}44`,
+                        borderRadius:6,padding:"2px 5px",flexShrink:0,
+                      }}>{score}</span>
+                      <span style={{fontSize:12,fontWeight:700,color:C.t1,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                        {cl.empresa||cl.id}
+                      </span>
+                      <span style={{fontSize:13,fontWeight:700,color,flexShrink:0}}>{valFmt(rest[valKey])}</span>
+                    </div>
+                  </div>
+                ))}
+                {sorted.length===0 && <div style={{color:C.t3,fontSize:12}}>Sin datos.</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── PANEL 4: Pipeline / Conversión ──────────────────────────────────── */}
+      {iTab==="pipeline" && (
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {/* Tickets detenidos (V8 improvement) */}
+          {operacionData.filter(d=>d.stalled).length > 0 && (
+            <div style={{background:`${C.red}0a`,border:`1.5px solid ${C.red}44`,borderRadius:14,padding:"12px 14px"}}>
+              <div style={{...label10,color:C.red,marginBottom:8}}>
+                {operacionData.filter(d=>d.stalled).length} ticket(s) sin movimiento +72h
+              </div>
+              {operacionData.filter(d=>d.stalled).slice(0,3).map(d=>(
+                <div key={d.t.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                  <span style={{fontSize:11,fontWeight:800,color:C.red,flexShrink:0,minWidth:28}}>
+                    {Math.round(d.diasSinMovimiento)}d
+                  </span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:12,fontWeight:600,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                      {d.t.titulo||"Sin título"}
+                    </div>
+                    <div style={{fontSize:10,color:C.t3}}>{d.cl?.empresa||"—"} · {d.t.status}</div>
+                  </div>
+                  {d.rev>0&&<div style={{fontSize:11,fontWeight:600,color:C.t3,flexShrink:0}}>{mxn(d.rev)}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{...label10,marginBottom:4}}>Embudo de Conversión · {pipelineData.total} tickets activos</div>
+          {pipelineData.stages.map((s,i)=>{
+            const maxCount = pipelineData.stages[0].count||1;
+            const barW = maxCount>0 ? (s.count/maxCount)*100 : 0;
+            return (
+              <div key={s.key} style={{
+                ...cardStyle,
+                border:`1.5px solid ${s.isBottleneck?C.red:C.border}`,
+              }}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                  <span style={{fontSize:12,fontWeight:700,color:s.isBottleneck?C.red:C.t1,flex:1}}>{s.label}</span>
+                  {s.isBottleneck && (
+                    <span style={{fontSize:9,fontWeight:700,color:C.red,background:`${C.red}18`,border:`1px solid ${C.red}44`,borderRadius:6,padding:"2px 7px"}}>
+                      CUELLO DE BOTELLA
+                    </span>
+                  )}
+                  <span style={{fontSize:13,fontWeight:700,color:C.t1,flexShrink:0}}>{s.count}</span>
+                </div>
+                {/* Bar */}
+                <div style={{height:6,borderRadius:3,background:C.border,overflow:"hidden",marginBottom:4}}>
+                  <div style={{height:"100%",borderRadius:3,width:`${barW}%`,
+                    background:s.isBottleneck?C.red:C.blue,transition:"width 0.6s ease"}}/>
+                </div>
+                {i>0 && (
+                  <div style={{fontSize:10,color:s.isBottleneck?C.red:C.t3}}>
+                    Conversión desde etapa anterior: <span style={{fontWeight:700}}>{fpct(s.convPct)}</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── PANEL 5 & 6: Partes ─────────────────────────────────────────────── */}
+      {iTab==="partes" && (
+        <div style={{display:"flex",flexDirection:"column",gap:20}}>
+          {/* Top 15 */}
+          <div>
+            <div style={{...label10,marginBottom:8}}>Top Partes por Frecuencia</div>
+            <div style={{...cardStyle,padding:0,overflow:"hidden"}}>
+              {partesData.top15.map((p,i)=>(
+                <div key={p.name} style={{
+                  display:"grid",gridTemplateColumns:"24px 1fr auto auto",
+                  gap:8,alignItems:"center",
+                  padding:"9px 14px",
+                  borderBottom: i<partesData.top15.length-1?`1px solid ${C.border}`:"none",
+                }}>
+                  <span style={{fontSize:10,color:C.t3,fontWeight:700}}>#{i+1}</span>
+                  <span style={{fontSize:12,color:C.t1,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {p.name}
+                  </span>
+                  <span style={{fontSize:11,color:C.cyan,fontWeight:700,flexShrink:0}}>{p.freq}x</span>
+                  <span style={{fontSize:11,color:C.green,fontWeight:700,flexShrink:0,textAlign:"right"}}>{mxn(p.revenue)}</span>
+                </div>
+              ))}
+              {partesData.top15.length===0 && (
+                <div style={{padding:"16px",color:C.t3,fontSize:12}}>Sin datos de partes.</div>
+              )}
             </div>
           </div>
 
-          {/* En riesgo: sin tickets en 60 días */}
-          {(()=>{
-            const now = Date.now();
-            const MS60 = 60*24*60*60*1000;
-            const enRiesgo = clients.filter(cl=>{
-              if(cl._deleted) return false;
-              const myTickets = tickets.filter(t=>!t._deleted&&t.clientId===cl.id);
-              if(myTickets.length===0) return false;
-              const lastTs = myTickets.reduce((mx,t)=>{
-                const d = t.updatedAt||t.createdAt;
-                const ts = d?.toMillis?d.toMillis():d instanceof Date?d.getTime():typeof d==="number"?d:0;
-                return Math.max(mx,ts);
-              },0);
-              return lastTs>0 && (now-lastTs)>MS60;
-            });
-            if(enRiesgo.length===0) return null;
-            return (
-              <div>
-                <div style={{...label10,marginBottom:8,color:C.yellow}}>En riesgo · sin actividad en 60+ días ({enRiesgo.length})</div>
-                {enRiesgo.slice(0,5).map(cl=>(
-                  <div key={cl.id} style={{
-                    ...cardStyle,marginBottom:6,
-                    background:`${C.yellow}06`,border:`1px solid ${C.yellow}33`,
-                  }}>
-                    <div style={{fontSize:12,fontWeight:700,color:C.t1}}>{cl.empresa||cl.id}</div>
-                    <div style={{fontSize:10,color:C.t3,marginTop:2}}>Sin tickets recientes — considerar reactivación</div>
+          {/* Inventario sugerido */}
+          <div>
+            <div style={{...label10,marginBottom:8}}>Inventario Sugerido (≥3 solicitudes en 90 días)</div>
+            {partesData.sugeridas.length===0 && (
+              <div style={{color:C.t3,fontSize:12}}>Ninguna pieza cumple los criterios aún.</div>
+            )}
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {partesData.sugeridas.map(p=>(
+                <div key={p.name} style={{
+                  ...cardStyle,
+                  background:`${C.green}08`,border:`1px solid ${C.green}33`,
+                }}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                    <span style={{fontSize:14}}>📦</span>
+                    <span style={{fontSize:13,fontWeight:700,color:C.t1,flex:1}}>{p.name}</span>
+                    <span style={{fontSize:11,fontWeight:700,color:C.green,flexShrink:0}}>{p.freq}x</span>
                   </div>
-                ))}
-              </div>
-            );
-          })()}
-
-          {/* Cartera: clientes con saldo pendiente */}
-          {clientesData.filter(d=>d.cartPending>0).length>0 && (
-            <div>
-              <div style={{...label10,marginBottom:8,color:C.yellow}}>Cartera pendiente de cobro</div>
-              {[...clientesData].filter(d=>d.cartPending>0).sort((a,b)=>b.cartPending-a.cartPending).map(({cl,cartPending})=>(
-                <div key={cl.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
-                  <span style={{fontSize:12,color:C.t1,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.empresa||cl.id}</span>
-                  <span style={{fontSize:13,fontWeight:700,color:C.yellow,flexShrink:0}}>{mxn(cartPending)}</span>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                    <div>
+                      <div style={{...label10,fontSize:9}}>Últ. solicitud</div>
+                      <div style={{fontSize:11,color:C.t2,marginTop:1}}>
+                        {p.lastDate ? p.lastDate.toLocaleDateString("es-MX") : "—"}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{...label10,fontSize:9}}>Ingreso prom/tkt</div>
+                      <div style={{fontSize:11,fontWeight:700,color:C.green,marginTop:1}}>{mxn(p.avgRevPerTicket)}</div>
+                    </div>
+                  </div>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── PANEL 9: Sourceabilidad ─────────────────────────────────────────── */}
+      {iTab==="sourceabilidad" && (
+        <div style={{display:"flex",flexDirection:"column",gap:16}}>
+          {/* KPIs globales de sourceo */}
+          <div>
+            <div style={{...label10,marginBottom:8}}>Tiempo de Sourceo · ticket creado → proveedor identificado</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+              {[
+                {l:"Promedio",h:sourceoData.promedio},
+                {l:"Mediana",h:sourceoData.mediana},
+                {l:"Mejor",h:sourceoData.mejor},
+                {l:"Peor",h:sourceoData.peor},
+              ].map(({l,h})=>(
+                <div key={l} style={{...cardStyle,textAlign:"center",padding:"12px 10px"}}>
+                  <div style={{fontSize:20,fontWeight:800,color:h===null?C.t3:h<2?C.green:h<6?C.yellow:C.red,lineHeight:1.1}}>
+                    {sourceoData.fmtH(h)}
+                  </div>
+                  <div style={{fontSize:10,color:C.t3,marginTop:3}}>{l}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{fontSize:10,color:C.t3,textAlign:"center"}}>
+              Basado en {sourceoData.n} operaciones con proveedor identificado
+            </div>
+          </div>
+
+          {/* Componentes más difíciles */}
+          <div>
+            <div style={{...label10,marginBottom:8}}>Componentes más difíciles de sourcear</div>
+            <div style={{...cardStyle,padding:0,overflow:"hidden"}}>
+              {sourceoData.partesDificiles.length===0 && (
+                <div style={{padding:14,color:C.t3,fontSize:12}}>Sin datos suficientes.</div>
+              )}
+              {sourceoData.partesDificiles.map((p,i)=>(
+                <div key={p.name} style={{display:"grid",gridTemplateColumns:"20px 1fr auto auto",gap:8,alignItems:"center",
+                  padding:"9px 14px",borderBottom:i<sourceoData.partesDificiles.length-1?`1px solid ${C.border}`:"none"}}>
+                  <span style={{fontSize:9,color:C.t3,fontWeight:700}}>#{i+1}</span>
+                  <span style={{fontSize:12,color:C.t1,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</span>
+                  <span style={{fontSize:10,color:C.t3,flexShrink:0}}>{p.freq}x</span>
+                  <span style={{fontSize:12,fontWeight:700,color:p.avgH<2?C.green:p.avgH<6?C.yellow:C.red,flexShrink:0}}>
+                    {sourceoData.fmtH(p.avgH)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Familias dominadas */}
+          <div>
+            <div style={{...label10,marginBottom:8}}>Familias Dominadas</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {sourceoData.familias.map((f,i)=>(
+                <div key={f.key} style={{...cardStyle}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                    <div style={{width:24,height:24,borderRadius:12,background:`${C.blue}18`,border:`1px solid ${C.blue}33`,
+                      display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:C.blue,flexShrink:0}}>
+                      {i+1}
+                    </div>
+                    <span style={{fontSize:13,fontWeight:700,color:C.t1,flex:1}}>{f.label}</span>
+                    <span style={{fontSize:11,color:C.t3}}>{f.ops} ops</span>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+                    <div>
+                      <div style={{...label10,fontSize:8}}>Revenue</div>
+                      <div style={{fontSize:11,fontWeight:700,color:C.t1,marginTop:1}}>{mxn(f.revenue)}</div>
+                    </div>
+                    <div>
+                      <div style={{...label10,fontSize:8}}>Utilidad</div>
+                      <div style={{fontSize:11,fontWeight:700,color:C.green,marginTop:1}}>{mxn(f.utilidad)}</div>
+                    </div>
+                    <div>
+                      <div style={{...label10,fontSize:8}}>T. Sourceo</div>
+                      <div style={{fontSize:11,fontWeight:700,color:f.avgSourcH===null?C.t3:f.avgSourcH<2?C.green:C.yellow,marginTop:1}}>
+                        {f.avgSourcH===null?"—":sourceoData.fmtH(f.avgSourcH)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {sourceoData.familias.length===0 && <div style={{color:C.t3,fontSize:12}}>Sin datos de familias.</div>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── PANEL 12: Oportunidad Perdida ───────────────────────────────────── */}
+      {iTab==="oportunidad" && (
+        <div style={{display:"flex",flexDirection:"column",gap:16}}>
+          {/* Resumen */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <div style={{...cardStyle,textAlign:"center"}}>
+              <div style={{fontSize:24,fontWeight:800,color:C.red,lineHeight:1.1}}>{cancelData.total}</div>
+              <div style={{fontSize:10,color:C.t3,marginTop:3}}>ops canceladas</div>
+            </div>
+            <div style={{...cardStyle,textAlign:"center"}}>
+              <div style={{fontSize:18,fontWeight:800,color:C.red,lineHeight:1.1}}>{mxn(cancelData.totalRevLost)}</div>
+              <div style={{fontSize:10,color:C.t3,marginTop:3}}>revenue perdido</div>
+            </div>
+          </div>
+
+          {/* Por motivo */}
+          <div>
+            <div style={{...label10,marginBottom:8}}>Revenue Perdido por Motivo</div>
+            {cancelData.sorted.length===0 && (
+              <div style={{...cardStyle,color:C.t3,fontSize:12}}>
+                Sin cancelaciones registradas. Los motivos se capturan al cambiar el estado a "Cancelado".
+              </div>
+            )}
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {cancelData.sorted.map((d,i)=>{
+                const pct = cancelData.totalRevLost>0 ? (d.revenue/cancelData.totalRevLost)*100 : 0;
+                return (
+                  <div key={d.motivo} style={{...cardStyle,padding:"10px 14px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                      <span style={{fontSize:12,fontWeight:700,color:C.t1,flex:1}}>{d.motivo}</span>
+                      <span style={{fontSize:11,color:C.t3}}>{d.count} ops</span>
+                      <span style={{fontSize:12,fontWeight:700,color:C.red,flexShrink:0}}>{mxn(d.revenue)}</span>
+                    </div>
+                    <div style={{height:4,background:C.border,borderRadius:2,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${pct}%`,background:C.red,borderRadius:2}}/>
+                    </div>
+                    <div style={{fontSize:9,color:C.t3,marginTop:3,textAlign:"right"}}>{pct.toFixed(0)}%</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {cancelData.sorted.length>0 && cancelData.sorted.find(d=>d.motivo==="sin motivo") && (
+            <div style={{...cardStyle,background:`${C.yellow}08`,border:`1px solid ${C.yellow}33`}}>
+              <div style={{fontSize:11,color:C.yellow,fontWeight:700,marginBottom:4}}>Sin motivo registrado</div>
+              <div style={{fontSize:11,color:C.t2}}>
+                Hay cancelaciones sin motivo capturado. Los nuevos tickets cancelados pedirán el motivo automáticamente.
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* ── PROVEEDORES ─────────────────────────────────────────────────────── */}
-      {iTab==="proveedores" && (
+      {/* ── PANEL 7: KPIs Operativos ─────────────────────────────────────────── */}
+      {iTab==="kpis" && (
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          <div style={{...label10,marginBottom:2}}>Ranking por Utilidad · Revenue = solo operaciones concretadas</div>
-          {proveedoresData.length===0 && <div style={{color:C.t3,fontSize:13}}>Sin datos de proveedores.</div>}
-          {[...proveedoresData].sort((a,b)=>b.utilidad-a.utilidad).map(({supplier,ticketCount,concretadosCount,revenue,utilidad,tasaExito},idx)=>{
-            const score = tasaExito>=85&&revenue>10000?"A":tasaExito>=70?"B":tasaExito>=50?"C":"D";
-            return (
-              <div key={supplier.id} style={cardStyle}>
-                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-                  <div style={{width:28,height:28,borderRadius:14,background:`${C.blue}18`,border:`1px solid ${C.blue}33`,
-                    display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:C.blue,flexShrink:0}}>
-                    {idx+1}
-                  </div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:13,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                      {supplier.nombre||supplier.id}
-                    </div>
-                    <div style={{fontSize:11,color:C.t3}}>{ticketCount} asignados · {concretadosCount} concretados</div>
-                  </div>
-                  <div style={{width:32,height:32,borderRadius:16,flexShrink:0,
-                    background:`${scoreColor(score)}18`,border:`1.5px solid ${scoreColor(score)}`,
-                    display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:scoreColor(score)}}>
-                    {score}
+          <div style={{...label10,marginBottom:4}}>Tiempos Operativos Promedio</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            {kpisOpData.map(k=>(
+              <div key={k.key} style={{...cardStyle,textAlign:"center"}}>
+                <div style={{fontSize:28,fontWeight:800,color:k.hrs===null?C.t3:C.blue,lineHeight:1.2,marginBottom:4}}>
+                  {k.fmt}
+                </div>
+                <div style={{fontSize:12,fontWeight:700,color:C.t1,marginBottom:2}}>T. {k.label}</div>
+                <div style={{fontSize:10,color:C.t3}}>{k.n} tickets</div>
+              </div>
+            ))}
+          </div>
+          <div style={{...cardStyle,marginTop:4}}>
+            <div style={{...label10,marginBottom:8}}>Desglose de tiempos</div>
+            {kpisOpData.map(k=>(
+              <div key={k.key} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:12,fontWeight:600,color:C.t1,marginBottom:3}}>{k.label}</div>
+                  <div style={{height:4,borderRadius:2,background:C.border,overflow:"hidden"}}>
+                    {k.hrs!==null && (
+                      <div style={{height:"100%",borderRadius:2,
+                        width:`${Math.min(100,(k.hrs/720)*100)}%`,
+                        background:`linear-gradient(90deg,${C.blue},${C.cyan})`,transition:"width 0.6s"}}/>
+                    )}
                   </div>
                 </div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-                  <div>
-                    <div style={{...label10,fontSize:9}}>Utilidad</div>
-                    <div style={{fontSize:13,fontWeight:700,color:C.green,marginTop:2}}>{mxn(utilidad)}</div>
-                  </div>
-                  <div>
-                    <div style={{...label10,fontSize:9}}>Revenue concretado</div>
-                    <div style={{fontSize:13,fontWeight:700,color:C.t1,marginTop:2}}>{mxn(revenue)}</div>
-                  </div>
-                  <div>
-                    <div style={{...label10,fontSize:9}}>Tasa éxito</div>
-                    <div style={{fontSize:13,fontWeight:800,color:tasaExito>=80?C.green:tasaExito>=60?C.yellow:C.red,marginTop:2}}>
-                      {tasaExito.toFixed(0)}%
+                <div style={{fontSize:14,fontWeight:700,color:C.blue,flexShrink:0,width:48,textAlign:"right"}}>{k.fmt}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── PANEL 8: Alertas Estratégicas ───────────────────────────────────── */}
+      {iTab==="alertas" && (
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <div style={{...label10,marginBottom:4}}>Alertas Estratégicas · {alertasData.length} activas</div>
+          {alertasData.length===0 && (
+            <div style={{...cardStyle,textAlign:"center",padding:"24px",color:C.green}}>
+              <div style={{fontSize:28,marginBottom:8}}>✓</div>
+              <div style={{fontSize:13,fontWeight:700}}>Sin alertas activas</div>
+              <div style={{fontSize:11,color:C.t3,marginTop:4}}>Todos los indicadores dentro de parámetros normales.</div>
+            </div>
+          )}
+          {alertasData.map((a,i)=>{
+            const sevColor = a.sev==="red" ? C.red : C.yellow;
+            return (
+              <div key={i} style={{
+                background:`${sevColor}0a`,border:`1.5px solid ${sevColor}44`,
+                borderRadius:14,padding:"14px 16px",
+              }}>
+                <div style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:6}}>
+                  <span style={{fontSize:16,flexShrink:0,lineHeight:1.3}}>{a.icon}</span>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:700,color:sevColor,marginBottom:4}}>{a.title}</div>
+                    <div style={{fontSize:12,color:C.t2,lineHeight:1.55,marginBottom:8}}>{a.desc}</div>
+                    <div style={{background:`${C.blue}10`,border:`1px solid ${C.blue}28`,borderRadius:8,
+                      padding:"7px 10px",display:"flex",alignItems:"flex-start",gap:6}}>
+                      <span style={{fontSize:11,color:C.blue,flexShrink:0}}>→</span>
+                      <span style={{fontSize:11,color:C.blue,lineHeight:1.5}}>{a.action}</span>
                     </div>
                   </div>
                 </div>
@@ -10248,227 +10430,108 @@ function MInteligencia({state}) {
         </div>
       )}
 
-      {/* ── DEMANDA ─────────────────────────────────────────────────────────── */}
-      {iTab==="demanda" && (
-        <div style={{display:"flex",flexDirection:"column",gap:16}}>
-          {/* Inventario sugerido */}
-          <div>
-            <div style={{...label10,marginBottom:8}}>Inventario Sugerido · partes con ≥3 solicitudes en 90 días</div>
-            {partesData.sugeridas.length===0
-              ? <div style={{fontSize:12,color:C.t3}}>Ninguna pieza cumple los criterios aún.</div>
-              : partesData.sugeridas.map(p=>(
-                  <div key={p.name} style={{
-                    ...cardStyle,marginBottom:8,
-                    background:`${C.green}08`,border:`1px solid ${C.green}33`,
-                  }}>
-                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                      <span style={{fontSize:13,fontWeight:700,color:C.t1,flex:1}}>{p.name}</span>
-                      <span style={{fontSize:11,fontWeight:700,color:C.green,flexShrink:0}}>{p.freq}x en 90d</span>
-                    </div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-                      <div>
-                        <div style={{...label10,fontSize:8}}>Últ. solicitud</div>
-                        <div style={{fontSize:11,color:C.t2,marginTop:1}}>{p.lastDate?p.lastDate.toLocaleDateString("es-MX"):"—"}</div>
-                      </div>
-                      <div>
-                        <div style={{...label10,fontSize:8}}>Ingreso prom/tkt</div>
-                        <div style={{fontSize:11,fontWeight:700,color:C.green,marginTop:1}}>{mxn(p.avgRevPerTicket)}</div>
-                      </div>
-                    </div>
-                  </div>
-                ))
-            }
-          </div>
-
-          {/* Más solicitadas — barra horizontal */}
-          <div>
-            <div style={{...label10,marginBottom:8}}>Más Solicitadas · top 10 por frecuencia</div>
-            <div style={{...cardStyle,padding:0,overflow:"hidden"}}>
-              {partesData.top15.slice(0,10).map((p,i)=>{
-                const maxFreq = partesData.top15[0]?.freq||1;
-                const barW = maxFreq>0?(p.freq/maxFreq)*100:0;
-                return (
-                  <div key={p.name} style={{padding:"8px 14px",borderBottom:i<Math.min(9,partesData.top15.length-1)?`1px solid ${C.border}`:"none"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
-                      <span style={{fontSize:9,color:C.t3,fontWeight:700,width:18,flexShrink:0}}>#{i+1}</span>
-                      <span style={{fontSize:12,color:C.t1,fontWeight:600,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</span>
-                      <span style={{fontSize:11,color:C.cyan,fontWeight:700,flexShrink:0}}>{p.freq}x</span>
-                      <span style={{fontSize:11,color:C.green,fontWeight:700,flexShrink:0,width:68,textAlign:"right"}}>{mxn(p.revenue)}</span>
-                    </div>
-                    <div style={{height:3,borderRadius:2,background:C.border,overflow:"hidden"}}>
-                      <div style={{height:"100%",width:`${barW}%`,background:C.cyan,borderRadius:2}}/>
-                    </div>
-                  </div>
-                );
-              })}
-              {partesData.top15.length===0 && <div style={{padding:14,color:C.t3,fontSize:12}}>Sin datos de partes.</div>}
-            </div>
-          </div>
-
-          {/* Más difíciles de conseguir */}
-          <div>
-            <div style={{...label10,marginBottom:8}}>Más Difíciles de Conseguir · mayor tiempo de sourceo</div>
-            <div style={{...cardStyle,padding:0,overflow:"hidden"}}>
-              {sourceoData.partesDificiles.slice(0,5).map((p,i)=>(
-                <div key={p.name} style={{display:"grid",gridTemplateColumns:"20px 1fr auto auto",gap:8,alignItems:"center",
-                  padding:"9px 14px",borderBottom:i<Math.min(4,sourceoData.partesDificiles.length-1)?`1px solid ${C.border}`:"none"}}>
-                  <span style={{fontSize:9,color:C.t3,fontWeight:700}}>#{i+1}</span>
-                  <span style={{fontSize:12,color:C.t1,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</span>
-                  <span style={{fontSize:10,color:C.t3,flexShrink:0}}>{p.freq}x</span>
-                  <span style={{fontSize:12,fontWeight:700,color:p.avgH<2?C.green:p.avgH<6?C.yellow:C.red,flexShrink:0}}>
-                    {sourceoData.fmtH(p.avgH)}
-                  </span>
-                </div>
-              ))}
-              {sourceoData.partesDificiles.length===0 && <div style={{padding:14,color:C.t3,fontSize:12}}>Sin datos suficientes.</div>}
-            </div>
-          </div>
-
-          {/* Familias dominadas */}
-          {sourceoData.familias.length>0 && (
-            <div>
-              <div style={{...label10,marginBottom:8}}>Familias Dominadas</div>
-              <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                {sourceoData.familias.map((f,i)=>(
-                  <div key={f.key} style={cardStyle}>
-                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                      <div style={{width:24,height:24,borderRadius:12,background:`${C.blue}18`,border:`1px solid ${C.blue}33`,
-                        display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:C.blue,flexShrink:0}}>
-                        {i+1}
-                      </div>
-                      <span style={{fontSize:13,fontWeight:700,color:C.t1,flex:1}}>{f.label}</span>
-                      <span style={{fontSize:11,color:C.t3}}>{f.ops} ops</span>
-                    </div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
-                      <div>
-                        <div style={{...label10,fontSize:8}}>Revenue</div>
-                        <div style={{fontSize:11,fontWeight:700,color:C.t1,marginTop:1}}>{mxn(f.revenue)}</div>
-                      </div>
-                      <div>
-                        <div style={{...label10,fontSize:8}}>Utilidad</div>
-                        <div style={{fontSize:11,fontWeight:700,color:C.green,marginTop:1}}>{mxn(f.utilidad)}</div>
-                      </div>
-                      <div>
-                        <div style={{...label10,fontSize:8}}>T. Sourceo</div>
-                        <div style={{fontSize:11,fontWeight:700,color:f.avgSourcH===null?C.t3:f.avgSourcH<2?C.green:C.yellow,marginTop:1}}>
-                          {f.avgSourcH===null?"—":sourceoData.fmtH(f.avgSourcH)}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── RIESGOS ─────────────────────────────────────────────────────────── */}
-      {iTab==="riesgos" && (
-        <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          {alertasData.length===0 && cancelData.sorted.length===0 && (
-            <div style={{...cardStyle,textAlign:"center",padding:"28px"}}>
-              <div style={{fontSize:28,marginBottom:8,color:C.green}}>✓</div>
-              <div style={{fontSize:13,fontWeight:700,color:C.green}}>Sin riesgos activos</div>
-              <div style={{fontSize:11,color:C.t3,marginTop:4}}>Todos los indicadores dentro de parámetros normales.</div>
-            </div>
-          )}
-
-          {/* Alertas estratégicas */}
-          {alertasData.length>0 && (
-            <div>
-              <div style={{...label10,marginBottom:8}}>Alertas Estratégicas · {alertasData.length} activas</div>
-              {alertasData.map((a,i)=>{
-                const sevColor = a.sev==="red"?C.red:C.yellow;
-                return (
-                  <div key={i} style={{
-                    background:`${sevColor}0a`,border:`1.5px solid ${sevColor}44`,
-                    borderRadius:14,padding:"14px 16px",marginBottom:8,
-                  }}>
-                    <div style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:6}}>
-                      <span style={{fontSize:16,flexShrink:0,lineHeight:1.3}}>{a.icon}</span>
-                      <div style={{flex:1}}>
-                        <div style={{fontSize:13,fontWeight:700,color:sevColor,marginBottom:4}}>{a.title}</div>
-                        <div style={{fontSize:12,color:C.t2,lineHeight:1.55,marginBottom:8}}>{a.desc}</div>
-                        <div style={{background:`${C.blue}10`,border:`1px solid ${C.blue}28`,borderRadius:8,
-                          padding:"7px 10px",display:"flex",alignItems:"flex-start",gap:6}}>
-                          <span style={{fontSize:11,color:C.blue,flexShrink:0}}>→</span>
-                          <span style={{fontSize:11,color:C.blue,lineHeight:1.5}}>{a.action}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Revenue perdido por cancelaciones */}
-          {(cancelData.total>0||cancelData.sorted.length>0) && (
-            <div>
-              <div style={{...label10,marginBottom:8}}>Revenue Perdido · operaciones canceladas</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-                <div style={{...cardStyle,textAlign:"center"}}>
-                  <div style={{fontSize:22,fontWeight:800,color:C.red,lineHeight:1.1}}>{cancelData.total}</div>
-                  <div style={{fontSize:10,color:C.t3,marginTop:3}}>ops canceladas</div>
-                </div>
-                <div style={{...cardStyle,textAlign:"center"}}>
-                  <div style={{fontSize:16,fontWeight:800,color:C.red,lineHeight:1.1}}>{mxn(cancelData.totalRevLost)}</div>
-                  <div style={{fontSize:10,color:C.t3,marginTop:3}}>revenue perdido</div>
-                </div>
-              </div>
-              {cancelData.sorted.length===0
-                ? <div style={{fontSize:12,color:C.t3}}>Sin cancelaciones con motivo registrado.</div>
-                : cancelData.sorted.map((d,i)=>{
-                    const pct = cancelData.totalRevLost>0?(d.revenue/cancelData.totalRevLost)*100:0;
-                    return (
-                      <div key={d.motivo} style={{...cardStyle,padding:"10px 14px",marginBottom:6}}>
-                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
-                          <span style={{fontSize:12,fontWeight:700,color:C.t1,flex:1}}>{d.motivo}</span>
-                          <span style={{fontSize:11,color:C.t3}}>{d.count} ops</span>
-                          <span style={{fontSize:12,fontWeight:700,color:C.red,flexShrink:0}}>{mxn(d.revenue)}</span>
-                        </div>
-                        <div style={{height:4,background:C.border,borderRadius:2,overflow:"hidden"}}>
-                          <div style={{height:"100%",width:`${pct}%`,background:C.red,borderRadius:2}}/>
-                        </div>
-                        <div style={{fontSize:9,color:C.t3,marginTop:3,textAlign:"right"}}>{pct.toFixed(0)}% del total</div>
-                      </div>
-                    );
-                  })
-              }
-              {cancelData.sorted.length>0 && cancelData.sorted.find(d=>d.motivo==="sin motivo") && (
-                <div style={{...cardStyle,background:`${C.yellow}08`,border:`1px solid ${C.yellow}33`,marginTop:4}}>
-                  <div style={{fontSize:11,color:C.yellow,fontWeight:700,marginBottom:4}}>Sin motivo registrado</div>
-                  <div style={{fontSize:11,color:C.t2}}>
-                    Hay cancelaciones sin motivo capturado. Los nuevos tickets cancelados pedirán el motivo automáticamente.
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── PANEL 9: IA ──────────────────────────────────────────────────────── */}
+      {/* ── PANEL 9: Resumen Ejecutivo ───────────────────────────────────────── */}
       {iTab==="ia" && (
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          <div style={{...label10,marginBottom:4}}>Análisis IA · 7 preguntas estratégicas</div>
+          <div style={{...label10,marginBottom:4}}>Resumen Ejecutivo · datos en tiempo real</div>
 
-          {/* Generate button */}
+          {/* Posición financiera */}
+          <div style={{...cardStyle,border:`1.5px solid ${C.blue}44`}}>
+            <div style={{...label10,color:C.blue,marginBottom:10}}>Posición Financiera</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:10}}>
+              <div>
+                <div style={{fontSize:9,color:C.t3,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:3}}>Vendido 30d</div>
+                <div style={{fontSize:20,fontWeight:800,color:C.t1,lineHeight:1}}>{mxn(dineroData.rev30)}</div>
+                <div style={{fontSize:10,color:dineroData.avgMargen30>=15?C.green:dineroData.avgMargen30>=8?C.yellow:C.red,marginTop:2}}>{dineroData.avgMargen30.toFixed(1)}% margen neto</div>
+              </div>
+              <div>
+                <div style={{fontSize:9,color:C.t3,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:3}}>Cartera pendiente</div>
+                <div style={{fontSize:20,fontWeight:800,color:dineroData.cartera>0?C.yellow:C.green,lineHeight:1}}>{mxn(dineroData.cartera)}</div>
+                <div style={{fontSize:10,color:C.t3,marginTop:2}}>{dineroData.carteraCount} ticket(s)</div>
+              </div>
+            </div>
+            <div style={{height:1,background:C.border,marginBottom:8}}/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontSize:11,color:C.t3}}>Pipeline activo</span>
+                <span style={{fontSize:12,fontWeight:700,color:C.cyan}}>{mxn(dineroData.flujoForecast)}</span>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontSize:11,color:C.t3}}>Util. 30d</span>
+                <span style={{fontSize:12,fontWeight:700,color:C.green}}>{mxn(dineroData.util30)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Tiempos operativos */}
+          <div style={cardStyle}>
+            <div style={{...label10,marginBottom:10}}>Tiempos Operativos Promedio</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              {kpisOpData.map(k=>(
+                <div key={k.key} style={{background:C.bg2,borderRadius:10,padding:"10px 12px"}}>
+                  <div style={{fontSize:9,color:C.t3,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:4}}>{k.label}</div>
+                  <div style={{fontSize:18,fontWeight:800,color:k.hrs===null?C.t3:k.hrs<24?C.green:k.hrs<72?C.yellow:C.red,lineHeight:1}}>{k.fmt}</div>
+                  <div style={{fontSize:9,color:C.t3,marginTop:2}}>n={k.n}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Atención requerida */}
+          {operacionData.filter(d=>d.stalled).length > 0 && (
+            <div style={{background:`${C.red}0a`,border:`1.5px solid ${C.red}44`,borderRadius:14,padding:"12px 14px"}}>
+              <div style={{...label10,color:C.red,marginBottom:8}}>Requieren atención inmediata</div>
+              {operacionData.filter(d=>d.stalled).slice(0,5).map(d=>(
+                <div key={d.t.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                  <span style={{fontSize:11,fontWeight:800,color:C.red,flexShrink:0,minWidth:28}}>{Math.round(d.diasSinMovimiento)}d</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:12,fontWeight:600,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.t.titulo||"Sin título"}</div>
+                    <div style={{fontSize:10,color:C.t3}}>{d.cl?.empresa||"—"} · {d.t.status}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Alertas activas */}
+          {alertasData.length > 0 && (
+            <div style={cardStyle}>
+              <div style={{...label10,marginBottom:8}}>Alertas Estratégicas · {alertasData.length}</div>
+              {alertasData.slice(0,3).map((a,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:i<Math.min(alertasData.length,3)-1?10:0}}>
+                  <span style={{fontSize:14,flexShrink:0,lineHeight:1.3}}>{a.icon}</span>
+                  <div>
+                    <div style={{fontSize:12,fontWeight:700,color:a.sev==="red"?C.red:C.yellow}}>{a.title}</div>
+                    <div style={{fontSize:11,color:C.t3,lineHeight:1.4,marginTop:1}}>{a.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Revenue perdido */}
+          {cancelData.total > 0 && (
+            <div style={cardStyle}>
+              <div style={{...label10,marginBottom:8}}>Oportunidad Perdida · cancelaciones</div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                <div style={{fontSize:20,fontWeight:800,color:C.red}}>{mxn(cancelData.totalRevLost)}</div>
+                <div style={{fontSize:11,color:C.t3,textAlign:"right"}}>{cancelData.total} cancelaciones<br/>revenue potencial perdido</div>
+              </div>
+              {cancelData.sorted.slice(0,3).map((m,i)=>(
+                <div key={m.motivo} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                  <span style={{fontSize:11,color:C.t2}}>{m.motivo}</span>
+                  <span style={{fontSize:11,fontWeight:600,color:C.t3}}>{m.count}x · {mxn(m.revenue)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* IA no disponible */}
           {phase==="idle" && (
-            <button onClick={runAnalysis} style={{
-              width:"100%",padding:"16px",
-              background:`linear-gradient(135deg,${C.blue}22 0%,${C.cyan}18 100%)`,
-              border:`1.5px solid ${C.blueHi}`,borderRadius:18,cursor:"pointer",
-              display:"flex",alignItems:"center",justifyContent:"center",gap:10,
-              boxShadow:`0 4px 24px ${C.blue}22`,
-              touchAction:"manipulation",WebkitTapHighlightColor:"transparent",
-            }}>
-              <span style={{fontSize:22}}>✦</span>
-              <span style={{fontSize:16,fontWeight:700,color:C.blue,letterSpacing:"-0.01em"}}>
-                Generar análisis IA
-              </span>
-            </button>
+            <div style={{...cardStyle,textAlign:"center",padding:"20px",opacity:0.6}}>
+              <div style={{fontSize:11,color:C.t3}}>Análisis IA extendido no disponible en este entorno.</div>
+              <div style={{fontSize:10,color:C.t3,marginTop:4}}>El resumen de arriba contiene los datos clave de tu operación.</div>
+            </div>
           )}
 
           {/* Loading state */}
@@ -10659,6 +10722,8 @@ function MInteligencia({state}) {
     </div>
   );
 }
+
+// ── MasSheet — bottom sheet del menú "Más" ───────────────────────────────────
 
 // ── MasSheet — bottom sheet del menú "Más" ───────────────────────────────────
 function MasSheet({open,onClose,tab,setTab}) {
