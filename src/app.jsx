@@ -9151,11 +9151,14 @@ function MInteligencia({state}) {
   const now = useMemo(() => new Date(), []);
 
   // ── PANEL 1: Unidades ─────────────────────────────────────────────────────
+  const [selectedUnitId, setSelectedUnitId] = useState(null);
+
   const unidadesData = useMemo(() => {
-    const active = tickets.filter(t=>!t._deleted);
+    // Only concretadas: entregado, facturado, cobrado, cerrado
+    const concretadas = tickets.filter(t=>!t._deleted && OPERADO_SET.has(t.status));
     const cutoff90 = new Date(now); cutoff90.setDate(now.getDate()-90);
     return units.map(u => {
-      const uTickets = active.filter(t => t.unitId === u.id);
+      const uTickets = concretadas.filter(t => t.unitId === u.id);
       const gastoAcum = uTickets.reduce((s,t)=>s+safeNumber(t.snap?.costoTotal),0);
       const utilidadGen = uTickets.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0);
       const revenueAcum = uTickets.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
@@ -9170,8 +9173,12 @@ function MInteligencia({state}) {
       }
       const cl = clients.find(c=>c.id===u.clientId);
       const alert = uTickets.length>5 || gastoAcum>50000 || incidentes90d>3;
+      const sortedOps = [...uTickets].sort((a,b)=>{
+        const da=parseDate(a.date), db=parseDate(b.date);
+        return db-da;
+      });
       return {unit:u, cl, ticketCount:uTickets.length, gastoAcum, utilidadGen, revenueAcum,
-              lastIncident, incidentes90d, avgDaysBetween, alert};
+              lastIncident, incidentes90d, avgDaysBetween, alert, ops:sortedOps};
     }).sort((a,b)=>b.gastoAcum-a.gastoAcum);
   }, [tickets, units, clients, now]);
 
@@ -9391,10 +9398,10 @@ function MInteligencia({state}) {
       }
     }
 
-    // 3. Unidades con gasto excesivo
+    // 3. Unidades con gasto excesivo (solo operaciones concretadas)
     const cutoff90 = new Date(now); cutoff90.setDate(now.getDate()-90);
     units.forEach(u => {
-      const uTkts = active.filter(t=>t.unitId===u.id);
+      const uTkts = operados.filter(t=>t.unitId===u.id);
       const gasto = uTkts.reduce((s,t)=>s+safeNumber(t.snap?.costoTotal),0);
       if(gasto>50000) {
         const cl = clients.find(c=>c.id===u.clientId);
@@ -9630,45 +9637,106 @@ function MInteligencia({state}) {
       {/* ── PANEL 1: Unidades ───────────────────────────────────────────────── */}
       {iTab==="unidades" && (
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          <div style={{...label10,marginBottom:4}}>Rendimiento por Unidad</div>
+          <div style={{...label10,marginBottom:4}}>Rendimiento por Unidad · solo operaciones concretadas</div>
           {unidadesData.length===0 && <div style={{color:C.t3,fontSize:13}}>Sin unidades registradas.</div>}
-          {unidadesData.map(({unit,cl,ticketCount,gastoAcum,utilidadGen,incidentes90d,avgDaysBetween,alert})=>(
-            <div key={unit.id} style={{
-              ...cardStyle,
-              border:`1.5px solid ${alert?C.red:C.border}`,
-            }}>
-              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,marginBottom:8}}>
-                <div>
-                  <div style={{display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{fontSize:13,fontWeight:700,color:C.t1}}>{unit.economico}</span>
-                    <span style={{fontSize:11,color:C.t3}}>{unit.marca} {unit.modelo}</span>
-                    {alert && <span style={{fontSize:9,fontWeight:700,color:C.red,background:`${C.red}18`,border:`1px solid ${C.red}44`,borderRadius:6,padding:"2px 6px"}}>ALERTA</span>}
+          {unidadesData.map(({unit,cl,ticketCount,gastoAcum,utilidadGen,incidentes90d,avgDaysBetween,alert,ops})=>{
+            const isOpen = selectedUnitId === unit.id;
+            return (
+              <div key={unit.id}>
+                <div
+                  onClick={()=>setSelectedUnitId(isOpen ? null : unit.id)}
+                  style={{
+                    ...cardStyle,
+                    border:`1.5px solid ${alert?C.red:isOpen?C.blue:C.border}`,
+                    cursor:"pointer",
+                    WebkitTapHighlightColor:"transparent",
+                  }}>
+                  <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,marginBottom:8}}>
+                    <div>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <span style={{fontSize:13,fontWeight:700,color:C.t1}}>{unit.economico}</span>
+                        <span style={{fontSize:11,color:C.t3}}>{unit.marca} {unit.modelo}</span>
+                        {alert && <span style={{fontSize:9,fontWeight:700,color:C.red,background:`${C.red}18`,border:`1px solid ${C.red}44`,borderRadius:6,padding:"2px 6px"}}>ALERTA</span>}
+                      </div>
+                      <div style={{fontSize:11,color:C.t3,marginTop:2}}>{cl?.empresa||"Sin cliente"} · {unit.anio||"—"}</div>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:13,fontWeight:700,color:C.t1}}>{ticketCount} ops</div>
+                        <div style={{fontSize:10,color:C.t3}}>{incidentes90d} en 90d</div>
+                      </div>
+                      <span style={{fontSize:14,color:C.t3,transform:isOpen?"rotate(180deg)":"none",transition:"transform 0.2s",display:"inline-block"}}>▾</span>
+                    </div>
                   </div>
-                  <div style={{fontSize:11,color:C.t3,marginTop:2}}>{cl?.empresa||"Sin cliente"} · {unit.anio||"—"}</div>
-                </div>
-                <div style={{textAlign:"right",flexShrink:0}}>
-                  <div style={{fontSize:13,fontWeight:700,color:C.t1}}>{ticketCount} tkts</div>
-                  <div style={{fontSize:10,color:C.t3}}>{incidentes90d} en 90d</div>
-                </div>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-                <div>
-                  <div style={{...label10,fontSize:9}}>Gasto acum.</div>
-                  <div style={{fontSize:13,fontWeight:700,color:C.red,marginTop:2}}>{mxn(gastoAcum)}</div>
-                </div>
-                <div>
-                  <div style={{...label10,fontSize:9}}>Utilidad gen.</div>
-                  <div style={{fontSize:13,fontWeight:700,color:C.green,marginTop:2}}>{mxn(utilidadGen)}</div>
-                </div>
-                <div>
-                  <div style={{...label10,fontSize:9}}>Frec. prom.</div>
-                  <div style={{fontSize:13,fontWeight:700,color:C.t2,marginTop:2}}>
-                    {avgDaysBetween!==null ? `${avgDaysBetween.toFixed(0)}d` : "—"}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                    <div>
+                      <div style={{...label10,fontSize:9}}>Gasto acum.</div>
+                      <div style={{fontSize:13,fontWeight:700,color:C.red,marginTop:2}}>{mxn(gastoAcum)}</div>
+                    </div>
+                    <div>
+                      <div style={{...label10,fontSize:9}}>Utilidad gen.</div>
+                      <div style={{fontSize:13,fontWeight:700,color:C.green,marginTop:2}}>{mxn(utilidadGen)}</div>
+                    </div>
+                    <div>
+                      <div style={{...label10,fontSize:9}}>Frec. prom.</div>
+                      <div style={{fontSize:13,fontWeight:700,color:C.t2,marginTop:2}}>
+                        {avgDaysBetween!==null ? `${avgDaysBetween.toFixed(0)}d` : "—"}
+                      </div>
+                    </div>
                   </div>
                 </div>
+                {isOpen && (
+                  <div style={{marginTop:6,marginLeft:8,display:"flex",flexDirection:"column",gap:6}}>
+                    {ops.length===0 && (
+                      <div style={{color:C.t3,fontSize:12,padding:"10px 14px",background:C.card,borderRadius:10,border:`1px solid ${C.border}`}}>
+                        Sin operaciones concretadas para esta unidad.
+                      </div>
+                    )}
+                    {ops.map(t=>{
+                      const folio = mkFolio(t,"OP");
+                      const precio = safeNumber(t.snap?.precioConIVA);
+                      const uNeta = safeNumber(t.snap?.uNeta);
+                      const margen = precio>0 ? (uNeta/precio)*100 : 0;
+                      const meta = TICKET_META[t.status]||{};
+                      return (
+                        <div key={t.id} style={{
+                          background:C.card,borderRadius:10,padding:"10px 14px",
+                          border:`1px solid ${C.border}`,
+                        }}>
+                          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontSize:9,color:C.t3,fontFamily:"'Courier New',monospace",letterSpacing:"0.04em",marginBottom:2}}>
+                                {folio}
+                              </div>
+                              <div style={{fontSize:12,fontWeight:600,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                                {t.titulo||"Sin título"}
+                              </div>
+                              <div style={{fontSize:10,color:C.t3,marginTop:2}}>{t.date||"—"}</div>
+                            </div>
+                            <div style={{textAlign:"right",flexShrink:0}}>
+                              <div style={{fontSize:12,fontWeight:700,color:C.t1}}>{mxn(precio)}</div>
+                              <div style={{fontSize:10,color:margen>=20?C.green:C.yellow,marginTop:1}}>
+                                {fpct(margen)} margen
+                              </div>
+                              <div style={{
+                                marginTop:3,fontSize:8,fontWeight:700,
+                                color:meta.dot||C.t3,
+                                background:meta.color||`${C.t3}18`,
+                                border:`1px solid ${meta.dot||C.t3}44`,
+                                borderRadius:5,padding:"1px 5px",display:"inline-block",
+                              }}>
+                                {meta.label||t.status}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
