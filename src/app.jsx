@@ -9346,9 +9346,12 @@ function MInteligencia({state}) {
       const tDate = parseDate(t.date);
       const rev = safeNumber(t.snap?.precioConIVA);
       const util = safeNumber(t.snap?.uNeta);
+      // Colectar nombres únicos por ticket para evitar doble conteo (titulo = lineas[0])
+      const seenInTicket = new Set();
       const addPart = (name) => {
         const key = norm(name);
-        if(!key || key.length<3) return;
+        if(!key || key.length<3 || seenInTicket.has(key)) return;
+        seenInTicket.add(key);
         if(!partsMap[key]) partsMap[key] = {name:key, freq:0, revenue:0, utilidad:0, lastDate:null};
         partsMap[key].freq++;
         partsMap[key].revenue += rev/Math.max(1,(t.lineas?.length||1));
