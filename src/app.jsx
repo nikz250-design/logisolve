@@ -4816,7 +4816,9 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
     }
     setEditLineas(lineas);
     setEf({
-      date:t.date, clientId:t.clientId||"", supplierId:t.supplierId||"", unitId:t.unitId||"",
+      date:t.date, clientId:t.clientId||"", supplierId:t.supplierId||"",
+      unitId:t.unitId||"",
+      unitIds: t.unitIds ? [...t.unitIds] : (t.unitId ? [t.unitId] : []),
       status:t.status, payType:t.payType, promesaPago:t.promesaPago||"",
       prob:t.prob||"high", horasOp:t.horasOp||0, notes:t.notes||"",
       iva, isr:t.snap?.params?.isr||20,
@@ -4878,7 +4880,9 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
       titulo, lineas:lineasConSnap,
       opId:opType, opShort:opMeta.short, priority:ef.priority||"P3",
       mods:[...activeMods],
-      date:ef.date, clientId:ef.clientId, supplierId:ef.supplierId, unitId:ef.unitId||"",
+      date:ef.date, clientId:ef.clientId, supplierId:ef.supplierId,
+      unitId:(ef.unitIds||[])[0]||ef.unitId||"",
+      unitIds: ef.unitIds||[],
       status:ef.status, payType:ef.payType,
       promesaPago:ef.payType==="credit"?ef.promesaPago:null,
       cobrado:PAID_SET.has(ef.status), prob:ef.prob,
@@ -5001,7 +5005,29 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                         <Sel label="Cliente"   value={ef.clientId}   onChange={sfn("clientId")}   options={[{value:"",label:"-- Sin cliente --"},...clients.map(c=>({value:c.id,label:c.empresa}))]}/>
                         <Sel label="Proveedor" value={ef.supplierId} onChange={sfn("supplierId")} options={[{value:"",label:"-- Sin proveedor --"},...suppliers.map(s=>({value:s.id,label:s.nombre}))]}/>
                       </div>
-                      <UnitPicker units={units} value={ef.unitId||""} onChange={sfn("unitId")}/>
+                      {/* Multi-unidad */}
+                      <div style={{marginBottom:7}}>
+                        <div style={{fontSize:7,color:C.t3,letterSpacing:"0.14em",marginBottom:3}}>UNIDADES VINCULADAS</div>
+                        {(ef.unitIds||[]).map((uid,idx)=>{
+                          const u=units.find(un=>un.id===uid);
+                          if(!u) return null;
+                          return (
+                            <div key={uid} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:C.bg3,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 8px",marginBottom:3}}>
+                              <span style={{fontSize:9,color:C.cyan,fontFamily:"'Courier New',monospace"}}>
+                                {u.economico?"Eco."+u.economico+" · ":""}{u.marca} {u.modelo} {u.anio}{u.placa?" · "+u.placa:""}
+                              </span>
+                              <span onClick={()=>setEf(p=>({...p,unitIds:(p.unitIds||[]).filter((_,i)=>i!==idx)}))}
+                                style={{cursor:"pointer",color:C.red,fontSize:13,padding:"0 4px",lineHeight:1,fontWeight:700}}>×</span>
+                            </div>
+                          );
+                        })}
+                        <UnitPicker
+                          units={units.filter(u=>!(ef.unitIds||[]).includes(u.id))}
+                          value=""
+                          onChange={uid=>{if(uid)setEf(p=>({...p,unitIds:[...(p.unitIds||[]),uid]}));}}
+                          placeholder={(ef.unitIds||[]).length===0?"Buscar por eco, placa, marca...":"+ Agregar otra unidad"}
+                        />
+                      </div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6,marginBottom:6}}>
                         {ef.payType==="credit"&&<Field label="Promesa" value={ef.promesaPago} onChange={sfn("promesaPago")} prefix="" hint="DD/MM/AAAA"/>}
                         <Sel label="Prob." value={ef.prob} onChange={sfn("prob")} options={PROB.map(p=>({value:p.id,label:p.label+" ("+p.pct+"%)"}))}/>
@@ -5167,6 +5193,14 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                         <span>IVA {t.snap?.params?.iva||16}%</span>
                         <span>ISR {t.snap?.params?.isr||20}%</span>
                         {cl&&<span>Cliente: {cl.empresa}</span>}
+                        {(()=>{
+                          const uids=[...new Set([...(t.unitIds||[]),t.unitId].filter(Boolean))];
+                          if(!uids.length) return null;
+                          return uids.map(uid=>{
+                            const u=units.find(x=>x.id===uid);
+                            return u?<span key={uid} style={{color:C.blueHi}}>{u.economico?"Eco."+u.economico+" ":""}{u.marca} {u.modelo}</span>:null;
+                          });
+                        })()}
                         {t.mods&&t.mods.length>0&&<span>Mods: {t.mods.join(", ")}</span>}
                         {t.horasOp>0&&<span>Util/h: {mxn((t.snap?.uNeta||0)/t.horasOp)}</span>}
                         {t.payType==="credit"&&<span style={{color:C.yellow}}>Credito · {t.promesaPago||"sin fecha"}</span>}
