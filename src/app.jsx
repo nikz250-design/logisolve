@@ -9124,6 +9124,606 @@ function MProveedores({state,dispatch,toast}) {
   );
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// MInteligencia — Inteligencia Operativa IA
+// ══════════════════════════════════════════════════════════════════════════════
+function MInteligencia({state}) {
+  const C = React.useContext(ThemeCtx);
+  const A = makeA(C);
+  const {tickets, clients, units} = state;
+
+  const [loading,  setLoading]  = useState(false);
+  const [result,   setResult]   = useState(null);
+  const [error,    setError]    = useState(null);
+  const [progress, setProgress] = useState({chars:0, thinkingChars:0});
+  const [phase,    setPhase]    = useState("idle"); // idle | thinking | generating | done | error
+
+  // ── Build business summary from state ──────────────────────────────────────
+  const payload = useMemo(() => {
+    const now   = new Date();
+    const from30 = new Date(now); from30.setDate(now.getDate() - 30);
+
+    const active = tickets.filter(t => !t._deleted);
+
+    // 30d operados
+    const ops30 = active.filter(t => {
+      const d = parseDateMX(t.date);
+      return OPERADO_SET.has(t.status) && d && d >= from30 && d <= now;
+    });
+
+    const totalRevenue = ops30.reduce((s,t) => s + safeNumber(t.snap?.precioConIVA), 0);
+    const utilNeta     = ops30.reduce((s,t) => s + safeNumber(t.snap?.uNeta), 0);
+    const avgMargin    = ops30.length > 0
+      ? ops30.reduce((s,t) => {
+          const p = safeNumber(t.snap?.precioConIVA);
+          const u = safeNumber(t.snap?.uNeta);
+          return s + (p > 0 ? (u / p) * 100 : 0);
+        }, 0) / ops30.length
+      : 0;
+
+    // Status breakdown (all active)
+    const statusBreakdown = {};
+    active.forEach(t => {
+      statusBreakdown[t.status] = (statusBreakdown[t.status] || 0) + 1;
+    });
+
+    // Top 3 clients by revenue (30d)
+    const clientRevMap = {};
+    ops30.forEach(t => {
+      if(!t.clientId) return;
+      if(!clientRevMap[t.clientId]) clientRevMap[t.clientId] = {revenue:0, ticketCount:0};
+      clientRevMap[t.clientId].revenue     += safeNumber(t.snap?.precioConIVA);
+      clientRevMap[t.clientId].ticketCount += 1;
+    });
+    const topClients = Object.entries(clientRevMap)
+      .map(([id, d]) => {
+        const cl = clients.find(c => c.id === id);
+        return { empresa: cl?.empresa || id, revenue: d.revenue, ticketCount: d.ticketCount };
+      })
+      .sort((a,b) => b.revenue - a.revenue)
+      .slice(0, 3);
+
+    // CxC cartera
+    const carteraTkts = active.filter(t => CARTERA_SET.has(t.status));
+    const carteraTotal = carteraTkts.reduce((s,t) => s + safeNumber(t.snap?.precioConIVA), 0);
+    const oldestDays = carteraTkts.reduce((mx, t) => {
+      const d = parseDateMX(t.date);
+      if(!d) return mx;
+      const age = Math.floor((now - d) / 86400000);
+      return Math.max(mx, age);
+    }, 0);
+
+    // Margin analysis (30d)
+    const lowMargin = ops30.filter(t => {
+      const p = safeNumber(t.snap?.precioConIVA);
+      const u = safeNumber(t.snap?.uNeta);
+      return p > 0 && (u / p) * 100 < 25;
+    });
+    const marginAnalysis = {
+      avg: avgMargin,
+      lowMarginCount: lowMargin.length,
+      lowMarginPct:   ops30.length > 0 ? (lowMargin.length / ops30.length) * 100 : 0,
+      lowMarginSample: lowMargin.slice(0, 3).map(t => t.titulo || t.id),
+    };
+
+    // Payment type mix (30d)
+    const paymentMix = {};
+    ops30.forEach(t => {
+      const k = t.payType || "contado";
+      paymentMix[k] = (paymentMix[k] || 0) + 1;
+    });
+
+    // Weekly trend — last 4 weeks
+    const weeklyTrend = [];
+    for(let w = 3; w >= 0; w--) {
+      const wFrom = new Date(now); wFrom.setDate(now.getDate() - (w+1)*7);
+      const wTo   = new Date(now); wTo.setDate(now.getDate() - w*7);
+      const wOps  = active.filter(t => {
+        const d = parseDateMX(t.date);
+        return OPERADO_SET.has(t.status) && d && d >= wFrom && d < wTo;
+      });
+      const wRevenue = wOps.reduce((s,t) => s + safeNumber(t.snap?.precioConIVA), 0);
+      const wLabel   = `${String(wFrom.getDate()).padStart(2,"0")}/${String(wFrom.getMonth()+1).padStart(2,"0")}`;
+      weeklyTrend.push({ weekLabel: wLabel, revenue: wRevenue, ops: wOps.length });
+    }
+
+    // Op categories breakdown (30d)
+    const opCategories = {};
+    ops30.forEach(t => {
+      const cat = t.opId || "consumable";
+      if(!opCategories[cat]) opCategories[cat] = {count:0, revenue:0};
+      opCategories[cat].count++;
+      opCategories[cat].revenue += safeNumber(t.snap?.precioConIVA);
+    });
+
+    // Recent cancelled
+    const recentCancelled = active
+      .filter(t => t.status === "cancelado")
+      .sort((a,b) => {
+        const da = parseDateMX(a.date), db = parseDateMX(b.date);
+        return (db||0) - (da||0);
+      })
+      .slice(0, 5)
+      .map(t => ({
+        titulo: t.titulo,
+        cliente: clients.find(c => c.id === t.clientId)?.empresa || null,
+        date: t.date,
+      }));
+
+    return {
+      period: "Últimos 30 días",
+      kpis: { totalRevenue, utilNeta, avgMargin, ticketCount: ops30.length },
+      statusBreakdown,
+      topClients,
+      cartera: { total: carteraTotal, count: carteraTkts.length, oldest: oldestDays || null },
+      marginAnalysis,
+      paymentMix,
+      weeklyTrend,
+      opCategories,
+      recentCancelled,
+    };
+  }, [tickets, clients]);
+
+  // ── Streaming call ─────────────────────────────────────────────────────────
+  const runAnalysis = async () => {
+    setLoading(true);
+    setResult(null);
+    setError(null);
+    setProgress({chars:0, thinkingChars:0});
+    setPhase("thinking");
+
+    try {
+      const resp = await fetch("/api/ai/insights", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({payload}),
+      });
+
+      if(!resp.ok) {
+        if(resp.status === 503) {
+          setError("El módulo de IA no está habilitado en este entorno.");
+        } else {
+          const j = await resp.json().catch(()=>({}));
+          setError(j.error || `Error ${resp.status}`);
+        }
+        setPhase("error");
+        setLoading(false);
+        return;
+      }
+
+      const reader = resp.body.getReader();
+      const dec    = new TextDecoder();
+      let buf = "";
+
+      while(true) {
+        const {done, value} = await reader.read();
+        if(done) break;
+        buf += dec.decode(value, {stream:true});
+        const lines = buf.split("\n");
+        buf = lines.pop();
+        for(const line of lines) {
+          if(!line.startsWith("data: ")) continue;
+          try {
+            const ev = JSON.parse(line.slice(6));
+            if(ev.type === "thinking") {
+              setPhase("thinking");
+              setProgress({chars: ev.chars||0, thinkingChars: ev.thinkingChars||0});
+            } else if(ev.type === "progress") {
+              setPhase("generating");
+              setProgress({chars: ev.chars||0, thinkingChars: ev.thinkingChars||0});
+            } else if(ev.type === "result" && ev.done) {
+              setResult(ev.result);
+              setPhase("done");
+            } else if(ev.type === "error") {
+              setError(ev.error || "Error desconocido");
+              setPhase("error");
+            }
+          } catch(_) {}
+        }
+      }
+    } catch(e) {
+      setError(String(e));
+      setPhase("error");
+    }
+    setLoading(false);
+  };
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  const categoriaColor = cat => ({
+    financiero: C.blue,
+    operativo:  C.cyan,
+    cliente:    C.yellow,
+    crecimiento:C.green,
+    riesgo:     C.red,
+  }[cat] || C.t3);
+
+  const urgenciaColor = u => ({
+    inmediata: C.red,
+    alta:      C.yellow,
+    media:     C.cyan,
+    baja:      C.t3,
+  }[u] || C.t3);
+
+  const impactoColor = i => ({
+    alto:  C.green,
+    medio: C.yellow,
+    bajo:  C.t3,
+  }[i] || C.t3);
+
+  const saludColor = n => n >= 75 ? C.green : n >= 50 ? C.yellow : C.red;
+
+  const kpis = payload.kpis;
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  return (
+    <div style={{padding:"12px 16px 24px",minHeight:"100vh"}}>
+
+      {/* Header */}
+      <div style={{marginBottom:20}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+          <span style={{fontSize:22,lineHeight:1}}>✦</span>
+          <h2 style={{margin:0,fontSize:20,fontWeight:700,color:C.t1,letterSpacing:"-0.02em"}}>
+            Inteligencia Operativa
+          </h2>
+        </div>
+        <p style={{margin:0,fontSize:12,color:C.t3,lineHeight:1.5}}>
+          Análisis estratégico con IA · Claude Opus · Datos últimos 30 días
+        </p>
+      </div>
+
+      {/* Datos analizados mini-card */}
+      <div style={{
+        background: A.card, backdropFilter: A.blur, WebkitBackdropFilter: A.blur,
+        border: `1px solid ${C.border}`, borderRadius: 16,
+        padding: "14px 16px", marginBottom: 16,
+        boxShadow: A.shadowSm,
+      }}>
+        <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase",fontWeight:600,marginBottom:10}}>
+          Datos a analizar
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          {[
+            {label:"Facturación 30d",     val: mxn(kpis.totalRevenue)},
+            {label:"Util. neta 30d",      val: mxn(kpis.utilNeta)},
+            {label:"Margen promedio",     val: fpct(kpis.avgMargin)},
+            {label:"Operaciones",         val: `${kpis.ticketCount} ops`},
+            {label:"Cartera pendiente",   val: mxn(payload.cartera.total)},
+            {label:"Clientes analizados", val: `${payload.topClients.length} top`},
+          ].map(({label,val}) => (
+            <div key={label}>
+              <div style={{fontSize:10,color:C.t3}}>{label}</div>
+              <div style={{fontSize:13,fontWeight:700,color:C.t1,marginTop:2}}>{val}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Generate button */}
+      {phase === "idle" && (
+        <button onClick={runAnalysis}
+          style={{
+            width:"100%",padding:"16px",
+            background: `linear-gradient(135deg, ${C.blue}22 0%, ${C.cyan}18 100%)`,
+            border: `1.5px solid ${C.blueHi}`,
+            borderRadius: 18, cursor:"pointer",
+            display:"flex",alignItems:"center",justifyContent:"center",gap:10,
+            boxShadow: `0 4px 24px ${C.blue}22`,
+            touchAction:"manipulation", WebkitTapHighlightColor:"transparent",
+            marginBottom: 12,
+          }}>
+          <span style={{fontSize:22}}>✦</span>
+          <span style={{fontSize:16,fontWeight:700,color:C.blue,letterSpacing:"-0.01em"}}>
+            Generar análisis IA
+          </span>
+        </button>
+      )}
+
+      {/* Loading / streaming state */}
+      {loading && (
+        <div style={{
+          background: A.card, backdropFilter: A.blur, WebkitBackdropFilter: A.blur,
+          border: `1px solid ${C.border}`, borderRadius: 16,
+          padding: "24px 20px", marginBottom: 16,
+          boxShadow: A.shadowSm,
+          display:"flex",flexDirection:"column",alignItems:"center",gap:16,
+        }}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <span style={{fontSize:24,animation:"spin 2s linear infinite",display:"inline-block"}}>✦</span>
+            <div>
+              <div style={{fontSize:14,fontWeight:600,color:C.t1}}>
+                {phase === "thinking" ? "Claude está pensando…" : "Generando análisis…"}
+              </div>
+              <div style={{fontSize:11,color:C.t3,marginTop:2}}>
+                {phase === "thinking"
+                  ? `${progress.thinkingChars.toLocaleString()} caracteres de razonamiento`
+                  : `${progress.chars.toLocaleString()} caracteres generados`}
+              </div>
+            </div>
+          </div>
+          {/* Skeleton bars */}
+          {[100,75,90,60,80].map((w,i) => (
+            <div key={i} style={{
+              width:`${w}%`, height:10, borderRadius:6,
+              background: C.border,
+              animation:`pulse 1.5s ease-in-out ${i*0.15}s infinite`,
+            }}/>
+          ))}
+        </div>
+      )}
+
+      {/* Error state */}
+      {phase === "error" && error && (
+        <div style={{
+          background: `${C.red}12`, border: `1px solid ${C.red}44`,
+          borderRadius: 16, padding: "16px 18px", marginBottom: 16,
+        }}>
+          <div style={{fontSize:13,fontWeight:700,color:C.red,marginBottom:6}}>Error al generar análisis</div>
+          <div style={{fontSize:12,color:C.t2}}>{error}</div>
+          <button onClick={runAnalysis}
+            style={{marginTop:14,padding:"10px 20px",background:C.bg2,border:`1px solid ${C.border}`,
+              borderRadius:10,color:C.t1,fontSize:13,cursor:"pointer",fontWeight:600}}>
+            Reintentar
+          </button>
+        </div>
+      )}
+
+      {/* Results */}
+      {result && phase === "done" && (
+        <div style={{display:"flex",flexDirection:"column",gap:16}}>
+
+          {/* a. Resumen ejecutivo */}
+          <div style={{
+            background: `linear-gradient(135deg, ${C.blue}14 0%, ${C.cyan}0a 100%)`,
+            border: `1.5px solid ${C.blueHi}`,
+            borderRadius: 18, padding: "18px 18px",
+            boxShadow: A.shadow,
+          }}>
+            <div style={{fontSize:10,color:C.blue,letterSpacing:"0.14em",textTransform:"uppercase",fontWeight:700,marginBottom:10}}>
+              Resumen Ejecutivo
+            </div>
+            <p style={{margin:0,fontSize:14,color:C.t1,lineHeight:1.65,fontWeight:500}}>
+              {result.resumenEjecutivo}
+            </p>
+            {result.alertas?.length > 0 && (
+              <div style={{marginTop:14,display:"flex",flexDirection:"column",gap:6}}>
+                {result.alertas.map((a,i) => (
+                  <div key={i} style={{
+                    display:"flex",alignItems:"flex-start",gap:8,
+                    background:`${C.red}12`,border:`1px solid ${C.red}33`,
+                    borderRadius:10,padding:"8px 12px",
+                  }}>
+                    <span style={{color:C.red,flexShrink:0,marginTop:1}}>⚠</span>
+                    <span style={{fontSize:12,color:C.red,fontWeight:600}}>{a}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* b. Salud financiera */}
+          {result.saludFinanciera && (
+            <div style={{
+              background: A.card, backdropFilter: A.blur, WebkitBackdropFilter: A.blur,
+              border: `1px solid ${C.border}`, borderRadius: 16,
+              padding: "18px 18px", boxShadow: A.shadowSm,
+            }}>
+              <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",textTransform:"uppercase",fontWeight:700,marginBottom:12}}>
+                Salud Financiera
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:14}}>
+                <div style={{
+                  width:56,height:56,borderRadius:28,
+                  background:`${saludColor(result.saludFinanciera.score)}22`,
+                  border:`2px solid ${saludColor(result.saludFinanciera.score)}`,
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  flexShrink:0,
+                }}>
+                  <span style={{fontSize:18,fontWeight:800,color:saludColor(result.saludFinanciera.score)}}>
+                    {result.saludFinanciera.score}
+                  </span>
+                </div>
+                <div>
+                  <div style={{fontSize:15,fontWeight:700,color:saludColor(result.saludFinanciera.score),textTransform:"capitalize"}}>
+                    {result.saludFinanciera.nivel}
+                  </div>
+                  <div style={{fontSize:11,color:C.t3,marginTop:2}}>Índice de salud (0–100)</div>
+                </div>
+              </div>
+              {/* Score bar */}
+              <div style={{height:6,borderRadius:3,background:C.border,marginBottom:14,overflow:"hidden"}}>
+                <div style={{
+                  height:"100%",borderRadius:3,
+                  width:`${result.saludFinanciera.score}%`,
+                  background:`linear-gradient(90deg, ${saludColor(result.saludFinanciera.score)}, ${saludColor(result.saludFinanciera.score)}aa)`,
+                  transition:"width 1s ease",
+                }}/>
+              </div>
+              {result.saludFinanciera.factores?.map((f,i) => (
+                <div key={i} style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:6}}>
+                  <span style={{color:C.t3,flexShrink:0,fontSize:12}}>·</span>
+                  <span style={{fontSize:12,color:C.t2,lineHeight:1.5}}>{f}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* c. Insights */}
+          {result.insights?.length > 0 && (
+            <div>
+              <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",textTransform:"uppercase",fontWeight:700,marginBottom:10}}>
+                Insights Estratégicos
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {result.insights.map((ins,i) => (
+                  <div key={i} style={{
+                    background: A.card, backdropFilter: A.blur, WebkitBackdropFilter: A.blur,
+                    border: `1px solid ${C.border}`, borderRadius: 14,
+                    padding: "14px 16px", boxShadow: A.shadowSm,
+                  }}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                      <span style={{
+                        width:8,height:8,borderRadius:4,flexShrink:0,
+                        background: categoriaColor(ins.categoria),
+                        boxShadow: `0 0 6px ${categoriaColor(ins.categoria)}66`,
+                      }}/>
+                      <span style={{fontSize:10,color:categoriaColor(ins.categoria),fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em"}}>
+                        {ins.categoria}
+                      </span>
+                      <span style={{
+                        marginLeft:"auto",fontSize:9,fontWeight:700,
+                        color:impactoColor(ins.impacto),
+                        background:`${impactoColor(ins.impacto)}18`,
+                        border:`1px solid ${impactoColor(ins.impacto)}44`,
+                        borderRadius:6,padding:"2px 7px",textTransform:"uppercase",letterSpacing:"0.06em",
+                      }}>
+                        {ins.impacto}
+                      </span>
+                    </div>
+                    <div style={{fontSize:13,fontWeight:700,color:C.t1,marginBottom:5}}>{ins.titulo}</div>
+                    <div style={{fontSize:12,color:C.t2,lineHeight:1.55,marginBottom:10}}>{ins.descripcion}</div>
+                    <div style={{
+                      background:`${C.blue}10`,border:`1px solid ${C.blue}28`,
+                      borderRadius:8,padding:"8px 12px",
+                      display:"flex",alignItems:"flex-start",gap:8,
+                    }}>
+                      <span style={{fontSize:11,color:C.blue,flexShrink:0,marginTop:1}}>→</span>
+                      <span style={{fontSize:11,color:C.blue,lineHeight:1.5}}>{ins.accion}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* d. Riesgos */}
+          {result.riesgos?.length > 0 && (
+            <div>
+              <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",textTransform:"uppercase",fontWeight:700,marginBottom:10}}>
+                Riesgos Identificados
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {result.riesgos.map((r,i) => (
+                  <div key={i} style={{
+                    background:`${C.red}08`,
+                    border:`1px solid ${urgenciaColor(r.urgencia)}44`,
+                    borderRadius:14,padding:"14px 16px",
+                  }}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                      <span style={{fontSize:12,fontWeight:700,color:urgenciaColor(r.urgencia),flex:1}}>{r.titulo}</span>
+                      <span style={{
+                        fontSize:9,fontWeight:700,
+                        color:urgenciaColor(r.urgencia),
+                        background:`${urgenciaColor(r.urgencia)}18`,
+                        border:`1px solid ${urgenciaColor(r.urgencia)}44`,
+                        borderRadius:6,padding:"2px 7px",textTransform:"uppercase",letterSpacing:"0.06em",flexShrink:0,
+                      }}>
+                        {r.urgencia}
+                      </span>
+                    </div>
+                    <div style={{fontSize:12,color:C.t2,lineHeight:1.55}}>{r.descripcion}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* e. Oportunidades */}
+          {result.oportunidades?.length > 0 && (
+            <div>
+              <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",textTransform:"uppercase",fontWeight:700,marginBottom:10}}>
+                Oportunidades de Crecimiento
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {result.oportunidades.map((o,i) => (
+                  <div key={i} style={{
+                    background:`${C.green}08`,
+                    border:`1px solid ${C.green}33`,
+                    borderRadius:14,padding:"14px 16px",
+                  }}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                      <span style={{fontSize:12,fontWeight:700,color:C.green,flex:1}}>{o.titulo}</span>
+                      <span style={{
+                        fontSize:10,fontWeight:700,color:C.green,
+                        background:`${C.green}18`,border:`1px solid ${C.green}44`,
+                        borderRadius:6,padding:"3px 8px",flexShrink:0,
+                      }}>
+                        +{mxn(o.potencialMXN)}
+                      </span>
+                    </div>
+                    <div style={{fontSize:12,color:C.t2,lineHeight:1.55}}>{o.descripcion}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* f. Estrategia de escala */}
+          {result.estrategiaEscala && (
+            <div style={{
+              background: A.card, backdropFilter: A.blur, WebkitBackdropFilter: A.blur,
+              border: `1px solid ${C.border}`, borderRadius: 16,
+              padding: "18px 18px", boxShadow: A.shadowSm,
+            }}>
+              <div style={{fontSize:10,color:C.t3,letterSpacing:"0.14em",textTransform:"uppercase",fontWeight:700,marginBottom:12}}>
+                Estrategia de Escala
+              </div>
+              <div style={{fontSize:13,fontWeight:700,color:C.t1,marginBottom:14,lineHeight:1.5}}>
+                {result.estrategiaEscala.objetivo}
+              </div>
+              {result.estrategiaEscala.pasos?.map((p,i) => (
+                <div key={i} style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:10}}>
+                  <div style={{
+                    width:22,height:22,borderRadius:11,
+                    background:`${C.blue}22`,border:`1.5px solid ${C.blue}`,
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                    flexShrink:0,fontSize:10,fontWeight:700,color:C.blue,
+                  }}>{i+1}</div>
+                  <span style={{fontSize:12,color:C.t2,lineHeight:1.5,paddingTop:3}}>{p}</span>
+                </div>
+              ))}
+              {result.estrategiaEscala.kpisObjetivo?.length > 0 && (
+                <div style={{marginTop:16}}>
+                  <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase",fontWeight:600,marginBottom:10}}>
+                    KPIs Objetivo
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    {result.estrategiaEscala.kpisObjetivo.map((k,i) => (
+                      <div key={i} style={{
+                        display:"grid",gridTemplateColumns:"1fr auto auto",
+                        gap:8,alignItems:"center",
+                        borderBottom:`1px solid ${C.border}`,paddingBottom:8,
+                      }}>
+                        <span style={{fontSize:11,color:C.t2,fontWeight:600}}>{k.kpi}</span>
+                        <span style={{fontSize:11,color:C.t3}}>Actual: <span style={{color:C.t1}}>{k.actual}</span></span>
+                        <span style={{fontSize:11,color:C.green}}>→ {k.objetivo}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Regenerate button */}
+          <button onClick={runAnalysis}
+            style={{
+              width:"100%",padding:"13px",
+              background:"transparent",
+              border:`1px solid ${C.border}`,
+              borderRadius:14,cursor:"pointer",
+              color:C.t3,fontSize:13,fontWeight:600,
+              touchAction:"manipulation",WebkitTapHighlightColor:"transparent",
+              marginTop:4,
+            }}>
+            ↻ Actualizar análisis
+          </button>
+
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── MasSheet — bottom sheet del menú "Más" ───────────────────────────────────
 function MasSheet({open,onClose,tab,setTab}) {
   const C = React.useContext(ThemeCtx);
@@ -9715,7 +10315,7 @@ function App() {
             backdropFilter:"blur(44px) saturate(2.8) brightness(1.01)",WebkitBackdropFilter:"blur(44px) saturate(2.8) brightness(1.01)",
             border: darkMode ? "1px solid rgba(255,255,255,0.09)" : "1px solid rgba(0,0,0,0.10)",
             borderRadius:28,
-            display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",
+            display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr 1fr",
             boxShadow: darkMode
               ? "0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.06) inset"
               : "0 4px 24px rgba(0,0,0,0.10), 0 1px 0 rgba(255,255,255,1) inset"}}>
@@ -9723,6 +10323,7 @@ function App() {
             {id:"ops",        label:"Centro",   icon:"⊙"},
             {id:"tickets",    label:"Pipeline", icon:"◈"},
             {id:"historial",  label:"Historial",icon:"☰"},
+            {id:"ia",         label:"IA",        icon:"✦"},
             {id:"cobranza",   label:"Cobros",   icon:"$"},
             {id:"__mas__",    label:"Más",      icon:"···"},
           ].map(t=>{
@@ -9801,6 +10402,7 @@ function App() {
         {tab==="proveedores"&&(mobileView?<MProveedores state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Proveedores state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="clientes"   &&(mobileView?<MClientes   state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Clientes    state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="ajustes"    &&(mobileView?<MAjustes state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Ajustes state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
+        {tab==="ia"         &&<MInteligencia state={state}/>}
         {tab==="cobranza"   &&<MCobranza state={state} dispatch={dispatchWithDelete} toast={toast}/>}
         {tab==="chat"       &&<MChat state={state} dispatch={dispatchWithDelete} C={C} toast={toast}/>}
         {tab==="sourcing"   &&<SourcingCopilot state={state} dispatch={dispatchWithDelete} C={C} toast={toast}/>}
