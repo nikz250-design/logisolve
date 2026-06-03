@@ -8142,6 +8142,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                               {l:"Util. neta",   v:mxn(uNeta),  c:uNeta>=0?A.lime:A.red},
                               {l:"Costo s/IVA",  v:mxn(safeNumber(t.snap?.costoBase)), c:A.t2},
                               {l:"Costo c/IVA",  v:mxn(safeNumber(t.snap?.costoBase)+safeNumber(t.snap?.ivaAcred)), c:A.t1},
+                              {l:"Otros gastos", v:safeNumber(t.snap?.gastos)>0?mxn(safeNumber(t.snap?.gastos)):"—", c:A.t2},
                               {l:"Margen",       v:fpct(safeNumber(t.snap?.margenNetoPrecio)), c:A.t2},
                             ].map(({l,v,c})=>(
                               <div key={l}>
