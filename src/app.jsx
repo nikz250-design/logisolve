@@ -9342,6 +9342,8 @@ function MInteligencia({state}) {
     const cutoff90 = new Date(now); cutoff90.setDate(now.getDate()-90);
     const partsMap = {};
     const norm = s => (s||"").toLowerCase().trim().replace(/\s+/g," ");
+    // Clave invariante al orden de palabras: "kit primer sayer" y "primer sayer kit" → misma entrada
+    const normKey = s => norm(s).split(" ").sort().join(" ");
     tickets.filter(t => !t._deleted).forEach(t => {
       const tDate = parseDate(t.date);
       const rev = safeNumber(t.snap?.precioConIVA);
@@ -9349,10 +9351,11 @@ function MInteligencia({state}) {
       // Colectar nombres únicos por ticket para evitar doble conteo (titulo = lineas[0])
       const seenInTicket = new Set();
       const addPart = (name) => {
-        const key = norm(name);
+        const display = norm(name);
+        const key = normKey(name);
         if(!key || key.length<3 || seenInTicket.has(key)) return;
         seenInTicket.add(key);
-        if(!partsMap[key]) partsMap[key] = {name:key, freq:0, revenue:0, utilidad:0, lastDate:null};
+        if(!partsMap[key]) partsMap[key] = {name:display, freq:0, revenue:0, utilidad:0, lastDate:null};
         partsMap[key].freq++;
         partsMap[key].revenue += rev/Math.max(1,(t.lineas?.length||1));
         partsMap[key].utilidad += util/Math.max(1,(t.lineas?.length||1));
