@@ -8120,7 +8120,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                           {t.titulo}
                         </div>
                         <div style={{fontSize:9,color:A.t3,fontFamily:"'Courier New',monospace",marginBottom:3,letterSpacing:"0.04em"}}>
-                          {t.id}
+                          {mkFolio(t,"OP")}
                         </div>
                         {(cl||un)&&(
                           <div style={{fontSize:10,color:A.t3,
