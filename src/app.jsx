@@ -9338,11 +9338,11 @@ function MInteligencia({state}) {
 
   // ── PANEL 5 & 6: Partes ───────────────────────────────────────────────────
   const partesData = useMemo(() => {
-    // Incluye todos los tickets (incluso eliminados) — cada solicitud es demanda real
+    // Excluye eliminados. Cancelados SÍ cuentan (demanda real aunque no se concretó)
     const cutoff90 = new Date(now); cutoff90.setDate(now.getDate()-90);
     const partsMap = {};
     const norm = s => (s||"").toLowerCase().trim().replace(/\s+/g," ");
-    tickets.forEach(t => {
+    tickets.filter(t => !t._deleted).forEach(t => {
       const tDate = parseDate(t.date);
       const rev = safeNumber(t.snap?.precioConIVA);
       const util = safeNumber(t.snap?.uNeta);
