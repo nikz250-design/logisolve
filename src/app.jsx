@@ -9195,7 +9195,7 @@ function MInteligencia({state}) {
   const {tickets=[], clients=[], suppliers=[], units=[]} = state;
 
   // Inner tab navigation state
-  const [iTab, setITab] = useState("control");
+  const [iTab, setITab] = useState("unidades");
 
   // ── AI streaming state (kept as before) ──────────────────────────────────
   const [loading,  setLoading]  = useState(false);
