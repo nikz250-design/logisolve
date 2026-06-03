@@ -9333,42 +9333,140 @@ function MInteligencia({state}) {
     }).filter(d=>d.ticketCount>0 || d.cartPending>0);
   }, [tickets, clients]);
 
-  // ── PANEL 4: Pipeline / Conversión ───────────────────────────────────────
+  // ── PANEL 4: Dos Embudos — Operativo + Cobranza ──────────────────────────
   const pipelineData = useMemo(() => {
-    const active = tickets.filter(t=>!t._deleted && t.status!=="cancelado");
-    const total = active.length;
-    const stageOrder = ["recibido","cotizado","autorizado","entregado","cobrado"];
-    const stageSets = {
-      recibido:  new Set(TICKET_PIPELINE),
-      cotizado:  new Set(["cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado"]),
-      autorizado:new Set(["autorizado","comprado","transito","entregado","facturado","cobrado","cerrado"]),
-      entregado: OPERADO_SET,
-      cobrado:   new Set(["cobrado","cerrado"]),
+    const all    = tickets.filter(t=>!t._deleted);
+    const noCanc = all.filter(t=>t.status!=="cancelado");
+    const cancelled = all.filter(t=>t.status==="cancelado");
+    const parseTS = ts => { try { return new Date(ts); } catch { return null; } };
+    const findEv  = (tl, kw) => {
+      const ev=(tl||[]).find(e=>(e.evento||"").toLowerCase().includes(kw));
+      return ev ? parseTS(ev.ts) : null;
     };
-    const labels = {
-      recibido:"Recibido", cotizado:"Cotizado", autorizado:"Autorizado",
-      entregado:"Entregado", cobrado:"Cobrado"
+    const avg = arr => arr.length ? arr.reduce((s,v)=>s+v,0)/arr.length : null;
+    const fmtH = h => h===null?"—": h<48?`${h.toFixed(1)}h`:`${(h/24).toFixed(1)}d`;
+
+    // ── Embudo Operativo: acumulativo (tickets que llegaron a esa etapa o más) ──
+    const opOrder = ["recibido","validando","sourcing","cotizado","autorizado","entregado"];
+    const opSets = {
+      recibido:   new Set([...TICKET_PIPELINE, ...Array.from(OPERADO_SET)]),
+      validando:  new Set(["validando","sourcing","cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado"]),
+      sourcing:   new Set(["sourcing","cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado"]),
+      cotizado:   new Set(["cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado"]),
+      autorizado: new Set(["autorizado","comprado","transito","entregado","facturado","cobrado","cerrado"]),
+      entregado:  OPERADO_SET,
     };
-    const counts = {};
-    stageOrder.forEach(s => {
-      counts[s] = active.filter(t=>stageSets[s].has(t.status)).length;
+    const opLabel = {recibido:"Recibido",validando:"Validando",sourcing:"Sourcing",cotizado:"Cotizado",autorizado:"Autorizado",entregado:"Entregado"};
+
+    const opCounts = {}; const opRevs = {};
+    opOrder.forEach(s=>{
+      const ts = noCanc.filter(t=>opSets[s].has(t.status));
+      opCounts[s]=ts.length;
+      opRevs[s]=ts.reduce((acc,t)=>acc+safeNumber(t.snap?.precioConIVA),0);
     });
-    // Find bottleneck: biggest absolute drop between consecutive stages
-    let bottleneckIdx = 0;
-    let biggestDrop = 0;
-    for(let i=1;i<stageOrder.length;i++){
-      const prev = counts[stageOrder[i-1]];
-      const curr = counts[stageOrder[i]];
-      const drop = prev - curr;
-      if(drop > biggestDrop){ biggestDrop=drop; bottleneckIdx=i; }
-    }
-    const stages = stageOrder.map((s,i)=>({
-      key:s, label:labels[s], count:counts[s],
-      convPct: i===0 ? 100 : (counts[stageOrder[i-1]]>0 ? (counts[s]/counts[stageOrder[i-1]])*100 : 0),
-      isBottleneck: i===bottleneckIdx && biggestDrop>0,
-    }));
-    return {stages, total};
-  }, [tickets]);
+
+    let bkIdx=0, bigDrop=0;
+    const opStages = opOrder.map((s,i)=>{
+      const count=opCounts[s];
+      const prev = i>0 ? opCounts[opOrder[i-1]] : count;
+      const convPct = i===0 ? 100 : (prev>0?(count/prev)*100:0);
+      const lost = i>0 ? prev-count : 0;
+      const lostRev = i>0 ? opRevs[opOrder[i-1]]-opRevs[s] : 0;
+      const drop = prev-count;
+      if(drop>bigDrop){bigDrop=drop;bkIdx=i;}
+      return {key:s, label:opLabel[s], count, convPct, lost, lostRev, isBottleneck:false};
+    });
+    if(bigDrop>0) opStages[bkIdx].isBottleneck=true;
+
+    // ── Tiempos por etapa (desde timeline) ──
+    const times={recVal:[],valSrc:[],srcCot:[],cotAut:[],autEnt:[],total:[]};
+    noCanc.forEach(t=>{
+      const tl=t.timeline||[];
+      const rec = findEv(tl,"solicitud recibida")||findEv(tl,"ticket creado")||parseDate(t.date);
+      const val = findEv(tl,"estado: validando");
+      const src = findEv(tl,"estado: sourcing");
+      const cot = findEv(tl,"estado: cotizado");
+      const aut = findEv(tl,"estado: autorizado");
+      const ent = findEv(tl,"estado: entregado");
+      if(rec&&val&&val>rec) times.recVal.push((val-rec)/3600000);
+      if(val&&src&&src>val) times.valSrc.push((src-val)/3600000);
+      if(src&&cot&&cot>src) times.srcCot.push((cot-src)/3600000);
+      else if(rec&&cot&&cot>rec&&!src) times.srcCot.push((cot-rec)/3600000);
+      if(cot&&aut&&aut>cot) times.cotAut.push((aut-cot)/3600000);
+      if(aut&&ent&&ent>aut) times.autEnt.push((ent-aut)/3600000);
+      if(rec&&ent&&ent>rec) times.total.push((ent-rec)/3600000);
+    });
+    const stageTimings=[
+      {label:"Recibido → Validando",   avg:avg(times.recVal),  fmt:fmtH(avg(times.recVal)),  n:times.recVal.length,  hot:true},
+      {label:"Validando → Sourcing",   avg:avg(times.valSrc),  fmt:fmtH(avg(times.valSrc)),  n:times.valSrc.length,  hot:true},
+      {label:"Sourcing → Cotizado",    avg:avg(times.srcCot),  fmt:fmtH(avg(times.srcCot)),  n:times.srcCot.length,  hot:true},
+      {label:"Cotizado → Autorizado",  avg:avg(times.cotAut),  fmt:fmtH(avg(times.cotAut)),  n:times.cotAut.length,  hot:false},
+      {label:"Autorizado → Entregado", avg:avg(times.autEnt),  fmt:fmtH(avg(times.autEnt)),  n:times.autEnt.length,  hot:false},
+      {label:"Tiempo total rec→ent",   avg:avg(times.total),   fmt:fmtH(avg(times.total)),   n:times.total.length,   hot:false},
+    ];
+
+    // ── Embudo de Cobranza ──
+    const cobOrder = ["entregado","facturado","cobrado"];
+    const cobSets = {
+      entregado: OPERADO_SET,
+      facturado: new Set(["facturado","cobrado","cerrado"]),
+      cobrado:   CASH_SET,
+    };
+    const cobLabel={entregado:"Entregado",facturado:"Facturado",cobrado:"Cobrado"};
+    const cobCounts={}; const cobRevs={};
+    cobOrder.forEach(s=>{
+      const ts=all.filter(t=>cobSets[s].has(t.status));
+      cobCounts[s]=ts.length;
+      cobRevs[s]=ts.reduce((acc,t)=>acc+safeNumber(t.snap?.precioConIVA),0);
+    });
+    const cobStages=cobOrder.map((s,i)=>{
+      const count=cobCounts[s];
+      const prev=i>0?cobCounts[cobOrder[i-1]]:count;
+      const convPct=i===0?100:(prev>0?(count/prev)*100:0);
+      const pendingRev=i>0?cobRevs[cobOrder[i-1]]-cobRevs[s]:0;
+      return {key:s,label:cobLabel[s],count,convPct,pendingRev};
+    });
+
+    // Cartera vencida
+    const carteraTkts=all.filter(t=>CARTERA_SET.has(t.status));
+    const carteraTotal=carteraTkts.reduce((acc,t)=>acc+safeNumber(t.snap?.precioConIVA),0);
+    const todayMs=now.getTime();
+    const vencidaTkts=carteraTkts.filter(t=>{
+      const d=parseDate(t.promesaPago);
+      return d && d.getTime()<todayMs;
+    });
+    const carteraVencida=vencidaTkts.reduce((acc,t)=>acc+safeNumber(t.snap?.precioConIVA),0);
+
+    // Días promedio de cobro (facturado → cobrado)
+    const cobDays=[];
+    all.filter(t=>CASH_SET.has(t.status)).forEach(t=>{
+      const tl=t.timeline||[];
+      const facD=findEv(tl,"estado: facturado");
+      const cobD=findEv(tl,"estado: cobrado");
+      if(facD&&cobD&&cobD>facD) cobDays.push((cobD-facD)/86400000);
+    });
+    const avgCobDays=avg(cobDays);
+
+    // Top clientes por saldo pendiente
+    const byClient={};
+    carteraTkts.forEach(t=>{
+      const v=safeNumber(t.snap?.precioConIVA);
+      if(!byClient[t.clientId]) byClient[t.clientId]={clientId:t.clientId,total:0,count:0};
+      byClient[t.clientId].total+=v;
+      byClient[t.clientId].count++;
+    });
+    const topDeudores=Object.values(byClient).sort((a,b)=>b.total-a.total).slice(0,5);
+
+    // Revenue perdido por cancelados
+    const cancelRevenue=cancelled.reduce((acc,t)=>acc+safeNumber(t.snap?.precioConIVA),0);
+
+    return {
+      opStages, stageTimings, opTotal:opCounts.recibido||0,
+      cancelCount:cancelled.length, cancelRevenue,
+      cobStages, carteraTotal, carteraVencida, avgCobDays,
+      topDeudores, cobTotal:cobCounts.entregado||0,
+    };
+  }, [tickets, now]);
 
   // ── PANEL 5 & 6: Partes ───────────────────────────────────────────────────
   const partesData = useMemo(() => {
@@ -9747,7 +9845,7 @@ function MInteligencia({state}) {
     // Enrichment from panels
     const topUnit = unidadesData[0];
     const topClient = clientesData.sort((a,b)=>b.revenue-a.revenue)[0];
-    const bottleneck = pipelineData.stages.find(s=>s.isBottleneck);
+    const bottleneck = pipelineData.opStages.find(s=>s.isBottleneck);
     const partInventorySuggestions = partesData.sugeridas.slice(0,3).map(p=>p.name);
     const cartVencida = alertasData.filter(a=>a.title==="Cartera vencida")[0];
     const clientConc = topClients[0] && totalRevenue>0 ? (topClients[0].revenue/totalRevenue)*100 : 0;
@@ -10136,24 +10234,21 @@ function MInteligencia({state}) {
         </div>
       )}
 
-      {/* ── PANEL 4: Pipeline / Conversión ──────────────────────────────────── */}
+      {/* ── PANEL 4: Dos Embudos ─────────────────────────────────────────────── */}
       {iTab==="pipeline" && (
-        <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          {/* Tickets detenidos (V8 improvement) */}
-          {operacionData.filter(d=>d.stalled).length > 0 && (
+        <div style={{display:"flex",flexDirection:"column",gap:16}}>
+
+          {/* Alerta tickets detenidos */}
+          {operacionData.filter(d=>d.stalled).length>0&&(
             <div style={{background:`${C.red}0a`,border:`1.5px solid ${C.red}44`,borderRadius:14,padding:"12px 14px"}}>
               <div style={{...label10,color:C.red,marginBottom:8}}>
                 {operacionData.filter(d=>d.stalled).length} ticket(s) sin movimiento +72h
               </div>
               {operacionData.filter(d=>d.stalled).slice(0,3).map(d=>(
                 <div key={d.t.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                  <span style={{fontSize:11,fontWeight:800,color:C.red,flexShrink:0,minWidth:28}}>
-                    {Math.round(d.diasSinMovimiento)}d
-                  </span>
+                  <span style={{fontSize:11,fontWeight:800,color:C.red,flexShrink:0,minWidth:28}}>{Math.round(d.diasSinMovimiento)}d</span>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:12,fontWeight:600,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                      {d.t.titulo||"Sin título"}
-                    </div>
+                    <div style={{fontSize:12,fontWeight:600,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.t.titulo||"Sin título"}</div>
                     <div style={{fontSize:10,color:C.t3}}>{d.cl?.empresa||"—"} · {d.t.status}</div>
                   </div>
                   {d.rev>0&&<div style={{fontSize:11,fontWeight:600,color:C.t3,flexShrink:0}}>{mxn(d.rev)}</div>}
@@ -10161,37 +10256,138 @@ function MInteligencia({state}) {
               ))}
             </div>
           )}
-          <div style={{...label10,marginBottom:4}}>Embudo de Conversión · {pipelineData.total} tickets activos</div>
-          {pipelineData.stages.map((s,i)=>{
-            const maxCount = pipelineData.stages[0].count||1;
-            const barW = maxCount>0 ? (s.count/maxCount)*100 : 0;
-            return (
-              <div key={s.key} style={{
-                ...cardStyle,
-                border:`1.5px solid ${s.isBottleneck?C.red:C.border}`,
-              }}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                  <span style={{fontSize:12,fontWeight:700,color:s.isBottleneck?C.red:C.t1,flex:1}}>{s.label}</span>
-                  {s.isBottleneck && (
-                    <span style={{fontSize:9,fontWeight:700,color:C.red,background:`${C.red}18`,border:`1px solid ${C.red}44`,borderRadius:6,padding:"2px 7px"}}>
-                      CUELLO DE BOTELLA
-                    </span>
-                  )}
-                  <span style={{fontSize:13,fontWeight:700,color:C.t1,flexShrink:0}}>{s.count}</span>
-                </div>
-                {/* Bar */}
-                <div style={{height:6,borderRadius:3,background:C.border,overflow:"hidden",marginBottom:4}}>
-                  <div style={{height:"100%",borderRadius:3,width:`${barW}%`,
-                    background:s.isBottleneck?C.red:C.blue,transition:"width 0.6s ease"}}/>
-                </div>
-                {i>0 && (
-                  <div style={{fontSize:10,color:s.isBottleneck?C.red:C.t3}}>
-                    Conversión desde etapa anterior: <span style={{fontWeight:700}}>{fpct(s.convPct)}</span>
+
+          {/* ════ EMBUDO OPERATIVO ════ */}
+          <div style={{...cardStyle,padding:"14px 16px"}}>
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:13,fontWeight:800,color:C.t1,marginBottom:2}}>Embudo Operativo</div>
+              <div style={{fontSize:10,color:C.t3}}>¿Qué tan bien resolvemos problemas? · {pipelineData.opTotal} tickets (sin cancelados)</div>
+            </div>
+
+            {/* Funnel bars */}
+            {pipelineData.opStages.map((s,i)=>{
+              const maxC=pipelineData.opStages[0].count||1;
+              const barW=maxC>0?(s.count/maxC)*100:0;
+              const isKnowledge=["validando","sourcing","cotizado"].includes(s.key);
+              const barColor=s.isBottleneck?C.red:isKnowledge?C.cyan:C.blue;
+              return(
+                <div key={s.key} style={{marginBottom:8}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+                    <span style={{fontSize:11,fontWeight:700,color:s.isBottleneck?C.red:isKnowledge?C.cyan:C.t1,width:110,flexShrink:0}}>{s.label}</span>
+                    {s.isBottleneck&&<span style={{fontSize:8,fontWeight:700,color:C.red,background:`${C.red}18`,border:`1px solid ${C.red}44`,borderRadius:5,padding:"1px 6px",flexShrink:0}}>CUELLO</span>}
+                    {isKnowledge&&!s.isBottleneck&&<span style={{fontSize:8,color:C.cyan,background:`${C.cyan}12`,borderRadius:5,padding:"1px 6px",flexShrink:0}}>CONOCIMIENTO</span>}
+                    <div style={{flex:1}}/>
+                    <span style={{fontSize:12,fontWeight:800,color:s.isBottleneck?C.red:C.t1,flexShrink:0,minWidth:24,textAlign:"right"}}>{s.count}</span>
+                    {i>0&&<span style={{fontSize:10,color:s.isBottleneck?C.red:s.convPct>=70?C.green:s.convPct>=40?C.yellow:C.red,flexShrink:0,minWidth:38,textAlign:"right"}}>{fpct(s.convPct)}</span>}
                   </div>
-                )}
+                  <div style={{height:7,borderRadius:4,background:C.border,overflow:"hidden"}}>
+                    <div style={{height:"100%",borderRadius:4,width:`${barW}%`,background:barColor,transition:"width .5s ease"}}/>
+                  </div>
+                  {i>0&&s.lost>0&&(
+                    <div style={{fontSize:9,color:C.t3,marginTop:2}}>
+                      {s.lost} ticket{s.lost>1?"s":""} perdido{s.lost>1?"s":""} aquí
+                      {s.lostRev>0&&<span style={{color:C.red}}> · {mxn(s.lostRev)} revenue perdido</span>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Cancelados */}
+            {pipelineData.cancelCount>0&&(
+              <div style={{marginTop:6,padding:"7px 10px",background:`${C.red}09`,border:`1px solid ${C.red}33`,borderRadius:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontSize:10,color:C.red,fontWeight:600}}>Cancelados: {pipelineData.cancelCount} tickets</span>
+                <span style={{fontSize:10,color:C.red,fontWeight:700}}>{mxn(pipelineData.cancelRevenue)} perdidos</span>
               </div>
-            );
-          })}
+            )}
+
+            {/* Tiempos por etapa */}
+            <div style={{height:1,background:C.border,margin:"12px 0 10px"}}/>
+            <div style={{fontSize:11,fontWeight:700,color:C.t2,marginBottom:8}}>Tiempos promedio por etapa</div>
+            <div style={{display:"flex",flexDirection:"column",gap:5}}>
+              {pipelineData.stageTimings.map((st,i)=>{
+                const isKnowledge=st.hot;
+                const isTotal=i===pipelineData.stageTimings.length-1;
+                return(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 8px",borderRadius:6,background:isTotal?C.bg3:isKnowledge?`${C.cyan}09`:"transparent",border:isTotal?`1px solid ${C.border}`:"none"}}>
+                    {isKnowledge&&<span style={{fontSize:9,color:C.cyan,flexShrink:0}}>★</span>}
+                    <span style={{flex:1,fontSize:10,color:isTotal?C.t1:isKnowledge?C.cyan:C.t2,fontWeight:isTotal?700:400}}>{st.label}</span>
+                    <span style={{fontSize:11,fontWeight:700,color:isTotal?C.cyan:C.t1,fontFamily:"'Courier New',monospace",flexShrink:0}}>{st.fmt}</span>
+                    {st.n>0&&<span style={{fontSize:9,color:C.t3,flexShrink:0}}>({st.n})</span>}
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{fontSize:9,color:C.t3,marginTop:8}}>★ Etapas de conocimiento — diferenciador de LogiSolve</div>
+          </div>
+
+          {/* ════ EMBUDO DE COBRANZA ════ */}
+          <div style={{...cardStyle,padding:"14px 16px"}}>
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:13,fontWeight:800,color:C.t1,marginBottom:2}}>Embudo de Cobranza</div>
+              <div style={{fontSize:10,color:C.t3}}>¿Qué tan rápido recuperamos el dinero? · {pipelineData.cobTotal} tickets entregados</div>
+            </div>
+
+            {/* 3-step funnel */}
+            {pipelineData.cobStages.map((s,i)=>{
+              const maxC=pipelineData.cobStages[0].count||1;
+              const barW=maxC>0?(s.count/maxC)*100:0;
+              const colors=["#7AA0E0","#A78BFA","#50D070"];
+              return(
+                <div key={s.key} style={{marginBottom:8}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+                    <span style={{fontSize:11,fontWeight:700,color:colors[i],width:90,flexShrink:0}}>{s.label}</span>
+                    <div style={{flex:1}}/>
+                    <span style={{fontSize:12,fontWeight:800,color:C.t1,flexShrink:0,minWidth:24,textAlign:"right"}}>{s.count}</span>
+                    {i>0&&<span style={{fontSize:10,color:s.convPct>=70?C.green:s.convPct>=40?C.yellow:C.red,flexShrink:0,minWidth:38,textAlign:"right"}}>{fpct(s.convPct)}</span>}
+                  </div>
+                  <div style={{height:7,borderRadius:4,background:C.border,overflow:"hidden"}}>
+                    <div style={{height:"100%",borderRadius:4,width:`${barW}%`,background:colors[i],transition:"width .5s ease"}}/>
+                  </div>
+                  {i>0&&s.pendingRev>0&&(
+                    <div style={{fontSize:9,color:C.t3,marginTop:2}}>
+                      {mxn(s.pendingRev)} aún por cobrar desde esta etapa
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* KPIs de cobranza */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:12,marginBottom:12}}>
+              <div style={{background:C.bg3,borderRadius:8,padding:"10px 12px",border:`1px solid ${C.border}`}}>
+                <div style={{fontSize:9,color:C.t3,marginBottom:3}}>POR COBRAR</div>
+                <div style={{fontSize:14,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(pipelineData.carteraTotal)}</div>
+              </div>
+              <div style={{background:pipelineData.carteraVencida>0?`${C.red}0c`:C.bg3,borderRadius:8,padding:"10px 12px",border:`1px solid ${pipelineData.carteraVencida>0?C.red+"44":C.border}`}}>
+                <div style={{fontSize:9,color:pipelineData.carteraVencida>0?C.red:C.t3,marginBottom:3}}>VENCIDA</div>
+                <div style={{fontSize:14,fontWeight:800,color:pipelineData.carteraVencida>0?C.red:C.t2,fontFamily:"'Courier New',monospace"}}>{mxn(pipelineData.carteraVencida)}</div>
+              </div>
+              <div style={{background:C.bg3,borderRadius:8,padding:"10px 12px",border:`1px solid ${C.border}`}}>
+                <div style={{fontSize:9,color:C.t3,marginBottom:3}}>DÍAS PROM. COBRO</div>
+                <div style={{fontSize:14,fontWeight:800,color:C.t1,fontFamily:"'Courier New',monospace"}}>
+                  {pipelineData.avgCobDays!==null ? pipelineData.avgCobDays.toFixed(1)+"d" : "—"}
+                </div>
+              </div>
+            </div>
+
+            {/* Top deudores */}
+            {pipelineData.topDeudores.length>0&&(
+              <>
+                <div style={{fontSize:11,fontWeight:700,color:C.t2,marginBottom:6}}>Clientes con mayor saldo pendiente</div>
+                {pipelineData.topDeudores.map((d,i)=>{
+                  const cl=clients.find(c=>c.id===d.clientId);
+                  return(
+                    <div key={d.clientId||i} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderBottom:i<pipelineData.topDeudores.length-1?`1px solid ${C.border}`:"none"}}>
+                      <span style={{fontSize:10,fontWeight:600,color:C.t1,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl?.empresa||"Sin cliente"}</span>
+                      <span style={{fontSize:10,color:C.t3,flexShrink:0}}>{d.count} tkt{d.count>1?"s":""}</span>
+                      <span style={{fontSize:11,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace",flexShrink:0}}>{mxn(d.total)}</span>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
         </div>
       )}
 
