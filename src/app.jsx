@@ -9195,7 +9195,7 @@ function MInteligencia({state}) {
   const {tickets=[], clients=[], suppliers=[], units=[]} = state;
 
   // Inner tab navigation state
-  const [iTab, setITab] = useState("unidades");
+  const [iTab, setITab] = useState("control");
 
   // ── AI streaming state (kept as before) ──────────────────────────────────
   const [loading,  setLoading]  = useState(false);
@@ -9248,15 +9248,15 @@ function MInteligencia({state}) {
   // ── PANEL 2: Proveedores ──────────────────────────────────────────────────
   const proveedoresData = useMemo(() => {
     const active = tickets.filter(t=>!t._deleted);
-    const withSupplier = active.filter(t=>t.supplierId);
+    const concretados = active.filter(t=>OPERADO_SET.has(t.status));
     return suppliers.filter(s=>s.id).map(s => {
       const sTickets = active.filter(t=>t.supplierId===s.id);
+      const sConcretados = concretados.filter(t=>t.supplierId===s.id);
       const ticketCount = sTickets.length;
-      const revenue = sTickets.reduce((acc,t)=>acc+safeNumber(t.snap?.precioConIVA),0);
-      const utilidad = sTickets.reduce((acc,t)=>acc+safeNumber(t.snap?.uNeta),0);
-      const totalWithSupp = withSupplier.length;
-      const disponibilidad = totalWithSupp>0 ? (ticketCount/totalWithSupp)*100 : 100;
-      return {supplier:s, ticketCount, revenue, utilidad, disponibilidad};
+      const revenue = sConcretados.reduce((acc,t)=>acc+safeNumber(t.snap?.precioConIVA),0);
+      const utilidad = sConcretados.reduce((acc,t)=>acc+safeNumber(t.snap?.uNeta),0);
+      const tasaExito = ticketCount>0 ? (sConcretados.length/ticketCount)*100 : 0;
+      return {supplier:s, ticketCount, concretadosCount:sConcretados.length, revenue, utilidad, tasaExito};
     }).filter(d=>d.ticketCount>0).sort((a,b)=>b.revenue-a.revenue);
   }, [tickets, suppliers]);
 
@@ -9284,8 +9284,10 @@ function MInteligencia({state}) {
           const pDate = t.promesaPago ? parseDate(t.promesaPago) : null;
           if(!tDate) return false;
           const deadline = pDate || new Date(tDate.getTime()+creditDays*86400000);
-          // approximation: cobrado=true means paid, assume paid by promesaPago or on time
-          return true;
+          const cobroEv = (t.timeline||[]).find(e=>(e.evento||"").toLowerCase().includes("cobrado"));
+          if(!cobroEv?.ts) return true; // sin evidencia de fecha real, asumir a tiempo
+          const cobroDate = new Date(cobroEv.ts);
+          return !isNaN(cobroDate) && cobroDate<=deadline;
         });
         puntualidad = (onTime.length/creditTkts.length)*100;
       }
@@ -9607,6 +9609,50 @@ function MInteligencia({state}) {
     return {cancelled, sorted, total:cancelled.length, totalRevLost};
   }, [tickets]);
 
+  // ── Dinero: posición financiera agregada ─────────────────────────────────
+  const dineroData = useMemo(() => {
+    const active = tickets.filter(t=>!t._deleted);
+    const operados = active.filter(t=>OPERADO_SET.has(t.status));
+    const carteraTkts = active.filter(t=>CARTERA_SET.has(t.status));
+    const forecastTkts = active.filter(t=>FORECAST_SET.has(t.status));
+    const pipelineTkts = active.filter(t=>PIPELINE_SET.has(t.status));
+    const from30 = new Date(now); from30.setDate(now.getDate()-30);
+    const from90 = new Date(now); from90.setDate(now.getDate()-90);
+    const ops30 = operados.filter(t=>{const d=parseDate(t.date);return d&&d>=from30;});
+    const ops90 = operados.filter(t=>{const d=parseDate(t.date);return d&&d>=from90;});
+    const sum = (arr,f) => arr.reduce((s,t)=>s+safeNumber(t.snap?.[f]),0);
+    const avgM = arr => arr.length>0 ? arr.reduce((s,t)=>{
+      const p=safeNumber(t.snap?.precioConIVA),u=safeNumber(t.snap?.uNeta);
+      return s+(p>0?(u/p)*100:0);
+    },0)/arr.length : 0;
+    return {
+      totalRevenue: sum(operados,'precioConIVA'), totalUtilidad: sum(operados,'uNeta'),
+      avgMargen: avgM(operados),
+      rev30: sum(ops30,'precioConIVA'), util30: sum(ops30,'uNeta'), avgMargen30: avgM(ops30),
+      rev90: sum(ops90,'precioConIVA'), util90: sum(ops90,'uNeta'),
+      cartera: sum(carteraTkts,'precioConIVA'), carteraCount: carteraTkts.length,
+      flujoForecast: sum(forecastTkts,'precioConIVA'), flujoForecastCount: forecastTkts.length,
+      costoEnProceso: sum(pipelineTkts,'costoTotal'),
+    };
+  }, [tickets, now]);
+
+  // ── Operación: tickets activos con SLA ───────────────────────────────────
+  const operacionData = useMemo(() => {
+    const parseTS = ts=>{try{return new Date(ts);}catch{return null;}};
+    const nowMs = now.getTime();
+    const active = tickets.filter(t=>!t._deleted && !["cancelado","cerrado","cobrado"].includes(t.status));
+    return active.map(t=>{
+      const tl = t.timeline||[];
+      const lastEv = tl.length>0 ? parseTS(tl[tl.length-1].ts) : null;
+      const ref = lastEv || parseDate(t.date) || now;
+      const horasSinMovimiento = (nowMs - ref.getTime())/3600000;
+      const diasSinMovimiento = horasSinMovimiento/24;
+      const cl = clients.find(c=>c.id===t.clientId);
+      return {t, cl, rev:safeNumber(t.snap?.precioConIVA), util:safeNumber(t.snap?.uNeta),
+        horasSinMovimiento, diasSinMovimiento, stalled:horasSinMovimiento>72};
+    }).sort((a,b)=>b.horasSinMovimiento-a.horasSinMovimiento);
+  }, [tickets, clients, now]);
+
   // ── Global KPIs ───────────────────────────────────────────────────────────
   const gKpi_concretadas = useMemo(()=>tickets.filter(t=>!t._deleted&&OPERADO_SET.has(t.status)).length,[tickets]);
   const gKpi_total       = useMemo(()=>tickets.filter(t=>!t._deleted).length,[tickets]);
@@ -9746,16 +9792,14 @@ function MInteligencia({state}) {
 
   // ── Inner tab pills ───────────────────────────────────────────────────────
   const ITABS = [
-    {id:"unidades",       label:"Unidades"},
-    {id:"proveedores",    label:"Proveedores"},
-    {id:"clientes",       label:"Clientes"},
-    {id:"pipeline",       label:"Pipeline"},
-    {id:"partes",         label:"Partes"},
-    {id:"sourceabilidad", label:"Sourcing"},
-    {id:"oportunidad",    label:"Oportunidad"},
-    {id:"kpis",           label:"KPIs"},
-    {id:"alertas",        label:"Alertas"},
-    {id:"ia",             label:"IA"},
+    {id:"control",     label:"Control"},
+    {id:"dinero",      label:"Dinero"},
+    {id:"operacion",   label:"Operación"},
+    {id:"clientes",    label:"Clientes"},
+    {id:"proveedores", label:"Proveedores"},
+    {id:"demanda",     label:"Demanda"},
+    {id:"riesgos",     label:"Riesgos"},
+    {id:"ia",          label:"IA"},
   ];
 
   const categoriaColor = cat => ({financiero:C.blue,operativo:C.cyan,cliente:C.yellow,crecimiento:C.green,riesgo:C.red}[cat]||C.t3);
@@ -9812,8 +9856,8 @@ function MInteligencia({state}) {
         </div>
       </div>
 
-      {/* ── PANEL 1: Unidades ───────────────────────────────────────────────── */}
-      {iTab==="unidades" && (
+      {/* ── CONTROL: Centro de Control ──────────────────────────────────────── */}
+      {iTab==="control" && (
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
           <div style={{...label10,marginBottom:4}}>Rendimiento por Unidad · solo operaciones concretadas</div>
           {unidadesData.length===0 && <div style={{color:C.t3,fontSize:13}}>Sin unidades registradas.</div>}
