@@ -2505,7 +2505,7 @@ function Tickets({state,dispatch,toast,scheduleHardDelete}) {
   const filtered = useMemo(()=>tickets.filter(t=>{
     if(fStatus!=="all"&&t.status!==fStatus) return false;
     if(fPrio!=="all"&&t.priority!==fPrio)   return false;
-    if(dSearch){const lq=safeLower(dSearch);if(!safeLower(t.titulo).includes(lq)&&!safeLower(t.id).includes(lq))return false;}
+    if(dSearch){const lq=safeLower(dSearch);if(!safeLower(t.titulo).includes(lq)&&!safeLower(t.id).includes(lq)&&!safeLower(mkFolio(t,"OP")).includes(lq)&&!safeLower(clients.find(c=>c.id===t.clientId)?.empresa||"").includes(lq))return false;}
     return true;
   }),[tickets,fStatus,fPrio,dSearch]);
 
@@ -6981,8 +6981,9 @@ function MPipeline({state,dispatch,toast}) {
       arr=arr.filter(t=>
         (t.titulo||"").toLowerCase().includes(lq)||
         (t.id||"").toLowerCase().includes(lq)||
+        mkFolio(t,"OP").toLowerCase().includes(lq)||
         clients.find(c=>c.id===t.clientId)?.empresa?.toLowerCase().includes(lq)||
-        units.find(u=>u.id===t.unitId)?.economico?.toLowerCase().includes(lq)
+        getTicketUnitIds(t).some(id=>units.find(u=>u.id===id)?.economico?.toLowerCase().includes(lq))
       );
     }
     const pOrd={P1:0,P2:1,P3:2,P4:3};
@@ -7115,7 +7116,10 @@ function MPipeline({state,dispatch,toast}) {
                         background:A.redDim,color:A.red,letterSpacing:"0.06em"}}>VENCIDO</span>}
                     </div>
                     <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                      <span style={{fontSize:10,color:A.t3}}>{t.date}</span>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontSize:9,fontWeight:700,color:A.cyan,fontFamily:"'Courier New',monospace",letterSpacing:"0.04em"}}>{mkFolio(t,"OP")}</div>
+                        <div style={{fontSize:9,color:A.t3}}>{t.date}</div>
+                      </div>
                       <span style={{fontSize:14,color:A.t3,transform:isExp?"rotate(90deg)":"none",
                         transition:"transform 200ms",display:"inline-block",lineHeight:1}}>›</span>
                     </div>
@@ -12374,6 +12378,7 @@ function MCobranza({state, dispatch, toast}) {
   const A = makeA(C);
   const {tickets, clients} = state;
   const [tab, setTab] = React.useState("por_cobrar"); // "por_cobrar" | "cobrado"
+  const [search, setSearch] = React.useState("");
 
   const active = React.useMemo(() =>
     tickets.filter(t => !t._deleted), [tickets]);
@@ -12393,8 +12398,19 @@ function MCobranza({state, dispatch, toast}) {
     [active]);
 
   const pendiente = cartera.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0);
-  const porFacturar = cartera.filter(t=>t.status==="entregado");
-  const porCobrar   = cartera.filter(t=>t.status==="facturado");
+
+  const applySearch = arr => {
+    if(!search.trim()) return arr;
+    const lq=search.toLowerCase();
+    return arr.filter(t=>
+      (t.titulo||"").toLowerCase().includes(lq)||
+      mkFolio(t,"OP").toLowerCase().includes(lq)||
+      clients.find(c=>c.id===t.clientId)?.empresa?.toLowerCase().includes(lq)
+    );
+  };
+
+  const porFacturar = applySearch(cartera.filter(t=>t.status==="entregado"));
+  const porCobrar   = applySearch(cartera.filter(t=>t.status==="facturado"));
 
   const mxn = n => safeNumber(n).toLocaleString("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2});
   const daysSince = dateStr => {
@@ -12416,7 +12432,7 @@ function MCobranza({state, dispatch, toast}) {
     toast("Cobrado ✓", "success");
   };
 
-  const listItems = tab === "por_cobrar" ? cartera : cobrados;
+  const listItems = tab === "por_cobrar" ? cartera : applySearch(cobrados);
 
   return (
     <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
@@ -12444,7 +12460,7 @@ function MCobranza({state, dispatch, toast}) {
         </div>
 
         {/* Tab selector */}
-        <div style={{display:"flex",gap:6,marginBottom:14}}>
+        <div style={{display:"flex",gap:6,marginBottom:10}}>
           {[["por_cobrar","Por cobrar"],["cobrado","Ya cobrado"]].map(([id,label])=>(
             <button key={id} onClick={()=>setTab(id)}
               style={{padding:"6px 12px",borderRadius:20,fontSize:10,fontWeight:700,
@@ -12454,6 +12470,20 @@ function MCobranza({state, dispatch, toast}) {
               {label}
             </button>
           ))}
+        </div>
+        {/* Buscador */}
+        <div style={{position:"relative",marginBottom:14}}>
+          <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",fontSize:14,color:C.t3,pointerEvents:"none"}}>⌕</span>
+          <input
+            value={search} onChange={e=>setSearch(e.target.value)}
+            placeholder="Buscar por folio, título o cliente..."
+            style={{width:"100%",boxSizing:"border-box",background:C.bg1,
+              border:`1px solid ${search?C.blueHi:C.border}`,borderRadius:12,
+              padding:"10px 14px 10px 34px",color:C.t1,fontSize:13,outline:"none",
+              fontFamily:"inherit"}}/>
+          {search&&<span onClick={()=>setSearch("")}
+            style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",
+              fontSize:16,color:C.t3,cursor:"pointer",lineHeight:1}}>×</span>}
         </div>
       </div>
 
@@ -12524,6 +12554,7 @@ function CobranzaCard({t, clients, C, A, mxn, daysSince, action, dispatch, toast
       <div style={{padding:"12px 14px"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:6}}>
           <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:9,fontWeight:700,color:A.cyan,fontFamily:"'Courier New',monospace",letterSpacing:"0.04em",marginBottom:2}}>{mkFolio(t,"OP")}</div>
             <div style={{fontSize:12,fontWeight:800,color:A.t1,
               overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:2}}>
               {t.titulo}
