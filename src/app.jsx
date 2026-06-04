@@ -1933,23 +1933,98 @@ function UnitPicker({units, value, onChange, placeholder="Buscar por eco, placa,
 }
 
 // ── TIMELINE COMPONENT ───────────────────────────────────────────────────────
-const Timeline = React.memo(function Timeline({events}) {
+const Timeline = React.memo(function Timeline({events, active=false, mobile=false}) {
+  const C = React.useContext(ThemeCtx);
   if(!events||!events.length) return <div style={{padding:"8px 12px",fontSize:9,color:C.t3}}>Sin eventos registrados.</div>;
+
+  const parseTS = ts => { try { return new Date(ts); } catch { return null; } };
+  const fmtDelta = ms => {
+    const min = Math.round(ms/60000);
+    if(min < 1)  return "+&lt;1 min";
+    if(min < 60) return `+${min} min`;
+    const h = Math.floor(min/60), m = min%60;
+    return m > 0 ? `+${h}h ${m}min` : `+${h}h`;
+  };
+  const fmtTotal = ms => {
+    const min = Math.round(ms/60000);
+    if(min < 60) return `${min} min`;
+    const h = Math.floor(min/60), m = min%60;
+    return m > 0 ? `${h}h ${m}min` : `${h}h`;
+  };
+
+  const parsed = events.map(ev => ({...ev, date: parseTS(ev.ts)}));
+  const first  = parsed[0]?.date;
+  const last   = parsed[parsed.length-1]?.date;
+  const totalMs = (first && last && last > first) ? last - first : 0;
+
+  // If ticket still active, show time since last event
+  const nowMs  = Date.now();
+  const sinceLastMs = last ? nowMs - last.getTime() : 0;
+  const sinceLastMin = Math.round(sinceLastMs / 60000);
+
+  const dotSize   = mobile ? 10 : 8;
+  const tsFont    = mobile ? 11 : 8;
+  const evFont    = mobile ? 13 : 10;
+  const actFont   = mobile ? 11 : 8;
+  const deltaFont = mobile ? 10 : 8;
+  const pad       = mobile ? "10px 14px" : "6px 12px";
+
   return (
-    <div style={{padding:"6px 12px"}}>
-      {events.map((ev,i)=>(
-        <div key={i} style={{display:"flex",gap:10,marginBottom:i<events.length-1?8:0}}>
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",flexShrink:0}}>
-            <div style={{width:8,height:8,borderRadius:"50%",background:C.cyan,border:`1px solid ${C.cyanDim}`,flexShrink:0,marginTop:2}}/>
-            {i<events.length-1&&<div style={{width:1,flex:1,background:C.border,minHeight:12,marginTop:2}}/>}
+    <div style={{padding:pad}}>
+      {parsed.map((ev, i)=>{
+        const prevDate = i > 0 ? parsed[i-1].date : null;
+        const deltaMs  = (prevDate && ev.date && ev.date > prevDate) ? ev.date - prevDate : 0;
+        return (
+          <div key={i}>
+            {/* Delta entre eventos */}
+            {i > 0 && deltaMs > 0 && (
+              <div style={{display:"flex",alignItems:"center",gap:6,margin:`${mobile?4:2}px 0 ${mobile?4:2}px ${Math.floor(dotSize/2)}px`}}>
+                <div style={{width:1,height:mobile?18:14,background:C.border}}/>
+                <span style={{fontSize:deltaFont,color:C.t3,fontFamily:"'Courier New',monospace",
+                  background:C.bg3,padding:"1px 5px",borderRadius:3,border:`1px solid ${C.border}`}}
+                  dangerouslySetInnerHTML={{__html:fmtDelta(deltaMs)}}/>
+              </div>
+            )}
+            <div style={{display:"flex",gap:mobile?12:10,alignItems:"flex-start"}}>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",flexShrink:0}}>
+                <div style={{width:dotSize,height:dotSize,borderRadius:"50%",
+                  background: i===parsed.length-1 ? (active?C.green:C.cyan) : C.cyan,
+                  border:`1.5px solid ${i===parsed.length-1?(active?C.green:C.cyan):C.cyanDim}`,
+                  boxShadow: i===parsed.length-1&&active?`0 0 6px ${C.green}88`:"none",
+                  flexShrink:0,marginTop:2}}/>
+                {i < parsed.length-1 && <div style={{width:1,flex:1,background:C.border,minHeight:mobile?18:12,marginTop:2}}/>}
+              </div>
+              <div style={{paddingBottom: i<parsed.length-1?(mobile?10:8):0, minWidth:0}}>
+                <div style={{fontSize:tsFont,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:1}}>{fmtTS(ev.ts)}</div>
+                <div style={{fontSize:evFont,color:C.t1,lineHeight:1.3,fontWeight:500}}>{ev.evento}</div>
+                {ev.actor&&<div style={{fontSize:actFont,color:C.t2,marginTop:1}}>by {ev.actor}</div>}
+              </div>
+            </div>
           </div>
-          <div style={{paddingBottom:i<events.length-1?8:0,minWidth:0}}>
-            <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:1}}>{fmtTS(ev.ts)}</div>
-            <div style={{fontSize:10,color:C.t1,lineHeight:1.3}}>{ev.evento}</div>
-            {ev.actor&&<div style={{fontSize:8,color:C.t2,marginTop:1}}>{ev.actor}</div>}
-          </div>
+        );
+      })}
+
+      {/* Tiempo activo si sigue en proceso */}
+      {active && sinceLastMin > 0 && (
+        <div style={{display:"flex",alignItems:"center",gap:6,margin:`${mobile?4:2}px 0 ${mobile?8:6}px ${Math.floor(dotSize/2)}px`}}>
+          <div style={{width:1,height:mobile?18:14,background:C.border}}/>
+          <span style={{fontSize:deltaFont,color:C.green,fontFamily:"'Courier New',monospace",
+            background:`${C.green}12`,padding:"1px 5px",borderRadius:3,border:`1px solid ${C.green}33`,
+            animation:"pulse 2s infinite"}}>
+            +{sinceLastMin < 60 ? `${sinceLastMin} min` : `${Math.floor(sinceLastMin/60)}h ${sinceLastMin%60}min`} · en curso
+          </span>
         </div>
-      ))}
+      )}
+
+      {/* Total */}
+      {totalMs > 0 && (
+        <div style={{marginTop:mobile?12:8,padding:mobile?"8px 12px":"5px 8px",
+          background:C.bg3,border:`1px solid ${C.border}`,borderRadius:mobile?8:4,
+          display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontSize:mobile?11:8,color:C.t3,letterSpacing:"0.08em",textTransform:"uppercase"}}>Tiempo total</span>
+          <span style={{fontSize:mobile?13:9,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{fmtTotal(totalMs)}</span>
+        </div>
+      )}
     </div>
   );
 })
@@ -2397,8 +2472,8 @@ function Tickets({state,dispatch,toast,scheduleHardDelete}) {
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0}}>
                     {/* Timeline */}
                     <div style={{borderRight:`1px solid ${C.border}`}}>
-                      <SHdr title="TIMELINE OPERATIVO"/>
-                      <Timeline events={t.timeline||[]}/>
+                      <SHdr title={`TIMELINE · ${(t.timeline||[]).length} EVENTOS`}/>
+                      <Timeline events={t.timeline||[]} active={!CLOSED_SET.has(t.status)&&t.status!=="cancelado"}/>
                       {/* Agregar evento */}
                       <div style={{padding:"6px 10px",borderTop:`1px solid ${C.border}`,display:"flex",gap:5}}>
                         <input value={tlInput.evento} onChange={e=>setTlInput(p=>({...p,evento:e.target.value}))} placeholder="Nuevo evento..."
@@ -6715,6 +6790,7 @@ function MPipeline({state,dispatch,toast}) {
                 {/* Expanded */}
                 {isExp&&(
                   <div style={{borderTop:`1px solid ${C.border}`,padding:"16px",background:C.bg0}}>
+                    {/* KPIs financieros */}
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
                       {[
                         {l:"Precio c/IVA", v:mxn(price),    c:A.t1},
@@ -6730,6 +6806,19 @@ function MPipeline({state,dispatch,toast}) {
                     </div>
                     {t.notes&&<div style={{fontSize:11,color:A.t2,padding:"10px 12px",background:C._dark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.03)",
                       borderRadius:10,marginBottom:12,border:`1px solid ${C.border}`}}>{t.notes}</div>}
+
+                    {/* Timeline completo */}
+                    {(t.timeline||[]).length > 0 && (
+                      <div style={{marginBottom:14,background:C.bg1,border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden"}}>
+                        <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <span style={{fontSize:9,fontWeight:700,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase"}}>Timeline · {(t.timeline||[]).length} eventos</span>
+                          {!CLOSED_SET.has(t.status)&&t.status!=="cancelado"&&(
+                            <span style={{fontSize:9,fontWeight:700,color:A.lime,background:`${A.lime}15`,border:`1px solid ${A.lime}33`,borderRadius:6,padding:"2px 7px"}}>EN CURSO</span>
+                          )}
+                        </div>
+                        <Timeline events={t.timeline||[]} active={!CLOSED_SET.has(t.status)&&t.status!=="cancelado"} mobile/>
+                      </div>
+                    )}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <div style={{fontSize:8,color:A.t3,letterSpacing:"0.08em",textTransform:"uppercase"}}>{t.id}</div>
                       <div style={{display:"flex",gap:7}}>
