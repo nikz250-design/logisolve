@@ -2392,6 +2392,40 @@ function Tickets({state,dispatch,toast,scheduleHardDelete}) {
     return true;
   }),[tickets,fStatus,fPrio,dSearch]);
 
+  // ── Helpers de velocidad ──────────────────────────────────────────────────
+  const parseTSt = ts=>{try{return new Date(ts);}catch{return null;}};
+  const findEvt  = (tl,kw)=>{const ev=(tl||[]).find(e=>(e.evento||"").toLowerCase().includes(kw));return ev?parseTSt(ev.ts):null;};
+  const fmtVel   = ms=>{if(!ms||ms<=0)return"—";const h=Math.round(ms/3600000);if(h<48)return`${h}h`;return`${(h/24).toFixed(1)}d`;};
+
+  // ── Base de conocimiento local (para hint por ticket) ─────────────────────
+  const normKeyT = s=>(s||"").toLowerCase().trim().replace(/\s+/g," ").split(" ").sort().join(" ");
+  const knowledgeMap = useMemo(()=>{
+    const map={};
+    tickets.filter(t=>!t._deleted&&t.titulo).forEach(t=>{
+      const key=normKeyT(t.titulo);
+      if(!key||key.length<3) return;
+      if(!map[key]) map[key]={key,freq:0,success:0,sumUtil:0,sumOpH:0,opHCount:0,suppFreq:{}};
+      const m=map[key];
+      m.freq++;
+      if(OPERADO_SET.has(t.status)){
+        m.success++;
+        m.sumUtil+=safeNumber(t.snap?.uNeta);
+        const tl=t.timeline||[];
+        const rec=findEvt(tl,"solicitud recibida")||findEvt(tl,"ticket creado");
+        const ent=findEvt(tl,"estado: entregado");
+        if(rec&&ent&&ent>rec){m.sumOpH+=(ent-rec)/3600000;m.opHCount++;}
+        if(t.supplierId) m.suppFreq[t.supplierId]=(m.suppFreq[t.supplierId]||0)+1;
+      }
+    });
+    Object.values(map).forEach(m=>{
+      m.avgUtil=m.success>0?m.sumUtil/m.success:0;
+      m.avgOpH=m.opHCount>0?m.sumOpH/m.opHCount:null;
+      const top=Object.entries(m.suppFreq).sort((a,b)=>b[1]-a[1])[0];
+      m.topSuppId=top?.[0]||null;
+    });
+    return map;
+  },[tickets]);
+
   const moveStatus=(id,to)=>{
     const t=tickets.find(t=>t.id===id);
     if(!t||!canTransition(t.status,to)){toast("Transicion no permitida","error");return;}
@@ -2467,8 +2501,36 @@ function Tickets({state,dispatch,toast,scheduleHardDelete}) {
                 <div style={{fontSize:9,color:C.t3,textAlign:"center"}}>{exp?"^":"v"}</div>
               </div>
 
-              {exp&&(
+              {exp&&(()=>{
+                // ── Velocidades de este ticket ──
+                const tl2=t.timeline||[];
+                const rec2=findEvt(tl2,"solicitud recibida")||findEvt(tl2,"ticket creado");
+                const aut2=findEvt(tl2,"estado: autorizado");
+                const ent2=findEvt(tl2,"estado: entregado");
+                const cob2=findEvt(tl2,"estado: cobrado")||findEvt(tl2,"cobrado");
+                const velCom=rec2&&aut2&&aut2>rec2?aut2-rec2:null;
+                const velOp =rec2&&ent2&&ent2>rec2?ent2-rec2:null;
+                const velFin=ent2&&cob2&&cob2>ent2?cob2-ent2:null;
+                const util2=safeNumber(t.snap?.uNeta);
+                const utilPH2=velOp&&velOp>0&&util2>0?util2/(velOp/3600000):null;
+                // ── Knowledge hint ──
+                const hint=knowledgeMap[normKeyT(t.titulo||"")];
+                const showHint=hint&&hint.freq>=2&&hint.success>=1;
+                const topSuppHint=hint?.topSuppId?suppliers.find(s=>s.id===hint.topSuppId):null;
+                return(
                 <div style={{background:C.bg0,borderTop:`1px solid ${C.border}`}}>
+                  {/* Knowledge hint banner */}
+                  {showHint&&(
+                    <div style={{padding:"6px 12px",background:`${C.cyan}09`,borderBottom:`1px solid ${C.cyan}22`,display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+                      <span style={{fontSize:8,fontWeight:800,color:C.cyan,letterSpacing:"0.1em",flexShrink:0}}>★ CONOCIMIENTO</span>
+                      <span style={{fontSize:8,color:C.t2}}>
+                        Ya resolviste este problema <strong style={{color:C.t1}}>{hint.success} vez{hint.success!==1?"es":""}</strong>
+                        {hint.avgOpH?` · Tiempo prom. ${hint.avgOpH<48?hint.avgOpH.toFixed(1)+"h":(hint.avgOpH/24).toFixed(1)+"d"}`:""}
+                        {hint.avgUtil>0?` · Utilidad prom. ${mxn(Math.round(hint.avgUtil))}`:""}
+                        {topSuppHint?` · Proveedor: ${topSuppHint.nombre||topSuppHint.name}`:""}
+                      </span>
+                    </div>
+                  )}
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0}}>
                     {/* Timeline */}
                     <div style={{borderRight:`1px solid ${C.border}`}}>
@@ -2482,6 +2544,34 @@ function Tickets({state,dispatch,toast,scheduleHardDelete}) {
                           style={{width:80,background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"4px 7px",color:C.t2,fontSize:9,outline:"none",fontFamily:"inherit"}}/>
                         <button onClick={()=>addTlEvent(t.id)} style={{padding:"4px 9px",background:C.blue,border:"none",borderRadius:3,color:C.t1,fontSize:9,cursor:"pointer",fontWeight:600}}>+</button>
                       </div>
+                      {/* Velocidades de este ticket */}
+                      {(velCom||velOp||velFin)&&(
+                        <>
+                          <SHdr title="VELOCIDADES DE ESTE TICKET"/>
+                          <div style={{padding:"6px 10px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
+                            <div style={{background:`${C.blue}09`,border:`1px solid ${C.blue}22`,borderRadius:5,padding:"5px 8px"}}>
+                              <div style={{fontSize:7,color:C.blue,fontWeight:700,letterSpacing:"0.1em",marginBottom:2}}>COMERCIAL</div>
+                              <div style={{fontSize:7,color:C.t3,marginBottom:3}}>Rec→Aut</div>
+                              <div style={{fontSize:11,fontWeight:800,color:C.blue,fontFamily:"monospace"}}>{fmtVel(velCom)}</div>
+                            </div>
+                            <div style={{background:`${C.cyan}09`,border:`1px solid ${C.cyan}22`,borderRadius:5,padding:"5px 8px"}}>
+                              <div style={{fontSize:7,color:C.cyan,fontWeight:700,letterSpacing:"0.1em",marginBottom:2}}>OPERATIVA</div>
+                              <div style={{fontSize:7,color:C.t3,marginBottom:3}}>Rec→Ent</div>
+                              <div style={{fontSize:11,fontWeight:800,color:C.cyan,fontFamily:"monospace"}}>{fmtVel(velOp)}</div>
+                            </div>
+                            <div style={{background:`${C.green}09`,border:`1px solid ${C.green}22`,borderRadius:5,padding:"5px 8px"}}>
+                              <div style={{fontSize:7,color:C.green,fontWeight:700,letterSpacing:"0.1em",marginBottom:2}}>FINANCIERA</div>
+                              <div style={{fontSize:7,color:C.t3,marginBottom:3}}>Ent→Cob</div>
+                              <div style={{fontSize:11,fontWeight:800,color:C.green,fontFamily:"monospace"}}>{fmtVel(velFin)}</div>
+                            </div>
+                            <div style={{background:`${C.yellow}09`,border:`1px solid ${C.yellow}33`,borderRadius:5,padding:"5px 8px"}}>
+                              <div style={{fontSize:7,color:C.yellow,fontWeight:700,letterSpacing:"0.1em",marginBottom:2}}>UTIL/HORA</div>
+                              <div style={{fontSize:7,color:C.t3,marginBottom:3}}>Util÷HrsOp</div>
+                              <div style={{fontSize:11,fontWeight:800,color:C.yellow,fontFamily:"monospace"}}>{utilPH2?mxn(Math.round(utilPH2))+"/h":"—"}</div>
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
                     {/* Detalles + acciones */}
                     <div>
@@ -2525,7 +2615,8 @@ function Tickets({state,dispatch,toast,scheduleHardDelete}) {
                     </div>
                   </div>
                 </div>
-              )}
+                );
+              })()}
             </div>
           );
         })}
@@ -9567,11 +9658,51 @@ function MInteligencia({state}) {
     // Revenue perdido por cancelados
     const cancelRevenue=cancelled.reduce((acc,t)=>acc+safeNumber(t.snap?.precioConIVA),0);
 
+    // ── Tres Velocidades ──────────────────────────────────────────────────────
+    // Velocidad Comercial: Recibido → Autorizado
+    const comHours=[];
+    noCanc.forEach(t=>{
+      const tl=t.timeline||[];
+      const rec=findEv(tl,"solicitud recibida")||findEv(tl,"ticket creado")||parseDate(t.date);
+      const aut=findEv(tl,"estado: autorizado");
+      if(rec&&aut&&aut>rec) comHours.push((aut-rec)/3600000);
+    });
+    const avgComercialH=avg(comHours);
+
+    // Velocidad Operativa: Recibido → Entregado (ya calculada en times.total)
+    const avgOperativoH=avg(times.total);
+
+    // Velocidad Financiera: Entregado → Cobrado
+    const finHours=[];
+    all.filter(t=>CASH_SET.has(t.status)).forEach(t=>{
+      const tl=t.timeline||[];
+      const ent=findEv(tl,"estado: entregado");
+      const cob=findEv(tl,"estado: cobrado")||findEv(tl,"cobrado");
+      if(ent&&cob&&cob>ent) finHours.push((cob-ent)/3600000);
+    });
+    const avgCobranzaH=avg(finHours);
+
+    // Utilidad por Hora Operativa (solo operados con timeline completo)
+    let sumUtil=0,sumOpH=0,uhCount=0;
+    noCanc.filter(t=>OPERADO_SET.has(t.status)).forEach(t=>{
+      const tl=t.timeline||[];
+      const rec=findEv(tl,"solicitud recibida")||findEv(tl,"ticket creado")||parseDate(t.date);
+      const ent=findEv(tl,"estado: entregado");
+      const opH=rec&&ent&&ent>rec?(ent-rec)/3600000:null;
+      const util=safeNumber(t.snap?.uNeta);
+      if(opH&&opH>0&&util>0){sumUtil+=util;sumOpH+=opH;uhCount++;}
+    });
+    const utilPorHora=sumOpH>0?sumUtil/sumOpH:null;
+
     return {
       opStages, stageTimings, opTotal:opCounts.recibido||0,
       cancelCount:cancelled.length, cancelRevenue,
       cobStages, carteraTotal, carteraVencida, avgCobDays,
       topDeudores, cobTotal:cobCounts.entregado||0,
+      avgComercialH, avgOperativoH, avgCobranzaH, utilPorHora, uhCount,
+      fmtComercial:fmtH(avgComercialH),
+      fmtOperativo:fmtH(avgOperativoH),
+      fmtFinanciero:fmtH(avgCobranzaH),
     };
   }, [tickets, now]);
 
@@ -9917,6 +10048,135 @@ function MInteligencia({state}) {
   },[tickets]);
   const fmtH_global = h=>h===null?"—":h<48?`${h.toFixed(1)}h`:`${(h/24).toFixed(1)}d`;
 
+  // ── Conocimiento — base de conocimiento operativa ─────────────────────────
+  const [conocimientoSearch, setConocimientoSearch] = useState("");
+  const [conocimientoVista, setConocimientoVista] = useState("frecuencia");
+
+  const conocimientoData = useMemo(()=>{
+    const all = tickets.filter(t=>!t._deleted);
+    const normStr = s=>(s||"").toLowerCase().trim().replace(/\s+/g," ");
+    const normKey = s=>normStr(s).split(" ").sort().join(" ");
+    const parseTS = ts=>{try{return new Date(ts);}catch{return null;}};
+    const findEv  = (tl,kw)=>{const ev=(tl||[]).find(e=>(e.evento||"").toLowerCase().includes(kw));return ev?parseTS(ev.ts):null;};
+    const avgArr  = arr=>arr.length?arr.reduce((s,v)=>s+v,0)/arr.length:null;
+    const fmtH    = h=>h===null?"—":h<48?`${h.toFixed(1)}h`:`${(h/24).toFixed(1)}d`;
+
+    // ── Build problem map ──────────────────────────────────────────────────
+    const probMap={};
+    all.forEach(t=>{
+      const rawKey = normKey(t.titulo||"sin titulo");
+      if(!rawKey||rawKey.length<3) return;
+      if(!probMap[rawKey]) probMap[rawKey]={key:rawKey,name:normStr(t.titulo||"sin titulo"),tickets:[],suppFreq:{}};
+      probMap[rawKey].tickets.push(t);
+      if(t.supplierId&&OPERADO_SET.has(t.status))
+        probMap[rawKey].suppFreq[t.supplierId]=(probMap[rawKey].suppFreq[t.supplierId]||0)+1;
+    });
+
+    // ── Compute stats per problem ──────────────────────────────────────────
+    const problems = Object.values(probMap).map(p=>{
+      const total   = p.tickets.length;
+      const succT   = p.tickets.filter(t=>OPERADO_SET.has(t.status));
+      const cancT   = p.tickets.filter(t=>t.status==="cancelado");
+      const success = succT.length;
+      const cancelled = cancT.length;
+      const successRate = total>0?(success/total)*100:0;
+      const cancelRate  = total>0?(cancelled/total)*100:0;
+      const avgRev  = success>0?succT.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0)/success:0;
+      const avgUtil = success>0?succT.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0)/success:0;
+      // Op hours (rec → ent)
+      const opHrs=[];
+      succT.forEach(t=>{
+        const tl=t.timeline||[];
+        const rec=findEv(tl,"solicitud recibida")||findEv(tl,"ticket creado")||parseDate(t.date);
+        const ent=findEv(tl,"estado: entregado");
+        if(rec&&ent&&ent>rec) opHrs.push((ent-rec)/3600000);
+      });
+      const avgOpH=avgArr(opHrs);
+      // Validation hours (rec → validando)
+      const valHrs=[];
+      p.tickets.forEach(t=>{
+        const tl=t.timeline||[];
+        const rec=findEv(tl,"solicitud recibida")||findEv(tl,"ticket creado")||parseDate(t.date);
+        const val=findEv(tl,"estado: validando");
+        if(rec&&val&&val>rec) valHrs.push((val-rec)/3600000);
+      });
+      const avgValH=avgArr(valHrs);
+      // Sourcing hours (validando → sourcing)
+      const srcHrs=[];
+      p.tickets.forEach(t=>{
+        const tl=t.timeline||[];
+        const val=findEv(tl,"estado: validando");
+        const src=findEv(tl,"estado: sourcing");
+        if(val&&src&&src>val) srcHrs.push((src-val)/3600000);
+      });
+      const avgSrcH=avgArr(srcHrs);
+      // Utilidad/hora
+      const utilPorHora = avgOpH&&avgOpH>0&&avgUtil>0?avgUtil/avgOpH:null;
+      // Top proveedor
+      const suppEntries=Object.entries(p.suppFreq).sort((a,b)=>b[1]-a[1]);
+      const topSuppId=suppEntries[0]?.[0]||null;
+      const topSuppCount=suppEntries[0]?.[1]||0;
+      // Last date
+      const dates=p.tickets.map(t=>parseDate(t.date)).filter(Boolean);
+      const lastDate=dates.length?dates.reduce((a,b)=>a>b?a:b):null;
+      return {key:p.key,name:p.name,total,success,cancelled,successRate,cancelRate,
+        avgRev,avgUtil,avgOpH,avgValH,avgSrcH,utilPorHora,topSuppId,topSuppCount,lastDate,
+        fmtOpH:fmtH(avgOpH),fmtValH:fmtH(avgValH),fmtSrcH:fmtH(avgSrcH)};
+    }).filter(p=>p.name&&p.name.length>=3);
+
+    // ── Sorted views ──────────────────────────────────────────────────────────
+    const byFreq    = [...problems].sort((a,b)=>b.total-a.total).slice(0,20);
+    const byUtil    = [...problems].filter(p=>p.success>0).sort((a,b)=>b.avgUtil-a.avgUtil).slice(0,20);
+    const bySuccess = [...problems].filter(p=>p.total>=2).sort((a,b)=>b.successRate-a.successRate).slice(0,20);
+    const byCancel  = [...problems].filter(p=>p.cancelled>0).sort((a,b)=>b.cancelRate-a.cancelRate).slice(0,20);
+
+    // ── Clientes con más incidencias ─────────────────────────────────────────
+    const clientMap={};
+    all.forEach(t=>{
+      if(!t.clientId) return;
+      if(!clientMap[t.clientId]) clientMap[t.clientId]={clientId:t.clientId,count:0,success:0,util:0,problems:new Set()};
+      clientMap[t.clientId].count++;
+      if(OPERADO_SET.has(t.status)){
+        clientMap[t.clientId].success++;
+        clientMap[t.clientId].util+=safeNumber(t.snap?.uNeta);
+      }
+      if(t.titulo) clientMap[t.clientId].problems.add(normKey(t.titulo));
+    });
+    const topClientes=Object.values(clientMap)
+      .sort((a,b)=>b.count-a.count).slice(0,10)
+      .map(d=>({...d,problems:d.problems.size}));
+
+    // ── Vehículos con más fallas ─────────────────────────────────────────────
+    const unitMap={};
+    all.forEach(t=>{
+      const ids=t.unitIds?.length?t.unitIds:t.unitId?[t.unitId]:[];
+      ids.forEach(uid=>{
+        if(!unitMap[uid]) unitMap[uid]={unitId:uid,count:0,success:0,util:0,problems:new Set()};
+        unitMap[uid].count++;
+        if(OPERADO_SET.has(t.status)){unitMap[uid].success++;unitMap[uid].util+=safeNumber(t.snap?.uNeta);}
+        if(t.titulo) unitMap[uid].problems.add(normKey(t.titulo));
+      });
+    });
+    const topUnidades=Object.values(unitMap)
+      .sort((a,b)=>b.count-a.count).slice(0,10)
+      .map(d=>({...d,problems:d.problems.size}));
+
+    // ── Proveedores más efectivos ─────────────────────────────────────────────
+    const suppMap={};
+    all.filter(t=>OPERADO_SET.has(t.status)&&t.supplierId).forEach(t=>{
+      const sid=t.supplierId;
+      if(!suppMap[sid]) suppMap[sid]={supplierId:sid,count:0,util:0,parts:new Set()};
+      suppMap[sid].count++;
+      suppMap[sid].util+=safeNumber(t.snap?.uNeta);
+      if(t.titulo) suppMap[sid].parts.add(normKey(t.titulo));
+    });
+    const topProveedores=Object.values(suppMap)
+      .sort((a,b)=>b.count-a.count).slice(0,10)
+      .map(d=>({...d,parts:d.parts.size}));
+
+    return {problems,byFreq,byUtil,bySuccess,byCancel,topClientes,topUnidades,topProveedores};
+  },[tickets,clients]);
+
   // ── AI payload — enriched with panel context ──────────────────────────────
   const aiPayload = useMemo(() => {
     const active = tickets.filter(t=>!t._deleted);
@@ -10041,6 +10301,7 @@ function MInteligencia({state}) {
     {id:"proveedores",    label:"Proveedores"},
     {id:"clientes",       label:"Clientes"},
     {id:"pipeline",       label:"Pipeline"},
+    {id:"conocimiento",   label:"Conocimiento"},
     {id:"partes",         label:"Partes"},
     {id:"sourceabilidad", label:"Sourcing"},
     {id:"oportunidad",    label:"Oportunidad"},
@@ -10345,6 +10606,36 @@ function MInteligencia({state}) {
       {iTab==="pipeline" && (
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
 
+          {/* ── Tres Velocidades ── */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <div style={{...cardStyle,background:`${C.blue}08`,border:`1px solid ${C.blue}22`,padding:"12px 14px"}}>
+              <div style={{fontSize:8,fontWeight:700,color:C.blue,letterSpacing:"0.14em",marginBottom:2}}>VELOCIDAD COMERCIAL</div>
+              <div style={{fontSize:9,color:C.t3,marginBottom:8}}>Recibido → Autorizado</div>
+              <div style={{fontSize:22,fontWeight:800,color:C.blue,fontFamily:"'Courier New',monospace",lineHeight:1}}>{pipelineData.fmtComercial}</div>
+              <div style={{fontSize:9,color:C.t3,marginTop:4}}>¿Qué tan rápido convertimos?</div>
+            </div>
+            <div style={{...cardStyle,background:`${C.cyan}08`,border:`1px solid ${C.cyan}22`,padding:"12px 14px"}}>
+              <div style={{fontSize:8,fontWeight:700,color:C.cyan,letterSpacing:"0.14em",marginBottom:2}}>VELOCIDAD OPERATIVA</div>
+              <div style={{fontSize:9,color:C.t3,marginBottom:8}}>Recibido → Entregado</div>
+              <div style={{fontSize:22,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",lineHeight:1}}>{pipelineData.fmtOperativo}</div>
+              <div style={{fontSize:9,color:C.t3,marginTop:4}}>¿Qué tan rápido resolvemos?</div>
+            </div>
+            <div style={{...cardStyle,background:`${C.green}08`,border:`1px solid ${C.green}22`,padding:"12px 14px"}}>
+              <div style={{fontSize:8,fontWeight:700,color:C.green,letterSpacing:"0.14em",marginBottom:2}}>VELOCIDAD FINANCIERA</div>
+              <div style={{fontSize:9,color:C.t3,marginBottom:8}}>Entregado → Cobrado</div>
+              <div style={{fontSize:22,fontWeight:800,color:C.green,fontFamily:"'Courier New',monospace",lineHeight:1}}>{pipelineData.fmtFinanciero}</div>
+              <div style={{fontSize:9,color:C.t3,marginTop:4}}>¿Qué tan rápido cobramos?</div>
+            </div>
+            <div style={{...cardStyle,background:`${C.yellow}08`,border:`1px solid ${C.yellow}33`,padding:"12px 14px"}}>
+              <div style={{fontSize:8,fontWeight:700,color:C.yellow,letterSpacing:"0.14em",marginBottom:2}}>UTIL. POR HORA OP.</div>
+              <div style={{fontSize:9,color:C.t3,marginBottom:8}}>Utilidad ÷ Horas operativas</div>
+              <div style={{fontSize:22,fontWeight:800,color:C.yellow,fontFamily:"'Courier New',monospace",lineHeight:1}}>
+                {pipelineData.utilPorHora!==null?mxn(Math.round(pipelineData.utilPorHora))+"/h":"—"}
+              </div>
+              <div style={{fontSize:9,color:C.t3,marginTop:4}}>Rentabilidad operativa pura{pipelineData.uhCount>0?` · ${pipelineData.uhCount} tkts`:""}</div>
+            </div>
+          </div>
+
           {/* Alerta tickets detenidos */}
           {operacionData.filter(d=>d.stalled).length>0&&(
             <div style={{background:`${C.red}0a`,border:`1.5px solid ${C.red}44`,borderRadius:14,padding:"12px 14px"}}>
@@ -10497,6 +10788,203 @@ function MInteligencia({state}) {
           </div>
         </div>
       )}
+
+      {/* ── PANEL: Conocimiento ─────────────────────────────────────────────── */}
+      {iTab==="conocimiento" && (()=>{
+        const VISTAS=[
+          {id:"frecuencia",  label:"Más frecuentes"},
+          {id:"rentabilidad",label:"Más rentables"},
+          {id:"exito",       label:"Mayor éxito"},
+          {id:"cancelacion", label:"Mayor cancelación"},
+          {id:"clientes",    label:"Clientes"},
+          {id:"vehiculos",   label:"Vehículos"},
+          {id:"proveedores", label:"Proveedores"},
+        ];
+        const vistaData = {
+          frecuencia:   conocimientoData.byFreq,
+          rentabilidad: conocimientoData.byUtil,
+          exito:        conocimientoData.bySuccess,
+          cancelacion:  conocimientoData.byCancel,
+        };
+        const lq = conocimientoSearch.trim().toLowerCase();
+        const getList = (key)=>{
+          const base = vistaData[key]||[];
+          if(!lq) return base;
+          return base.filter(p=>p.name.includes(lq));
+        };
+        const suppName = id => suppliers.find(s=>s.id===id)?.nombre||suppliers.find(s=>s.id===id)?.name||id||"—";
+        const clientName = id => clients.find(c=>c.id===id)?.empresa||id||"—";
+        const unitDesc = id => {const u=units.find(u=>u.id===id);return u?`${u.marca} ${u.modelo}${u.economico?" (Eco."+u.economico+")":""}`:"—";};
+        return (
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            {/* Search */}
+            <div style={{position:"relative"}}>
+              <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",fontSize:13,color:C.t3}}>🔍</span>
+              <input
+                value={conocimientoSearch}
+                onChange={e=>setConocimientoSearch(e.target.value)}
+                placeholder="Buscar problema, pieza, síntoma..."
+                style={{width:"100%",boxSizing:"border-box",paddingLeft:36,paddingRight:12,paddingTop:10,paddingBottom:10,
+                  background:C.card,border:`1.5px solid ${conocimientoSearch?C.cyan:C.border}`,borderRadius:12,
+                  color:C.t1,fontSize:13,outline:"none",fontFamily:"inherit"}}
+              />
+            </div>
+
+            {/* Vista pills */}
+            <div style={{overflowX:"auto",scrollbarWidth:"none",WebkitOverflowScrolling:"touch"}}>
+              <div style={{display:"flex",gap:6,width:"max-content",paddingBottom:2}}>
+                {VISTAS.map(v=>(
+                  <button key={v.id} onClick={()=>setConocimientoVista(v.id)}
+                    style={{padding:"6px 12px",borderRadius:16,border:"none",fontSize:11,fontWeight:600,cursor:"pointer",
+                      whiteSpace:"nowrap",touchAction:"manipulation",WebkitTapHighlightColor:"transparent",
+                      background:conocimientoVista===v.id?A.pillBg:"transparent",
+                      color:conocimientoVista===v.id?A.pillColor:C.t3,
+                      outline:conocimientoVista===v.id?`1.5px solid ${A.pillBorder}`:`1px solid ${A.pillBorderInactive}`}}>
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* ─ Problema lists ─ */}
+            {["frecuencia","rentabilidad","exito","cancelacion"].includes(conocimientoVista)&&(()=>{
+              const list = getList(conocimientoVista);
+              const isEmpty = list.length===0;
+              return(
+                <div style={{...cardStyle,padding:0,overflow:"hidden"}}>
+                  {isEmpty?(
+                    <div style={{padding:"20px",color:C.t3,fontSize:12,textAlign:"center"}}>
+                      {lq?`Sin resultados para "${conocimientoSearch}"`:"Sin datos suficientes aún."}
+                    </div>
+                  ):list.map((p,i)=>{
+                    const topS = p.topSuppId?suppliers.find(s=>s.id===p.topSuppId):null;
+                    return(
+                      <div key={p.key} style={{padding:"12px 14px",borderBottom:i<list.length-1?`1px solid ${C.border}`:"none"}}>
+                        {/* Nombre + contadores */}
+                        <div style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:6}}>
+                          <span style={{fontSize:11,fontWeight:700,color:C.t3,flexShrink:0,marginTop:1}}>#{i+1}</span>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:12,fontWeight:700,color:C.t1,lineHeight:1.3,wordBreak:"break-word"}}>{p.name}</div>
+                            <div style={{display:"flex",gap:6,marginTop:4,flexWrap:"wrap"}}>
+                              <span style={{fontSize:10,color:C.cyan,fontWeight:700}}>{p.total}x solicitado</span>
+                              <span style={{fontSize:10,color:C.green}}>{p.success} entregados ({Math.round(p.successRate)}%)</span>
+                              {p.cancelled>0&&<span style={{fontSize:10,color:C.red}}>{p.cancelled} cancelados ({Math.round(p.cancelRate)}%)</span>}
+                            </div>
+                          </div>
+                        </div>
+                        {/* KPIs */}
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6}}>
+                          <div style={{background:C.bg3,borderRadius:7,padding:"6px 8px"}}>
+                            <div style={{fontSize:8,color:C.t3,marginBottom:2}}>UTIL. PROM</div>
+                            <div style={{fontSize:11,fontWeight:700,color:p.avgUtil>=0?C.green:C.red,fontFamily:"monospace"}}>{mxn(Math.round(p.avgUtil))}</div>
+                          </div>
+                          <div style={{background:C.bg3,borderRadius:7,padding:"6px 8px"}}>
+                            <div style={{fontSize:8,color:C.t3,marginBottom:2}}>T. OP. PROM</div>
+                            <div style={{fontSize:11,fontWeight:700,color:C.t1,fontFamily:"monospace"}}>{p.fmtOpH}</div>
+                          </div>
+                          <div style={{background:`${C.cyan}0a`,borderRadius:7,padding:"6px 8px"}}>
+                            <div style={{fontSize:8,color:C.t3,marginBottom:2}}>VALIDACIÓN</div>
+                            <div style={{fontSize:11,fontWeight:700,color:C.cyan,fontFamily:"monospace"}}>{p.fmtValH}</div>
+                          </div>
+                          <div style={{background:`${C.cyan}0a`,borderRadius:7,padding:"6px 8px"}}>
+                            <div style={{fontSize:8,color:C.t3,marginBottom:2}}>SOURCING</div>
+                            <div style={{fontSize:11,fontWeight:700,color:C.cyan,fontFamily:"monospace"}}>{p.fmtSrcH}</div>
+                          </div>
+                        </div>
+                        {/* Proveedor + util/hora */}
+                        {(topS||p.utilPorHora)&&(
+                          <div style={{display:"flex",gap:8,marginTop:6,flexWrap:"wrap"}}>
+                            {topS&&(
+                              <div style={{fontSize:10,color:C.t2,background:C.bg3,borderRadius:6,padding:"3px 8px"}}>
+                                Proveedor más efectivo: <span style={{color:C.t1,fontWeight:700}}>{topS.nombre||topS.name}</span>
+                                {p.topSuppCount>1&&<span style={{color:C.t3}}> ({p.topSuppCount}x)</span>}
+                              </div>
+                            )}
+                            {p.utilPorHora&&(
+                              <div style={{fontSize:10,color:C.yellow,background:`${C.yellow}10`,borderRadius:6,padding:"3px 8px",fontWeight:700}}>
+                                {mxn(Math.round(p.utilPorHora))}/h operativa
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
+            {/* ─ Clientes con más incidencias ─ */}
+            {conocimientoVista==="clientes"&&(
+              <div style={{...cardStyle,padding:0,overflow:"hidden"}}>
+                {conocimientoData.topClientes.length===0?(
+                  <div style={{padding:20,color:C.t3,fontSize:12,textAlign:"center"}}>Sin datos de clientes.</div>
+                ):conocimientoData.topClientes.filter(d=>!lq||clientName(d.clientId).toLowerCase().includes(lq)).map((d,i)=>(
+                  <div key={d.clientId||i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:i<conocimientoData.topClientes.length-1?`1px solid ${C.border}`:"none"}}>
+                    <span style={{fontSize:12,fontWeight:800,color:C.t3,flexShrink:0,minWidth:24}}>#{i+1}</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{clientName(d.clientId)}</div>
+                      <div style={{fontSize:10,color:C.t3,marginTop:2}}>
+                        {d.success} entregados · {d.problems} tipo{d.problems!==1?"s":""} de problema
+                      </div>
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0}}>
+                      <div style={{fontSize:13,fontWeight:800,color:C.cyan,fontFamily:"monospace"}}>{d.count}x</div>
+                      <div style={{fontSize:10,color:C.green,fontFamily:"monospace"}}>{mxn(Math.round(d.util))}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ─ Vehículos con más fallas ─ */}
+            {conocimientoVista==="vehiculos"&&(
+              <div style={{...cardStyle,padding:0,overflow:"hidden"}}>
+                {conocimientoData.topUnidades.length===0?(
+                  <div style={{padding:20,color:C.t3,fontSize:12,textAlign:"center"}}>Sin unidades vinculadas aún.</div>
+                ):conocimientoData.topUnidades.filter(d=>!lq||unitDesc(d.unitId).toLowerCase().includes(lq)).map((d,i)=>(
+                  <div key={d.unitId||i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:i<conocimientoData.topUnidades.length-1?`1px solid ${C.border}`:"none"}}>
+                    <span style={{fontSize:12,fontWeight:800,color:C.t3,flexShrink:0,minWidth:24}}>#{i+1}</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{unitDesc(d.unitId)}</div>
+                      <div style={{fontSize:10,color:C.t3,marginTop:2}}>
+                        {d.success} resueltos · {d.problems} tipo{d.problems!==1?"s":""} de falla
+                      </div>
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0}}>
+                      <div style={{fontSize:13,fontWeight:800,color:C.red,fontFamily:"monospace"}}>{d.count}x</div>
+                      <div style={{fontSize:10,color:C.green,fontFamily:"monospace"}}>{mxn(Math.round(d.util))}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ─ Proveedores más efectivos ─ */}
+            {conocimientoVista==="proveedores"&&(
+              <div style={{...cardStyle,padding:0,overflow:"hidden"}}>
+                {conocimientoData.topProveedores.length===0?(
+                  <div style={{padding:20,color:C.t3,fontSize:12,textAlign:"center"}}>Sin proveedores con operaciones concretadas.</div>
+                ):conocimientoData.topProveedores.filter(d=>!lq||suppName(d.supplierId).toLowerCase().includes(lq)).map((d,i)=>(
+                  <div key={d.supplierId||i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:i<conocimientoData.topProveedores.length-1?`1px solid ${C.border}`:"none"}}>
+                    <span style={{fontSize:12,fontWeight:800,color:C.t3,flexShrink:0,minWidth:24}}>#{i+1}</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{suppName(d.supplierId)}</div>
+                      <div style={{fontSize:10,color:C.t3,marginTop:2}}>
+                        {d.parts} tipo{d.parts!==1?"s":""} de parte surtida
+                      </div>
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0}}>
+                      <div style={{fontSize:13,fontWeight:800,color:C.green,fontFamily:"monospace"}}>{d.count}x</div>
+                      <div style={{fontSize:10,color:C.green,fontFamily:"monospace"}}>{mxn(Math.round(d.util))}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── PANEL 5 & 6: Partes ─────────────────────────────────────────────── */}
       {iTab==="partes" && (
