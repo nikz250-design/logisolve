@@ -8738,14 +8738,18 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                         <div style={{fontSize:9,color:A.t3,fontFamily:"'Courier New',monospace",marginBottom:3,letterSpacing:"0.04em"}}>
                           {mkFolio(t,"OP")}
                         </div>
-                        {(cl||ticketUnits.length>0)&&(
-                          <div style={{fontSize:10,color:A.t3,
-                            overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                            {cl&&<span style={{color:A.t2}}>{cl.empresa}</span>}
-                            {cl&&ticketUnits.length>0&&<span style={{margin:"0 4px"}}>·</span>}
-                            {ticketUnits.length>0&&<span>{fmtUnits(ticketUnits)}</span>}
+                        {cl&&(
+                          <div style={{fontSize:10,color:A.t2,marginBottom:ticketUnits.length>0?2:0}}>
+                            {cl.empresa}
                           </div>
                         )}
+                        {ticketUnits.map(u=>(
+                          <div key={u.id} style={{fontSize:10,color:A.t3,lineHeight:1.4}}>
+                            {u.economico&&<span style={{color:A.cyan,fontFamily:"'Courier New',monospace",fontWeight:700,marginRight:5}}>Eco.{u.economico}</span>}
+                            <span>{u.marca} {u.modelo}{u.anio?" "+u.anio:""}</span>
+                            {u.vin&&<span style={{display:"block",fontSize:9,color:A.t3,fontFamily:"'Courier New',monospace",letterSpacing:"0.04em"}}>VIN {u.vin}</span>}
+                          </div>
+                        ))}
                       </div>
 
                       {/* Expanded detail */}
