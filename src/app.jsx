@@ -2641,8 +2641,10 @@ function lookupKB(query, tickets, suppliers) {
     return words.some(w=>tl.includes(w));
   });
   if(!matches.length) return null;
-  const success = matches.filter(t=>OPERADO_SET.has(t.status));
+  const success  = matches.filter(t=>OPERADO_SET.has(t.status));
   const canceled = matches.filter(t=>t.status==="cancelado");
+  // closed = solo tickets con resultado conocido (excluye en-progreso del denominador de éxito)
+  const closedCount = success.length + canceled.length;
   let sumUtil=0,sumCosto=0,sumPrecio=0,fCount=0,sumOpH=0,opHCount=0,suppFreq={};
   success.forEach(t=>{
     sumUtil   += safeNumber(t.snap?.uNeta);
@@ -2662,12 +2664,16 @@ function lookupKB(query, tickets, suppliers) {
     return parse(b.date)-parse(a.date);
   })[0];
   return {
-    total:matches.length, success:success.length, canceled:canceled.length,
-    rate:matches.length>0?Math.round((success.length/matches.length)*100):0,
+    total:matches.length,
+    resolved:success.length,   // entregado+ (el número operativamente relevante)
+    canceled:canceled.length,
+    // tasa = éxitos / (éxitos + cancelados) — excluye en-progreso del denominador
+    rate:closedCount>0?Math.round((success.length/closedCount)*100):null,
     avgUtil:fCount>0?sumUtil/fCount:null,
     avgCosto:fCount>0?sumCosto/fCount:null,
     avgPrecio:fCount>0?sumPrecio/fCount:null,
-    avgOpH:opHCount>0?sumOpH/opHCount:null,
+    // tiempo solo si hay ≥2 puntos para que el promedio sea significativo
+    avgOpH:opHCount>=2?sumOpH/opHCount:null,
     topSuppName:topSupp?.nombre||topSupp?.name||null,
     lastDate:lastSuccess?.date||null,
   };
@@ -3063,7 +3069,8 @@ function Cotizador({state,dispatch,toast}) {
                         <div style={{marginBottom:6,background:`${C.cyan}0C`,border:`1px solid ${C.cyan}28`,borderRadius:4,padding:"7px 9px"}}>
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                             <span style={{fontSize:8,fontWeight:700,color:C.cyan,letterSpacing:"0.1em"}}>
-                              ★ HISTORIAL · {kbHints[i].total} caso{kbHints[i].total!==1?"s":""} · {kbHints[i].rate}% éxito
+                              ★ HISTORIAL · {kbHints[i].resolved} entregado{kbHints[i].resolved!==1?"s":""}{kbHints[i].canceled>0?` · ${kbHints[i].canceled} cancel.`:""}
+                              {kbHints[i].rate!==null&&<span style={{marginLeft:6,color:kbHints[i].rate>=80?C.green:kbHints[i].rate>=50?C.yellow:C.red}}>{kbHints[i].rate}% éxito</span>}
                             </span>
                             {kbHints[i].avgCosto>0&&(
                               <button onClick={()=>applyKBHint(i,kbHints[i])}
@@ -7483,7 +7490,9 @@ function MCotizador({state,dispatch,toast}) {
                 <div style={{margin:"8px 0",background:`${C.cyan}0E`,border:`1px solid ${C.cyan}30`,borderRadius:10,padding:"10px 12px"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                     <span style={{fontSize:11,fontWeight:700,color:A.cyan,letterSpacing:"0.06em"}}>
-                      ★ {kbHints[i].total} caso{kbHints[i].total!==1?"s":""} · {kbHints[i].rate}% éxito
+                      ★ {kbHints[i].resolved} entregado{kbHints[i].resolved!==1?"s":""}
+                      {kbHints[i].canceled>0&&<span style={{color:A.red,marginLeft:4}}>{kbHints[i].canceled} cancel.</span>}
+                      {kbHints[i].rate!==null&&<span style={{color:kbHints[i].rate>=80?A.lime:kbHints[i].rate>=50?A.amber:A.red,marginLeft:4}}>{kbHints[i].rate}% éxito</span>}
                     </span>
                     {kbHints[i].avgCosto>0&&(
                       <button onPointerDown={e=>{e.preventDefault();applyKBHint(i,kbHints[i]);}}
@@ -8921,7 +8930,9 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                                 <div style={{marginBottom:8,background:`${C.cyan}0E`,border:`1px solid ${C.cyan}30`,borderRadius:8,padding:"9px 12px"}}>
                                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
                                     <span style={{fontSize:10,fontWeight:700,color:A.cyan,letterSpacing:"0.06em"}}>
-                                      ★ {kbHints[idx].total} caso{kbHints[idx].total!==1?"s":""} · {kbHints[idx].rate}% éxito
+                                      ★ {kbHints[idx].resolved} entregado{kbHints[idx].resolved!==1?"s":""}
+                                      {kbHints[idx].canceled>0&&<span style={{color:A.red,marginLeft:4}}>{kbHints[idx].canceled} cancel.</span>}
+                                      {kbHints[idx].rate!==null&&<span style={{color:kbHints[idx].rate>=80?A.lime:kbHints[idx].rate>=50?A.amber:A.red,marginLeft:4}}>{kbHints[idx].rate}% éxito</span>}
                                     </span>
                                     {kbHints[idx].avgCosto>0&&(
                                       <button onPointerDown={e=>{e.preventDefault();applyKBHint(idx,kbHints[idx]);}}
