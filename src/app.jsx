@@ -2627,7 +2627,53 @@ function Tickets({state,dispatch,toast,scheduleHardDelete}) {
 
 // ── COTIZADOR ────────────────────────────────────────────────────────────────
 
-// lookupKB — busca casos históricos similares por palabras clave.
+// lookupByFamilia — motor primario de inteligencia. Agrupa por familia de problema.
+// Retorna avgCosto CON IVA (listo para aplicar en el campo "Costo unitario c/IVA").
+function lookupByFamilia(familiaKey, tickets, suppliers) {
+  if(!familiaKey||familiaKey==="otros") return null;
+  const familiaLabel = FAMILIAS_DEF.find(f=>f.key===familiaKey)?.label || familiaKey;
+  const matches = (tickets||[]).filter(t=>!t._deleted&&(
+    t.familia===familiaKey ||
+    (!t.familia && classifyFamilia(t.titulo||"")===familiaKey)
+  ));
+  if(!matches.length) return null;
+  const success  = matches.filter(t=>OPERADO_SET.has(t.status));
+  const canceled = matches.filter(t=>t.status==="cancelado");
+  const closedCount = success.length + canceled.length;
+  let sumUtil=0,sumCostoUnit=0,fCount=0,sumOpH=0,opHCount=0,suppFreq={};
+  success.forEach(t=>{
+    sumUtil += safeNumber(t.snap?.uNeta);
+    // Costo con IVA: usar primera línea si existe, si no costoBase * 1.16
+    const lc = t.lineas?.length ? safeNumber(t.lineas[0]?.costoUnit) : 0;
+    sumCostoUnit += lc>0 ? lc : safeNumber(t.snap?.costoBase)*1.16;
+    fCount++;
+    const tl=t.timeline||[];
+    const recEv=tl.find(e=>(e.evento||"").toLowerCase().includes("solicitud recibida"))||tl.find(e=>(e.evento||"").toLowerCase().includes("ticket creado"));
+    const entEv=tl.find(e=>(e.evento||"").toLowerCase().includes("estado: entregado"));
+    if(recEv&&entEv){const r=new Date(recEv.ts),en=new Date(entEv.ts);if(!isNaN(r)&&!isNaN(en)&&en>r){sumOpH+=(en-r)/3600000;opHCount++;}}
+    if(t.supplierId) suppFreq[t.supplierId]=(suppFreq[t.supplierId]||0)+1;
+  });
+  const topSuppEntry=Object.entries(suppFreq).sort((a,b)=>b[1]-a[1])[0];
+  const topSupp=topSuppEntry?(suppliers||[]).find(s=>s.id===topSuppEntry[0]):null;
+  const lastSuccess=[...success].sort((a,b)=>{
+    const parse=d=>{const p=(d||"").split("/");return p.length===3?new Date(+p[2],+p[1]-1,+p[0]):new Date(0);};
+    return parse(b.date)-parse(a.date);
+  })[0];
+  return {
+    familiaKey,familiaLabel,
+    total:matches.length,
+    resolved:success.length,
+    canceled:canceled.length,
+    rate:closedCount>0?Math.round((success.length/closedCount)*100):null,
+    avgUtil:fCount>0?sumUtil/fCount:null,
+    avgCosto:fCount>0?sumCostoUnit/fCount:null,
+    avgOpH:opHCount>=2?sumOpH/opHCount:null,
+    topSuppName:topSupp?.nombre||topSupp?.name||null,
+    lastDate:lastSuccess?.date||null,
+  };
+}
+
+// lookupKB — fallback textual cuando no hay familia detectada.
 // Retorna null si no hay coincidencias, o un objeto con estadísticas.
 // Preposiciones, artículos y palabras cortas del español que no aportan al match
 const KB_STOPWORDS = new Set(["de","el","la","los","las","un","una","en","con","por","para","del","al","y","o","a","su","se","no","es","si"]);
@@ -2784,13 +2830,14 @@ function Cotizador({state,dispatch,toast}) {
   const removeLinea = useCallback(idx=>setLineas(p=>p.filter((_,i)=>i!==idx)),[]);
   const addLinea    = useCallback(()=>setLineas(p=>[...p,emptyLine(opType,priority,activeMods)]),[opType,priority,activeMods]);
 
-  // ── Knowledge Base hints — se actualizan al tipear en DESCRIPCION ────────
-  const kbHints = useMemo(()=>lineas.map(l=>lookupKB(l.titulo,state.tickets,state.suppliers)),
-    [lineas, state.tickets, state.suppliers]);
+  // ── Knowledge Base hints — familia de problema es el motor primario ──────
+  const kbHints = useMemo(()=>lineas.map(l=>{
+    const fk=classifyFamilia(l.titulo);
+    if(fk&&fk!=="otros") return lookupByFamilia(fk,state.tickets,state.suppliers);
+    return lookupKB(l.titulo,state.tickets,state.suppliers);
+  }),[lineas,state.tickets,state.suppliers]);
   const applyKBHint = useCallback((idx,hint)=>{
-    const patch={};
-    if(hint.avgCosto>0) patch.costoUnit=Math.round(hint.avgCosto);
-    updateLinea(idx,patch);
+    if(hint.avgCosto>0) updateLinea(idx,{costoUnit:Math.round(hint.avgCosto)});
   },[updateLinea]);
 
   // Reset custom margin when opType/priority changes (state update during render — safe pattern)
@@ -2823,6 +2870,7 @@ function Cotizador({state,dispatch,toast}) {
     const tkt = {
       id:mkTicketId(fecha), titulo, opId:opType, opShort:opMeta.short, priority,
       clientId, supplierId, unitId,
+      familia:classifyFamilia(titulo),
       partRef:lineas.map(l=>l.partRef).filter(Boolean).join(", "),
       date:fecha, status, payType,
       promesaPago:payType==="credit"?promesa:null,
@@ -3080,9 +3128,10 @@ function Cotizador({state,dispatch,toast}) {
                       {kbHints[i]&&l.titulo.trim().length>=3&&(
                         <div style={{marginBottom:6,background:`${C.cyan}0C`,border:`1px solid ${C.cyan}28`,borderRadius:4,padding:"7px 9px"}}>
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                            <span style={{fontSize:8,fontWeight:700,color:C.cyan,letterSpacing:"0.1em"}}>
-                              ★ HISTORIAL · {kbHints[i].resolved} entregado{kbHints[i].resolved!==1?"s":""}{kbHints[i].canceled>0?` · ${kbHints[i].canceled} cancel.`:""}
-                              {kbHints[i].rate!==null&&<span style={{marginLeft:6,color:kbHints[i].rate>=80?C.green:kbHints[i].rate>=50?C.yellow:C.red}}>{kbHints[i].rate}% éxito</span>}
+                            <span style={{fontSize:8,fontWeight:700,color:C.cyan,letterSpacing:"0.1em",display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
+                              {kbHints[i].familiaLabel&&<span style={{background:`${C.cyan}25`,color:C.cyan,borderRadius:3,padding:"1px 6px",fontSize:7,fontWeight:800,letterSpacing:"0.15em"}}>{kbHints[i].familiaLabel.toUpperCase()}</span>}
+                              ★ {kbHints[i].resolved} entregado{kbHints[i].resolved!==1?"s":""}{kbHints[i].canceled>0&&<span style={{color:C.red}}> · {kbHints[i].canceled} cancel.</span>}
+                              {kbHints[i].rate!==null&&<span style={{marginLeft:4,color:kbHints[i].rate>=80?C.green:kbHints[i].rate>=50?C.yellow:C.red}}>{kbHints[i].rate}% éxito</span>}
                             </span>
                             {kbHints[i].avgCosto>0&&(
                               <button onClick={()=>applyKBHint(i,kbHints[i])}
@@ -7094,10 +7143,12 @@ function MPipeline({state,dispatch,toast}) {
 
 // ── MCotizador — Flujo unificado mobile ────────────────────────────────────────
 // ── PartPicker — Autocomplete inteligente del catálogo ──────────────────────
-function PartPicker({parts, value, onChange, onSelect, placeholder, mobile}) {
+function PartPicker({parts, value, onChange, onSelect, placeholder, mobile, onOpenChange}) {
   const C = React.useContext(ThemeCtx);
   const [open, setOpen] = useState(false);
   const ref  = useRef();
+
+  useEffect(()=>{ onOpenChange?.(open); },[open]);
 
   useEffect(()=>{
     const h=e=>{if(ref.current&&!ref.current.contains(e.target)){setOpen(false);}};
@@ -7201,6 +7252,7 @@ function MCotizador({state,dispatch,toast}) {
   const [isr]                   = useState(20);
   const [lineas,setLineas]      = useState([emptyLine("consumable","P3",[])]);
   const [partQ,setPartQ]        = useState({});
+  const [pickerOpen,setPickerOpen] = useState({});
   const [clientId,setClientId]  = useState("");
   const [unitId,setUnitId]      = useState("");
   const [supplierId,setSupplierId] = useState("");
@@ -7233,9 +7285,12 @@ function MCotizador({state,dispatch,toast}) {
     upd(i,{titulo:p.nombre,partRef:p.oem||"",costoUnit:p.ultimoPrecio||0,manualPrice:String(p.ultimoPrecio||0)});
   };
 
-  // ── Knowledge Base hints ─────────────────────────────────────────────────
-  const kbHints = useMemo(()=>lineas.map(l=>lookupKB(l.titulo,state.tickets,state.suppliers)),
-    [lineas, state.tickets, state.suppliers]);
+  // ── Knowledge Base hints — familia como motor primario ──────────────────
+  const kbHints = useMemo(()=>lineas.map(l=>{
+    const fk=classifyFamilia(l.titulo);
+    if(fk&&fk!=="otros") return lookupByFamilia(fk,state.tickets,state.suppliers);
+    return lookupKB(l.titulo,state.tickets,state.suppliers);
+  }),[lineas,state.tickets,state.suppliers]);
   const applyKBHint = (idx,hint)=>{
     if(hint.avgCosto>0) upd(idx,{costoUnit:Math.round(hint.avgCosto)});
   };
@@ -7287,6 +7342,7 @@ function MCotizador({state,dispatch,toast}) {
       id:mkTicketId(fecha),titulo,
       opId:opType,opShort:(OP_TYPES.find(o=>o.id===opType)||OP_TYPES[0]).short,
       priority,clientId,supplierId,unitId,
+      familia:classifyFamilia(titulo),
       partRef:lineas.map(l=>l.partRef).filter(Boolean).join(", "),
       date:fecha,status:"recibido",payType,
       promesaPago:payType==="credit"?promesa:null,cobrado:false,
@@ -7495,16 +7551,18 @@ function MCotizador({state,dispatch,toast}) {
                 value={partQ[i]!==undefined?partQ[i]:(l.titulo||"")}
                 onChange={v=>{setPartQ(q=>({...q,[i]:v}));upd(i,{titulo:v});}}
                 onSelect={p=>selectPart(i,p)}
+                onOpenChange={v=>setPickerOpen(m=>({...m,[i]:v}))}
                 mobile
               />
-              {/* ── KB HINT — aparece al tipear si hay historial ── */}
-              {kbHints[i]&&l.titulo.trim().length>=3&&(
+              {/* ── KB HINT — oculto mientras el dropdown del picker está abierto ── */}
+              {!pickerOpen[i]&&kbHints[i]&&l.titulo.trim().length>=3&&(
                 <div style={{margin:"8px 0",background:`${C.cyan}0E`,border:`1px solid ${C.cyan}30`,borderRadius:10,padding:"10px 12px"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                    <span style={{fontSize:11,fontWeight:700,color:A.cyan,letterSpacing:"0.06em"}}>
+                    <span style={{fontSize:11,fontWeight:700,color:A.cyan,letterSpacing:"0.06em",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                      {kbHints[i].familiaLabel&&<span style={{background:`${A.cyan}20`,color:A.cyan,borderRadius:6,padding:"2px 8px",fontSize:9,fontWeight:800,letterSpacing:"0.15em"}}>{kbHints[i].familiaLabel.toUpperCase()}</span>}
                       ★ {kbHints[i].resolved} entregado{kbHints[i].resolved!==1?"s":""}
-                      {kbHints[i].canceled>0&&<span style={{color:A.red,marginLeft:4}}>{kbHints[i].canceled} cancel.</span>}
-                      {kbHints[i].rate!==null&&<span style={{color:kbHints[i].rate>=80?A.lime:kbHints[i].rate>=50?A.amber:A.red,marginLeft:4}}>{kbHints[i].rate}% éxito</span>}
+                      {kbHints[i].canceled>0&&<span style={{color:A.red}}>{kbHints[i].canceled} cancel.</span>}
+                      {kbHints[i].rate!==null&&<span style={{color:kbHints[i].rate>=80?A.lime:kbHints[i].rate>=50?A.amber:A.red}}>{kbHints[i].rate}% éxito</span>}
                     </span>
                     {kbHints[i].avgCosto>0&&(
                       <button onPointerDown={e=>{e.preventDefault();applyKBHint(i,kbHints[i]);}}
@@ -8247,6 +8305,16 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
     setMCatalogIdx(null);
   };
 
+  // KB hints for inline edit modal (familia como motor primario)
+  const kbHints = useMemo(()=>mLineas.map(l=>{
+    const fk=classifyFamilia(l.titulo);
+    if(fk&&fk!=="otros") return lookupByFamilia(fk,state.tickets,state.suppliers);
+    return lookupKB(l.titulo,state.tickets,state.suppliers);
+  }),[mLineas,state.tickets,state.suppliers]);
+  const applyKBHint = (idx,hint)=>{
+    if(hint.avgCosto>0) setMLineas(ls=>ls.map((l,i)=>i===idx?{...l,costoUnit:String(Math.round(hint.avgCosto))}:l));
+  };
+
   const openEdit = t => {
     const s = t.snap || {};
     const ivaR_e = safeNumber(s.params?.iva,16)/100;
@@ -8941,10 +9009,11 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                               {kbHints[idx]&&l.titulo.trim().length>=3&&(
                                 <div style={{marginBottom:8,background:`${C.cyan}0E`,border:`1px solid ${C.cyan}30`,borderRadius:8,padding:"9px 12px"}}>
                                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
-                                    <span style={{fontSize:10,fontWeight:700,color:A.cyan,letterSpacing:"0.06em"}}>
+                                    <span style={{fontSize:10,fontWeight:700,color:A.cyan,letterSpacing:"0.06em",display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
+                                      {kbHints[idx].familiaLabel&&<span style={{background:`${A.cyan}20`,color:A.cyan,borderRadius:6,padding:"2px 7px",fontSize:8,fontWeight:800,letterSpacing:"0.15em"}}>{kbHints[idx].familiaLabel.toUpperCase()}</span>}
                                       ★ {kbHints[idx].resolved} entregado{kbHints[idx].resolved!==1?"s":""}
-                                      {kbHints[idx].canceled>0&&<span style={{color:A.red,marginLeft:4}}>{kbHints[idx].canceled} cancel.</span>}
-                                      {kbHints[idx].rate!==null&&<span style={{color:kbHints[idx].rate>=80?A.lime:kbHints[idx].rate>=50?A.amber:A.red,marginLeft:4}}>{kbHints[idx].rate}% éxito</span>}
+                                      {kbHints[idx].canceled>0&&<span style={{color:A.red}}>{kbHints[idx].canceled} cancel.</span>}
+                                      {kbHints[idx].rate!==null&&<span style={{color:kbHints[idx].rate>=80?A.lime:kbHints[idx].rate>=50?A.amber:A.red}}>{kbHints[idx].rate}% éxito</span>}
                                     </span>
                                     {kbHints[idx].avgCosto>0&&(
                                       <button onPointerDown={e=>{e.preventDefault();applyKBHint(idx,kbHints[idx]);}}
