@@ -2629,13 +2629,17 @@ function Tickets({state,dispatch,toast,scheduleHardDelete}) {
 
 // lookupKB — busca casos históricos similares por palabras clave.
 // Retorna null si no hay coincidencias, o un objeto con estadísticas.
+// Preposiciones, artículos y palabras cortas del español que no aportan al match
+const KB_STOPWORDS = new Set(["de","el","la","los","las","un","una","en","con","por","para","del","al","y","o","a","su","se","no","es","si"]);
+
 function lookupKB(query, tickets, suppliers) {
   const q = (query||"").trim();
   if(!q||q.length<3) return null;
-  const words = q.toLowerCase().replace(/\s+/g," ").split(" ").filter(w=>w.length>=2);
+  // mínimo 3 chars Y no es stop word
+  const words = q.toLowerCase().replace(/\s+/g," ").split(" ").filter(w=>w.length>=3&&!KB_STOPWORDS.has(w));
   if(!words.length) return null;
   const all = (tickets||[]).filter(t=>!t._deleted&&t.titulo);
-  // OR: cualquier palabra del query aparece en el título
+  // OR: cualquier palabra significativa del query aparece en el título
   const matches = all.filter(t=>{
     const tl=(t.titulo||"").toLowerCase();
     return words.some(w=>tl.includes(w));
@@ -2665,17 +2669,25 @@ function lookupKB(query, tickets, suppliers) {
   })[0];
   return {
     total:matches.length,
-    resolved:success.length,   // entregado+ (el número operativamente relevante)
+    resolved:success.length,
     canceled:canceled.length,
-    // tasa = éxitos / (éxitos + cancelados) — excluye en-progreso del denominador
     rate:closedCount>0?Math.round((success.length/closedCount)*100):null,
     avgUtil:fCount>0?sumUtil/fCount:null,
     avgCosto:fCount>0?sumCosto/fCount:null,
     avgPrecio:fCount>0?sumPrecio/fCount:null,
-    // tiempo solo si hay ≥2 puntos para que el promedio sea significativo
     avgOpH:opHCount>=2?sumOpH/opHCount:null,
     topSuppName:topSupp?.nombre||topSupp?.name||null,
     lastDate:lastSuccess?.date||null,
+    // dataset completo para debug — IDs, estado, fecha, opH de cada ticket
+    _rows:matches.map(t=>{
+      const OPERADO_SET_=new Set(["entregado","facturado","cobrado","cerrado"]);
+      const tl=t.timeline||[];
+      const recEv=tl.find(e=>(e.evento||"").toLowerCase().includes("solicitud recibida"))||tl.find(e=>(e.evento||"").toLowerCase().includes("ticket creado"));
+      const entEv=tl.find(e=>(e.evento||"").toLowerCase().includes("estado: entregado"));
+      let opH=null;
+      if(recEv&&entEv){const r=new Date(recEv.ts),en=new Date(entEv.ts);if(!isNaN(r)&&!isNaN(en)&&en>r)opH=(en-r)/3600000;}
+      return {id:t.id,titulo:t.titulo,status:t.status,date:t.date,opH,uNeta:t.snap?.uNeta};
+    }),
   };
 }
 
