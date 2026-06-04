@@ -10050,7 +10050,10 @@ function MInteligencia({state}) {
 
   // ── Conocimiento — base de conocimiento operativa ─────────────────────────
   const [conocimientoSearch, setConocimientoSearch] = useState("");
-  const [conocimientoVista, setConocimientoVista] = useState("frecuencia");
+  const [fichaType, setFichaType] = useState(null); // 'parte'|'vehiculo'|'proveedor'|'cliente'
+  const [fichaKey,  setFichaKey]  = useState(null);
+  const openFicha = (type, key) => { setFichaType(type); setFichaKey(key); };
+  const closeFicha = () => { setFichaType(null); setFichaKey(null); };
 
   const conocimientoData = useMemo(()=>{
     const all = tickets.filter(t=>!t._deleted);
@@ -10061,7 +10064,6 @@ function MInteligencia({state}) {
     const avgArr  = arr=>arr.length?arr.reduce((s,v)=>s+v,0)/arr.length:null;
     const fmtH    = h=>h===null?"—":h<48?`${h.toFixed(1)}h`:`${(h/24).toFixed(1)}d`;
 
-    // ── Build problem map ──────────────────────────────────────────────────
     const probMap={};
     all.forEach(t=>{
       const rawKey = normKey(t.titulo||"sin titulo");
@@ -10072,7 +10074,6 @@ function MInteligencia({state}) {
         probMap[rawKey].suppFreq[t.supplierId]=(probMap[rawKey].suppFreq[t.supplierId]||0)+1;
     });
 
-    // ── Compute stats per problem ──────────────────────────────────────────
     const problems = Object.values(probMap).map(p=>{
       const total   = p.tickets.length;
       const succT   = p.tickets.filter(t=>OPERADO_SET.has(t.status));
@@ -10083,7 +10084,6 @@ function MInteligencia({state}) {
       const cancelRate  = total>0?(cancelled/total)*100:0;
       const avgRev  = success>0?succT.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0)/success:0;
       const avgUtil = success>0?succT.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0)/success:0;
-      // Op hours (rec → ent)
       const opHrs=[];
       succT.forEach(t=>{
         const tl=t.timeline||[];
@@ -10092,7 +10092,6 @@ function MInteligencia({state}) {
         if(rec&&ent&&ent>rec) opHrs.push((ent-rec)/3600000);
       });
       const avgOpH=avgArr(opHrs);
-      // Validation hours (rec → validando)
       const valHrs=[];
       p.tickets.forEach(t=>{
         const tl=t.timeline||[];
@@ -10101,7 +10100,6 @@ function MInteligencia({state}) {
         if(rec&&val&&val>rec) valHrs.push((val-rec)/3600000);
       });
       const avgValH=avgArr(valHrs);
-      // Sourcing hours (validando → sourcing)
       const srcHrs=[];
       p.tickets.forEach(t=>{
         const tl=t.timeline||[];
@@ -10110,13 +10108,10 @@ function MInteligencia({state}) {
         if(val&&src&&src>val) srcHrs.push((src-val)/3600000);
       });
       const avgSrcH=avgArr(srcHrs);
-      // Utilidad/hora
       const utilPorHora = avgOpH&&avgOpH>0&&avgUtil>0?avgUtil/avgOpH:null;
-      // Top proveedor
       const suppEntries=Object.entries(p.suppFreq).sort((a,b)=>b[1]-a[1]);
       const topSuppId=suppEntries[0]?.[0]||null;
       const topSuppCount=suppEntries[0]?.[1]||0;
-      // Last date
       const dates=p.tickets.map(t=>parseDate(t.date)).filter(Boolean);
       const lastDate=dates.length?dates.reduce((a,b)=>a>b?a:b):null;
       return {key:p.key,name:p.name,total,success,cancelled,successRate,cancelRate,
@@ -10124,29 +10119,21 @@ function MInteligencia({state}) {
         fmtOpH:fmtH(avgOpH),fmtValH:fmtH(avgValH),fmtSrcH:fmtH(avgSrcH)};
     }).filter(p=>p.name&&p.name.length>=3);
 
-    // ── Sorted views ──────────────────────────────────────────────────────────
-    const byFreq    = [...problems].sort((a,b)=>b.total-a.total).slice(0,20);
-    const byUtil    = [...problems].filter(p=>p.success>0).sort((a,b)=>b.avgUtil-a.avgUtil).slice(0,20);
-    const bySuccess = [...problems].filter(p=>p.total>=2).sort((a,b)=>b.successRate-a.successRate).slice(0,20);
-    const byCancel  = [...problems].filter(p=>p.cancelled>0).sort((a,b)=>b.cancelRate-a.cancelRate).slice(0,20);
+    const byFreq    = [...problems].sort((a,b)=>b.total-a.total);
+    const byUtil    = [...problems].filter(p=>p.success>0).sort((a,b)=>b.avgUtil-a.avgUtil);
+    const bySuccess = [...problems].filter(p=>p.total>=2).sort((a,b)=>b.successRate-a.successRate);
+    const byCancel  = [...problems].filter(p=>p.cancelled>0).sort((a,b)=>b.cancelRate-a.cancelRate);
 
-    // ── Clientes con más incidencias ─────────────────────────────────────────
     const clientMap={};
     all.forEach(t=>{
       if(!t.clientId) return;
       if(!clientMap[t.clientId]) clientMap[t.clientId]={clientId:t.clientId,count:0,success:0,util:0,problems:new Set()};
       clientMap[t.clientId].count++;
-      if(OPERADO_SET.has(t.status)){
-        clientMap[t.clientId].success++;
-        clientMap[t.clientId].util+=safeNumber(t.snap?.uNeta);
-      }
+      if(OPERADO_SET.has(t.status)){clientMap[t.clientId].success++;clientMap[t.clientId].util+=safeNumber(t.snap?.uNeta);}
       if(t.titulo) clientMap[t.clientId].problems.add(normKey(t.titulo));
     });
-    const topClientes=Object.values(clientMap)
-      .sort((a,b)=>b.count-a.count).slice(0,10)
-      .map(d=>({...d,problems:d.problems.size}));
+    const topClientes=Object.values(clientMap).sort((a,b)=>b.count-a.count).map(d=>({...d,problems:d.problems.size}));
 
-    // ── Vehículos con más fallas ─────────────────────────────────────────────
     const unitMap={};
     all.forEach(t=>{
       const ids=t.unitIds?.length?t.unitIds:t.unitId?[t.unitId]:[];
@@ -10157,11 +10144,8 @@ function MInteligencia({state}) {
         if(t.titulo) unitMap[uid].problems.add(normKey(t.titulo));
       });
     });
-    const topUnidades=Object.values(unitMap)
-      .sort((a,b)=>b.count-a.count).slice(0,10)
-      .map(d=>({...d,problems:d.problems.size}));
+    const topUnidades=Object.values(unitMap).sort((a,b)=>b.count-a.count).map(d=>({...d,problems:d.problems.size}));
 
-    // ── Proveedores más efectivos ─────────────────────────────────────────────
     const suppMap={};
     all.filter(t=>OPERADO_SET.has(t.status)&&t.supplierId).forEach(t=>{
       const sid=t.supplierId;
@@ -10170,12 +10154,195 @@ function MInteligencia({state}) {
       suppMap[sid].util+=safeNumber(t.snap?.uNeta);
       if(t.titulo) suppMap[sid].parts.add(normKey(t.titulo));
     });
-    const topProveedores=Object.values(suppMap)
-      .sort((a,b)=>b.count-a.count).slice(0,10)
-      .map(d=>({...d,parts:d.parts.size}));
+    const topProveedores=Object.values(suppMap).sort((a,b)=>b.count-a.count).map(d=>({...d,parts:d.parts.size}));
 
     return {problems,byFreq,byUtil,bySuccess,byCancel,topClientes,topUnidades,topProveedores};
   },[tickets,clients]);
+
+  // ── Ficha seleccionada — computa datos completos de la entidad ─────────────
+  const selectedFichaData = useMemo(()=>{
+    if(!fichaType||!fichaKey) return null;
+    const all = tickets.filter(t=>!t._deleted);
+    const normStr = s=>(s||"").toLowerCase().trim().replace(/\s+/g," ");
+    const normKey = s=>normStr(s).split(" ").sort().join(" ");
+    const parseTS = ts=>{try{return new Date(ts);}catch{return null;}};
+    const findEv  = (tl,kw)=>{const ev=(tl||[]).find(e=>(e.evento||"").toLowerCase().includes(kw));return ev?parseTS(ev.ts):null;};
+    const avgArr  = arr=>arr.length?arr.reduce((s,v)=>s+v,0)/arr.length:null;
+    const fmtH    = h=>h===null?"—":h<48?`${h.toFixed(1)}h`:`${(h/24).toFixed(1)}d`;
+    const byDate  = (a,b)=>{const da=parseDate(a.date),db=parseDate(b.date);return(da&&db)?(db-da):0;};
+
+    if(fichaType==='parte') {
+      const tkts=all.filter(t=>normKey(t.titulo||"")===fichaKey);
+      if(!tkts.length) return null;
+      const name=normStr(tkts[0].titulo||"");
+      const succT=tkts.filter(t=>OPERADO_SET.has(t.status));
+      const cancT=tkts.filter(t=>t.status==="cancelado");
+      const inProg=tkts.filter(t=>!OPERADO_SET.has(t.status)&&t.status!=="cancelado");
+      const revenueGen=succT.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
+      const revenuePerd=cancT.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
+      const utilTotal=succT.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0);
+      const avgUtil=succT.length>0?utilTotal/succT.length:0;
+      const opHrs=[],valHrs=[],srcHrs=[];
+      tkts.forEach(t=>{
+        const tl=t.timeline||[];
+        const rec=findEv(tl,"solicitud recibida")||findEv(tl,"ticket creado")||parseDate(t.date);
+        const val=findEv(tl,"estado: validando");
+        const src=findEv(tl,"estado: sourcing");
+        const ent=findEv(tl,"estado: entregado");
+        if(rec&&val&&val>rec) valHrs.push((val-rec)/3600000);
+        if(val&&src&&src>val) srcHrs.push((src-val)/3600000);
+        if(rec&&ent&&ent>rec) opHrs.push((ent-rec)/3600000);
+      });
+      const avgOpH=avgArr(opHrs),avgValH=avgArr(valHrs),avgSrcH=avgArr(srcHrs);
+      const suppFreq={};
+      succT.forEach(t=>{if(t.supplierId)suppFreq[t.supplierId]=(suppFreq[t.supplierId]||0)+1;});
+      const topSuppList=Object.entries(suppFreq).sort((a,b)=>b[1]-a[1]).slice(0,5);
+      const unitSet={};
+      tkts.forEach(t=>{
+        const ids=t.unitIds?.length?t.unitIds:t.unitId?[t.unitId]:[];
+        ids.forEach(uid=>{if(!unitSet[uid])unitSet[uid]={uid,count:0};unitSet[uid].count++;});
+      });
+      const vehiculosRel=Object.values(unitSet).sort((a,b)=>b.count-a.count).slice(0,8);
+      const clientSet={};
+      tkts.forEach(t=>{
+        if(!t.clientId) return;
+        if(!clientSet[t.clientId])clientSet[t.clientId]={clientId:t.clientId,count:0,util:0};
+        clientSet[t.clientId].count++;
+        if(OPERADO_SET.has(t.status)) clientSet[t.clientId].util+=safeNumber(t.snap?.uNeta);
+      });
+      const clientesRel=Object.values(clientSet).sort((a,b)=>b.count-a.count).slice(0,5);
+      return {type:'parte',name,total:tkts.length,success:succT.length,cancelled:cancT.length,inProg:inProg.length,
+        revenueGen,revenuePerd,utilTotal,avgUtil,avgOpH,avgValH,avgSrcH,
+        fmtOpH:fmtH(avgOpH),fmtValH:fmtH(avgValH),fmtSrcH:fmtH(avgSrcH),
+        topSuppList,vehiculosRel,clientesRel,casos:[...tkts].sort(byDate)};
+    }
+
+    if(fichaType==='vehiculo') {
+      const u=units.find(un=>un.id===fichaKey);
+      if(!u) return null;
+      const tkts=all.filter(t=>t.unitIds?.includes(fichaKey)||t.unitId===fichaKey);
+      const succT=tkts.filter(t=>OPERADO_SET.has(t.status));
+      const cancT=tkts.filter(t=>t.status==="cancelado");
+      const revenueTotal=succT.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
+      const utilTotal=succT.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0);
+      const fallaMap={};
+      tkts.forEach(t=>{
+        const key=normKey(t.titulo||"");
+        if(!key||key.length<3) return;
+        if(!fallaMap[key]) fallaMap[key]={key,name:normStr(t.titulo||""),count:0,success:0};
+        fallaMap[key].count++;
+        if(OPERADO_SET.has(t.status)) fallaMap[key].success++;
+      });
+      const topFallas=Object.values(fallaMap).sort((a,b)=>b.count-a.count).slice(0,10);
+      const suppFreq={};
+      succT.forEach(t=>{if(t.supplierId)suppFreq[t.supplierId]=(suppFreq[t.supplierId]||0)+1;});
+      const topSuppVeh=Object.entries(suppFreq).sort((a,b)=>b[1]-a[1]).slice(0,5);
+      const opHrs=[];
+      succT.forEach(t=>{
+        const tl=t.timeline||[];
+        const rec=findEv(tl,"solicitud recibida")||findEv(tl,"ticket creado")||parseDate(t.date);
+        const ent=findEv(tl,"estado: entregado");
+        if(rec&&ent&&ent>rec) opHrs.push((ent-rec)/3600000);
+      });
+      return {type:'vehiculo',u,total:tkts.length,success:succT.length,cancelled:cancT.length,
+        revenueTotal,utilTotal,topFallas,topSuppVeh,avgOpH:avgArr(opHrs),fmtOpH:fmtH(avgArr(opHrs)),
+        casos:[...tkts].sort(byDate)};
+    }
+
+    if(fichaType==='proveedor') {
+      const s=suppliers.find(s=>s.id===fichaKey);
+      const tkts=all.filter(t=>t.supplierId===fichaKey);
+      const succT=tkts.filter(t=>OPERADO_SET.has(t.status));
+      const cancT=tkts.filter(t=>t.status==="cancelado");
+      const revenueGen=succT.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
+      const utilGen=succT.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0);
+      const partFreq={};
+      succT.forEach(t=>{
+        const key=normKey(t.titulo||"");
+        if(!key||key.length<3) return;
+        if(!partFreq[key])partFreq[key]={key,name:normStr(t.titulo||""),count:0};
+        partFreq[key].count++;
+      });
+      const topPartes=Object.values(partFreq).sort((a,b)=>b.count-a.count).slice(0,12);
+      const srcHrs=[];
+      tkts.forEach(t=>{
+        const tl=t.timeline||[];
+        const rec=findEv(tl,"solicitud recibida")||findEv(tl,"ticket creado")||parseDate(t.date);
+        const src=findEv(tl,"estado: sourcing")||findEv(tl,"estado: cotizado");
+        if(rec&&src&&src>rec) srcHrs.push((src-rec)/3600000);
+      });
+      return {type:'proveedor',s,total:tkts.length,success:succT.length,cancelled:cancT.length,
+        revenueGen,utilGen,topPartes,avgSrcH:avgArr(srcHrs),fmtSrcH:fmtH(avgArr(srcHrs)),
+        casos:[...tkts].sort(byDate)};
+    }
+
+    if(fichaType==='cliente') {
+      const cl=clients.find(c=>c.id===fichaKey);
+      const tkts=all.filter(t=>t.clientId===fichaKey);
+      const succT=tkts.filter(t=>OPERADO_SET.has(t.status));
+      const cancT=tkts.filter(t=>t.status==="cancelado");
+      const cartT=tkts.filter(t=>CARTERA_SET.has(t.status));
+      const revenueTotal=succT.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
+      const utilTotal=succT.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0);
+      const cartTotal=cartT.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
+      const fallaMap={};
+      tkts.forEach(t=>{
+        const key=normKey(t.titulo||"");
+        if(!key||key.length<3) return;
+        if(!fallaMap[key])fallaMap[key]={key,name:normStr(t.titulo||""),count:0,success:0};
+        fallaMap[key].count++;
+        if(OPERADO_SET.has(t.status)) fallaMap[key].success++;
+      });
+      const topFallas=Object.values(fallaMap).sort((a,b)=>b.count-a.count).slice(0,10);
+      const autHrs=[];
+      tkts.forEach(t=>{
+        const tl=t.timeline||[];
+        const rec=findEv(tl,"solicitud recibida")||findEv(tl,"ticket creado")||parseDate(t.date);
+        const aut=findEv(tl,"estado: autorizado");
+        if(rec&&aut&&aut>rec) autHrs.push((aut-rec)/3600000);
+      });
+      return {type:'cliente',cl,total:tkts.length,success:succT.length,cancelled:cancT.length,
+        revenueTotal,utilTotal,cartTotal,topFallas,avgAutH:avgArr(autHrs),fmtAutH:fmtH(avgArr(autHrs)),
+        casos:[...tkts].sort(byDate)};
+    }
+    return null;
+  },[fichaType,fichaKey,tickets,clients,suppliers,units]);
+
+  // ── Búsqueda global en conocimiento ───────────────────────────────────────
+  const conocimientoResults = useMemo(()=>{
+    const lq=conocimientoSearch.trim().toLowerCase();
+    if(!lq) return null;
+    const normStr = s=>(s||"").toLowerCase().trim().replace(/\s+/g," ");
+    const res=[];
+    conocimientoData.byFreq.filter(p=>p.name.includes(lq)).slice(0,6).forEach(p=>
+      res.push({type:'parte',key:p.key,title:p.name,sub:`${p.total}x · ${p.success} entregadas · ${mxn(Math.round(p.avgUtil))} util. prom`}));
+    conocimientoData.topUnidades.filter(d=>{
+      const u=units.find(un=>un.id===d.unitId);
+      if(!u) return false;
+      return `${u.marca} ${u.modelo} ${u.anio||""} ${u.economico||""} ${u.placa||""}`.toLowerCase().includes(lq);
+    }).slice(0,4).forEach(d=>{
+      const u=units.find(un=>un.id===d.unitId);
+      res.push({type:'vehiculo',key:d.unitId,title:u?`${u.marca} ${u.modelo}${u.anio?" "+u.anio:""}`:d.unitId,
+        sub:`${d.count} incidencias${u?.economico?" · Eco."+u.economico:""}`});
+    });
+    conocimientoData.topProveedores.filter(d=>{
+      const s=suppliers.find(s=>s.id===d.supplierId);
+      return s&&normStr(s.nombre||s.name||"").includes(lq);
+    }).slice(0,4).forEach(d=>{
+      const s=suppliers.find(s=>s.id===d.supplierId);
+      res.push({type:'proveedor',key:d.supplierId,title:s?.nombre||s?.name||d.supplierId,
+        sub:`${d.count} operaciones · ${d.parts} tipos de parte`});
+    });
+    conocimientoData.topClientes.filter(d=>{
+      const cl=clients.find(c=>c.id===d.clientId);
+      return cl&&normStr(cl.empresa||"").includes(lq);
+    }).slice(0,4).forEach(d=>{
+      const cl=clients.find(c=>c.id===d.clientId);
+      res.push({type:'cliente',key:d.clientId,title:cl?.empresa||d.clientId,
+        sub:`${d.count} solicitudes · ${d.success} resueltas · ${d.problems} tipos de falla`});
+    });
+    return res;
+  },[conocimientoSearch,conocimientoData,clients,suppliers,units]);
 
   // ── AI payload — enriched with panel context ──────────────────────────────
   const aiPayload = useMemo(() => {
@@ -10789,201 +10956,445 @@ function MInteligencia({state}) {
         </div>
       )}
 
-      {/* ── PANEL: Conocimiento ─────────────────────────────────────────────── */}
+      {/* ── PANEL: Conocimiento — base de conocimiento navegable ──────────────── */}
       {iTab==="conocimiento" && (()=>{
-        const VISTAS=[
-          {id:"frecuencia",  label:"Más frecuentes"},
-          {id:"rentabilidad",label:"Más rentables"},
-          {id:"exito",       label:"Mayor éxito"},
-          {id:"cancelacion", label:"Mayor cancelación"},
-          {id:"clientes",    label:"Clientes"},
-          {id:"vehiculos",   label:"Vehículos"},
-          {id:"proveedores", label:"Proveedores"},
+        // ─ helpers ─
+        const suppName = id=>{const s=suppliers.find(s=>s.id===id);return s?.nombre||s?.name||id||"—";};
+        const clientName = id=>clients.find(c=>c.id===id)?.empresa||id||"—";
+        const unitDesc = id=>{const u=units.find(u=>u.id===id);return u?`${u.marca} ${u.modelo}${u.anio?" "+u.anio:""}${u.economico?" (Eco."+u.economico+")":""}`:"—";};
+        const typeLabel = {parte:"Parte",vehiculo:"Vehículo",proveedor:"Proveedor",cliente:"Cliente"};
+        const typeColor = {parte:C.cyan,vehiculo:C.blue,proveedor:C.green,cliente:C.yellow};
+        const typeIcon  = {parte:"⚙",vehiculo:"🚛",proveedor:"📦",cliente:"👤"};
+
+        // ── FICHA abierta ─────────────────────────────────────────────────────
+        if(fichaType&&fichaKey) {
+          const f = selectedFichaData;
+          if(!f) return <div style={{padding:24,color:C.t3,fontSize:12,textAlign:"center"}}>Sin datos para esta entidad.</div>;
+          const accent = typeColor[f.type]||C.cyan;
+          const FRow = ({label,val,col})=>(
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
+              <span style={{fontSize:11,color:C.t3}}>{label}</span>
+              <span style={{fontSize:12,fontWeight:700,color:col||C.t1,fontFamily:"monospace"}}>{val}</span>
+            </div>
+          );
+          const KpiMini = ({label,val,col})=>(
+            <div style={{background:C.bg3,borderRadius:8,padding:"8px 10px"}}>
+              <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",marginBottom:3}}>{label}</div>
+              <div style={{fontSize:13,fontWeight:800,color:col||C.t1,fontFamily:"monospace"}}>{val}</div>
+            </div>
+          );
+          const TagRow = ({items,onClickKey,onClickType,color})=>(
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:4}}>
+              {items.map((item,i)=>(
+                <button key={i} onClick={()=>openFicha(onClickType,item.key||item)}
+                  style={{padding:"4px 10px",borderRadius:16,border:`1px solid ${color}44`,background:`${color}12`,
+                    color,fontSize:10,fontWeight:600,cursor:"pointer",touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
+                  {item.label||item}
+                </button>
+              ))}
+            </div>
+          );
+          const Section = ({title,children})=>(
+            <div style={{...cardStyle,padding:"12px 14px",display:"flex",flexDirection:"column",gap:0}}>
+              <div style={{fontSize:10,fontWeight:700,color:C.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:10}}>{title}</div>
+              {children}
+            </div>
+          );
+          return (
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              {/* Back + header */}
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <button onClick={closeFicha}
+                  style={{padding:"7px 14px",borderRadius:20,border:`1px solid ${C.border}`,background:C.bg3,color:C.t2,fontSize:11,cursor:"pointer",fontWeight:600,flexShrink:0,touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
+                  ← Volver
+                </button>
+                <span style={{fontSize:9,padding:"3px 10px",borderRadius:10,background:`${accent}18`,color:accent,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",flexShrink:0}}>
+                  {typeIcon[f.type]} {typeLabel[f.type]}
+                </span>
+                <span style={{fontSize:14,fontWeight:800,color:C.t1,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                  {f.type==='parte'?f.name:f.type==='vehiculo'?`${f.u.marca} ${f.u.modelo}${f.u.anio?" "+f.u.anio:""}`:f.type==='proveedor'?(f.s?.nombre||f.s?.name||fichaKey):f.type==='cliente'?(f.cl?.empresa||fichaKey):""}
+                </span>
+              </div>
+
+              {/* ── FICHA: PARTE ── */}
+              {f.type==='parte'&&(
+                <>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                    <KpiMini label="SOLICITUDES" val={f.total} col={C.cyan}/>
+                    <KpiMini label="ENTREGADAS" val={f.success} col={C.green}/>
+                    <KpiMini label="CANCELADAS" val={f.cancelled} col={f.cancelled>0?C.red:C.t3}/>
+                    <KpiMini label="TASA ÉXITO" val={`${Math.round(f.success/Math.max(1,f.total)*100)}%`} col={f.success/Math.max(1,f.total)>=0.7?C.green:C.yellow}/>
+                    <KpiMini label="REVENUE GEN." val={mxn(Math.round(f.revenueGen))} col={C.cyan}/>
+                    <KpiMini label="REVENUE PERD." val={mxn(Math.round(f.revenuePerd))} col={f.revenuePerd>0?C.red:C.t3}/>
+                  </div>
+                  <Section title="Tiempos operativos">
+                    <FRow label="Tiempo operativo total (rec→ent)" val={f.fmtOpH} col={C.t1}/>
+                    <FRow label="Tiempo de validación (rec→val)" val={f.fmtValH} col={C.cyan}/>
+                    <FRow label="Tiempo de sourcing (val→src)" val={f.fmtSrcH} col={C.cyan}/>
+                    <FRow label="Utilidad promedio por ticket" val={mxn(Math.round(f.avgUtil))} col={C.green}/>
+                    {f.avgOpH&&f.avgUtil>0&&<FRow label="Utilidad por hora operativa" val={`${mxn(Math.round(f.avgUtil/f.avgOpH))}/h`} col={C.yellow}/>}
+                  </Section>
+                  {f.topSuppList.length>0&&(
+                    <Section title="Proveedores que surtieron esta parte">
+                      {f.topSuppList.map(([sid,cnt],i)=>(
+                        <div key={sid} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<f.topSuppList.length-1?`1px solid ${C.border}`:"none"}}>
+                          <button onClick={()=>openFicha('proveedor',sid)}
+                            style={{flex:1,textAlign:"left",background:"none",border:"none",cursor:"pointer",color:C.cyan,fontSize:12,fontWeight:700,padding:0,touchAction:"manipulation"}}>
+                            {suppName(sid)}
+                          </button>
+                          <span style={{fontSize:11,color:C.t3,flexShrink:0}}>{cnt}x</span>
+                        </div>
+                      ))}
+                    </Section>
+                  )}
+                  {f.vehiculosRel.length>0&&(
+                    <Section title="Vehículos con esta falla">
+                      <TagRow items={f.vehiculosRel.map(v=>({key:v.uid,label:`${unitDesc(v.uid)} (${v.count}x)`}))} onClickType="vehiculo" color={C.blue}/>
+                    </Section>
+                  )}
+                  {f.clientesRel.length>0&&(
+                    <Section title="Clientes que solicitaron esta parte">
+                      <TagRow items={f.clientesRel.map(c=>({key:c.clientId,label:`${clientName(c.clientId)} (${c.count}x)`}))} onClickType="cliente" color={C.yellow}/>
+                    </Section>
+                  )}
+                  <Section title={`Casos históricos (${f.casos.length})`}>
+                    {f.casos.slice(0,8).map((t,i)=>{
+                      const cl=clients.find(c=>c.id===t.clientId);
+                      const sm=TICKET_META[t.status];
+                      return(
+                        <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<Math.min(f.casos.length,8)-1?`1px solid ${C.border}`:"none"}}>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:10,color:C.t2,fontFamily:"monospace",marginBottom:1}}>{t.id} · {t.date}</div>
+                            <div style={{fontSize:10,color:C.t3}}>{cl?.empresa||"—"}</div>
+                          </div>
+                          <span style={{fontSize:9,padding:"2px 7px",borderRadius:5,background:sm?.color+"22",color:sm?.dot,flexShrink:0}}>{sm?.label||t.status}</span>
+                          <span style={{fontSize:10,fontWeight:700,color:C.green,fontFamily:"monospace",flexShrink:0}}>{mxn(t.snap?.uNeta||0)}</span>
+                        </div>
+                      );
+                    })}
+                  </Section>
+                </>
+              )}
+
+              {/* ── FICHA: VEHÍCULO ── */}
+              {f.type==='vehiculo'&&(
+                <>
+                  <div style={{...cardStyle,padding:"12px 14px"}}>
+                    <div style={{fontSize:12,color:C.t2,marginBottom:6}}>
+                      {f.u.marca} {f.u.modelo} {f.u.anio||""}{f.u.economico?" · Eco."+f.u.economico:""}{f.u.placa?" · "+f.u.placa:""}
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                      <KpiMini label="SOLICITUDES" val={f.total} col={C.cyan}/>
+                      <KpiMini label="RESUELTAS" val={f.success} col={C.green}/>
+                      <KpiMini label="CANCELADAS" val={f.cancelled} col={f.cancelled>0?C.red:C.t3}/>
+                      <KpiMini label="TASA ÉXITO" val={`${Math.round(f.success/Math.max(1,f.total)*100)}%`} col={f.success/Math.max(1,f.total)>=0.7?C.green:C.yellow}/>
+                      <KpiMini label="REVENUE TOTAL" val={mxn(Math.round(f.revenueTotal))} col={C.cyan}/>
+                      <KpiMini label="UTILIDAD TOTAL" val={mxn(Math.round(f.utilTotal))} col={C.green}/>
+                    </div>
+                    {f.fmtOpH!=="—"&&<div style={{marginTop:8,fontSize:11,color:C.t3}}>Tiempo promedio de resolución: <strong style={{color:C.t1}}>{f.fmtOpH}</strong></div>}
+                  </div>
+                  {f.topFallas.length>0&&(
+                    <Section title="Top fallas recurrentes">
+                      {f.topFallas.map((fl,i)=>(
+                        <div key={fl.key} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:i<f.topFallas.length-1?`1px solid ${C.border}`:"none"}}>
+                          <button onClick={()=>openFicha('parte',fl.key)}
+                            style={{flex:1,textAlign:"left",background:"none",border:"none",cursor:"pointer",color:C.cyan,fontSize:12,fontWeight:700,padding:0,touchAction:"manipulation"}}>
+                            {fl.name}
+                          </button>
+                          <span style={{fontSize:10,color:C.t3,flexShrink:0}}>{fl.success}/{fl.count}</span>
+                          <span style={{fontSize:11,fontWeight:700,color:C.cyan,flexShrink:0}}>{fl.count}x</span>
+                        </div>
+                      ))}
+                    </Section>
+                  )}
+                  {f.topSuppVeh.length>0&&(
+                    <Section title="Proveedores usados con este vehículo">
+                      <TagRow items={f.topSuppVeh.map(([sid,cnt])=>({key:sid,label:`${suppName(sid)} (${cnt}x)`}))} onClickType="proveedor" color={C.green}/>
+                    </Section>
+                  )}
+                  <Section title={`Historial de incidencias (${f.casos.length})`}>
+                    {f.casos.slice(0,8).map((t,i)=>{
+                      const cl=clients.find(c=>c.id===t.clientId);
+                      const sm=TICKET_META[t.status];
+                      return(
+                        <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<Math.min(f.casos.length,8)-1?`1px solid ${C.border}`:"none"}}>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:11,color:C.t1,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                            <div style={{fontSize:9,color:C.t3}}>{t.date} · {cl?.empresa||"—"}</div>
+                          </div>
+                          <span style={{fontSize:9,padding:"2px 7px",borderRadius:5,background:sm?.color+"22",color:sm?.dot,flexShrink:0}}>{sm?.label||t.status}</span>
+                          <span style={{fontSize:10,fontWeight:700,color:C.green,fontFamily:"monospace",flexShrink:0}}>{mxn(t.snap?.uNeta||0)}</span>
+                        </div>
+                      );
+                    })}
+                  </Section>
+                </>
+              )}
+
+              {/* ── FICHA: PROVEEDOR ── */}
+              {f.type==='proveedor'&&(
+                <>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                    <KpiMini label="SOLICITUDES" val={f.total} col={C.cyan}/>
+                    <KpiMini label="CONCRETADAS" val={f.success} col={C.green}/>
+                    <KpiMini label="CANCELADAS" val={f.cancelled} col={f.cancelled>0?C.red:C.t3}/>
+                    <KpiMini label="TASA ÉXITO" val={`${Math.round(f.success/Math.max(1,f.total)*100)}%`} col={f.success/Math.max(1,f.total)>=0.7?C.green:C.yellow}/>
+                    <KpiMini label="REVENUE GEN." val={mxn(Math.round(f.revenueGen))} col={C.cyan}/>
+                    <KpiMini label="UTILIDAD GEN." val={mxn(Math.round(f.utilGen))} col={C.green}/>
+                  </div>
+                  <Section title="Tiempos">
+                    <FRow label="Tiempo promedio de sourcing" val={f.fmtSrcH} col={C.cyan}/>
+                  </Section>
+                  {f.topPartes.length>0&&(
+                    <Section title="Partes que surtieron">
+                      {f.topPartes.map((p,i)=>(
+                        <div key={p.key} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<f.topPartes.length-1?`1px solid ${C.border}`:"none"}}>
+                          <button onClick={()=>openFicha('parte',p.key)}
+                            style={{flex:1,textAlign:"left",background:"none",border:"none",cursor:"pointer",color:C.cyan,fontSize:12,fontWeight:700,padding:0,touchAction:"manipulation"}}>
+                            {p.name}
+                          </button>
+                          <span style={{fontSize:11,color:C.t3,fontWeight:700,flexShrink:0}}>{p.count}x</span>
+                        </div>
+                      ))}
+                    </Section>
+                  )}
+                  <Section title={`Operaciones (${f.casos.length})`}>
+                    {f.casos.slice(0,8).map((t,i)=>{
+                      const cl=clients.find(c=>c.id===t.clientId);
+                      const sm=TICKET_META[t.status];
+                      return(
+                        <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<Math.min(f.casos.length,8)-1?`1px solid ${C.border}`:"none"}}>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:11,color:C.t1,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                            <div style={{fontSize:9,color:C.t3}}>{t.date} · {cl?.empresa||"—"}</div>
+                          </div>
+                          <span style={{fontSize:9,padding:"2px 7px",borderRadius:5,background:sm?.color+"22",color:sm?.dot,flexShrink:0}}>{sm?.label||t.status}</span>
+                          <span style={{fontSize:10,fontWeight:700,color:C.green,fontFamily:"monospace",flexShrink:0}}>{mxn(t.snap?.uNeta||0)}</span>
+                        </div>
+                      );
+                    })}
+                  </Section>
+                </>
+              )}
+
+              {/* ── FICHA: CLIENTE ── */}
+              {f.type==='cliente'&&(
+                <>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                    <KpiMini label="SOLICITUDES" val={f.total} col={C.cyan}/>
+                    <KpiMini label="ENTREGADAS" val={f.success} col={C.green}/>
+                    <KpiMini label="CANCELADAS" val={f.cancelled} col={f.cancelled>0?C.red:C.t3}/>
+                    <KpiMini label="REVENUE" val={mxn(Math.round(f.revenueTotal))} col={C.cyan}/>
+                    <KpiMini label="UTILIDAD" val={mxn(Math.round(f.utilTotal))} col={C.green}/>
+                    <KpiMini label="CARTERA" val={mxn(Math.round(f.cartTotal))} col={f.cartTotal>0?C.yellow:C.t3}/>
+                  </div>
+                  <Section title="Tiempos">
+                    <FRow label="Tiempo promedio de autorización" val={f.fmtAutH} col={C.cyan}/>
+                  </Section>
+                  {f.topFallas.length>0&&(
+                    <Section title="Familias de falla más frecuentes">
+                      {f.topFallas.map((fl,i)=>(
+                        <div key={fl.key} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:i<f.topFallas.length-1?`1px solid ${C.border}`:"none"}}>
+                          <button onClick={()=>openFicha('parte',fl.key)}
+                            style={{flex:1,textAlign:"left",background:"none",border:"none",cursor:"pointer",color:C.cyan,fontSize:12,fontWeight:700,padding:0,touchAction:"manipulation"}}>
+                            {fl.name}
+                          </button>
+                          <span style={{fontSize:10,color:C.t3,flexShrink:0}}>{fl.success}/{fl.count}</span>
+                          <span style={{fontSize:11,fontWeight:700,color:C.cyan,flexShrink:0}}>{fl.count}x</span>
+                        </div>
+                      ))}
+                    </Section>
+                  )}
+                  <Section title={`Historial de operaciones (${f.casos.length})`}>
+                    {f.casos.slice(0,8).map((t,i)=>{
+                      const sm=TICKET_META[t.status];
+                      return(
+                        <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<Math.min(f.casos.length,8)-1?`1px solid ${C.border}`:"none"}}>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:11,color:C.t1,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                            <div style={{fontSize:9,color:C.t3}}>{t.date}</div>
+                          </div>
+                          <span style={{fontSize:9,padding:"2px 7px",borderRadius:5,background:sm?.color+"22",color:sm?.dot,flexShrink:0}}>{sm?.label||t.status}</span>
+                          <span style={{fontSize:10,fontWeight:700,color:C.green,fontFamily:"monospace",flexShrink:0}}>{mxn(t.snap?.uNeta||0)}</span>
+                        </div>
+                      );
+                    })}
+                  </Section>
+                </>
+              )}
+            </div>
+          );
+        }
+
+        // ── BÚSQUEDA GLOBAL ───────────────────────────────────────────────────
+        const showSearch = conocimientoSearch.trim().length > 0;
+        const ENTITY_TILES = [
+          {type:'parte',    label:"Partes",     count:conocimientoData.byFreq.length,    icon:"⚙",  col:C.cyan,  sub:"Piezas y refacciones del historial"},
+          {type:'vehiculo', label:"Vehículos",  count:conocimientoData.topUnidades.length,icon:"🚛", col:C.blue,  sub:"Unidades de flota con incidencias"},
+          {type:'proveedor',label:"Proveedores",count:conocimientoData.topProveedores.length,icon:"📦",col:C.green,sub:"Proveedores con operaciones registradas"},
+          {type:'cliente',  label:"Clientes",   count:conocimientoData.topClientes.length,icon:"👤", col:C.yellow,sub:"Clientes con historial operativo"},
         ];
-        const vistaData = {
-          frecuencia:   conocimientoData.byFreq,
-          rentabilidad: conocimientoData.byUtil,
-          exito:        conocimientoData.bySuccess,
-          cancelacion:  conocimientoData.byCancel,
+
+        // ─ nav state (what list is open within Conocimiento) ─
+        const [kbView, setKbView] = React.useState(null); // null=home | 'parte'|'vehiculo'|'proveedor'|'cliente'
+
+        const listData = {
+          parte:     conocimientoData.byFreq,
+          vehiculo:  conocimientoData.topUnidades,
+          proveedor: conocimientoData.topProveedores,
+          cliente:   conocimientoData.topClientes,
         };
-        const lq = conocimientoSearch.trim().toLowerCase();
-        const getList = (key)=>{
-          const base = vistaData[key]||[];
-          if(!lq) return base;
-          return base.filter(p=>p.name.includes(lq));
+
+        const renderListItem = (type, item, i, total) => {
+          const isLast = i===total-1;
+          if(type==='parte') return(
+            <button key={item.key} onClick={()=>openFicha('parte',item.key)}
+              style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderBottom:isLast?"none":`1px solid ${C.border}`,background:"none",border:"none",width:"100%",textAlign:"left",cursor:"pointer",touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.name}</div>
+                <div style={{fontSize:10,color:C.t3,marginTop:2}}>{item.total}x · {item.success} entregadas ({Math.round(item.successRate)}%){item.avgUtil>0?` · ${mxn(Math.round(item.avgUtil))} util.`:""}</div>
+              </div>
+              {item.topSuppId&&<span style={{fontSize:9,color:C.t3,flexShrink:0,maxWidth:90,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{suppName(item.topSuppId)}</span>}
+              <span style={{fontSize:10,color:C.cyan,fontWeight:700,flexShrink:0}}>›</span>
+            </button>
+          );
+          if(type==='vehiculo') {const u=units.find(un=>un.id===item.unitId); return(
+            <button key={item.unitId} onClick={()=>openFicha('vehiculo',item.unitId)}
+              style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderBottom:isLast?"none":`1px solid ${C.border}`,background:"none",border:"none",width:"100%",textAlign:"left",cursor:"pointer",touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u?`${u.marca} ${u.modelo}${u.anio?" "+u.anio:""}`:item.unitId}</div>
+                <div style={{fontSize:10,color:C.t3,marginTop:2}}>{item.count} incidencias · {item.success} resueltas{u?.economico?" · Eco."+u.economico:""}</div>
+              </div>
+              <span style={{fontSize:13,fontWeight:800,color:C.blue,flexShrink:0}}>{item.count}x</span>
+              <span style={{fontSize:10,color:C.blue,fontWeight:700,flexShrink:0}}>›</span>
+            </button>
+          );}
+          if(type==='proveedor') {const s=suppliers.find(s=>s.id===item.supplierId); return(
+            <button key={item.supplierId} onClick={()=>openFicha('proveedor',item.supplierId)}
+              style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderBottom:isLast?"none":`1px solid ${C.border}`,background:"none",border:"none",width:"100%",textAlign:"left",cursor:"pointer",touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s?.nombre||s?.name||item.supplierId}</div>
+                <div style={{fontSize:10,color:C.t3,marginTop:2}}>{item.count} operaciones · {item.parts} tipos de parte</div>
+              </div>
+              <span style={{fontSize:13,fontWeight:800,color:C.green,flexShrink:0}}>{mxn(Math.round(item.util))}</span>
+              <span style={{fontSize:10,color:C.green,fontWeight:700,flexShrink:0}}>›</span>
+            </button>
+          );}
+          if(type==='cliente') {const cl=clients.find(c=>c.id===item.clientId); return(
+            <button key={item.clientId} onClick={()=>openFicha('cliente',item.clientId)}
+              style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderBottom:isLast?"none":`1px solid ${C.border}`,background:"none",border:"none",width:"100%",textAlign:"left",cursor:"pointer",touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl?.empresa||item.clientId}</div>
+                <div style={{fontSize:10,color:C.t3,marginTop:2}}>{item.count} solicitudes · {item.success} resueltas · {item.problems} tipos de falla</div>
+              </div>
+              <span style={{fontSize:13,fontWeight:800,color:C.yellow,flexShrink:0}}>{mxn(Math.round(item.util))}</span>
+              <span style={{fontSize:10,color:C.yellow,fontWeight:700,flexShrink:0}}>›</span>
+            </button>
+          );}
+          return null;
         };
-        const suppName = id => suppliers.find(s=>s.id===id)?.nombre||suppliers.find(s=>s.id===id)?.name||id||"—";
-        const clientName = id => clients.find(c=>c.id===id)?.empresa||id||"—";
-        const unitDesc = id => {const u=units.find(u=>u.id===id);return u?`${u.marca} ${u.modelo}${u.economico?" (Eco."+u.economico+")":""}`:"—";};
+
         return (
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
-            {/* Search */}
+            {/* ─ Search bar ─ */}
             <div style={{position:"relative"}}>
-              <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",fontSize:13,color:C.t3}}>🔍</span>
+              <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:14,color:C.t3,pointerEvents:"none"}}>🔍</span>
               <input
                 value={conocimientoSearch}
-                onChange={e=>setConocimientoSearch(e.target.value)}
-                placeholder="Buscar problema, pieza, síntoma..."
-                style={{width:"100%",boxSizing:"border-box",paddingLeft:36,paddingRight:12,paddingTop:10,paddingBottom:10,
-                  background:C.card,border:`1.5px solid ${conocimientoSearch?C.cyan:C.border}`,borderRadius:12,
+                onChange={e=>{setConocimientoSearch(e.target.value);}}
+                placeholder="Buscar pieza, vehículo, proveedor, cliente..."
+                style={{width:"100%",boxSizing:"border-box",paddingLeft:40,paddingRight:conocimientoSearch?36:12,paddingTop:11,paddingBottom:11,
+                  background:C.card,border:`1.5px solid ${conocimientoSearch?C.cyan:C.border}`,borderRadius:14,
                   color:C.t1,fontSize:13,outline:"none",fontFamily:"inherit"}}
               />
+              {conocimientoSearch&&(
+                <button onClick={()=>setConocimientoSearch("")}
+                  style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:16,color:C.t3,lineHeight:1}}>×</button>
+              )}
             </div>
 
-            {/* Vista pills */}
-            <div style={{overflowX:"auto",scrollbarWidth:"none",WebkitOverflowScrolling:"touch"}}>
-              <div style={{display:"flex",gap:6,width:"max-content",paddingBottom:2}}>
-                {VISTAS.map(v=>(
-                  <button key={v.id} onClick={()=>setConocimientoVista(v.id)}
-                    style={{padding:"6px 12px",borderRadius:16,border:"none",fontSize:11,fontWeight:600,cursor:"pointer",
-                      whiteSpace:"nowrap",touchAction:"manipulation",WebkitTapHighlightColor:"transparent",
-                      background:conocimientoVista===v.id?A.pillBg:"transparent",
-                      color:conocimientoVista===v.id?A.pillColor:C.t3,
-                      outline:conocimientoVista===v.id?`1.5px solid ${A.pillBorder}`:`1px solid ${A.pillBorderInactive}`}}>
-                    {v.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* ─ Problema lists ─ */}
-            {["frecuencia","rentabilidad","exito","cancelacion"].includes(conocimientoVista)&&(()=>{
-              const list = getList(conocimientoVista);
-              const isEmpty = list.length===0;
+            {/* ─ Resultados de búsqueda ─ */}
+            {showSearch&&(()=>{
+              const res = conocimientoResults||[];
+              if(res.length===0) return(
+                <div style={{...cardStyle,padding:"24px",textAlign:"center",color:C.t3,fontSize:12}}>
+                  Sin resultados para "{conocimientoSearch}"
+                </div>
+              );
               return(
-                <div style={{...cardStyle,padding:0,overflow:"hidden"}}>
-                  {isEmpty?(
-                    <div style={{padding:"20px",color:C.t3,fontSize:12,textAlign:"center"}}>
-                      {lq?`Sin resultados para "${conocimientoSearch}"`:"Sin datos suficientes aún."}
-                    </div>
-                  ):list.map((p,i)=>{
-                    const topS = p.topSuppId?suppliers.find(s=>s.id===p.topSuppId):null;
-                    return(
-                      <div key={p.key} style={{padding:"12px 14px",borderBottom:i<list.length-1?`1px solid ${C.border}`:"none"}}>
-                        {/* Nombre + contadores */}
-                        <div style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:6}}>
-                          <span style={{fontSize:11,fontWeight:700,color:C.t3,flexShrink:0,marginTop:1}}>#{i+1}</span>
+                <div style={{display:"flex",flexDirection:"column",gap:0}}>
+                  <div style={{fontSize:10,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8,paddingLeft:2}}>
+                    {res.length} resultado{res.length!==1?"s":""} para "{conocimientoSearch}"
+                  </div>
+                  <div style={{...cardStyle,padding:0,overflow:"hidden"}}>
+                    {res.map((r,i)=>{
+                      const col=typeColor[r.type]||C.cyan;
+                      return(
+                        <button key={r.key+r.type} onClick={()=>openFicha(r.type,r.key)}
+                          style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",
+                            borderBottom:i<res.length-1?`1px solid ${C.border}`:"none",
+                            background:"none",border:"none",width:"100%",textAlign:"left",cursor:"pointer",
+                            touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
+                          <span style={{fontSize:14,flexShrink:0}}>{typeIcon[r.type]}</span>
                           <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:12,fontWeight:700,color:C.t1,lineHeight:1.3,wordBreak:"break-word"}}>{p.name}</div>
-                            <div style={{display:"flex",gap:6,marginTop:4,flexWrap:"wrap"}}>
-                              <span style={{fontSize:10,color:C.cyan,fontWeight:700}}>{p.total}x solicitado</span>
-                              <span style={{fontSize:10,color:C.green}}>{p.success} entregados ({Math.round(p.successRate)}%)</span>
-                              {p.cancelled>0&&<span style={{fontSize:10,color:C.red}}>{p.cancelled} cancelados ({Math.round(p.cancelRate)}%)</span>}
-                            </div>
+                            <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.title}</div>
+                            <div style={{fontSize:10,color:C.t3,marginTop:1}}>{r.sub}</div>
                           </div>
-                        </div>
-                        {/* KPIs */}
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6}}>
-                          <div style={{background:C.bg3,borderRadius:7,padding:"6px 8px"}}>
-                            <div style={{fontSize:8,color:C.t3,marginBottom:2}}>UTIL. PROM</div>
-                            <div style={{fontSize:11,fontWeight:700,color:p.avgUtil>=0?C.green:C.red,fontFamily:"monospace"}}>{mxn(Math.round(p.avgUtil))}</div>
-                          </div>
-                          <div style={{background:C.bg3,borderRadius:7,padding:"6px 8px"}}>
-                            <div style={{fontSize:8,color:C.t3,marginBottom:2}}>T. OP. PROM</div>
-                            <div style={{fontSize:11,fontWeight:700,color:C.t1,fontFamily:"monospace"}}>{p.fmtOpH}</div>
-                          </div>
-                          <div style={{background:`${C.cyan}0a`,borderRadius:7,padding:"6px 8px"}}>
-                            <div style={{fontSize:8,color:C.t3,marginBottom:2}}>VALIDACIÓN</div>
-                            <div style={{fontSize:11,fontWeight:700,color:C.cyan,fontFamily:"monospace"}}>{p.fmtValH}</div>
-                          </div>
-                          <div style={{background:`${C.cyan}0a`,borderRadius:7,padding:"6px 8px"}}>
-                            <div style={{fontSize:8,color:C.t3,marginBottom:2}}>SOURCING</div>
-                            <div style={{fontSize:11,fontWeight:700,color:C.cyan,fontFamily:"monospace"}}>{p.fmtSrcH}</div>
-                          </div>
-                        </div>
-                        {/* Proveedor + util/hora */}
-                        {(topS||p.utilPorHora)&&(
-                          <div style={{display:"flex",gap:8,marginTop:6,flexWrap:"wrap"}}>
-                            {topS&&(
-                              <div style={{fontSize:10,color:C.t2,background:C.bg3,borderRadius:6,padding:"3px 8px"}}>
-                                Proveedor más efectivo: <span style={{color:C.t1,fontWeight:700}}>{topS.nombre||topS.name}</span>
-                                {p.topSuppCount>1&&<span style={{color:C.t3}}> ({p.topSuppCount}x)</span>}
-                              </div>
-                            )}
-                            {p.utilPorHora&&(
-                              <div style={{fontSize:10,color:C.yellow,background:`${C.yellow}10`,borderRadius:6,padding:"3px 8px",fontWeight:700}}>
-                                {mxn(Math.round(p.utilPorHora))}/h operativa
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                          <span style={{fontSize:9,padding:"2px 7px",borderRadius:8,background:`${col}18`,color:col,fontWeight:700,flexShrink:0}}>{typeLabel[r.type]}</span>
+                          <span style={{fontSize:12,color:col,fontWeight:700,flexShrink:0}}>›</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })()}
 
-            {/* ─ Clientes con más incidencias ─ */}
-            {conocimientoVista==="clientes"&&(
-              <div style={{...cardStyle,padding:0,overflow:"hidden"}}>
-                {conocimientoData.topClientes.length===0?(
-                  <div style={{padding:20,color:C.t3,fontSize:12,textAlign:"center"}}>Sin datos de clientes.</div>
-                ):conocimientoData.topClientes.filter(d=>!lq||clientName(d.clientId).toLowerCase().includes(lq)).map((d,i)=>(
-                  <div key={d.clientId||i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:i<conocimientoData.topClientes.length-1?`1px solid ${C.border}`:"none"}}>
-                    <span style={{fontSize:12,fontWeight:800,color:C.t3,flexShrink:0,minWidth:24}}>#{i+1}</span>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{clientName(d.clientId)}</div>
-                      <div style={{fontSize:10,color:C.t3,marginTop:2}}>
-                        {d.success} entregados · {d.problems} tipo{d.problems!==1?"s":""} de problema
-                      </div>
-                    </div>
-                    <div style={{textAlign:"right",flexShrink:0}}>
-                      <div style={{fontSize:13,fontWeight:800,color:C.cyan,fontFamily:"monospace"}}>{d.count}x</div>
-                      <div style={{fontSize:10,color:C.green,fontFamily:"monospace"}}>{mxn(Math.round(d.util))}</div>
-                    </div>
+            {/* ─ Lista de entidad seleccionada ─ */}
+            {!showSearch&&kbView&&(()=>{
+              const col = typeColor[kbView]||C.cyan;
+              const tile = ENTITY_TILES.find(t=>t.type===kbView);
+              const list = listData[kbView]||[];
+              return(
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <button onClick={()=>setKbView(null)}
+                      style={{padding:"7px 14px",borderRadius:20,border:`1px solid ${C.border}`,background:C.bg3,color:C.t2,fontSize:11,cursor:"pointer",fontWeight:600,flexShrink:0,touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
+                      ← Inicio
+                    </button>
+                    <span style={{fontSize:15,fontWeight:800,color:C.t1}}>{tile?.icon} {tile?.label}</span>
+                    <span style={{fontSize:10,color:C.t3,marginLeft:"auto"}}>{list.length} registros</span>
                   </div>
-                ))}
-              </div>
-            )}
+                  {list.length===0?(
+                    <div style={{...cardStyle,padding:24,textAlign:"center",color:C.t3,fontSize:12}}>Sin datos registrados aún.</div>
+                  ):(
+                    <div style={{...cardStyle,padding:0,overflow:"hidden"}}>
+                      {list.map((item,i)=>renderListItem(kbView,item,i,list.length))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
-            {/* ─ Vehículos con más fallas ─ */}
-            {conocimientoVista==="vehiculos"&&(
-              <div style={{...cardStyle,padding:0,overflow:"hidden"}}>
-                {conocimientoData.topUnidades.length===0?(
-                  <div style={{padding:20,color:C.t3,fontSize:12,textAlign:"center"}}>Sin unidades vinculadas aún.</div>
-                ):conocimientoData.topUnidades.filter(d=>!lq||unitDesc(d.unitId).toLowerCase().includes(lq)).map((d,i)=>(
-                  <div key={d.unitId||i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:i<conocimientoData.topUnidades.length-1?`1px solid ${C.border}`:"none"}}>
-                    <span style={{fontSize:12,fontWeight:800,color:C.t3,flexShrink:0,minWidth:24}}>#{i+1}</span>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{unitDesc(d.unitId)}</div>
-                      <div style={{fontSize:10,color:C.t3,marginTop:2}}>
-                        {d.success} resueltos · {d.problems} tipo{d.problems!==1?"s":""} de falla
-                      </div>
-                    </div>
-                    <div style={{textAlign:"right",flexShrink:0}}>
-                      <div style={{fontSize:13,fontWeight:800,color:C.red,fontFamily:"monospace"}}>{d.count}x</div>
-                      <div style={{fontSize:10,color:C.green,fontFamily:"monospace"}}>{mxn(Math.round(d.util))}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* ─ Proveedores más efectivos ─ */}
-            {conocimientoVista==="proveedores"&&(
-              <div style={{...cardStyle,padding:0,overflow:"hidden"}}>
-                {conocimientoData.topProveedores.length===0?(
-                  <div style={{padding:20,color:C.t3,fontSize:12,textAlign:"center"}}>Sin proveedores con operaciones concretadas.</div>
-                ):conocimientoData.topProveedores.filter(d=>!lq||suppName(d.supplierId).toLowerCase().includes(lq)).map((d,i)=>(
-                  <div key={d.supplierId||i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:i<conocimientoData.topProveedores.length-1?`1px solid ${C.border}`:"none"}}>
-                    <span style={{fontSize:12,fontWeight:800,color:C.t3,flexShrink:0,minWidth:24}}>#{i+1}</span>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{suppName(d.supplierId)}</div>
-                      <div style={{fontSize:10,color:C.t3,marginTop:2}}>
-                        {d.parts} tipo{d.parts!==1?"s":""} de parte surtida
-                      </div>
-                    </div>
-                    <div style={{textAlign:"right",flexShrink:0}}>
-                      <div style={{fontSize:13,fontWeight:800,color:C.green,fontFamily:"monospace"}}>{d.count}x</div>
-                      <div style={{fontSize:10,color:C.green,fontFamily:"monospace"}}>{mxn(Math.round(d.util))}</div>
-                    </div>
-                  </div>
+            {/* ─ Home: 4 tiles ─ */}
+            {!showSearch&&!kbView&&(
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                {ENTITY_TILES.map(t=>(
+                  <button key={t.type} onClick={()=>setKbView(t.type)}
+                    style={{...cardStyle,padding:"16px",border:`1px solid ${t.col}22`,background:`${t.col}06`,
+                      cursor:"pointer",textAlign:"left",display:"block",touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
+                    <div style={{fontSize:24,marginBottom:6}}>{t.icon}</div>
+                    <div style={{fontSize:13,fontWeight:800,color:C.t1,marginBottom:2}}>{t.label}</div>
+                    <div style={{fontSize:10,color:C.t3,marginBottom:8}}>{t.sub}</div>
+                    <div style={{fontSize:20,fontWeight:900,color:t.col,fontFamily:"monospace"}}>{t.count}</div>
+                    <div style={{fontSize:9,color:C.t3}}>registros</div>
+                  </button>
                 ))}
               </div>
             )}
           </div>
         );
+
       })()}
 
       {/* ── PANEL 5 & 6: Partes ─────────────────────────────────────────────── */}
