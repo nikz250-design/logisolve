@@ -203,6 +203,20 @@ const classifyFamilia = titulo => {
   return "otros";
 };
 
+// Helpers para soporte multi-unidad (backward compat con unitId legacy)
+function getTicketUnitIds(t) {
+  if(t.unitIds?.length) return t.unitIds;
+  if(t.unitId) return [t.unitId];
+  return [];
+}
+function getTicketUnits(t, units) {
+  return getTicketUnitIds(t).map(id=>(units||[]).find(u=>u.id===id)).filter(Boolean);
+}
+function fmtUnits(us) {
+  if(!us?.length) return "";
+  return us.map(u=>u.economico?"Eco."+u.economico:`${u.marca} ${u.modelo}`).join(" · ");
+}
+
 const PROB = [
   { id:"high",   label:"Alta",  pct:90 },
   { id:"medium", label:"Media", pct:60 },
@@ -1932,6 +1946,109 @@ function UnitPicker({units, value, onChange, placeholder="Buscar por eco, placa,
   );
 }
 
+// ── MultiUnitPicker — selector de múltiples unidades de flotilla ─────────────
+function MultiUnitPicker({units, values=[], onChange, mobile=false}) {
+  const C = React.useContext(ThemeCtx);
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef();
+
+  useEffect(()=>{
+    const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
+    document.addEventListener("mousedown",h);
+    document.addEventListener("touchstart",h,{passive:true});
+    return()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
+  },[]);
+
+  const selected = values.map(id=>units.find(u=>u.id===id)).filter(Boolean);
+  const results  = useMemo(()=>{
+    const available = units.filter(u=>!values.includes(u.id));
+    if(!q.trim()) return available.slice(0,80);
+    const lq=q.toLowerCase();
+    return available.filter(u=>
+      (u.economico&&safeLower(u.economico).includes(lq))||
+      (u.placa&&safeLower(u.placa).includes(lq))||
+      safeLower(u.marca).includes(lq)||
+      safeLower(u.modelo).includes(lq)||
+      safeLower(u.vin).includes(lq)
+    );
+  },[q,units,values]);
+
+  const add = id => { onChange([...values,id]); setQ(""); setOpen(false); };
+  const remove = id => onChange(values.filter(x=>x!==id));
+
+  const triggerPad  = mobile?"12px 14px":"6px 8px";
+  const triggerFont = mobile?15:10;
+  const labelFont   = mobile?10:7;
+  const dropFont    = mobile?13:9;
+  const dropSubFont = mobile?11:7;
+  const dropHeight  = mobile?320:260;
+  const itemPad     = mobile?"10px 12px":"6px 9px";
+
+  return (
+    <div ref={ref} style={{position:"relative",marginBottom:mobile?10:7}}>
+      <div style={{fontSize:labelFont,color:C.t3,letterSpacing:"0.14em",marginBottom:mobile?5:3,textTransform:"uppercase"}}>
+        {mobile?"Unidad(es)":"UNIDAD(ES)"}
+      </div>
+      {selected.length>0&&(
+        <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:6}}>
+          {selected.map(u=>(
+            <div key={u.id} style={{display:"flex",alignItems:"center",gap:4,
+              background:`${C.cyan}18`,border:`1px solid ${C.cyan}44`,
+              borderRadius:mobile?6:3,padding:mobile?"4px 10px":"2px 6px",
+              fontSize:mobile?12:8,color:C.cyan,fontFamily:"'Courier New',monospace"}}>
+              <span>{u.economico?"Eco."+u.economico:`${u.marca} ${u.modelo}`}</span>
+              <span onClick={()=>remove(u.id)}
+                style={{cursor:"pointer",color:C.red,fontSize:mobile?16:10,lineHeight:1,marginLeft:2}}>×</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <div onClick={()=>{setOpen(o=>!o);setQ("");}}
+        style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+          background:C.bg0,border:`1px solid ${open?C.blueHi:C.border}`,
+          borderRadius:mobile?6:3,padding:triggerPad,cursor:"pointer",minHeight:mobile?46:32}}>
+        <span style={{fontSize:triggerFont,color:C.t3}}>
+          {selected.length?"+ Agregar otra unidad...":"Buscar por eco, placa, marca..."}
+        </span>
+        <span style={{fontSize:mobile?10:8,color:C.t3}}>{open?"▲":"▼"}</span>
+      </div>
+      {open&&(
+        <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:300,
+          background:C.bg2,border:`1px solid ${C.blueHi}`,borderRadius:mobile?6:3,
+          boxShadow:"0 4px 20px rgba(0,0,0,.6)",maxHeight:dropHeight,display:"flex",flexDirection:"column"}}>
+          <div style={{padding:mobile?"10px 12px":"5px 8px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
+            <input autoFocus value={q} onChange={e=>setQ(e.target.value)}
+              placeholder="Eco., placa, marca, modelo..."
+              style={{width:"100%",background:"transparent",border:"none",outline:"none",
+                color:C.t1,fontSize:mobile?15:10,fontFamily:"'Courier New',monospace"}}/>
+          </div>
+          <div style={{overflowY:"auto",flex:1}}>
+            {results.length===0&&<div style={{padding:itemPad,fontSize:dropFont,color:C.t3}}>Sin resultados</div>}
+            {results.map(u=>(
+              <div key={u.id} onClick={()=>add(u.id)}
+                style={{padding:itemPad,borderBottom:`1px solid ${C.border}`,cursor:"pointer",
+                  display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                    {u.economico&&<span style={{fontSize:mobile?13:9,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",flexShrink:0}}>Eco.{u.economico}</span>}
+                    <span style={{fontSize:mobile?13:9,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.marca} {u.modelo} {u.anio}</span>
+                  </div>
+                  <div style={{fontSize:dropSubFont,color:C.t3,fontFamily:"'Courier New',monospace",marginTop:2}}>
+                    {u.placa&&<span>Placa {u.placa} · </span>}
+                    <span>{(u.vin||"").slice(-8)}</span>
+                  </div>
+                </div>
+                <StatusBadge sid={u.statusOp} meta={UNIT_STATUS} small/>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── TIMELINE COMPONENT ───────────────────────────────────────────────────────
 const Timeline = React.memo(function Timeline({events, active=false, mobile=false}) {
   const C = React.useContext(ThemeCtx);
@@ -2475,7 +2592,8 @@ function Tickets({state,dispatch,toast,scheduleHardDelete}) {
         {filtered.map((t,i)=>{
           const exp=expId===t.id;
           const cl=clients.find(c=>c.id===t.clientId);
-          const un=units.find(u=>u.id===t.unitId);
+          const ticketUnits=getTicketUnits(t,units);
+          const un=ticketUnits[0]||null;
           const allowed=TICKET_TRANSITIONS[t.status]||[];
           const venc=t.promesaPago&&!t.cobrado&&parseDateMX(t.promesaPago)&&new Date()>parseDateMX(t.promesaPago);
           const pr=PRIORITY[t.priority]||PRIORITY.P4;
@@ -2487,7 +2605,7 @@ function Tickets({state,dispatch,toast,scheduleHardDelete}) {
                 <div style={{minWidth:0}}>
                   <div style={{fontSize:8,fontWeight:700,color:C.t1,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.id}</div>
                   <div style={{fontSize:9,color:C.cyan,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
-                  <div style={{fontSize:7,color:C.t3}}>{t.date}{cl?" · "+cl.empresa:""}{un?" · "+un.marca+" "+un.modelo:""}</div>
+                  <div style={{fontSize:7,color:C.t3}}>{t.date}{cl?" · "+cl.empresa:""}{ticketUnits.length>0?" · "+fmtUnits(ticketUnits):""}</div>
                 </div>
                 <div style={{fontSize:8,color:C.t2,fontFamily:"'Courier New',monospace"}}>{t.opShort}</div>
                 <PriorityBadge pid={t.priority} small/>
@@ -2767,7 +2885,7 @@ function Cotizador({state,dispatch,toast}) {
   const [fecha,     setFecha]     = useState(todayMX());
   const [clientId,  setClientId]  = useState("");
   const [supplierId,setSupplierId]= useState("");
-  const [unitId,    setUnitId]    = useState("");
+  const [unitIds,   setUnitIds]   = useState([]);
   const [status,    setStatus]    = useState("recibido");
   const [payType,   setPayType]   = useState("contado");
   const [promesa,   setPromesa]   = useState("");
@@ -2852,7 +2970,7 @@ function Cotizador({state,dispatch,toast}) {
     if(!titulo||titulo==="Sin descripcion") { toast("Agrega al menos un concepto","error"); return; }
     setIsSaving(true);
     const cl   = clients.find(c=>c.id===clientId);
-    const un   = units.find(u=>u.id===unitId);
+    const un   = units.find(u=>u.id===unitIds[0]);
     const supp = suppliers.find(s=>s.id===supplierId);
     const lineasConSnap = lineas.map((l,i)=>({
       titulo:l.titulo||"Sin descripcion", partRef:l.partRef||"",
@@ -2869,7 +2987,7 @@ function Cotizador({state,dispatch,toast}) {
     };
     const tkt = {
       id:mkTicketId(fecha), titulo, opId:opType, opShort:opMeta.short, priority,
-      clientId, supplierId, unitId,
+      clientId, supplierId, unitId:unitIds[0]||"", unitIds:[...unitIds],
       familia:classifyFamilia(titulo),
       partRef:lineas.map(l=>l.partRef).filter(Boolean).join(", "),
       date:fecha, status, payType,
@@ -3048,7 +3166,7 @@ function Cotizador({state,dispatch,toast}) {
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginTop:4}}>
                 <Sel label="Cliente"   value={clientId}   onChange={setClientId}   options={[{value:"",label:"-- Sin cliente --"},...clients.map(c=>({value:c.id,label:c.empresa}))]}/>
               </div>
-              <UnitPicker units={units} value={unitId} onChange={setUnitId}/>
+              <MultiUnitPicker units={units} values={unitIds} onChange={setUnitIds}/>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginTop:0}}>
                 <Sel label="Proveedor" value={supplierId} onChange={setSupplierId} options={[{value:"",label:"-- Sin proveedor --"},...suppliers.map(s=>({value:s.id,label:s.nombre}))]}/>
                 <Sel label="Pago"      value={payType}    onChange={setPayType}    options={[{value:"contado",label:"Contado"},{value:"credit",label:"Credito"}]}/>
@@ -3414,7 +3532,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
 
   const [fecha,      setFecha]      = useState(todayMX());
   const [clientId,   setClientId]   = useState("");
-  const [unitId,     setUnitId]     = useState("");
+  const [unitIds,    setUnitIds]    = useState([]);
   const [supplierId, setSupplierId] = useState("");
   const [vigencia,   setVigencia]   = useState(3);
   const [payType,    setPayType]    = useState("contado");
@@ -3476,7 +3594,8 @@ function CotizadorRefacciones({state,dispatch,toast}) {
 
   const generarPDF = useCallback(()=>{
     const cl   = clients.find(c=>c.id===clientId);
-    const un   = units.find(u=>u.id===unitId);
+    const ticketUnits=unitIds.map(id=>units.find(u=>u.id===id)).filter(Boolean);
+    const un   = ticketUnits[0]||null;
     const supp = suppliers.find(s=>s.id===supplierId);
     const folio = mkCotId(fecha);
 
@@ -3487,7 +3606,9 @@ function CotizadorRefacciones({state,dispatch,toast}) {
       return `${parseInt(p[0])} de ${meses[parseInt(p[1])-1]} de ${p[2]}`;
     })();
 
-    const unidadStr=un?`${un.economico?"Eco. "+un.economico+" · ":""}${un.marca} ${un.modelo} ${un.anio}${un.placa?" · Placa: "+un.placa:""}${un.vin?" · VIN: "+un.vin:""}` : "";
+    const unidadStr=ticketUnits.length
+      ? ticketUnits.map(u=>`${u.economico?"Eco. "+u.economico+" · ":""}${u.marca} ${u.modelo} ${u.anio}${u.placa?" · Placa: "+u.placa:""}`).join(" | ")
+      : "";
     const clLine=cl?cl.empresa+(cl.ciudad?` · ${cl.ciudad}${cl.estado?", "+cl.estado:""}` :""):"—";
     const formaPago=payType==="credit"?`Crédito`+(promesa?` — Fecha límite: ${promesa}`:""):"Contado / Transferencia bancaria";
     const entrega=supp?.entregaDias?`${supp.entregaDias} día${supp.entregaDias>1?"s":""} hábiles`:"24-48 hrs hábiles";
@@ -3639,7 +3760,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
     };
     const tkt={
       id:mkTicketId(fecha), titulo, opId:"general", opShort:"REF-G", priority:"P3",
-      clientId, supplierId, unitId,
+      clientId, supplierId, unitId:unitIds[0]||"", unitIds:[...unitIds],
       partRef:lineas.map(l=>l.oem||l.aftermarket).filter(Boolean).join(", "),
       date:fecha, status:"cotizado", payType,
       promesaPago:payType==="credit"?promesa:null,
@@ -3653,14 +3774,14 @@ function CotizadorRefacciones({state,dispatch,toast}) {
     opLog.push("TKT_CREATED",{id:tkt.id,titulo});
     toast("Ticket registrado: "+tkt.id,"success");
     setTimeout(()=>setIsSaving(false),1500);
-  },[isSaving,lineas,lineSnaps,totalSnap,aggMargen,fecha,clientId,supplierId,unitId,payType,promesa,notes,iva,dispatch,toast]);
+  },[isSaving,lineas,lineSnaps,totalSnap,aggMargen,fecha,clientId,supplierId,unitIds,payType,promesa,notes,iva,dispatch,toast]);
 
   const reset=useCallback(()=>{
-    setLineas([emptyRefLine()]); setClientId(""); setUnitId(""); setSupplierId("");
+    setLineas([emptyRefLine()]); setClientId(""); setUnitIds([]); setSupplierId("");
     setNotes(""); setPayType("contado"); setPromesa(""); setFecha(todayMX());
   },[]);
 
-  const selectedUnit = units.find(u=>u.id===unitId);
+  const selectedUnit = units.find(u=>u.id===unitIds[0]);
 
   return (
     <div style={{padding:"10px 13px",maxWidth:1200,margin:"0 auto"}}>
@@ -3743,7 +3864,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
                 <Sel label="Proveedor" value={supplierId} onChange={setSupplierId}
                   options={[{value:"",label:"-- Sin proveedor --"},...suppliers.map(s=>({value:s.id,label:s.nombre}))]}/>
               </div>
-              <UnitPicker units={units} value={unitId} onChange={setUnitId}/>
+              <MultiUnitPicker units={units} values={unitIds} onChange={setUnitIds}/>
               {selectedUnit&&(
                 <div style={{background:C.bg3,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.borderHi}`,borderRadius:3,padding:"6px 9px",marginTop:4,marginBottom:4}}>
                   <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
@@ -7254,7 +7375,7 @@ function MCotizador({state,dispatch,toast}) {
   const [partQ,setPartQ]        = useState({});
   const [pickerOpen,setPickerOpen] = useState({});
   const [clientId,setClientId]  = useState("");
-  const [unitId,setUnitId]      = useState("");
+  const [unitIds,setUnitIds]    = useState([]);
   const [supplierId,setSupplierId] = useState("");
   const [payType,setPayType]    = useState("contado");
   const [promesa,setPromesa]    = useState("");
@@ -7295,8 +7416,9 @@ function MCotizador({state,dispatch,toast}) {
     if(hint.avgCosto>0) upd(idx,{costoUnit:Math.round(hint.avgCosto)});
   };
 
-  const cl   = clients.find(c=>c.id===clientId);
-  const un   = units.find(u=>u.id===unitId);
+  const cl          = clients.find(c=>c.id===clientId);
+  const ticketUnits = unitIds.map(id=>units.find(u=>u.id===id)).filter(Boolean);
+  const un          = ticketUnits[0]||null;
   const supp = suppliers.find(s=>s.id===supplierId);
 
   const save = ()=>{
@@ -7341,7 +7463,7 @@ function MCotizador({state,dispatch,toast}) {
     const tkt={
       id:mkTicketId(fecha),titulo,
       opId:opType,opShort:(OP_TYPES.find(o=>o.id===opType)||OP_TYPES[0]).short,
-      priority,clientId,supplierId,unitId,
+      priority,clientId,supplierId,unitId:unitIds[0]||"",unitIds:[...unitIds],
       familia:classifyFamilia(titulo),
       partRef:lineas.map(l=>l.partRef).filter(Boolean).join(", "),
       date:fecha,status:"recibido",payType,
@@ -7378,7 +7500,7 @@ function MCotizador({state,dispatch,toast}) {
     setPdfPending({tkt,cl,un,supp});
     setLineas([emptyLine(opType,priority,[])]);
     setNotes(""); setPartQ({});
-    setClientId(""); setUnitId(""); setSupplierId("");
+    setClientId(""); setUnitIds([]); setSupplierId("");
     setPayType("contado"); setPromesa(""); setStep(0);
     setKitMode(false); setKitTitle("");
   };
@@ -7742,7 +7864,7 @@ function MCotizador({state,dispatch,toast}) {
         <div style={{padding:"18px 18px 6px"}}>
           <MField label="Fecha" value={fecha} onChange={setFecha} placeholder="DD/MM/AAAA"/>
           <ClientPicker   clients={clients}     value={clientId}    onChange={setClientId}   mobile/>
-          <UnitPicker     units={units}          value={unitId}      onChange={setUnitId}     mobile/>
+          <MultiUnitPicker units={units} values={unitIds} onChange={setUnitIds} mobile/>
           <SupplierPicker suppliers={suppliers}  value={supplierId}  onChange={setSupplierId} mobile/>
           <MSel label="Pago" value={payType} onChange={setPayType}
             options={[{value:"contado",label:"Contado — sin seguimiento"},{value:"credit",label:"Crédito — genera cartera"}]}/>
@@ -7785,7 +7907,10 @@ function MCotizador({state,dispatch,toast}) {
         <div style={{display:"flex",flexDirection:"column",gap:5}}>
           {lineas.length>1&&<div style={{fontSize:10,color:A.t3}}>{lineas.length} líneas</div>}
           {cl&&<div style={{fontSize:11,color:A.t2}}>Cliente: <span style={{fontWeight:700,color:A.t1}}>{cl.empresa}</span></div>}
-          {un&&<div style={{fontSize:11,color:A.t2}}>Unidad: <span style={{color:A.t1}}>{un.economico?"Eco. "+un.economico+" ":""}{un.marca} {un.modelo}</span></div>}
+          {ticketUnits.length>0&&<div style={{fontSize:11,color:A.t2}}>
+            {ticketUnits.length===1?"Unidad":"Unidades"}:{" "}
+            <span style={{color:A.t1}}>{fmtUnits(ticketUnits)}</span>
+          </div>}
           <div style={{fontSize:10,color:A.t3}}>
             Pago: {payType==="credit"?`Crédito${promesa?" · "+promesa:""}` : "Contado"}
           </div>
@@ -8564,8 +8689,9 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                 {dayTickets.map(t=>{
                   const meta   = TICKET_META[t.status]||{};
                   const pr     = prC[t.priority]||prC.P4;
-                  const cl     = clients.find(c=>c.id===t.clientId);
-                  const un     = units.find(u=>u.id===t.unitId);
+                  const cl          = clients.find(c=>c.id===t.clientId);
+                  const ticketUnits = getTicketUnits(t,units);
+                  const un          = ticketUnits[0]||null;
                   const isExp  = expandId===t.id;
                   const isEdit = editId===t.id;
                   const isOp   = OPERADO_SET.has(t.status);
@@ -8612,12 +8738,12 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                         <div style={{fontSize:9,color:A.t3,fontFamily:"'Courier New',monospace",marginBottom:3,letterSpacing:"0.04em"}}>
                           {mkFolio(t,"OP")}
                         </div>
-                        {(cl||un)&&(
+                        {(cl||ticketUnits.length>0)&&(
                           <div style={{fontSize:10,color:A.t3,
                             overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                             {cl&&<span style={{color:A.t2}}>{cl.empresa}</span>}
-                            {cl&&un&&<span style={{margin:"0 4px"}}>·</span>}
-                            {un&&<span>{un.economico?"Eco. "+un.economico:un.marca+" "+un.modelo}</span>}
+                            {cl&&ticketUnits.length>0&&<span style={{margin:"0 4px"}}>·</span>}
+                            {ticketUnits.length>0&&<span>{fmtUnits(ticketUnits)}</span>}
                           </div>
                         )}
                       </div>
