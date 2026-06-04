@@ -2626,6 +2626,53 @@ function Tickets({state,dispatch,toast,scheduleHardDelete}) {
 }
 
 // ── COTIZADOR ────────────────────────────────────────────────────────────────
+
+// lookupKB — busca casos históricos similares por palabras clave.
+// Retorna null si no hay coincidencias, o un objeto con estadísticas.
+function lookupKB(query, tickets, suppliers) {
+  const q = (query||"").trim();
+  if(!q||q.length<3) return null;
+  const words = q.toLowerCase().replace(/\s+/g," ").split(" ").filter(w=>w.length>=2);
+  if(!words.length) return null;
+  const all = (tickets||[]).filter(t=>!t._deleted&&t.titulo);
+  // OR: cualquier palabra del query aparece en el título
+  const matches = all.filter(t=>{
+    const tl=(t.titulo||"").toLowerCase();
+    return words.some(w=>tl.includes(w));
+  });
+  if(!matches.length) return null;
+  const success = matches.filter(t=>OPERADO_SET.has(t.status));
+  const canceled = matches.filter(t=>t.status==="cancelado");
+  let sumUtil=0,sumCosto=0,sumPrecio=0,fCount=0,sumOpH=0,opHCount=0,suppFreq={};
+  success.forEach(t=>{
+    sumUtil   += safeNumber(t.snap?.uNeta);
+    sumCosto  += safeNumber(t.snap?.costoBase||t.snap?.costoTotal);
+    sumPrecio += safeNumber(t.snap?.precioSinIVA);
+    fCount++;
+    const tl=t.timeline||[];
+    const recEv=tl.find(e=>(e.evento||"").toLowerCase().includes("solicitud recibida"))||tl.find(e=>(e.evento||"").toLowerCase().includes("ticket creado"));
+    const entEv=tl.find(e=>(e.evento||"").toLowerCase().includes("estado: entregado"));
+    if(recEv&&entEv){const r=new Date(recEv.ts),en=new Date(entEv.ts);if(!isNaN(r)&&!isNaN(en)&&en>r){sumOpH+=(en-r)/3600000;opHCount++;}}
+    if(t.supplierId) suppFreq[t.supplierId]=(suppFreq[t.supplierId]||0)+1;
+  });
+  const topSuppEntry=Object.entries(suppFreq).sort((a,b)=>b[1]-a[1])[0];
+  const topSupp=topSuppEntry?(suppliers||[]).find(s=>s.id===topSuppEntry[0]):null;
+  const lastSuccess=[...success].sort((a,b)=>{
+    const parse=d=>{const p=(d||"").split("/");return p.length===3?new Date(+p[2],+p[1]-1,+p[0]):new Date(0);};
+    return parse(b.date)-parse(a.date);
+  })[0];
+  return {
+    total:matches.length, success:success.length, canceled:canceled.length,
+    rate:matches.length>0?Math.round((success.length/matches.length)*100):0,
+    avgUtil:fCount>0?sumUtil/fCount:null,
+    avgCosto:fCount>0?sumCosto/fCount:null,
+    avgPrecio:fCount>0?sumPrecio/fCount:null,
+    avgOpH:opHCount>0?sumOpH/opHCount:null,
+    topSuppName:topSupp?.nombre||topSupp?.name||null,
+    lastDate:lastSuccess?.date||null,
+  };
+}
+
 const emptyLine = (opType, priority, activeMods) => {
   const mg = effectiveMargin(opType||"consumable", priority||"P3", activeMods||[], false, 27);
   return {
@@ -2718,6 +2765,15 @@ function Cotizador({state,dispatch,toast}) {
   const updateLinea = useCallback((idx,patch)=>setLineas(p=>p.map((l,i)=>i===idx?{...l,...patch}:l)),[]);
   const removeLinea = useCallback(idx=>setLineas(p=>p.filter((_,i)=>i!==idx)),[]);
   const addLinea    = useCallback(()=>setLineas(p=>[...p,emptyLine(opType,priority,activeMods)]),[opType,priority,activeMods]);
+
+  // ── Knowledge Base hints — se actualizan al tipear en DESCRIPCION ────────
+  const kbHints = useMemo(()=>lineas.map(l=>lookupKB(l.titulo,state.tickets,state.suppliers)),
+    [lineas, state.tickets, state.suppliers]);
+  const applyKBHint = useCallback((idx,hint)=>{
+    const patch={};
+    if(hint.avgCosto>0) patch.costoUnit=Math.round(hint.avgCosto);
+    updateLinea(idx,patch);
+  },[updateLinea]);
 
   // Reset custom margin when opType/priority changes (state update during render — safe pattern)
   const [lastOpKey, setLastOpKey] = useState(()=>opType+priority);
@@ -3002,6 +3058,28 @@ function Cotizador({state,dispatch,toast}) {
                           </button>
                         </div>
                       </div>
+                      {/* ── KB HINT — aparece al tipear si hay historial ── */}
+                      {kbHints[i]&&l.titulo.trim().length>=3&&(
+                        <div style={{marginBottom:6,background:`${C.cyan}0C`,border:`1px solid ${C.cyan}28`,borderRadius:4,padding:"7px 9px"}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                            <span style={{fontSize:8,fontWeight:700,color:C.cyan,letterSpacing:"0.1em"}}>
+                              ★ HISTORIAL · {kbHints[i].total} caso{kbHints[i].total!==1?"s":""} · {kbHints[i].rate}% éxito
+                            </span>
+                            {kbHints[i].avgCosto>0&&(
+                              <button onClick={()=>applyKBHint(i,kbHints[i])}
+                                style={{padding:"2px 8px",fontSize:7,fontWeight:700,background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,cursor:"pointer",letterSpacing:"0.05em",touchAction:"manipulation"}}>
+                                ← Aplicar costo
+                              </button>
+                            )}
+                          </div>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"2px 14px",fontSize:9,color:C.t2}}>
+                            {kbHints[i].avgUtil!==null&&<span>Util. prom. <b style={{color:C.green,fontFamily:"monospace"}}>{mxn(Math.round(kbHints[i].avgUtil))}</b></span>}
+                            {kbHints[i].avgOpH!==null&&<span>Tiempo prom. <b style={{color:C.t1}}>{kbHints[i].avgOpH.toFixed(1)}h</b></span>}
+                            {kbHints[i].topSuppName&&<span style={{gridColumn:"1/-1"}}>Proveedor <b style={{color:C.t1}}>{kbHints[i].topSuppName}</b></span>}
+                            {kbHints[i].lastDate&&<span>Última vez <b style={{color:C.t3}}>{kbHints[i].lastDate}</b></span>}
+                          </div>
+                        </div>
+                      )}
                       {/* Cantidad + Costo unitario + Gasolina + Otros */}
                       <div style={{display:"grid",gridTemplateColumns:"80px 1fr 1fr 1fr",gap:5,marginBottom:6}}>
                         <div>
@@ -7136,6 +7214,13 @@ function MCotizador({state,dispatch,toast}) {
     upd(i,{titulo:p.nombre,partRef:p.oem||"",costoUnit:p.ultimoPrecio||0,manualPrice:String(p.ultimoPrecio||0)});
   };
 
+  // ── Knowledge Base hints ─────────────────────────────────────────────────
+  const kbHints = useMemo(()=>lineas.map(l=>lookupKB(l.titulo,state.tickets,state.suppliers)),
+    [lineas, state.tickets, state.suppliers]);
+  const applyKBHint = (idx,hint)=>{
+    if(hint.avgCosto>0) upd(idx,{costoUnit:Math.round(hint.avgCosto)});
+  };
+
   const cl   = clients.find(c=>c.id===clientId);
   const un   = units.find(u=>u.id===unitId);
   const supp = suppliers.find(s=>s.id===supplierId);
@@ -7393,6 +7478,28 @@ function MCotizador({state,dispatch,toast}) {
                 onSelect={p=>selectPart(i,p)}
                 mobile
               />
+              {/* ── KB HINT — aparece al tipear si hay historial ── */}
+              {kbHints[i]&&l.titulo.trim().length>=3&&(
+                <div style={{margin:"8px 0",background:`${C.cyan}0E`,border:`1px solid ${C.cyan}30`,borderRadius:10,padding:"10px 12px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                    <span style={{fontSize:11,fontWeight:700,color:A.cyan,letterSpacing:"0.06em"}}>
+                      ★ {kbHints[i].total} caso{kbHints[i].total!==1?"s":""} · {kbHints[i].rate}% éxito
+                    </span>
+                    {kbHints[i].avgCosto>0&&(
+                      <button onPointerDown={e=>{e.preventDefault();applyKBHint(i,kbHints[i]);}}
+                        style={{padding:"5px 12px",fontSize:11,fontWeight:700,background:A.blueDim,border:`1.5px solid ${A.blueHi}`,borderRadius:8,color:A.cyan,cursor:"pointer",touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
+                        ← Aplicar costo
+                      </button>
+                    )}
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"5px 16px",fontSize:12,color:A.t2}}>
+                    {kbHints[i].avgUtil!==null&&<span>Util. prom. <b style={{color:A.lime,fontFamily:"monospace"}}>{mxn(Math.round(kbHints[i].avgUtil))}</b></span>}
+                    {kbHints[i].avgOpH!==null&&<span>Tiempo <b style={{color:A.t1}}>{kbHints[i].avgOpH.toFixed(1)}h</b></span>}
+                    {kbHints[i].topSuppName&&<span style={{gridColumn:"1/-1"}}>Proveedor <b style={{color:A.t1}}>{kbHints[i].topSuppName}</b></span>}
+                    {kbHints[i].lastDate&&<span style={{color:A.t3}}>Última vez {kbHints[i].lastDate}</span>}
+                  </div>
+                </div>
+              )}
               {l.partRef&&(
                 <div style={{fontSize:10,color:A.t3,marginTop:6,marginBottom:10,letterSpacing:"0.04em"}}>
                   OEM: {l.partRef}
@@ -8809,6 +8916,28 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                                   </div>
                                 )}
                               </div>
+                              {/* ── KB HINT ── */}
+                              {kbHints[idx]&&l.titulo.trim().length>=3&&(
+                                <div style={{marginBottom:8,background:`${C.cyan}0E`,border:`1px solid ${C.cyan}30`,borderRadius:8,padding:"9px 12px"}}>
+                                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+                                    <span style={{fontSize:10,fontWeight:700,color:A.cyan,letterSpacing:"0.06em"}}>
+                                      ★ {kbHints[idx].total} caso{kbHints[idx].total!==1?"s":""} · {kbHints[idx].rate}% éxito
+                                    </span>
+                                    {kbHints[idx].avgCosto>0&&(
+                                      <button onPointerDown={e=>{e.preventDefault();applyKBHint(idx,kbHints[idx]);}}
+                                        style={{padding:"4px 10px",fontSize:10,fontWeight:700,background:A.blueDim,border:`1px solid ${A.blueHi}`,borderRadius:6,color:A.cyan,cursor:"pointer",touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
+                                        ← Aplicar costo
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"4px 16px",fontSize:11,color:A.t2}}>
+                                    {kbHints[idx].avgUtil!==null&&<span>Util. prom. <b style={{color:A.lime,fontFamily:"monospace"}}>{mxn(Math.round(kbHints[idx].avgUtil))}</b></span>}
+                                    {kbHints[idx].avgOpH!==null&&<span>Tiempo <b style={{color:A.t1}}>{kbHints[idx].avgOpH.toFixed(1)}h</b></span>}
+                                    {kbHints[idx].topSuppName&&<span style={{gridColumn:"1/-1"}}>Proveedor <b style={{color:A.t1}}>{kbHints[idx].topSuppName}</b></span>}
+                                    {kbHints[idx].lastDate&&<span style={{color:A.t3}}>Última vez {kbHints[idx].lastDate}</span>}
+                                  </div>
+                                </div>
+                              )}
                               <input value={l.partRef} onChange={e=>mLsfn(idx,"partRef")(e.target.value)}
                                 placeholder="No. parte / referencia"
                                 style={{width:"100%",boxSizing:"border-box",marginBottom:6,
