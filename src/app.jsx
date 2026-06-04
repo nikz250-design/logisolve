@@ -6514,6 +6514,7 @@ function MPipeline({state,dispatch,toast}) {
   const {tickets,clients,units} = state;
   const [filter,setFilter]       = useState("active");
   const [sortBy,setSortBy]       = useState("priority");
+  const [search,setSearch]       = useState("");
   const [statusSheet,setStatusSheet] = useState(null);
   const [editSheet,setEditSheet]  = useState(null);
   const [expandId,setExpandId]   = useState(null);
@@ -6542,17 +6543,25 @@ function MPipeline({state,dispatch,toast}) {
       const d=parseDateMX(t.promesaPago); return d&&new Date()>d;
     });
     else if(filter!=="all") arr=arr.filter(t=>t.status===filter);
+    if(search.trim()){
+      const lq=search.toLowerCase();
+      arr=arr.filter(t=>
+        (t.titulo||"").toLowerCase().includes(lq)||
+        (t.id||"").toLowerCase().includes(lq)||
+        clients.find(c=>c.id===t.clientId)?.empresa?.toLowerCase().includes(lq)||
+        units.find(u=>u.id===t.unitId)?.economico?.toLowerCase().includes(lq)
+      );
+    }
     const pOrd={P1:0,P2:1,P3:2,P4:3};
     const sOrd=["recibido","validando","sourcing","cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado","cancelado"];
     return [...arr].sort((a,b)=>{
       if(sortBy==="status")  return sOrd.indexOf(a.status)-sOrd.indexOf(b.status);
       if(sortBy==="cartera") return (b.snap?.precioConIVA||0)-(a.snap?.precioConIVA||0);
       if(sortBy==="date")    return b.date.localeCompare(a.date);
-      // priority: fix — use ?? not || (P1=0 is falsy)
       const pd=(pOrd[a.priority]??3)-(pOrd[b.priority]??3);
       return pd!==0?pd:b.date.localeCompare(a.date);
     });
-  },[active,filter,sortBy]);
+  },[active,filter,sortBy,search,clients,units]);
 
   const SORT_OPTS=[["priority","↕ Prioridad"],["date","↕ Fecha"],["cartera","↕ Monto"],["status","↕ Estado"]];
   const sortLabel = SORT_OPTS.find(s=>s[0]===sortBy)?.[1] ?? "↕";
@@ -6612,12 +6621,21 @@ function MPipeline({state,dispatch,toast}) {
           }}>{sortLabel}</button>
         </div>
 
+        {/* Buscador */}
+        <input
+          value={search} onChange={e=>setSearch(e.target.value)}
+          placeholder="Buscar por título, ID, cliente, eco..."
+          style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,
+            border:`1px solid ${search?A.cyan:C.border}`,borderRadius:12,
+            padding:"12px 16px",color:A.t1,fontSize:15,outline:"none",marginBottom:12,
+            boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .2s"}}/>
+
         {filtered.length===0&&(
           <div style={{textAlign:"center",padding:"48px 20px"}}>
             <div style={{fontSize:11,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>
               Sin tickets
             </div>
-            <div style={{fontSize:13,color:A.t3}}>Ajusta el filtro</div>
+            <div style={{fontSize:13,color:A.t3}}>{search?"Sin resultados para «"+search+"»":"Ajusta el filtro"}</div>
           </div>
         )}
 
@@ -9939,7 +9957,7 @@ function MInteligencia({state}) {
     {id:"oportunidad",    label:"Oportunidad"},
     {id:"kpis",           label:"KPIs"},
     {id:"alertas",        label:"Alertas"},
-    {id:"ia",             label:"IA"},
+    {id:"ia",             label:"Resumen"},
   ];
 
   const categoriaColor = cat => ({financiero:C.blue,operativo:C.cyan,cliente:C.yellow,crecimiento:C.green,riesgo:C.red}[cat]||C.t3);
@@ -11560,7 +11578,7 @@ function App() {
             {id:"ops",        label:"Centro",   icon:"⊙"},
             {id:"tickets",    label:"Pipeline", icon:"◈"},
             {id:"historial",  label:"Historial",icon:"☰"},
-            {id:"ia",         label:"IA",        icon:"✦"},
+            {id:"ia",         label:"Resumen",   icon:"✦"},
             {id:"cobranza",   label:"Cobros",   icon:"$"},
             {id:"__mas__",    label:"Más",      icon:"···"},
           ].map(t=>{
