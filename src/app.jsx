@@ -10052,6 +10052,7 @@ function MInteligencia({state}) {
   const [conocimientoSearch, setConocimientoSearch] = useState("");
   const [fichaType, setFichaType] = useState(null); // 'parte'|'vehiculo'|'proveedor'|'cliente'
   const [fichaKey,  setFichaKey]  = useState(null);
+  const [kbView,    setKbView]    = useState(null); // null=home | 'parte'|'vehiculo'|'proveedor'|'cliente'
   const openFicha = (type, key) => { setFichaType(type); setFichaKey(key); };
   const closeFicha = () => { setFichaType(null); setFichaKey(null); };
 
@@ -11234,9 +11235,6 @@ function MInteligencia({state}) {
           {type:'proveedor',label:"Proveedores",count:conocimientoData.topProveedores.length,icon:"📦",col:C.green,sub:"Proveedores con operaciones registradas"},
           {type:'cliente',  label:"Clientes",   count:conocimientoData.topClientes.length,icon:"👤", col:C.yellow,sub:"Clientes con historial operativo"},
         ];
-
-        // ─ nav state (what list is open within Conocimiento) ─
-        const [kbView, setKbView] = React.useState(null); // null=home | 'parte'|'vehiculo'|'proveedor'|'cliente'
 
         const listData = {
           parte:     conocimientoData.byFreq,
