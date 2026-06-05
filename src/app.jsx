@@ -2157,6 +2157,7 @@ function CentroOps({state}) {
   const C = React.useContext(ThemeCtx);
   const {tickets,clients,suppliers,units} = state;
   const [drillDown, setDrillDown] = useState(null);
+  const [pipelineFilter, setPipelineFilter] = useState(null);
   // Use shared selectors — business rules defined once in L3.5
   const active   = useMemo(()=>sel_active(tickets),[tickets]);
   const operados = useMemo(()=>sel_operados(tickets),[tickets]);
@@ -2302,13 +2303,17 @@ function CentroOps({state}) {
         <div style={{display:"grid",gridTemplateColumns:`repeat(${TICKET_ALL.length},1fr)`}}>
           {TICKET_ALL.map(sid=>{
             const s=TICKET_META[sid];
-            const count=tickets.filter(t=>t.status===sid).length;
+            const count=tickets.filter(t=>!t._deleted&&t.status===sid).length;
             const inBacklog=BACKLOG_SET.has(sid);
+            const selected=pipelineFilter===sid;
             return (
-              <div key={sid} style={{padding:"7px 3px",textAlign:"center",borderRight:`1px solid ${C.border}`,
-                background:inBacklog&&count>0?`${C.yellow}0D`:"transparent"}}>
+              <div key={sid} onClick={()=>setPipelineFilter(selected?null:sid)}
+                style={{padding:"7px 3px",textAlign:"center",borderRight:`1px solid ${C.border}`,
+                  cursor:"pointer",transition:"background 0.15s",
+                  background:selected?`${s.dot}22`:inBacklog&&count>0?`${C.yellow}0D`:"transparent"}}>
                 <div style={{fontSize:15,fontWeight:800,color:count>0?s.dot:C.t3,fontFamily:"'Courier New',monospace",lineHeight:1}}>{count}</div>
-                <div style={{fontSize:6,color:inBacklog&&count>0?C.yellow:C.t3,marginTop:2,lineHeight:1.3}}>{s.label}</div>
+                <div style={{fontSize:6,color:selected?s.dot:inBacklog&&count>0?C.yellow:C.t3,marginTop:2,lineHeight:1.3}}>{s.label}</div>
+                {selected&&<div style={{width:12,height:2,borderRadius:1,background:s.dot,margin:"3px auto 0"}}/>}
               </div>
             );
           })}
@@ -2810,6 +2815,121 @@ function CentroOps({state}) {
                 );
               })()}
 
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── PIPELINE STATUS MODAL ─────────────────────────────────────────── */}
+      {pipelineFilter&&(()=>{
+        const sid = pipelineFilter;
+        const s = TICKET_META[sid];
+        const tkts = tickets.filter(t=>!t._deleted&&t.status===sid);
+        const totalRev = sumSnap(tkts,"precioConIVA");
+        const totalUtil = sumSnap(tkts,"uNeta");
+        const isBacklog = BACKLOG_SET.has(sid);
+        const accent = isBacklog?C.yellow:s.dot;
+        const TH = ({children,right})=>(
+          <div style={{fontSize:7,fontWeight:700,color:C.t3,letterSpacing:"0.09em",
+            textTransform:"uppercase",textAlign:right?"right":"left"}}>{children}</div>
+        );
+        return (
+          <div onClick={e=>{if(e.target===e.currentTarget)setPipelineFilter(null)}}
+            style={{position:"fixed",inset:0,zIndex:710,background:"rgba(0,0,0,0.78)",
+              backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",
+              display:"flex",alignItems:"flex-start",justifyContent:"center",
+              padding:"36px 20px",overflowY:"auto"}}>
+            <div style={{background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,
+              width:"100%",maxWidth:760,boxShadow:"0 24px 80px rgba(0,0,0,0.7)"}}>
+
+              {/* Header */}
+              <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.border}`,
+                display:"flex",justifyContent:"space-between",alignItems:"center",
+                position:"sticky",top:0,background:C.bg0,zIndex:1,borderRadius:"6px 6px 0 0"}}>
+                <div>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                    <div style={{width:8,height:8,borderRadius:"50%",background:accent,flexShrink:0}}/>
+                    <div style={{fontSize:11,fontWeight:800,color:C.t1,letterSpacing:"0.1em",
+                      textTransform:"uppercase"}}>{s.label}</div>
+                  </div>
+                  <div style={{fontSize:8,color:C.t3}}>
+                    {tkts.length} operaci{tkts.length===1?"ón":"ones"}
+                    {tkts.length>0&&` · Revenue ${mxn(totalRev)} · Utilidad ${mxn(totalUtil)}`}
+                  </div>
+                </div>
+                <button onClick={()=>setPipelineFilter(null)}
+                  style={{background:"transparent",border:`1px solid ${C.border}`,color:C.t2,
+                    cursor:"pointer",fontSize:13,fontWeight:700,width:28,height:28,
+                    borderRadius:4,flexShrink:0,display:"flex",alignItems:"center",
+                    justifyContent:"center"}}>✕</button>
+              </div>
+
+              {tkts.length===0?(
+                <div style={{padding:"36px",textAlign:"center"}}>
+                  <span style={{fontSize:10,color:C.t3}}>Sin operaciones en este estado</span>
+                </div>
+              ):(
+                <>
+                  {/* Column headers */}
+                  <div style={{display:"grid",gridTemplateColumns:"110px 1fr 60px 110px 100px",
+                    padding:"7px 16px",borderBottom:`1px solid ${C.border}`,background:C.bg1}}>
+                    <TH>Folio</TH>
+                    <TH>Operación / Cliente</TH>
+                    <TH right>Días</TH>
+                    <TH right>Revenue</TH>
+                    <TH right>Utilidad</TH>
+                  </div>
+
+                  {/* Rows */}
+                  {tkts.map((t,i)=>{
+                    const cliente=clients.find(c=>c.id===t.clientId)?.nombre||t.clientId||"—";
+                    const dias=(()=>{const d=parseDateMX(t.date);return d?Math.round((Date.now()-d.getTime())/86400000):0;})();
+                    const util=safeNumber(t.snap?.uNeta);
+                    return (
+                      <div key={t.id} style={{display:"grid",
+                        gridTemplateColumns:"110px 1fr 60px 110px 100px",
+                        padding:"9px 16px",alignItems:"center",
+                        borderBottom:i<tkts.length-1?`1px solid ${C.border}`:"none",
+                        background:i%2===0?"transparent":`${C.bg1}70`}}>
+                        <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace",
+                          overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                          {mkFolio(t,"OP")}
+                        </div>
+                        <div style={{overflow:"hidden",paddingRight:8}}>
+                          <div style={{fontSize:9,fontWeight:600,color:C.t1,overflow:"hidden",
+                            textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo||"Sin título"}</div>
+                          <div style={{fontSize:7,color:C.t3,marginTop:1,overflow:"hidden",
+                            textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cliente}</div>
+                        </div>
+                        <div style={{fontSize:9,fontWeight:700,textAlign:"right",
+                          color:dias>14?C.red:dias>7?C.yellow:C.t2,
+                          fontFamily:"'Courier New',monospace"}}>{dias}d</div>
+                        <div style={{fontSize:9,fontWeight:700,textAlign:"right",color:C.cyan,
+                          fontFamily:"'Courier New',monospace"}}>{mxn(t.snap?.precioConIVA||0)}</div>
+                        <div style={{fontSize:9,fontWeight:700,textAlign:"right",
+                          color:util>=0?C.green:C.red,
+                          fontFamily:"'Courier New',monospace"}}>{mxn(util)}</div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Footer totals */}
+                  <div style={{display:"grid",gridTemplateColumns:"110px 1fr 60px 110px 100px",
+                    padding:"8px 16px",borderTop:`1px solid ${C.border}`,background:C.bg1,
+                    borderRadius:"0 0 6px 6px"}}>
+                    <div/>
+                    <div style={{fontSize:8,fontWeight:700,color:C.t2}}>
+                      {tkts.length} op{tkts.length===1?"":"s"} · total
+                    </div>
+                    <div/>
+                    <div style={{fontSize:10,fontWeight:800,textAlign:"right",color:C.cyan,
+                      fontFamily:"'Courier New',monospace"}}>{mxn(totalRev)}</div>
+                    <div style={{fontSize:10,fontWeight:800,textAlign:"right",
+                      color:totalUtil>=0?C.green:C.red,
+                      fontFamily:"'Courier New',monospace"}}>{mxn(totalUtil)}</div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         );
@@ -6102,6 +6222,7 @@ function MOps({state,setTab,triggerMargin}) {
   const C = React.useContext(ThemeCtx);
   const {tickets,clients} = state;
   const [mDrillDown, setMDrillDown] = useState(null);
+  const [mPipelineFilter, setMPipelineFilter] = useState(null);
   const [period,setPeriod]     = useState("month");
   const [heatMetric,setHeatMetric] = useState("venta");
   const [heatDay,setHeatDay]       = useState(null); // {dn,yr,mo}
@@ -6483,13 +6604,16 @@ function MOps({state,setTab,triggerMargin}) {
                 const isBacklog = BACKLOG_SET.has(sid);
                 const isCart    = ["entregado","facturado"].includes(sid);
                 const accent    = isBacklog?A.amber:isCart?A.lime:cnt>0?s.dot:A.t3;
+                const selected  = mPipelineFilter===sid;
                 return (
-                  <div key={sid} style={{
-                    display:"flex",flexDirection:"column",alignItems:"center",
-                    minWidth:56,padding:"8px 6px",borderRadius:8,
-                    background:cnt>0?(isBacklog?"rgba(245,197,48,0.07)":isCart?"rgba(74,222,128,0.06)":"rgba(255,255,255,0.03)"):"transparent",
-                    border:`1px solid ${cnt>0?(isBacklog?"rgba(245,197,48,0.2)":isCart?"rgba(74,222,128,0.15)":C.border):C.border}`,
-                  }}>
+                  <div key={sid} onClick={()=>setMPipelineFilter(selected?null:sid)}
+                    style={{
+                      display:"flex",flexDirection:"column",alignItems:"center",
+                      minWidth:56,padding:"8px 6px",borderRadius:8,cursor:"pointer",
+                      WebkitTapHighlightColor:"transparent",touchAction:"manipulation",
+                      background:selected?`${accent}18`:cnt>0?(isBacklog?"rgba(245,197,48,0.07)":isCart?"rgba(74,222,128,0.06)":"rgba(255,255,255,0.03)"):"transparent",
+                      border:`1px solid ${selected?accent:cnt>0?(isBacklog?"rgba(245,197,48,0.2)":isCart?"rgba(74,222,128,0.15)":C.border):C.border}`,
+                    }}>
                     <div style={{fontSize:22,fontWeight:800,color:accent,fontVariantNumeric:"tabular-nums",lineHeight:1,marginBottom:4}}>
                       {cnt}
                     </div>
@@ -6497,6 +6621,7 @@ function MOps({state,setTab,triggerMargin}) {
                       letterSpacing:"0.02em",maxWidth:52}}>
                       {s.label}
                     </div>
+                    {selected&&<div style={{width:16,height:2,borderRadius:1,background:accent,marginTop:4}}/>}
                   </div>
                 );
               })}
@@ -7484,6 +7609,132 @@ function MOps({state,setTab,triggerMargin}) {
                   );
                 })()}
 
+              </div>
+            </div>
+          </>
+        );
+      })()}
+
+      {/* ── PIPELINE STATUS BOTTOM SHEET ──────────────────────────────────── */}
+      {mPipelineFilter&&(()=>{
+        const sid = mPipelineFilter;
+        const s = TICKET_META[sid];
+        const tkts = tickets.filter(t=>!t._deleted&&t.status===sid);
+        const totalRev = sumSnap(tkts,"precioConIVA");
+        const totalUtil = sumSnap(tkts,"uNeta");
+        const isBacklog = BACKLOG_SET.has(sid);
+        const isCart = ["entregado","facturado"].includes(sid);
+        const accent = isBacklog?A.amber:isCart?A.lime:s.dot;
+        return (
+          <>
+            <div onClick={()=>setMPipelineFilter(null)}
+              style={{position:"fixed",inset:0,zIndex:800,background:"rgba(0,0,0,0.72)",
+                backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)"}}/>
+            <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:801,
+              background:C.bg0,borderRadius:"24px 24px 0 0",
+              border:`1px solid ${C.border}`,borderBottom:"none",
+              boxShadow:"0 -16px 60px rgba(0,0,0,0.6)",
+              maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
+
+              {/* Handle */}
+              <div style={{display:"flex",justifyContent:"center",padding:"12px 0 4px"}}>
+                <div style={{width:36,height:4,borderRadius:2,background:C.border}}/>
+              </div>
+
+              {/* Header */}
+              <div style={{padding:"10px 20px 14px",borderBottom:`1px solid ${C.border}`,
+                display:"flex",justifyContent:"space-between",alignItems:"flex-start",
+                flexShrink:0}}>
+                <div>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+                    <div style={{width:10,height:10,borderRadius:"50%",background:accent,flexShrink:0}}/>
+                    <div style={{fontSize:14,fontWeight:800,color:A.t1,letterSpacing:"0.06em",
+                      textTransform:"uppercase"}}>{s.label}</div>
+                  </div>
+                  <div style={{fontSize:11,color:A.t3}}>
+                    {tkts.length} operaci{tkts.length===1?"ón":"ones"}
+                    {tkts.length>0&&` · ${mxn(totalRev)}`}
+                  </div>
+                </div>
+                <button onClick={()=>setMPipelineFilter(null)}
+                  style={{background:"transparent",border:`1px solid ${C.border}`,color:A.t2,
+                    cursor:"pointer",fontSize:16,fontWeight:700,width:32,height:32,
+                    borderRadius:8,flexShrink:0,display:"flex",alignItems:"center",
+                    justifyContent:"center",WebkitTapHighlightColor:"transparent"}}>✕</button>
+              </div>
+
+              {/* Content */}
+              <div style={{overflowY:"auto",flex:1,padding:"8px 0 24px"}}>
+                {tkts.length===0?(
+                  <div style={{padding:"32px",textAlign:"center"}}>
+                    <span style={{fontSize:13,color:A.t3}}>Sin operaciones en este estado</span>
+                  </div>
+                ):(
+                  <>
+                    {tkts.map((t,i)=>{
+                      const cliente=clients.find(c=>c.id===t.clientId)?.nombre||t.clientId||"—";
+                      const dias=(()=>{const d=parseDateMX(t.date);return d?Math.round((Date.now()-d.getTime())/86400000):0;})();
+                      const util=safeNumber(t.snap?.uNeta);
+                      return (
+                        <div key={t.id} style={{padding:"14px 20px",
+                          borderBottom:i<tkts.length-1?`1px solid ${C.border}`:"none"}}>
+                          <div style={{display:"flex",justifyContent:"space-between",
+                            alignItems:"flex-start",marginBottom:10}}>
+                            <div style={{flex:1,minWidth:0,marginRight:12}}>
+                              <div style={{fontSize:8,color:A.t3,fontFamily:"'Courier New',monospace",
+                                marginBottom:4}}>
+                                {mkFolio(t,"OP")}
+                              </div>
+                              <div style={{fontSize:14,fontWeight:700,color:A.t1,
+                                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",
+                                marginBottom:3}}>
+                                {t.titulo||"Sin título"}
+                              </div>
+                              <div style={{fontSize:11,color:A.t3}}>{cliente}</div>
+                            </div>
+                            <div style={{textAlign:"right",flexShrink:0}}>
+                              <div style={{fontSize:16,fontWeight:800,color:C.cyan,
+                                fontFamily:"'Courier New',monospace",marginBottom:3}}>
+                                {mxn(t.snap?.precioConIVA||0)}
+                              </div>
+                              <div style={{fontSize:11,fontWeight:700,
+                                color:dias>14?A.red:dias>7?A.amber:A.t3}}>
+                                {dias}d
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                            <div style={{background:C.bg1,borderRadius:8,padding:"8px 12px"}}>
+                              <div style={{fontSize:8,color:A.t3,marginBottom:3}}>Utilidad neta</div>
+                              <div style={{fontSize:13,fontWeight:800,
+                                color:util>=0?A.lime:A.red,fontFamily:"'Courier New',monospace"}}>
+                                {mxn(util)}
+                              </div>
+                            </div>
+                            <div style={{background:C.bg1,borderRadius:8,padding:"8px 12px"}}>
+                              <div style={{fontSize:8,color:A.t3,marginBottom:3}}>Estado</div>
+                              <div style={{fontSize:11,fontWeight:700,color:accent,
+                                letterSpacing:"0.04em"}}>
+                                {s.label}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {/* Total */}
+                    <div style={{margin:"8px 20px 0",padding:"12px 0",
+                      borderTop:`2px solid ${C.border}`,
+                      display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span style={{fontSize:12,fontWeight:800,color:A.t3,
+                        letterSpacing:"0.06em",textTransform:"uppercase"}}>
+                        Total · {tkts.length} op{tkts.length===1?"":"s"}
+                      </span>
+                      <span style={{fontSize:16,fontWeight:800,color:C.cyan,
+                        fontFamily:"'Courier New',monospace"}}>{mxn(totalRev)}</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </>
