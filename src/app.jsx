@@ -6173,6 +6173,7 @@ function MOps({state,setTab,triggerMargin}) {
   const backlogCostoM  = useMemo(()=>backlogTkts.reduce((s,t)=>s+safeNumber(t.snap?.costoBase)*(1+safeNumber(t.snap?.params?.iva,16)/100),0),[backlogTkts]);
   const backlogAgingM  = useMemo(()=>backlogTkts.map(t=>{const d=parseDateMX(t.date);return d?Math.round((Date.now()-d.getTime())/86400000):0;}),[backlogTkts]);
   const backlogAvgM    = backlogAgingM.length?Math.round(backlogAgingM.reduce((s,v)=>s+v,0)/backlogAgingM.length):0;
+  const backlogOldestM = backlogAgingM.length?Math.max(...backlogAgingM):0;
   const capitalInmM    = backlogCostoM + carteraMonto;
 
   // ── Operational status ────────────────────────────────────────────────────
@@ -6507,6 +6508,138 @@ function MOps({state,setTab,triggerMargin}) {
             <span style={{color:A.lime}}>■ cartera</span>
             <span>■ pipeline</span>
           </div>
+        </div>
+
+        {/* ══ BACKLOG OPERATIVO ═════════════════════════════════════════════════ */}
+        <div className="glass-card" style={{overflow:"hidden",marginBottom:12,padding:0,
+          border:`1px solid rgba(245,197,48,0.2)`}}>
+          {/* Header */}
+          <div style={{padding:"14px 20px 12px",
+            borderBottom:`1px solid rgba(245,197,48,0.12)`,
+            borderLeft:`3px solid ${A.amber}`}}>
+            <div style={{fontSize:9,fontWeight:800,color:A.amber,letterSpacing:"0.16em",
+              textTransform:"uppercase",marginBottom:3}}>
+              Backlog Operativo
+            </div>
+            <div style={{fontSize:10,color:A.t3}}>
+              Vendido y comprometido — trabajo aprobado pendiente de entrega
+            </div>
+          </div>
+
+          {/* 4 KPIs — 2×2 grid */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr"}}>
+            <div onClick={()=>setMDrillDown("backlog")} style={{padding:"12px 16px",
+              borderRight:`1px solid rgba(245,197,48,0.12)`,
+              borderBottom:`1px solid rgba(245,197,48,0.12)`,cursor:"pointer",
+              WebkitTapHighlightColor:"transparent",touchAction:"manipulation"}}>
+              <div style={{fontSize:8,color:A.t3,marginBottom:5}}>Ops en backlog</div>
+              <div style={{fontSize:26,fontWeight:800,lineHeight:1,
+                color:backlogTkts.length>0?A.amber:A.t3,fontVariantNumeric:"tabular-nums"}}>
+                {backlogTkts.length}
+              </div>
+            </div>
+            <div onClick={()=>setMDrillDown("backlog")} style={{padding:"12px 16px",
+              borderBottom:`1px solid rgba(245,197,48,0.12)`,cursor:"pointer",
+              WebkitTapHighlightColor:"transparent",touchAction:"manipulation"}}>
+              <div style={{fontSize:8,color:A.t3,marginBottom:5}}>Revenue comprometido</div>
+              <div style={{fontSize:15,fontWeight:800,color:C.cyan,
+                fontVariantNumeric:"tabular-nums",letterSpacing:"-0.01em"}}>
+                {mxn(backlogRev)}
+              </div>
+            </div>
+            <div onClick={()=>setMDrillDown("backlog")} style={{padding:"12px 16px",
+              borderRight:`1px solid rgba(245,197,48,0.12)`,cursor:"pointer",
+              WebkitTapHighlightColor:"transparent",touchAction:"manipulation"}}>
+              <div style={{fontSize:8,color:A.t3,marginBottom:5}}>Util. comprometida</div>
+              <div style={{fontSize:15,fontWeight:800,
+                color:backlogUtilM>=0?A.lime:A.red,
+                fontVariantNumeric:"tabular-nums",letterSpacing:"-0.01em"}}>
+                {mxn(backlogUtilM)}
+              </div>
+            </div>
+            <div onClick={()=>setMDrillDown("backlog")} style={{padding:"12px 16px",
+              cursor:"pointer",WebkitTapHighlightColor:"transparent",
+              touchAction:"manipulation"}}>
+              <div style={{fontSize:8,color:A.t3,marginBottom:2}}>Capital comprometido</div>
+              <div style={{fontSize:8,color:A.t3,opacity:0.7,marginBottom:3}}>costos con IVA</div>
+              <div style={{fontSize:15,fontWeight:800,color:A.amber,
+                fontVariantNumeric:"tabular-nums",letterSpacing:"-0.01em"}}>
+                {mxn(backlogCostoM)}
+              </div>
+            </div>
+          </div>
+
+          {backlogTkts.length>0?(
+            <>
+              {/* Aging row */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",
+                borderTop:`1px solid rgba(245,197,48,0.12)`,
+                borderBottom:`1px solid rgba(245,197,48,0.12)`}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                  padding:"9px 16px",borderRight:`1px solid rgba(245,197,48,0.12)`}}>
+                  <span style={{fontSize:9,color:A.t3}}>Tiempo prom. en backlog</span>
+                  <span style={{fontSize:12,fontWeight:700,
+                    color:backlogAvgM>7?A.amber:A.t2,
+                    fontFamily:"'Courier New',monospace"}}>
+                    {backlogAvgM}d
+                  </span>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                  padding:"9px 16px"}}>
+                  <span style={{fontSize:9,color:A.t3}}>Ticket más antiguo</span>
+                  <span style={{fontSize:12,fontWeight:700,
+                    color:backlogOldestM>14?A.red:backlogOldestM>7?A.amber:A.t2,
+                    fontFamily:"'Courier New',monospace"}}>
+                    {backlogOldestM}d
+                  </span>
+                </div>
+              </div>
+
+              {/* Ticket list — up to 5 */}
+              {backlogTkts.slice(0,5).map((t,i)=>(
+                <div key={t.id} style={{display:"flex",justifyContent:"space-between",
+                  alignItems:"center",padding:"11px 16px",
+                  borderBottom:i<Math.min(backlogTkts.length,5)-1
+                    ?`1px solid rgba(245,197,48,0.08)`:"none"}}>
+                  <div style={{overflow:"hidden",flex:1,minWidth:0,marginRight:12}}>
+                    <div style={{fontSize:12,color:A.t2,overflow:"hidden",
+                      textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                      {t.titulo}
+                    </div>
+                    <div style={{fontSize:9,color:A.t3,marginTop:2}}>
+                      {TICKET_META[t.status]?.label||t.status}
+                    </div>
+                  </div>
+                  <div style={{textAlign:"right",flexShrink:0}}>
+                    <div style={{fontSize:12,fontWeight:700,color:C.cyan,
+                      fontFamily:"'Courier New',monospace"}}>
+                      {mxn(t.snap?.precioConIVA||0)}
+                    </div>
+                    <div style={{fontSize:9,marginTop:2,
+                      color:backlogAgingM[i]>14?A.red:backlogAgingM[i]>7?A.amber:A.t3}}>
+                      {backlogAgingM[i]}d
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {backlogTkts.length>5&&(
+                <div onClick={()=>setMDrillDown("backlog")}
+                  style={{padding:"11px 16px",fontSize:11,color:C.cyan,
+                    borderTop:`1px solid rgba(245,197,48,0.12)`,cursor:"pointer",
+                    WebkitTapHighlightColor:"transparent"}}>
+                  +{backlogTkts.length-5} más en backlog · ver todos ›
+                </div>
+              )}
+            </>
+          ):(
+            <div style={{padding:"18px 16px",textAlign:"center",
+              borderTop:`1px solid rgba(245,197,48,0.12)`}}>
+              <span style={{fontSize:11,color:A.t3}}>
+                Sin trabajo en backlog — todo entregado o en cotización
+              </span>
+            </div>
+          )}
         </div>
 
         {/* ══ CARTERA WIDGET — interactive, touchable ═══════════════════════════ */}
