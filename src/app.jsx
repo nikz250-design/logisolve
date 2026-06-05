@@ -2406,13 +2406,54 @@ function CentroOps({state}) {
       {/* 4. LIQUIDEZ OPERATIVA */}
       <div style={{borderLeft:`3px solid ${C.blueHi}`,paddingLeft:8,marginBottom:6}}>
         <div style={{fontSize:10,fontWeight:800,color:C.blueHi,letterSpacing:"0.14em",textTransform:"uppercase"}}>4. Liquidez Operativa</div>
-        <div style={{fontSize:8,color:C.t3,marginTop:1}}>Capital inmovilizado = backlog costos + cartera pendiente — dinero atado en operaciones</div>
+        <div style={{fontSize:8,color:C.t3,marginTop:1}}>Capital inmovilizado = capital comprometido + capital en cartera</div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:5,marginBottom:5}}>
-        <KPI label="Capital inmovilizado" value={mxn(capitalInmovilizado)} color={C.yellow} accent/>
-        <KPI label="Backlog comprometido" value={mxn(backlogCosto)} color={C.t2} sub={backlog.length+" ops pendientes"}/>
-        <KPI label="Cartera (CxC)" value={mxn(carteraMonto)} color={C.t2} sub={cartera.length+" por cobrar"}/>
+
+      {/* Desglose capital inmovilizado */}
+      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:5}}>
+        {/* Fila 1: los dos componentes */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",borderBottom:`1px solid ${C.border}`}}>
+          <div style={{padding:"10px 14px",borderRight:`1px solid ${C.border}`}}>
+            <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>
+              Capital Comprometido
+            </div>
+            <div style={{fontSize:8,color:C.t3,marginBottom:6}}>
+              Autorizado + Comprado + Tránsito · {backlog.length} op{backlog.length!==1?"s":""}
+            </div>
+            <div style={{fontSize:18,fontWeight:800,color:C.yellow,fontFamily:"'Courier New',monospace"}}>
+              {mxn(backlogCosto)}
+            </div>
+          </div>
+          <div style={{padding:"10px 14px"}}>
+            <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>
+              Capital en Cartera
+            </div>
+            <div style={{fontSize:8,color:C.t3,marginBottom:6}}>
+              Entregado + Facturado · {cartera.length} ticket{cartera.length!==1?"s":""}
+            </div>
+            <div style={{fontSize:18,fontWeight:800,color:C.yellow,fontFamily:"'Courier New',monospace",
+              color:vencidos.length>0?C.red:C.yellow}}>
+              {mxn(carteraMonto)}
+            </div>
+          </div>
+        </div>
+        {/* Fila 2: total */}
+        <div style={{padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",
+          background:`${C.yellow}0A`}}>
+          <div>
+            <div style={{fontSize:8,color:C.yellow,letterSpacing:"0.12em",textTransform:"uppercase",fontWeight:700}}>
+              = Capital Inmovilizado Total
+            </div>
+            <div style={{fontSize:8,color:C.t3,marginTop:2}}>
+              Dinero atado en operaciones que aún no ingresa como cash
+            </div>
+          </div>
+          <div style={{fontSize:22,fontWeight:800,color:C.yellow,fontFamily:"'Courier New',monospace",flexShrink:0,marginLeft:12}}>
+            {mxn(capitalInmovilizado)}
+          </div>
+        </div>
       </div>
+
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:8}}>
         <KPI label="Realizado (entregado+)" value={mxn(totalFact)} color={C.cyan} accent/>
         <KPI label="Utilidad neta" value={mxn(totalNeta)} color={totalNeta>=0?C.green:C.red} sub={fpct(pctNeta)+" del facturado"}/>
@@ -6238,50 +6279,88 @@ function MOps({state,setTab,triggerMargin}) {
           </div>
         </div>
 
-        {/* ══ BACKLOG OPERATIVO WIDGET ══════════════════════════════════════════ */}
-        <div className="glass-card" style={{padding:"22px 24px",marginBottom:12,
-          border:backlogTkts.length>0?`1px solid rgba(245,197,48,0.22)`:"1px solid transparent"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
-            <div>
-              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:3}}>
-                Backlog operativo
+        {/* ══ CAPITAL INMOVILIZADO WIDGET ═══════════════════════════════════════ */}
+        <div className="glass-card" style={{overflow:"hidden",marginBottom:12,
+          border:`1px solid rgba(245,197,48,0.2)`}}>
+          {/* Header */}
+          <div style={{padding:"18px 24px 14px",borderBottom:`1px solid rgba(245,197,48,0.12)`}}>
+            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:4}}>
+              Liquidez operativa
+            </div>
+            <div style={{fontSize:11,color:A.t3}}>
+              Capital inmovilizado = comprometido + en cartera
+            </div>
+          </div>
+
+          {/* Componente 1: Capital Comprometido */}
+          <div style={{padding:"14px 24px",borderBottom:`1px solid rgba(245,197,48,0.1)`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+              <div style={{flex:1,minWidth:0,marginRight:12}}>
+                <div style={{fontSize:9,color:A.amber,fontWeight:700,letterSpacing:"0.1em",
+                  textTransform:"uppercase",marginBottom:3}}>
+                  Capital Comprometido
+                </div>
+                <div style={{fontSize:11,color:A.t3}}>
+                  Autorizado · Comprado · Tránsito
+                  {backlogTkts.length>0&&` · ${backlogTkts.length} op${backlogTkts.length!==1?"s":""}`}
+                </div>
+                {backlogAvgM>0&&(
+                  <div style={{fontSize:10,color:backlogAvgM>7?A.amber:A.t3,marginTop:3}}>
+                    Prom. {backlogAvgM}d en backlog
+                  </div>
+                )}
               </div>
-              <div style={{fontSize:11,color:backlogTkts.length>0?A.amber:A.t3}}>
-                {backlogTkts.length>0?`${backlogTkts.length} op. comprometida${backlogTkts.length>1?"s":""}`:
-                  "Sin trabajo en backlog"}
+              <div style={{fontSize:26,fontWeight:800,color:A.amber,fontVariantNumeric:"tabular-nums",
+                letterSpacing:"-0.02em",flexShrink:0}}>
+                {mxn(backlogCostoM)}
               </div>
             </div>
-            {backlogTkts.length>0&&(
-              <div style={{textAlign:"right"}}>
-                <div style={{fontSize:9,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:3}}>Prom. en backlog</div>
-                <div style={{fontSize:16,fontWeight:800,color:backlogAvgM>7?A.amber:A.t2}}>{backlogAvgM}d</div>
-              </div>
-            )}
           </div>
-          {backlogTkts.length>0&&(
-            <>
-              <div style={{
-                fontSize:38,fontWeight:800,lineHeight:1,letterSpacing:"-0.025em",
-                color:A.amber,marginBottom:10,fontVariantNumeric:"tabular-nums",
-              }}>
-                {mxn(backlogRev)}
-              </div>
-              <div style={{height:1,background:"rgba(245,197,48,0.15)",marginBottom:14}}/>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:0}}>
-                {[
-                  {label:"Util. commit.",  value:mxn(backlogUtilM),  color:backlogUtilM>=0?A.lime:A.red},
-                  {label:"Capital",        value:mxn(backlogCostoM), color:A.amber, border:true},
-                  {label:"Cap. inm. total",value:mxn(capitalInmM),   color:A.amber, border:true},
-                ].map(({label,value,color,border})=>(
-                  <div key={label} style={{paddingLeft:border?14:0,
-                    borderLeft:border?`1px solid rgba(245,197,48,0.15)`:"none"}}>
-                    <div style={{fontSize:9,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:6}}>{label}</div>
-                    <div style={{fontSize:16,fontWeight:800,color,letterSpacing:"-0.01em",fontVariantNumeric:"tabular-nums"}}>{value}</div>
+
+          {/* Componente 2: Capital en Cartera */}
+          <div style={{padding:"14px 24px",borderBottom:`1px solid rgba(245,197,48,0.1)`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+              <div style={{flex:1,minWidth:0,marginRight:12}}>
+                <div style={{fontSize:9,color:vencidos.length>0?A.red:A.amber,fontWeight:700,
+                  letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:3}}>
+                  Capital en Cartera
+                </div>
+                <div style={{fontSize:11,color:A.t3}}>
+                  Entregado · Facturado
+                  {carteraTkts.length>0&&` · ${carteraTkts.length} ticket${carteraTkts.length!==1?"s":""}`}
+                </div>
+                {vencidos.length>0&&(
+                  <div style={{fontSize:10,color:A.red,marginTop:3}}>
+                    {vencidos.length} pago{vencidos.length!==1?"s":""} vencido{vencidos.length!==1?"s":""}
                   </div>
-                ))}
+                )}
               </div>
-            </>
-          )}
+              <div style={{fontSize:26,fontWeight:800,
+                color:vencidos.length>0?A.red:A.amber,
+                fontVariantNumeric:"tabular-nums",letterSpacing:"-0.02em",flexShrink:0}}>
+                {mxn(carteraMonto)}
+              </div>
+            </div>
+          </div>
+
+          {/* Total = suma */}
+          <div style={{padding:"14px 24px",background:"rgba(245,197,48,0.05)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{fontSize:9,color:A.amber,fontWeight:800,letterSpacing:"0.14em",
+                  textTransform:"uppercase",marginBottom:2}}>
+                  = Capital Inmovilizado Total
+                </div>
+                <div style={{fontSize:10,color:A.t3}}>
+                  Dinero atado que aún no ingresa como cash
+                </div>
+              </div>
+              <div style={{fontSize:32,fontWeight:800,color:A.amber,fontVariantNumeric:"tabular-nums",
+                letterSpacing:"-0.02em",flexShrink:0,marginLeft:12}}>
+                {mxn(capitalInmM)}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* ══ SPARKLINE — util trend ══════════════════════════════════════════ */}
