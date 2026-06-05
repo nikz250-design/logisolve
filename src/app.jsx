@@ -181,6 +181,8 @@ const CARTERA_SET   = new Set(["entregado","facturado"]);
 const FORECAST_SET  = new Set(["cotizado","autorizado"]);
 // Operational pipeline (en proceso, aún no entregado)
 const PIPELINE_SET  = new Set(["recibido","validando","sourcing","comprado","transito"]);
+// Backlog Operativo — vendido y comprometido, no entregado aún
+const BACKLOG_SET   = new Set(["autorizado","comprado","transito"]);
 // Closed states
 const CLOSED_SET    = new Set(["cerrado","cancelado","cobrado"]);
 const PAID_SET      = new Set(["cobrado","cerrado"]);
@@ -2245,6 +2247,21 @@ function CentroOps({state}) {
   // Eficiencia
   const eficientes = useMemo(()=>tickets.filter(t=>t.horasOp>0).map(t=>({titulo:t.titulo,uPH:(t.snap?.uNeta||0)/t.horasOp,uNeta:t.snap?.uNeta||0,horas:t.horasOp})).sort((a,b)=>b.uPH-a.uPH).slice(0,4),[tickets]);
 
+  // ── BACKLOG OPERATIVO — autorizado + comprado + transito ──────────────────
+  const backlog = useMemo(()=>tickets.filter(t=>!t._deleted&&BACKLOG_SET.has(t.status)),[tickets]);
+  const backlogRevenue = useMemo(()=>sumSnap(backlog,"precioConIVA"),[backlog]);
+  const backlogUtil = useMemo(()=>sumSnap(backlog,"uNeta"),[backlog]);
+  const backlogCosto = useMemo(()=>backlog.reduce((s,t)=>s+safeNumber(t.snap?.costoBase)*(1+safeNumber(t.snap?.params?.iva,16)/100),0),[backlog]);
+  const backlogAging = useMemo(()=>backlog.map(t=>{const d=parseDateMX(t.date);return d?Math.round((Date.now()-d.getTime())/86400000):0;}),[backlog]);
+  const backlogAvgDays = backlogAging.length?Math.round(backlogAging.reduce((s,v)=>s+v,0)/backlogAging.length):0;
+  const backlogOldestDays = backlogAging.length?Math.max(...backlogAging):0;
+
+  // ── EARLY PIPELINE (recibido→cotizado, pre-commit) ─────────────────────────
+  const earlyPipeline = useMemo(()=>tickets.filter(t=>!t._deleted&&["recibido","validando","sourcing","cotizado"].includes(t.status)),[tickets]);
+
+  // ── LIQUIDEZ OPERATIVA ─────────────────────────────────────────────────────
+  const capitalInmovilizado = backlogCosto + carteraMonto;
+
   return (
     <div style={{padding:"10px 13px",maxWidth:1300,margin:"0 auto"}}>
 
@@ -2266,23 +2283,145 @@ function CentroOps({state}) {
         </div>
       )}
 
-      {/* KPI fila 1 */}
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      {/* 1. PIPELINE COMERCIAL */}
+      <div style={{borderLeft:`3px solid ${C.cyan}`,paddingLeft:8,marginBottom:6,marginTop:2}}>
+        <div style={{fontSize:10,fontWeight:800,color:C.cyan,letterSpacing:"0.14em",textTransform:"uppercase"}}>1. Pipeline Comercial</div>
+        <div style={{fontSize:8,color:C.t3,marginTop:1}}>Tickets en evaluación y cotización — sin compromiso de entrega aún</div>
+      </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:5}}>
-        <KPI label="Realizado (entregado+)"   value={mxn(totalFact)}   color={C.cyan}   accent/>
-        <KPI label="Utilidad neta"     value={mxn(totalNeta)}   color={totalNeta>=0?C.green:C.red} sub={fpct(pctNeta)+" del facturado"}/>
-        <KPI label="Cartera pendiente" value={mxn(carteraPend)} color={C.yellow} alert={vencidos.length>0} sub={vencidos.length>0?vencidos.length+" vencida"+(vencidos.length>1?"s":""):""}/>
-        <KPI label="Forecast"          value={mxn(forecast)}    color={C.cyan}   sub="Hasta estado Transito"/>
+        <KPI label="En pipeline" value={String(earlyPipeline.length)} color={C.t1} sub="recibido→cotizado"/>
+        <KPI label="Cotizados" value={String(cotizados.length)} color={C.t2} sub="pendiente aprobación"/>
+        <KPI label="Forecast revenue" value={mxn(forecastMonto)} color={C.cyan} sub="cotiz.+autoriz."/>
+        <KPI label="Conversión" value={fpct(conversion)} color={conversion>=60?C.green:C.yellow} sub="cierre/total"/>
+      </div>
+      {/* Pipeline strip */}
+      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:10}}>
+        <SHdr title="DISTRIBUCIÓN PIPELINE"/>
+        <div style={{display:"grid",gridTemplateColumns:`repeat(${TICKET_ALL.length},1fr)`}}>
+          {TICKET_ALL.map(sid=>{
+            const s=TICKET_META[sid];
+            const count=tickets.filter(t=>t.status===sid).length;
+            const inBacklog=BACKLOG_SET.has(sid);
+            return (
+              <div key={sid} style={{padding:"7px 3px",textAlign:"center",borderRight:`1px solid ${C.border}`,
+                background:inBacklog&&count>0?`${C.yellow}0D`:"transparent"}}>
+                <div style={{fontSize:15,fontWeight:800,color:count>0?s.dot:C.t3,fontFamily:"'Courier New',monospace",lineHeight:1}}>{count}</div>
+                <div style={{fontSize:6,color:inBacklog&&count>0?C.yellow:C.t3,marginTop:2,lineHeight:1.3}}>{s.label}</div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      {/* KPI fila 2 */}
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      {/* 2. BACKLOG OPERATIVO */}
+      <div style={{borderLeft:`3px solid ${C.yellow}`,paddingLeft:8,marginBottom:6}}>
+        <div style={{fontSize:10,fontWeight:800,color:C.yellow,letterSpacing:"0.14em",textTransform:"uppercase"}}>2. Backlog Operativo</div>
+        <div style={{fontSize:8,color:C.t3,marginTop:1}}>Vendido y comprometido — trabajo aprobado pendiente de entrega</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:5}}>
+        <KPI label="Ops en backlog" value={String(backlog.length)} color={backlog.length>0?C.yellow:C.t3}/>
+        <KPI label="Revenue comprometido" value={mxn(backlogRevenue)} color={C.cyan}/>
+        <KPI label="Util. comprometida" value={mxn(backlogUtil)} color={backlogUtil>=0?C.green:C.red}/>
+        <KPI label="Capital comprometido" value={mxn(backlogCosto)} color={C.yellow} sub="costos con IVA"/>
+      </div>
+      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:10}}>
+        {backlog.length>0?(
+          <>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",borderBottom:`1px solid ${C.border}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",padding:"5px 11px",borderRight:`1px solid ${C.border}`}}>
+                <span style={{fontSize:8,color:C.t3}}>Tiempo promedio en backlog</span>
+                <span style={{fontSize:9,fontWeight:700,color:backlogAvgDays>7?C.yellow:C.t2,fontFamily:"'Courier New',monospace"}}>{backlogAvgDays}d</span>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",padding:"5px 11px"}}>
+                <span style={{fontSize:8,color:C.t3}}>Ticket más antiguo</span>
+                <span style={{fontSize:9,fontWeight:700,color:backlogOldestDays>14?C.red:backlogOldestDays>7?C.yellow:C.t2,fontFamily:"'Courier New',monospace"}}>{backlogOldestDays}d</span>
+              </div>
+            </div>
+            {backlog.slice(0,5).map((t,i)=>(
+              <div key={t.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 11px",
+                borderBottom:i<Math.min(backlog.length,5)-1?`1px solid ${C.border}`:"none"}}>
+                <div style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"55%"}}>
+                  <div style={{fontSize:8,color:C.t2}}>{t.titulo}</div>
+                  <div style={{fontSize:7,color:C.t3}}>{TICKET_META[t.status]?.label||t.status}</div>
+                </div>
+                <div style={{textAlign:"right",flexShrink:0}}>
+                  <div style={{fontSize:8,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap?.precioConIVA||0)}</div>
+                  <div style={{fontSize:7,color:backlogAging[i]>14?C.red:backlogAging[i]>7?C.yellow:C.t3}}>{backlogAging[i]}d</div>
+                </div>
+              </div>
+            ))}
+            {backlog.length>5&&(
+              <div style={{padding:"5px 11px",fontSize:7,color:C.t3,borderTop:`1px solid ${C.border}`}}>+{backlog.length-5} más en backlog</div>
+            )}
+          </>
+        ):(
+          <div style={{padding:"12px",textAlign:"center"}}>
+            <span style={{fontSize:8,color:C.t3}}>Sin trabajo en backlog — todo entregado o en cotización</span>
+          </div>
+        )}
+      </div>
+
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      {/* 3. COBRANZA */}
+      <div style={{borderLeft:`3px solid ${C.green}`,paddingLeft:8,marginBottom:6}}>
+        <div style={{fontSize:10,fontWeight:800,color:C.green,letterSpacing:"0.14em",textTransform:"uppercase"}}>3. Cobranza</div>
+        <div style={{fontSize:8,color:C.t3,marginTop:1}}>Entregado y facturado — cartera activa y cash recibido</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:5}}>
+        <KPI label="Cartera pendiente" value={mxn(carteraMonto)} color={C.yellow} alert={vencidos.length>0} sub={vencidos.length>0?vencidos.length+" vencida"+(vencidos.length>1?"s":""):""}/>
+        <KPI label="Cash cobrado" value={mxn(cashTotal)} color={C.green}/>
+        <KPI label="Por cobrar" value={String(cartera.length)+" tickets"} color={cartera.length>0?C.t1:C.t3}/>
+        <KPI label="Flujo operativo" value={mxn(flujoOp)} color={flujoOp>=0?C.green:C.red}/>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,marginBottom:10}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+          <SHdr title="AGING CARTERA"/>
+          {[["< 30 días",aging.a30,C.green],["30–60 días",aging.a60,C.yellow],["> 60 días",aging.mas60,C.red]].map(([lbl,val,col],i)=>(
+            <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 11px",borderBottom:`1px solid ${C.border}`}}>
+              <span style={{fontSize:9,color:C.t2}}>{lbl}</span>
+              <span style={{fontSize:9,fontWeight:700,color:col,fontFamily:"'Courier New',monospace"}}>{mxn(val)}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
+          <SHdr title="COBRANZA DETALLE"/>
+          {[
+            ["Cash cobrado",      mxn(cashTotal),    C.green],
+            ["Util. sobre cobrado",mxn(cashNeta),    C.green],
+            ["CxP proveedores",   mxn(cxp),          C.t2],
+            ["Carga fiscal",      mxn(cargaFiscal),  C.red],
+            ["Flujo neto",        mxn(flujoOp),      flujoOp>=0?C.green:C.red],
+          ].map(([lbl,val,col],i)=>(
+            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:`1px solid ${C.border}`}}>
+              <span style={{fontSize:8,color:C.t3}}>{lbl}</span>
+              <span style={{fontSize:10,fontWeight:800,color:col,fontFamily:"'Courier New',monospace"}}>{val}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      {/* 4. LIQUIDEZ OPERATIVA */}
+      <div style={{borderLeft:`3px solid ${C.blueHi}`,paddingLeft:8,marginBottom:6}}>
+        <div style={{fontSize:10,fontWeight:800,color:C.blueHi,letterSpacing:"0.14em",textTransform:"uppercase"}}>4. Liquidez Operativa</div>
+        <div style={{fontSize:8,color:C.t3,marginTop:1}}>Capital inmovilizado = backlog costos + cartera pendiente — dinero atado en operaciones</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:5,marginBottom:5}}>
+        <KPI label="Capital inmovilizado" value={mxn(capitalInmovilizado)} color={C.yellow} accent/>
+        <KPI label="Backlog comprometido" value={mxn(backlogCosto)} color={C.t2} sub={backlog.length+" ops pendientes"}/>
+        <KPI label="Cartera (CxC)" value={mxn(carteraMonto)} color={C.t2} sub={cartera.length+" por cobrar"}/>
+      </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:8}}>
-        <KPI label="Tickets abiertos" value={String(abiertas.length)} color={C.t1}/>
-        <KPI label="Conversion"       value={fpct(conversion)}        color={conversion>=60?C.green:C.yellow} sub="cierre / total"/>
-        <KPI label="Rentabilidad neta"     value={fpct(rentabilidadProm)}        color={margenColor(rentabilidadProm)} sub="neto s/precio"/>
-        <KPI label="Util / hora"      value={totalHoras>0?mxn(uPorHora):"---"} color={C.cyan} sub={totalHoras>0?totalHoras.toFixed(1)+"h registradas":""}/>
+        <KPI label="Realizado (entregado+)" value={mxn(totalFact)} color={C.cyan} accent/>
+        <KPI label="Utilidad neta" value={mxn(totalNeta)} color={totalNeta>=0?C.green:C.red} sub={fpct(pctNeta)+" del facturado"}/>
+        <KPI label="Markup promedio" value={fpct(markupProm)} color={C.blueHi}/>
+        <KPI label="Util / hora" value={totalHoras>0?mxn(uPorHora):"---"} color={C.cyan} sub={totalHoras>0?totalHoras.toFixed(1)+"h registradas":""}/>
       </div>
 
-      {/* 3 columnas principales */}
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      {/* ANÁLISIS OPERATIVO — 3 columnas */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7,marginBottom:7}}>
 
         {/* Col 1: Por categoria */}
@@ -2303,7 +2442,7 @@ function CentroOps({state}) {
           }
         </div>
 
-        {/* Col 2: Top clientes + Aging */}
+        {/* Col 2: Top clientes */}
         <div style={{display:"flex",flexDirection:"column",gap:7}}>
           <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
             <SHdr title="TOP CLIENTES — UTILIDAD"/>
@@ -2321,11 +2460,19 @@ function CentroOps({state}) {
             }
           </div>
           <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
-            <SHdr title="AGING CARTERA"/>
-            {[["< 30 dias",aging.a30,C.green],["30-60 dias",aging.a60,C.yellow],["> 60 dias",aging.mas60,C.red]].map(([lbl,val,col],i)=>(
-              <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 11px",borderBottom:`1px solid ${C.border}`}}>
-                <span style={{fontSize:9,color:C.t2}}>{lbl}</span>
-                <span style={{fontSize:9,fontWeight:700,color:col,fontFamily:"'Courier New',monospace"}}>{mxn(val)}</span>
+            <SHdr title="OPERACIÓN REALIZADA"/>
+            <div style={{fontSize:7,color:C.t3,padding:"4px 11px"}}>{operados.length} tickets · Entregado + Facturado + Cobrado</div>
+            {[
+              ["Revenue operado",   mxn(revenueOp),  C.cyan],
+              ["Costo total",       mxn(costoOp),    C.t2],
+              ["Utilidad operativa",mxn(utilidadOp), utilidadOp>=0?C.green:C.red],
+              ["Margen neto",       fpct(margenOp),  margenColor(margenOp)],
+              ["ROI operativo",     fpct(roi),        roi>=25?C.green:C.yellow],
+              ["Carga fiscal",      mxn(cargaFiscal), C.red],
+            ].map(([lbl,val,col],i)=>(
+              <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 11px",borderBottom:`1px solid ${C.border}`}}>
+                <span style={{fontSize:8,color:C.t3}}>{lbl}</span>
+                <span style={{fontSize:9,fontWeight:800,color:col,fontFamily:"'Courier New',monospace"}}>{val}</span>
               </div>
             ))}
           </div>
@@ -2366,102 +2513,12 @@ function CentroOps({state}) {
         </div>
       </div>
 
-      {/* Pipeline strip — ancho completo */}
-      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:7}}>
-        <SHdr title="DISTRIBUCION PIPELINE"/>
-        <div style={{display:"grid",gridTemplateColumns:`repeat(${TICKET_ALL.length},1fr)`}}>
-          {TICKET_ALL.map(sid=>{
-            const s=TICKET_META[sid];
-            const count=tickets.filter(t=>t.status===sid).length;
-            return (
-              <div key={sid} style={{padding:"7px 3px",textAlign:"center",borderRight:`1px solid ${C.border}`}}>
-                <div style={{fontSize:15,fontWeight:800,color:count>0?s.dot:C.t3,fontFamily:"'Courier New',monospace",lineHeight:1}}>{count}</div>
-                <div style={{fontSize:6,color:C.t3,marginTop:2,lineHeight:1.3}}>{s.label}</div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Resumen financiero — 3 bloques separados */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7,marginBottom:7}}>
-
-        {/* BLOQUE 1 — OPERACIÓN */}
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
-          <SHdr title="OPERACIÓN REALIZADA"/>
-          <div style={{fontSize:7,color:C.t3,marginBottom:6}}>Entregado · Facturado · Cobrado · {operados.length} tickets</div>
-          {[
-            ["Revenue operado",   mxn(revenueOp),  C.cyan],
-            ["Costo producto",    mxn(costoProducto), C.t2],
-            ["Gastos operativos", mxn(gastosOp),   C.t2],
-            ["Costo total",       mxn(costoOp),    C.t2],
-            ["Utilidad operativa",mxn(utilidadOp), utilidadOp>=0?C.green:C.red],
-            ["Margen neto",       fpct(margenOp),  margenColor(margenOp)],
-            ["Markup promedio",   fpct(markupProm),C.blueHi],
-            ["ROI operativo",     fpct(roi),        roi>=25?C.green:C.yellow],
-            ["IVA neto SAT",      mxn(ivaNetoOp),  C.yellow],
-            ["ISR estimado",      mxn(isrOp),       C.yellow],
-            ["Carga fiscal",      mxn(cargaFiscal), C.red],
-            ["Eficiencia fiscal", fpct(eficienciaFiscal),eficienciaFiscal>=75?C.green:C.yellow],
-          ].map(([lbl,val,col],i)=>(
-            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:`1px solid ${C.border}`}}>
-              <span style={{fontSize:8,color:C.t3}}>{lbl}</span>
-              <span style={{fontSize:10,fontWeight:800,color:col,fontFamily:"'Courier New',monospace"}}>{val}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* BLOQUE 2 — COBRANZA */}
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
-          <SHdr title="COBRANZA"/>
-          <div style={{fontSize:7,color:C.t3,marginBottom:6}}>Cash recibido vs cartera pendiente</div>
-          {[
-            ["Cash cobrado",     mxn(cashTotal),    C.green],
-            ["Util. sobre cobrado",mxn(cashNeta),   C.green],
-            ["Cartera pendiente",mxn(carteraMonto), C.yellow],
-            ["Vencidas",         String(vencidos.length)+" tickets", vencidos.length>0?C.red:C.t3],
-            ["CxP proveedores",  mxn(cxp),          C.t2],
-            ["Flujo operativo",  mxn(flujoOp),      flujoOp>=0?C.green:C.red],
-          ].map(([lbl,val,col],i)=>(
-            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:`1px solid ${C.border}`}}>
-              <span style={{fontSize:8,color:C.t3}}>{lbl}</span>
-              <span style={{fontSize:10,fontWeight:800,color:col,fontFamily:"'Courier New',monospace"}}>{val}</span>
-            </div>
-          ))}
-          <div style={{marginTop:8,fontSize:7,color:C.t3}}>DESGLOSE CARTERA</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4,marginTop:4}}>
-            <KPI label="Por cobrar" value={String(cartera.length)} sub="tickets"/>
-            <KPI label="Cobrados" value={String(cobrados.length)} sub="tickets"/>
-          </div>
-        </div>
-
-        {/* BLOQUE 3 — FORECAST */}
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
-          <SHdr title="FORECAST / PIPELINE"/>
-          <div style={{fontSize:7,color:C.t3,marginBottom:6}}>Cotizado + Autorizado — NO contamina revenue</div>
-          {[
-            ["Cotizados",        String(cotizados.length)+" tickets",  C.t2],
-            ["Autorizados",      String(autorizados.length)+" tickets",C.cyan],
-            ["Revenue forecast", mxn(forecastMonto),                   C.cyan],
-            ["Util. forecast",   mxn(forecastUtil),                    C.blueHi],
-          ].map(([lbl,val,col],i)=>(
-            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:`1px solid ${C.border}`}}>
-              <span style={{fontSize:8,color:C.t3}}>{lbl}</span>
-              <span style={{fontSize:10,fontWeight:800,color:col,fontFamily:"'Courier New',monospace"}}>{val}</span>
-            </div>
-          ))}
-          <div style={{marginTop:8}}>
-            <KPI label="P1 abiertos" value={String(p1Active.length)} color={p1Active.length>0?C.red:C.t3}/>
-          </div>
-        </div>
-      </div>
-
-      {/* Fila inferior: categorías + prioridades */}
+      {/* Resumen rápido + Prioridades */}
       <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:7}}>
         <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,padding:10}}>
           <SHdr title="RESUMEN RÁPIDO"/>
           <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5,marginTop:8}}>
-            {[["Revenue op.",mxn(revenueOp),C.cyan],["Cash cobrado",mxn(cashTotal),C.green],["Cartera",mxn(carteraMonto),C.yellow],["Util. operativa",mxn(utilidadOp),utilidadOp>=0?C.green:C.red],["Forecast",mxn(forecastMonto),C.t2]].map(([lbl,val,col],i)=>(
+            {[["Revenue op.",mxn(revenueOp),C.cyan],["Cash cobrado",mxn(cashTotal),C.green],["Cartera",mxn(carteraMonto),C.yellow],["Capital inm.",mxn(capitalInmovilizado),C.yellow],["Util. operativa",mxn(utilidadOp),utilidadOp>=0?C.green:C.red]].map(([lbl,val,col],i)=>(
               <div key={i} style={{padding:"5px 8px",background:C.bg2,borderRadius:3,border:`1px solid ${C.border}`}}>
                 <div style={{fontSize:7,color:C.t3,marginBottom:2}}>{lbl}</div>
                 <div style={{fontSize:12,fontWeight:800,color:col,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{val}</div>
@@ -5837,6 +5894,15 @@ function MOps({state,setTab,triggerMargin}) {
   const forecastMonto = useMemo(()=>sumSnap(forecastTkts,"precioConIVA"),[forecastTkts]);
   const forecastUtil  = useMemo(()=>forecastTkts.reduce((s,t)=>s+utilidadPonderada(safeNumber(t.snap?.uNeta),t.prob),0),[forecastTkts]);
 
+  // ── BACKLOG OPERATIVO ─────────────────────────────────────────────────────
+  const backlogTkts    = useMemo(()=>tickets.filter(t=>!t._deleted&&BACKLOG_SET.has(t.status)),[tickets]);
+  const backlogRev     = useMemo(()=>sumSnap(backlogTkts,"precioConIVA"),[backlogTkts]);
+  const backlogUtilM   = useMemo(()=>sumSnap(backlogTkts,"uNeta"),[backlogTkts]);
+  const backlogCostoM  = useMemo(()=>backlogTkts.reduce((s,t)=>s+safeNumber(t.snap?.costoBase)*(1+safeNumber(t.snap?.params?.iva,16)/100),0),[backlogTkts]);
+  const backlogAgingM  = useMemo(()=>backlogTkts.map(t=>{const d=parseDateMX(t.date);return d?Math.round((Date.now()-d.getTime())/86400000):0;}),[backlogTkts]);
+  const backlogAvgM    = backlogAgingM.length?Math.round(backlogAgingM.reduce((s,v)=>s+v,0)/backlogAgingM.length):0;
+  const capitalInmM    = backlogCostoM + carteraMonto;
+
   // ── Operational status ────────────────────────────────────────────────────
   const opsStatus = useMemo(()=>{
     if(p1Bloqueados.length>0) return {msg:`${p1Bloqueados.length} P1 requiere${p1Bloqueados.length>1?"n":""} acción`,level:"critical"};
@@ -6170,6 +6236,52 @@ function MOps({state,setTab,triggerMargin}) {
           <div style={{fontSize:11,color:A.t3}}>
             {carteraTkts.length} ticket{carteraTkts.length!==1?"s":""} pendientes · toca para detalle
           </div>
+        </div>
+
+        {/* ══ BACKLOG OPERATIVO WIDGET ══════════════════════════════════════════ */}
+        <div className="glass-card" style={{padding:"22px 24px",marginBottom:12,
+          border:backlogTkts.length>0?`1px solid rgba(245,197,48,0.22)`:"1px solid transparent"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+            <div>
+              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase",marginBottom:3}}>
+                Backlog operativo
+              </div>
+              <div style={{fontSize:11,color:backlogTkts.length>0?A.amber:A.t3}}>
+                {backlogTkts.length>0?`${backlogTkts.length} op. comprometida${backlogTkts.length>1?"s":""}`:
+                  "Sin trabajo en backlog"}
+              </div>
+            </div>
+            {backlogTkts.length>0&&(
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:9,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:3}}>Prom. en backlog</div>
+                <div style={{fontSize:16,fontWeight:800,color:backlogAvgM>7?A.amber:A.t2}}>{backlogAvgM}d</div>
+              </div>
+            )}
+          </div>
+          {backlogTkts.length>0&&(
+            <>
+              <div style={{
+                fontSize:38,fontWeight:800,lineHeight:1,letterSpacing:"-0.025em",
+                color:A.amber,marginBottom:10,fontVariantNumeric:"tabular-nums",
+              }}>
+                {mxn(backlogRev)}
+              </div>
+              <div style={{height:1,background:"rgba(245,197,48,0.15)",marginBottom:14}}/>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:0}}>
+                {[
+                  {label:"Util. commit.",  value:mxn(backlogUtilM),  color:backlogUtilM>=0?A.lime:A.red},
+                  {label:"Capital",        value:mxn(backlogCostoM), color:A.amber, border:true},
+                  {label:"Cap. inm. total",value:mxn(capitalInmM),   color:A.amber, border:true},
+                ].map(({label,value,color,border})=>(
+                  <div key={label} style={{paddingLeft:border?14:0,
+                    borderLeft:border?`1px solid rgba(245,197,48,0.15)`:"none"}}>
+                    <div style={{fontSize:9,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:6}}>{label}</div>
+                    <div style={{fontSize:16,fontWeight:800,color,letterSpacing:"-0.01em",fontVariantNumeric:"tabular-nums"}}>{value}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         {/* ══ SPARKLINE — util trend ══════════════════════════════════════════ */}
@@ -6641,6 +6753,9 @@ function MOps({state,setTab,triggerMargin}) {
             {label:"ISR estimado",      val:mxn(isrOp),              col:A.amber},
             {label:"Carga fiscal",      val:mxn(cargaFiscal),        col:A.red},
             {label:"Eficiencia fiscal", val:fpct(eficienciaFiscal),  col:eficienciaFiscal>=75?"#8FE3BE":A.amber},
+            {label:"Backlog ops",        val:String(backlogTkts.length)+" ops", col:backlogTkts.length>0?A.amber:A.t3, bold:backlogTkts.length>0},
+            {label:"Backlog revenue",   val:mxn(backlogRev),         col:A.amber},
+            {label:"Capital inm.",      val:mxn(capitalInmM),        col:A.amber},
             {label:"Cartera pendiente", val:mxn(carteraMonto),       col:vencidos.length>0?A.amber:A.t1},
             {label:"Flujo operativo",   val:mxn(flujoOp),            col:flujoOp>=0?"#8FE3BE":A.red},
             {label:"Forecast revenue",  val:mxn(forecastMonto),      col:A.t2},
