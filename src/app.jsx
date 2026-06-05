@@ -5210,6 +5210,7 @@ function Ajustes({state,dispatch,toast}) {
   const [confirmReset,setConfirmReset]=useState(false);
   const [confirmClearUnits,setConfirmClearUnits]=useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportingAudit, setExportingAudit] = useState(false);
   const [showBackups, setShowBackups] = useState(false);
   const [backupList, setBackupList] = useState([]);
   const [previewKey, setPreviewKey] = useState(null);
@@ -5331,6 +5332,78 @@ function Ajustes({state,dispatch,toast}) {
       dispatch({type:"IMPORT",data:d});
       toast("Datos restaurados desde backup","success");
     } catch { toast("Error al restaurar","error"); }
+  };
+
+  const exportAuditoria = () => {
+    if(exportingAudit) return;
+    setExportingAudit(true);
+    try {
+      const fev = (tl,kw) => { const e=(tl||[]).find(ev=>(ev.evento||'').toLowerCase().includes(kw)); return e?e.ts:null; };
+      const fevH = (hist,toState) => { const e=(hist||[]).find(h=>h.type==='status_changed'&&h.to===toState); return e?e.ts:null; };
+      const cobH = (hist) => { const e=(hist||[]).find(h=>h.type==='cobrado'); return e?e.ts:null; };
+      const BACKLOG=new Set(['autorizado','comprado','transito']);
+      const CARTERA=new Set(['entregado','facturado']);
+      const CASH=new Set(['cobrado','cerrado']);
+      const ts=Date.now();
+
+      const rows = state.tickets.filter(t=>!t._deleted).map(t=>{
+        const tl=t.timeline||[]; const hist=t.history||[];
+        const cl=state.clients.find(c=>c.id===t.clientId);
+        return {
+          id: t.id,
+          fecha_creacion: t.date||'',
+          status: t.status||'',
+          cliente_id: t.clientId||'',
+          cliente: cl?.empresa||cl?.nombre||t.clientId||'',
+          revenue: t.snap?.precioConIVA??'',
+          costo: t.snap?.costoBase??'',
+          utilidad: t.snap?.uNeta??'',
+          promesaPago: t.promesaPago||'',
+          cobrado_flag: t.cobrado||false,
+          en_backlog: BACKLOG.has(t.status),
+          en_cartera: CARTERA.has(t.status),
+          en_cash: CASH.has(t.status),
+          // Timestamps vía history[] (estructurado — fuente primaria)
+          ts_autorizado_h:  fevH(hist,'autorizado')||'',
+          ts_comprado_h:    fevH(hist,'comprado')||'',
+          ts_transito_h:    fevH(hist,'transito')||'',
+          ts_entregado_h:   fevH(hist,'entregado')||'',
+          ts_facturado_h:   fevH(hist,'facturado')||'',
+          ts_cobrado_h:     fevH(hist,'cobrado')||cobH(hist)||'',
+          // Timestamps vía timeline[] (substring — método actual del código)
+          ts_autorizado_tl: fev(tl,'estado: autorizado')||'',
+          ts_comprado_tl:   fev(tl,'estado: comprado')||'',
+          ts_transito_tl:   fev(tl,'estado: en transito')||fev(tl,'transito')||'',
+          ts_entregado_tl:  fev(tl,'estado: entregado')||fev(tl,'entregado')||'',
+          ts_facturado_tl:  fev(tl,'estado: facturado')||'',
+          ts_cobrado_tl:    fev(tl,'estado: cobrado')||fev(tl,'cobrado')||'',
+          // Arrays crudos serializados
+          timeline: JSON.stringify(tl),
+          history:  JSON.stringify(hist),
+        };
+      });
+
+      // JSON
+      const jsonStr = JSON.stringify({exportedAt:new Date().toISOString(),total:rows.length,tickets:rows},null,2);
+      const jBlob = new Blob([jsonStr],{type:'application/json'});
+      const jUrl  = URL.createObjectURL(jBlob);
+      const jA    = document.createElement('a');
+      jA.href=jUrl; jA.download=`logisolve-auditoria-${ts}.json`; jA.click();
+      URL.revokeObjectURL(jUrl);
+
+      // CSV (BOM UTF-8 para Excel)
+      const COLS = Object.keys(rows[0]||{});
+      const esc  = v => { const s=String(v??''); return (s.includes(',')||s.includes('"')||s.includes('\n'))?'"'+s.replace(/"/g,'""')+'"':s; };
+      const csv  = [COLS.join(','), ...rows.map(r=>COLS.map(c=>esc(r[c])).join(','))].join('\n');
+      const cBlob= new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+      const cUrl = URL.createObjectURL(cBlob);
+      const cA   = document.createElement('a');
+      cA.href=cUrl; cA.download=`logisolve-auditoria-${ts}.csv`; cA.click();
+      URL.revokeObjectURL(cUrl);
+
+      toast(`Auditoría exportada: ${rows.length} tickets`,"success");
+    } catch(e) { toast("Error al exportar auditoría: "+e?.message,"error"); }
+    finally { setExportingAudit(false); }
   };
 
   return (
@@ -5458,6 +5531,18 @@ function Ajustes({state,dispatch,toast}) {
             <button onClick={()=>fileRef.current&&fileRef.current.click()} style={{padding:"6px 14px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:11,cursor:"pointer"}}>⬆ Importar JSON</button>
           </div>
         )},
+        {title:"AUDITORÍA DE DATOS",content:(
+          <div style={{padding:11}}>
+            <div style={{fontSize:9,color:C.t2,marginBottom:4}}>Exporta todos los tickets cargados en memoria — datos crudos sin modificar.</div>
+            <div style={{fontSize:8,color:C.t3,marginBottom:9}}>Descarga un archivo <b style={{color:C.cyan}}>JSON</b> y un <b style={{color:C.cyan}}>CSV</b> con: ID, fecha, status, cliente, revenue, costo, utilidad, promesaPago, cobrado, timeline y history completos.</div>
+            <button onClick={exportAuditoria} disabled={exportingAudit}
+              style={{padding:"6px 14px",background:exportingAudit?C.bg2:C.purple||C.blue,border:"none",borderRadius:3,
+                color:exportingAudit?C.t3:C.t1,fontSize:11,fontWeight:700,cursor:exportingAudit?"not-allowed":"pointer"}}>
+              {exportingAudit?"Exportando…":"⬇ Exportar auditoría completa"}
+            </button>
+            <div style={{fontSize:8,color:C.t3,marginTop:6}}>{state.tickets.filter(t=>!t._deleted).length} tickets activos en memoria</div>
+          </div>
+        )},
         {title:"RESTABLECER",content:(
           <div style={{padding:11}}>
             <div style={{fontSize:9,color:C.t2,marginBottom:7}}>Elimina todos los datos y vuelve al estado inicial. <span style={{color:C.red}}>No se puede deshacer.</span></div>
@@ -5482,9 +5567,60 @@ function MAjustes({state,dispatch,toast}) {
   const [confirmReset,setConfirmReset]=useState(false);
   const [confirmClearUnits,setConfirmClearUnits]=useState(false);
   const [exporting,setExporting]=useState(false);
+  const [exportingAudit,setExportingAudit]=useState(false);
   const [importMode,setImportMode]=useState("merge");
 
   const savedAt=(()=>{try{const r=localStorage.getItem(STORAGE_KEY);if(r){const p=JSON.parse(r);return p.savedAt?new Date(p.savedAt).toLocaleString("es-MX"):"---";}}catch(_e){}return "---";})();
+
+  const exportAuditoria=()=>{
+    if(exportingAudit) return;
+    setExportingAudit(true);
+    try {
+      const fev=(tl,kw)=>{const e=(tl||[]).find(ev=>(ev.evento||'').toLowerCase().includes(kw));return e?e.ts:null;};
+      const fevH=(hist,toState)=>{const e=(hist||[]).find(h=>h.type==='status_changed'&&h.to===toState);return e?e.ts:null;};
+      const cobH=(hist)=>{const e=(hist||[]).find(h=>h.type==='cobrado');return e?e.ts:null;};
+      const BACKLOG=new Set(['autorizado','comprado','transito']);
+      const CARTERA=new Set(['entregado','facturado']);
+      const CASH=new Set(['cobrado','cerrado']);
+      const ts=Date.now();
+      const rows=state.tickets.filter(t=>!t._deleted).map(t=>{
+        const tl=t.timeline||[]; const hist=t.history||[];
+        const cl=state.clients.find(c=>c.id===t.clientId);
+        return {
+          id:t.id, fecha_creacion:t.date||'', status:t.status||'',
+          cliente_id:t.clientId||'', cliente:cl?.empresa||cl?.nombre||t.clientId||'',
+          revenue:t.snap?.precioConIVA??'', costo:t.snap?.costoBase??'',
+          utilidad:t.snap?.uNeta??'', promesaPago:t.promesaPago||'',
+          cobrado_flag:t.cobrado||false,
+          en_backlog:BACKLOG.has(t.status), en_cartera:CARTERA.has(t.status), en_cash:CASH.has(t.status),
+          ts_autorizado_h:fevH(hist,'autorizado')||'', ts_comprado_h:fevH(hist,'comprado')||'',
+          ts_transito_h:fevH(hist,'transito')||'', ts_entregado_h:fevH(hist,'entregado')||'',
+          ts_facturado_h:fevH(hist,'facturado')||'', ts_cobrado_h:fevH(hist,'cobrado')||cobH(hist)||'',
+          ts_autorizado_tl:fev(tl,'estado: autorizado')||'', ts_comprado_tl:fev(tl,'estado: comprado')||'',
+          ts_transito_tl:fev(tl,'estado: en transito')||fev(tl,'transito')||'',
+          ts_entregado_tl:fev(tl,'estado: entregado')||fev(tl,'entregado')||'',
+          ts_facturado_tl:fev(tl,'estado: facturado')||'', ts_cobrado_tl:fev(tl,'estado: cobrado')||fev(tl,'cobrado')||'',
+          timeline:JSON.stringify(tl), history:JSON.stringify(hist),
+        };
+      });
+      const jsonStr=JSON.stringify({exportedAt:new Date().toISOString(),total:rows.length,tickets:rows},null,2);
+      const jBlob=new Blob([jsonStr],{type:'application/json'});
+      const jUrl=URL.createObjectURL(jBlob);
+      const jA=document.createElement('a');
+      jA.href=jUrl; jA.download=`logisolve-auditoria-${ts}.json`; jA.click();
+      URL.revokeObjectURL(jUrl);
+      const COLS=Object.keys(rows[0]||{});
+      const esc=v=>{const s=String(v??'');return(s.includes(',')||s.includes('"')||s.includes('\n'))?'"'+s.replace(/"/g,'""')+'"':s;};
+      const csv=[COLS.join(','),...rows.map(r=>COLS.map(c=>esc(r[c])).join(','))].join('\n');
+      const cBlob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+      const cUrl=URL.createObjectURL(cBlob);
+      const cA=document.createElement('a');
+      cA.href=cUrl; cA.download=`logisolve-auditoria-${ts}.csv`; cA.click();
+      URL.revokeObjectURL(cUrl);
+      toast(`Auditoría exportada: ${rows.length} tickets`,"success");
+    }catch(e){toast("Error al exportar auditoría: "+e?.message,"error");}
+    finally{setExportingAudit(false);}
+  };
 
   const importUnitsJSON=(file,mode="merge")=>{
     const r=new FileReader();
@@ -5605,6 +5741,15 @@ function MAjustes({state,dispatch,toast}) {
         <div style={{fontSize:13,color:C.t2,marginBottom:12}}>Importa un backup JSON completo. <span style={{color:C.yellow}}>Reemplaza los datos actuales.</span></div>
         <input ref={fileRef} type="file" accept=".json" onChange={e=>{if(e.target.files[0])importData(e.target.files[0]);}} style={{display:"none"}}/>
         <MBtn label="⬆ Importar JSON" full color={C.t2} bg="transparent" border={C.border} onClick={()=>fileRef.current&&fileRef.current.click()}/>
+      </Card>
+
+      <Card title="AUDITORÍA DE DATOS">
+        <div style={{fontSize:13,color:C.t2,marginBottom:4}}>Exporta todos los tickets cargados en memoria — datos crudos sin modificar.</div>
+        <div style={{fontSize:11,color:C.t3,marginBottom:14,lineHeight:1.5}}>Descarga un <b style={{color:C.cyan}}>JSON</b> y un <b style={{color:C.cyan}}>CSV</b> con: ID, fecha, status, cliente, revenue, costo, utilidad, promesaPago, cobrado, timeline y history completos.</div>
+        <MBtn label={exportingAudit?"Exportando…":"⬇ Exportar auditoría completa"} full
+          color={exportingAudit?C.t3:C.t1} bg={exportingAudit?C.bg2:C.blue} border={exportingAudit?C.border:C.blue}
+          onClick={exportAuditoria}/>
+        <div style={{fontSize:10,color:C.t3,marginTop:8}}>{state.tickets.filter(t=>!t._deleted).length} tickets activos en memoria</div>
       </Card>
 
       <Card title="RESTABLECER">
