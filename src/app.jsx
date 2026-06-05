@@ -2156,6 +2156,7 @@ const Timeline = React.memo(function Timeline({events, active=false, mobile=fals
 function CentroOps({state}) {
   const C = React.useContext(ThemeCtx);
   const {tickets,clients,suppliers,units} = state;
+  const [drillDown, setDrillDown] = useState(null);
   // Use shared selectors — business rules defined once in L3.5
   const active   = useMemo(()=>sel_active(tickets),[tickets]);
   const operados = useMemo(()=>sel_operados(tickets),[tickets]);
@@ -2275,8 +2276,8 @@ function CentroOps({state}) {
             </div>
           )}
           {vencidos.length>0&&(
-            <div style={{background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:3,padding:"5px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{fontSize:9,color:"#C04040",fontWeight:700}}>CARTERA VENCIDA — {vencidos.length} op. / {mxn(vencidos.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0))}</span>
+            <div onClick={()=>setDrillDown("vencidos")} style={{background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:3,padding:"5px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
+              <span style={{fontSize:9,color:"#C04040",fontWeight:700}}>CARTERA VENCIDA — {vencidos.length} op. / {mxn(vencidos.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0))} · ver detalle ↗</span>
               <span style={{fontSize:8,color:"#C04040"}}>{vencidos.map(t=>t.id).join(" / ")}</span>
             </div>
           )}
@@ -2321,10 +2322,18 @@ function CentroOps({state}) {
         <div style={{fontSize:8,color:C.t3,marginTop:1}}>Vendido y comprometido — trabajo aprobado pendiente de entrega</div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:5}}>
-        <KPI label="Ops en backlog" value={String(backlog.length)} color={backlog.length>0?C.yellow:C.t3}/>
-        <KPI label="Revenue comprometido" value={mxn(backlogRevenue)} color={C.cyan}/>
-        <KPI label="Util. comprometida" value={mxn(backlogUtil)} color={backlogUtil>=0?C.green:C.red}/>
-        <KPI label="Capital comprometido" value={mxn(backlogCosto)} color={C.yellow} sub="costos con IVA"/>
+        <div onClick={()=>setDrillDown("backlog")} style={{cursor:"pointer"}}>
+          <KPI label="Ops en backlog ↗" value={String(backlog.length)} color={backlog.length>0?C.yellow:C.t3}/>
+        </div>
+        <div onClick={()=>setDrillDown("backlog")} style={{cursor:"pointer"}}>
+          <KPI label="Revenue comprometido ↗" value={mxn(backlogRevenue)} color={C.cyan}/>
+        </div>
+        <div onClick={()=>setDrillDown("backlog")} style={{cursor:"pointer"}}>
+          <KPI label="Util. comprometida ↗" value={mxn(backlogUtil)} color={backlogUtil>=0?C.green:C.red}/>
+        </div>
+        <div onClick={()=>setDrillDown("backlog")} style={{cursor:"pointer"}}>
+          <KPI label="Capital comprometido ↗" value={mxn(backlogCosto)} color={C.yellow} sub="costos con IVA"/>
+        </div>
       </div>
       <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:10}}>
         {backlog.length>0?(
@@ -2353,7 +2362,7 @@ function CentroOps({state}) {
               </div>
             ))}
             {backlog.length>5&&(
-              <div style={{padding:"5px 11px",fontSize:7,color:C.t3,borderTop:`1px solid ${C.border}`}}>+{backlog.length-5} más en backlog</div>
+              <div onClick={()=>setDrillDown("backlog")} style={{padding:"5px 11px",fontSize:7,color:C.cyan,borderTop:`1px solid ${C.border}`,cursor:"pointer"}}>+{backlog.length-5} más en backlog · ver todos ↗</div>
             )}
           </>
         ):(
@@ -2370,10 +2379,16 @@ function CentroOps({state}) {
         <div style={{fontSize:8,color:C.t3,marginTop:1}}>Entregado y facturado — cartera activa y cash recibido</div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:5}}>
-        <KPI label="Cartera pendiente" value={mxn(carteraMonto)} color={C.yellow} alert={vencidos.length>0} sub={vencidos.length>0?vencidos.length+" vencida"+(vencidos.length>1?"s":""):""}/>
+        <div onClick={()=>setDrillDown("cartera")} style={{cursor:"pointer"}}>
+          <KPI label="Cartera pendiente ↗" value={mxn(carteraMonto)} color={C.yellow} alert={vencidos.length>0} sub={vencidos.length>0?vencidos.length+" vencida"+(vencidos.length>1?"s":""):""}/>
+        </div>
         <KPI label="Cash cobrado" value={mxn(cashTotal)} color={C.green}/>
-        <KPI label="Por cobrar" value={String(cartera.length)+" tickets"} color={cartera.length>0?C.t1:C.t3}/>
-        <KPI label="Flujo operativo" value={mxn(flujoOp)} color={flujoOp>=0?C.green:C.red}/>
+        <div onClick={()=>setDrillDown("cartera")} style={{cursor:"pointer"}}>
+          <KPI label="Por cobrar ↗" value={String(cartera.length)+" tickets"} color={cartera.length>0?C.t1:C.t3}/>
+        </div>
+        <div onClick={()=>vencidos.length>0&&setDrillDown("vencidos")} style={{cursor:vencidos.length>0?"pointer":"default"}}>
+          <KPI label={vencidos.length>0?"Pagos vencidos ↗":"Flujo operativo"} value={vencidos.length>0?String(vencidos.length)+" vencidos":mxn(flujoOp)} color={vencidos.length>0?C.red:flujoOp>=0?C.green:C.red}/>
+        </div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,marginBottom:10}}>
         <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
@@ -2413,9 +2428,12 @@ function CentroOps({state}) {
       <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:5}}>
         {/* Fila 1: los dos componentes */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",borderBottom:`1px solid ${C.border}`}}>
-          <div style={{padding:"10px 14px",borderRight:`1px solid ${C.border}`}}>
+          <div onClick={()=>setDrillDown("backlog")} style={{padding:"10px 14px",borderRight:`1px solid ${C.border}`,
+            cursor:"pointer",transition:"background 0.15s"}}
+            onMouseEnter={e=>e.currentTarget.style.background=`${C.yellow}08`}
+            onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
             <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>
-              Capital Comprometido
+              Capital Comprometido <span style={{color:C.yellow,opacity:0.7}}>↗</span>
             </div>
             <div style={{fontSize:8,color:C.t3,marginBottom:6}}>
               Autorizado + Comprado + Tránsito · {backlog.length} op{backlog.length!==1?"s":""}
@@ -2424,14 +2442,16 @@ function CentroOps({state}) {
               {mxn(backlogCosto)}
             </div>
           </div>
-          <div style={{padding:"10px 14px"}}>
+          <div onClick={()=>setDrillDown("cartera")} style={{padding:"10px 14px",cursor:"pointer",transition:"background 0.15s"}}
+            onMouseEnter={e=>e.currentTarget.style.background=`${C.yellow}08`}
+            onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
             <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>
-              Capital en Cartera
+              Capital en Cartera <span style={{color:C.yellow,opacity:0.7}}>↗</span>
             </div>
             <div style={{fontSize:8,color:C.t3,marginBottom:6}}>
               Entregado + Facturado · {cartera.length} ticket{cartera.length!==1?"s":""}
             </div>
-            <div style={{fontSize:18,fontWeight:800,color:C.yellow,fontFamily:"'Courier New',monospace",
+            <div style={{fontSize:18,fontWeight:800,fontFamily:"'Courier New',monospace",
               color:vencidos.length>0?C.red:C.yellow}}>
               {mxn(carteraMonto)}
             </div>
@@ -2584,6 +2604,216 @@ function CentroOps({state}) {
           })}
         </div>
       </div>
+
+      {/* ── DRILL-DOWN MODAL ───────────────────────────────────────────────── */}
+      {drillDown&&(()=>{
+        const HDR_COLS = {
+          backlog:  {title:"Capital Comprometido — Backlog Operativo",  sub:`${backlog.length} operaciones · ${mxn(backlogCosto)}`},
+          cartera:  {title:"Capital en Cartera — Desglose por Cliente", sub:`${cartera.length} tickets · ${mxn(carteraMonto)}`},
+          vencidos: {title:"Pagos Vencidos — Por Antigüedad",           sub:`${vencidos.length} pagos · ${mxn(vencidos.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0))}`},
+        }[drillDown];
+        const TH = ({children,right}) => (
+          <div style={{fontSize:8,fontWeight:700,color:C.t3,letterSpacing:"0.09em",textTransform:"uppercase",
+            textAlign:right?"right":"left",paddingBottom:2}}>{children}</div>
+        );
+        const CELL = ({children,mono,bold,color,right,small,muted,truncate}) => (
+          <div style={{fontSize:small?7:9,fontWeight:bold?800:500,
+            color:color||(muted?C.t3:C.t2),fontFamily:mono?"'Courier New',monospace":"inherit",
+            textAlign:right?"right":"left",overflow:truncate?"hidden":"visible",
+            textOverflow:truncate?"ellipsis":"clip",whiteSpace:truncate?"nowrap":"normal",paddingRight:right?0:4}}>
+            {children}
+          </div>
+        );
+        return (
+          <div onClick={e=>{if(e.target===e.currentTarget)setDrillDown(null)}}
+            style={{position:"fixed",inset:0,zIndex:700,background:"rgba(0,0,0,0.78)",
+              backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",
+              display:"flex",alignItems:"flex-start",justifyContent:"center",
+              padding:"36px 20px",overflowY:"auto"}}>
+            <div style={{background:C.bg0,border:`1px solid ${C.border}`,borderRadius:6,
+              width:"100%",maxWidth:1020,boxShadow:"0 24px 80px rgba(0,0,0,0.7)"}}>
+
+              {/* Header */}
+              <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.border}`,
+                display:"flex",justifyContent:"space-between",alignItems:"center",
+                position:"sticky",top:0,background:C.bg0,zIndex:1,borderRadius:"6px 6px 0 0"}}>
+                <div>
+                  <div style={{fontSize:11,fontWeight:800,color:C.t1,letterSpacing:"0.1em",textTransform:"uppercase"}}>
+                    {HDR_COLS.title}
+                  </div>
+                  <div style={{fontSize:8,color:C.t3,marginTop:3}}>{HDR_COLS.sub}</div>
+                </div>
+                <button onClick={()=>setDrillDown(null)} style={{background:"transparent",
+                  border:`1px solid ${C.border}`,color:C.t2,cursor:"pointer",fontSize:13,
+                  fontWeight:700,width:28,height:28,borderRadius:4,flexShrink:0,
+                  display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+              </div>
+
+              {/* ── BACKLOG ── */}
+              {drillDown==="backlog"&&(()=>{
+                const cols = "120px 1fr 140px 110px 52px 105px 105px 95px";
+                const headers = ["Folio","Ticket","Cliente","Estado","Días","Revenue","Costo","Utilidad"];
+                return (
+                  <div>
+                    <div style={{display:"grid",gridTemplateColumns:cols,gap:0,
+                      padding:"7px 16px",borderBottom:`1px solid ${C.border}`,background:C.bg1}}>
+                      {headers.map(h=><TH key={h} right={["Revenue","Costo","Utilidad"].includes(h)}>{h}</TH>)}
+                    </div>
+                    {backlog.map((t,i)=>{
+                      const cl   = clients.find(c=>c.id===t.clientId);
+                      const iva  = safeNumber(t.snap?.params?.iva,16);
+                      const costo= safeNumber(t.snap?.costoBase)*(1+iva/100);
+                      const rev  = safeNumber(t.snap?.precioConIVA);
+                      const util = safeNumber(t.snap?.uNeta);
+                      const dias = backlogAging[i];
+                      const meta = TICKET_META[t.status]||{};
+                      return (
+                        <div key={t.id} style={{display:"grid",gridTemplateColumns:cols,gap:0,
+                          padding:"9px 16px",borderBottom:`1px solid ${C.border}`,alignItems:"center"}}>
+                          <CELL mono color={C.cyan} bold small>{mkFolio(t,"OP")}</CELL>
+                          <CELL truncate>{t.titulo}</CELL>
+                          <CELL truncate muted>{cl?.empresa||"—"}</CELL>
+                          <div>
+                            <span style={{fontSize:7,fontWeight:700,color:meta.dot||C.t3,
+                              background:`${meta.dot||C.border}22`,padding:"2px 6px",borderRadius:3}}>
+                              {meta.label||t.status}
+                            </span>
+                          </div>
+                          <CELL mono bold color={dias>14?C.red:dias>7?C.yellow:C.t2} right>{dias}d</CELL>
+                          <CELL mono color={C.cyan} right>{mxn(rev)}</CELL>
+                          <CELL mono muted right>{mxn(costo)}</CELL>
+                          <CELL mono bold color={util>=0?C.green:C.red} right>{mxn(util)}</CELL>
+                        </div>
+                      );
+                    })}
+                    <div style={{display:"grid",gridTemplateColumns:cols,gap:0,
+                      padding:"9px 16px",borderTop:`2px solid ${C.border}`,background:C.bg1,alignItems:"center"}}>
+                      <div style={{fontSize:8,fontWeight:800,color:C.t3,letterSpacing:"0.1em",
+                        gridColumn:"1/6",textTransform:"uppercase"}}>Total Backlog</div>
+                      <CELL mono bold color={C.cyan} right>{mxn(backlogRevenue)}</CELL>
+                      <CELL mono bold color={C.yellow} right>{mxn(backlogCosto)}</CELL>
+                      <CELL mono bold color={backlogUtil>=0?C.green:C.red} right>{mxn(backlogUtil)}</CELL>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── CARTERA ── */}
+              {drillDown==="cartera"&&(()=>{
+                const vSet = new Set(vencidos.map(v=>v.id));
+                const byClient = {};
+                cartera.forEach(t=>{ const k=t.clientId||"__"; if(!byClient[k])byClient[k]=[]; byClient[k].push(t); });
+                const cols = "120px 1fr 90px 100px 55px 115px 80px";
+                const headers = ["Folio","Ticket","Fecha","Promesa pago","Días","Monto","Estatus"];
+                return (
+                  <div>
+                    <div style={{display:"grid",gridTemplateColumns:cols,gap:0,
+                      padding:"7px 16px",borderBottom:`1px solid ${C.border}`,background:C.bg1}}>
+                      {headers.map(h=><TH key={h} right={["Monto"].includes(h)}>{h}</TH>)}
+                    </div>
+                    {Object.entries(byClient).map(([cid,tkts])=>{
+                      const cl = clients.find(c=>c.id===cid);
+                      const clientTotal = tkts.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
+                      const clientVenc  = tkts.filter(t=>vSet.has(t.id)).length;
+                      return (
+                        <div key={cid}>
+                          <div style={{padding:"7px 16px",background:`${C.cyan}12`,
+                            borderTop:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`,
+                            display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                            <span style={{fontSize:9,fontWeight:700,color:C.cyan}}>{cl?.empresa||"Sin cliente asignado"}</span>
+                            <span style={{fontSize:9,fontWeight:700,color:clientVenc>0?C.red:C.cyan,fontFamily:"'Courier New',monospace"}}>
+                              {tkts.length} ticket{tkts.length!==1?"s":""}{clientVenc>0?` · ${clientVenc} vencido${clientVenc>1?"s":""}`:""}
+                              {" · "}{mxn(clientTotal)}
+                            </span>
+                          </div>
+                          {tkts.map(t=>{
+                            const isVenc = vSet.has(t.id);
+                            const d = parseDateMX(t.date);
+                            const dias = d?Math.round((Date.now()-d.getTime())/86400000):0;
+                            return (
+                              <div key={t.id} style={{display:"grid",gridTemplateColumns:cols,gap:0,
+                                padding:"9px 16px",borderBottom:`1px solid ${C.border}`,alignItems:"center",
+                                background:isVenc?`${C.red}08`:"transparent"}}>
+                                <CELL mono color={C.cyan} bold small>{mkFolio(t,"OP")}</CELL>
+                                <CELL truncate>{t.titulo}</CELL>
+                                <CELL mono muted small>{t.date||"—"}</CELL>
+                                <CELL mono small color={t.promesaPago?(isVenc?C.red:C.t2):C.t3}>{t.promesaPago||"—"}</CELL>
+                                <CELL mono bold color={dias>30?C.red:dias>15?C.yellow:C.t2} right>{dias}d</CELL>
+                                <CELL mono bold color={isVenc?C.red:C.cyan} right>{mxn(safeNumber(t.snap?.precioConIVA))}</CELL>
+                                <div>
+                                  <span style={{fontSize:7,fontWeight:700,
+                                    color:isVenc?C.red:C.green,
+                                    background:isVenc?`${C.red}20`:`${C.green}20`,
+                                    padding:"2px 8px",borderRadius:3}}>
+                                    {isVenc?"VENCIDO":"VIGENTE"}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                    <div style={{padding:"9px 16px",borderTop:`2px solid ${C.border}`,background:C.bg1,
+                      display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span style={{fontSize:8,fontWeight:800,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase"}}>
+                        Total Cartera · {cartera.length} tickets
+                      </span>
+                      <span style={{fontSize:11,fontWeight:800,color:vencidos.length>0?C.red:C.yellow,fontFamily:"'Courier New',monospace"}}>
+                        {mxn(carteraMonto)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── VENCIDOS ── */}
+              {drillDown==="vencidos"&&(()=>{
+                const sorted = [...vencidos].sort((a,b)=>{
+                  const da=parseDateMX(a.promesaPago), db=parseDateMX(b.promesaPago);
+                  if(!da&&!db)return 0; if(!da)return 1; if(!db)return -1; return da-db;
+                });
+                const total = sorted.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
+                const cols = "160px 120px 1fr 115px 95px";
+                const headers = ["Cliente","Folio","Ticket","Monto","Días vencido"];
+                return (
+                  <div>
+                    <div style={{display:"grid",gridTemplateColumns:cols,gap:0,
+                      padding:"7px 16px",borderBottom:`1px solid ${C.border}`,background:C.bg1}}>
+                      {headers.map(h=><TH key={h} right={["Monto","Días vencido"].includes(h)}>{h}</TH>)}
+                    </div>
+                    {sorted.map(t=>{
+                      const cl = clients.find(c=>c.id===t.clientId);
+                      const d  = parseDateMX(t.promesaPago);
+                      const dias = d?Math.round((Date.now()-d.getTime())/86400000):0;
+                      return (
+                        <div key={t.id} style={{display:"grid",gridTemplateColumns:cols,gap:0,
+                          padding:"9px 16px",borderBottom:`1px solid ${C.border}`,alignItems:"center"}}>
+                          <CELL truncate bold>{cl?.empresa||"—"}</CELL>
+                          <CELL mono color={C.cyan} small bold>{mkFolio(t,"OP")}</CELL>
+                          <CELL truncate muted>{t.titulo}</CELL>
+                          <CELL mono bold color={C.red} right>{mxn(safeNumber(t.snap?.precioConIVA))}</CELL>
+                          <CELL mono bold color={dias>60?C.red:dias>30?C.yellow:C.red} right>{dias}d</CELL>
+                        </div>
+                      );
+                    })}
+                    <div style={{padding:"9px 16px",borderTop:`2px solid ${C.red}66`,background:C.bg1,
+                      display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span style={{fontSize:8,fontWeight:800,color:C.red,letterSpacing:"0.1em",textTransform:"uppercase"}}>
+                        Total Vencido · {sorted.length} pago{sorted.length!==1?"s":""}
+                      </span>
+                      <span style={{fontSize:11,fontWeight:800,color:C.red,fontFamily:"'Courier New',monospace"}}>
+                        {mxn(total)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
