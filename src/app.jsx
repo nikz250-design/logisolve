@@ -1082,16 +1082,17 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
     const ml      = migrateLinea(c, tkt.snap);
     const qty     = safeNumber(ml.qty, 1) || 1;
     const fin     = resolveLineFinancials(ml, tkt.snap, qty);
-    const desc    = ml.descripcionPDF ||
-      "Atenci\u00f3n correctiva para continuidad operativa de unidad en CEDIS SMO. Incluye integraci\u00f3n de componente compatible, validaci\u00f3n operativa y seguimiento log\u00edstico.";
+    const concepto = qty > 1
+      ? `${qty} unidades ${ml.titulo||"Sin descripci\u00f3n"}`
+      : (ml.titulo||"Sin descripci\u00f3n");
+    const desc    = (ml.descripcionPDF && ml.descripcionPDF !== ml.titulo && !/^\d+\s/.test(ml.descripcionPDF))
+      ? ml.descripcionPDF
+      : "Suministro e integraci\u00f3n de componente compatible para continuidad operativa. Validaci\u00f3n y coordinaci\u00f3n operativa. Entrega directa en CEDIS SMO.";
     const unTag   = unidadStr && i === 0 ? `<br><br><strong>Unidad:</strong> ${unidadStr}` : "";
     const refTag  = ml.partRef ? `<br><br><strong>Clave:</strong> ${ml.partRef}` : "";
-    const qtyTag  = qty > 1
-      ? `<br><span style="font-size:9px;color:#666">${qty} pzs &times; ${fmtMXN(fin.unitPrice)} c/u</span>`
-      : "";
     return `<tr>
       <td>${String(i+1).padStart(2,"0")}</td>
-      <td>${ml.titulo||"Sin descripcion"}${qtyTag}</td>
+      <td>${concepto}</td>
       <td>${desc}${unTag}${refTag}</td>
       <td class="money">${fmtMXN(fin.lineTotal)}</td>
     </tr>`;
@@ -1171,7 +1172,7 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
         <tr><td>Vigencia</td><td>3 d&iacute;as naturales</td></tr>
         <tr><td>Atenci&oacute;n</td><td>&Aacute;rea de Compras / Operaciones</td></tr>
       </table>
-      <div class="section-title">Detalle del concepto</div>
+      <div class="section-title">DETALLE DEL CONCEPTO</div>
       <table class="detail-table">
         <thead><tr>
           <th style="width:32px">No.</th>
