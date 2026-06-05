@@ -6101,6 +6101,7 @@ function MSel({label,value,onChange,options}) {
 function MOps({state,setTab,triggerMargin}) {
   const C = React.useContext(ThemeCtx);
   const {tickets,clients} = state;
+  const [mDrillDown, setMDrillDown] = useState(null);
   const [period,setPeriod]     = useState("month");
   const [heatMetric,setHeatMetric] = useState("venta");
   const [heatDay,setHeatDay]       = useState(null); // {dn,yr,mo}
@@ -6466,6 +6467,48 @@ function MOps({state,setTab,triggerMargin}) {
           </button>
         </div>
 
+        {/* ══ DISTRIBUCIÓN PIPELINE ═════════════════════════════════════════════ */}
+        <div className="glass-card" style={{overflow:"hidden",marginBottom:12,padding:0}}>
+          <div style={{padding:"14px 20px 10px",borderBottom:`1px solid ${C.border}`}}>
+            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase"}}>
+              Distribución Pipeline
+            </div>
+          </div>
+          <div style={{overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
+            <div style={{display:"flex",minWidth:"max-content",padding:"10px 12px 12px",gap:2}}>
+              {TICKET_ALL.map(sid=>{
+                const s   = TICKET_META[sid];
+                const cnt = tickets.filter(t=>t.status===sid&&!t._deleted).length;
+                const isBacklog = BACKLOG_SET.has(sid);
+                const isCart    = ["entregado","facturado"].includes(sid);
+                const accent    = isBacklog?A.amber:isCart?A.lime:cnt>0?s.dot:A.t3;
+                return (
+                  <div key={sid} style={{
+                    display:"flex",flexDirection:"column",alignItems:"center",
+                    minWidth:56,padding:"8px 6px",borderRadius:8,
+                    background:cnt>0?(isBacklog?"rgba(245,197,48,0.07)":isCart?"rgba(74,222,128,0.06)":"rgba(255,255,255,0.03)"):"transparent",
+                    border:`1px solid ${cnt>0?(isBacklog?"rgba(245,197,48,0.2)":isCart?"rgba(74,222,128,0.15)":C.border):C.border}`,
+                  }}>
+                    <div style={{fontSize:22,fontWeight:800,color:accent,fontVariantNumeric:"tabular-nums",lineHeight:1,marginBottom:4}}>
+                      {cnt}
+                    </div>
+                    <div style={{fontSize:7,color:cnt>0?accent:A.t3,textAlign:"center",lineHeight:1.3,
+                      letterSpacing:"0.02em",maxWidth:52}}>
+                      {s.label}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div style={{padding:"8px 20px",borderTop:`1px solid ${C.border}`,
+            display:"flex",gap:16,fontSize:8,color:A.t3}}>
+            <span style={{color:A.amber}}>■ backlog</span>
+            <span style={{color:A.lime}}>■ cartera</span>
+            <span>■ pipeline</span>
+          </div>
+        </div>
+
         {/* ══ CARTERA WIDGET — interactive, touchable ═══════════════════════════ */}
         <div onClick={()=>setTab("cartera")} style={{
           background: vencidos.length>0
@@ -6522,13 +6565,15 @@ function MOps({state,setTab,triggerMargin}) {
             </div>
           </div>
 
-          {/* Componente 1: Capital Comprometido */}
-          <div style={{padding:"14px 24px",borderBottom:`1px solid rgba(245,197,48,0.1)`}}>
+          {/* Componente 1: Capital Comprometido — tappable */}
+          <div onClick={()=>setMDrillDown("backlog")} style={{padding:"14px 24px",
+            borderBottom:`1px solid rgba(245,197,48,0.1)`,cursor:"pointer",
+            WebkitTapHighlightColor:"transparent",touchAction:"manipulation"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
               <div style={{flex:1,minWidth:0,marginRight:12}}>
                 <div style={{fontSize:9,color:A.amber,fontWeight:700,letterSpacing:"0.1em",
                   textTransform:"uppercase",marginBottom:3}}>
-                  Capital Comprometido
+                  Capital Comprometido <span style={{opacity:0.6}}>›</span>
                 </div>
                 <div style={{fontSize:11,color:A.t3}}>
                   Autorizado · Comprado · Tránsito
@@ -6547,21 +6592,24 @@ function MOps({state,setTab,triggerMargin}) {
             </div>
           </div>
 
-          {/* Componente 2: Capital en Cartera */}
-          <div style={{padding:"14px 24px",borderBottom:`1px solid rgba(245,197,48,0.1)`}}>
+          {/* Componente 2: Capital en Cartera — tappable */}
+          <div onClick={()=>setMDrillDown("cartera")} style={{padding:"14px 24px",
+            borderBottom:`1px solid rgba(245,197,48,0.1)`,cursor:"pointer",
+            WebkitTapHighlightColor:"transparent",touchAction:"manipulation"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
               <div style={{flex:1,minWidth:0,marginRight:12}}>
                 <div style={{fontSize:9,color:vencidos.length>0?A.red:A.amber,fontWeight:700,
                   letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:3}}>
-                  Capital en Cartera
+                  Capital en Cartera <span style={{opacity:0.6}}>›</span>
                 </div>
                 <div style={{fontSize:11,color:A.t3}}>
                   Entregado · Facturado
                   {carteraTkts.length>0&&` · ${carteraTkts.length} ticket${carteraTkts.length!==1?"s":""}`}
                 </div>
                 {vencidos.length>0&&(
-                  <div style={{fontSize:10,color:A.red,marginTop:3}}>
-                    {vencidos.length} pago{vencidos.length!==1?"s":""} vencido{vencidos.length!==1?"s":""}
+                  <div onClick={e=>{e.stopPropagation();setMDrillDown("vencidos");}}
+                    style={{fontSize:10,color:A.red,marginTop:3,cursor:"pointer"}}>
+                    {vencidos.length} pago{vencidos.length!==1?"s":""} vencido{vencidos.length!==1?"s":""} · ver ›
                   </div>
                 )}
               </div>
@@ -7101,6 +7149,213 @@ function MOps({state,setTab,triggerMargin}) {
           </div>
         </div>
       </div>
+
+      {/* ── MOBILE DRILL-DOWN — bottom sheet ──────────────────────────────────── */}
+      {mDrillDown&&(()=>{
+        const vencidosTkts = sel_vencidos(tickets);
+        const carteraTktsM = sel_cartera(tickets);
+        const vSet = new Set(vencidosTkts.map(v=>v.id));
+        const titles = {
+          backlog: `Capital Comprometido · ${mxn(backlogCostoM)}`,
+          cartera: `Capital en Cartera · ${mxn(carteraMonto)}`,
+          vencidos:`Pagos Vencidos · ${vencidosTkts.length} pago${vencidosTkts.length!==1?"s":""}`,
+        };
+        const Row = ({label,value,color,muted,bold,mono})=>(
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+            padding:"11px 0",borderBottom:`1px solid ${C.border}`}}>
+            <span style={{fontSize:12,color:muted?A.t3:A.t2}}>{label}</span>
+            <span style={{fontSize:bold?14:12,fontWeight:bold?800:600,
+              color:color||A.t1,fontFamily:mono?"'Courier New',monospace":"inherit"}}>{value}</span>
+          </div>
+        );
+        return (
+          <>
+            <div onClick={()=>setMDrillDown(null)}
+              style={{position:"fixed",inset:0,zIndex:800,background:"rgba(0,0,0,0.6)",
+                backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)"}}/>
+            <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:801,
+              background:C._dark?"rgba(14,16,20,0.97)":"rgba(250,251,252,0.97)",
+              backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",
+              borderRadius:"24px 24px 0 0",borderTop:`1px solid ${C.border}`,
+              maxHeight:"82vh",display:"flex",flexDirection:"column"}}>
+
+              {/* Handle + header */}
+              <div style={{padding:"14px 20px 0",flexShrink:0}}>
+                <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"0 auto 14px"}}/>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                  paddingBottom:12,borderBottom:`1px solid ${C.border}`}}>
+                  <div style={{fontSize:12,fontWeight:800,color:A.t1,letterSpacing:"0.04em"}}>
+                    {titles[mDrillDown]}
+                  </div>
+                  <button onClick={()=>setMDrillDown(null)} style={{background:"transparent",
+                    border:`1px solid ${C.border}`,color:A.t2,cursor:"pointer",fontSize:13,
+                    fontWeight:700,width:28,height:28,borderRadius:8,
+                    display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+                </div>
+              </div>
+
+              {/* Scrollable content */}
+              <div style={{overflowY:"auto",padding:"0 20px 32px",flex:1}}>
+
+                {/* BACKLOG */}
+                {mDrillDown==="backlog"&&backlogTkts.map((t,i)=>{
+                  const cl  = clients.find(c=>c.id===t.clientId);
+                  const iva = safeNumber(t.snap?.params?.iva,16);
+                  const costo = safeNumber(t.snap?.costoBase)*(1+iva/100);
+                  const dias  = backlogAgingM[i];
+                  const meta  = TICKET_META[t.status]||{};
+                  return (
+                    <div key={t.id} style={{paddingTop:14,paddingBottom:4,
+                      borderBottom:`1px solid ${C.border}`}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                        <div style={{flex:1,minWidth:0,marginRight:8}}>
+                          <div style={{fontSize:13,fontWeight:600,color:A.t1,marginBottom:2,
+                            overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                          <div style={{fontSize:11,color:A.t3}}>{cl?.empresa||"Sin cliente"}</div>
+                        </div>
+                        <span style={{fontSize:8,fontWeight:700,color:meta.dot||A.t3,
+                          background:`${meta.dot||C.border}22`,padding:"3px 8px",borderRadius:6,flexShrink:0}}>
+                          {meta.label||t.status}
+                        </span>
+                      </div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:4}}>
+                        {[
+                          ["Días",   `${dias}d`,                                          dias>14?A.red:dias>7?A.amber:A.t2],
+                          ["Revenue",mxn(safeNumber(t.snap?.precioConIVA)),               A.lime],
+                          ["Costo",  mxn(costo),                                          A.t3],
+                          ["Util.",  mxn(safeNumber(t.snap?.uNeta)),                      safeNumber(t.snap?.uNeta)>=0?A.lime:A.red],
+                        ].map(([lbl,val,col])=>(
+                          <div key={lbl} style={{background:C._dark?"rgba(255,255,255,0.04)":"rgba(0,0,0,0.04)",
+                            borderRadius:8,padding:"7px 8px"}}>
+                            <div style={{fontSize:8,color:A.t3,marginBottom:3,letterSpacing:"0.05em"}}>{lbl}</div>
+                            <div style={{fontSize:12,fontWeight:700,color:col,fontVariantNumeric:"tabular-nums"}}>{val}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                {mDrillDown==="backlog"&&(
+                  <div style={{marginTop:14,display:"flex",justifyContent:"space-between",
+                    padding:"12px 0",borderTop:`2px solid ${C.border}`}}>
+                    <span style={{fontSize:12,fontWeight:800,color:A.t3,letterSpacing:"0.06em",textTransform:"uppercase"}}>Total Backlog</span>
+                    <span style={{fontSize:14,fontWeight:800,color:A.amber,fontFamily:"'Courier New',monospace"}}>{mxn(backlogCostoM)}</span>
+                  </div>
+                )}
+
+                {/* CARTERA */}
+                {mDrillDown==="cartera"&&(()=>{
+                  const byClient={};
+                  carteraTktsM.forEach(t=>{const k=t.clientId||"__";if(!byClient[k])byClient[k]=[];byClient[k].push(t);});
+                  return (
+                    <>
+                      {Object.entries(byClient).map(([cid,tkts])=>{
+                        const cl=clients.find(c=>c.id===cid);
+                        const cTotal=tkts.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
+                        const cVenc=tkts.filter(t=>vSet.has(t.id)).length;
+                        return (
+                          <div key={cid}>
+                            <div style={{padding:"12px 0 8px",borderBottom:`1px solid ${C.border}`}}>
+                              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                                <span style={{fontSize:13,fontWeight:700,color:A.lime}}>{cl?.empresa||"Sin cliente"}</span>
+                                <span style={{fontSize:12,fontWeight:700,color:cVenc>0?A.red:A.lime,fontFamily:"'Courier New',monospace"}}>{mxn(cTotal)}</span>
+                              </div>
+                              {cVenc>0&&<div style={{fontSize:10,color:A.red,marginTop:2}}>{cVenc} vencido{cVenc>1?"s":""}</div>}
+                            </div>
+                            {tkts.map(t=>{
+                              const isVenc=vSet.has(t.id);
+                              const d=parseDateMX(t.date);
+                              const dias=d?Math.round((Date.now()-d.getTime())/86400000):0;
+                              return (
+                                <div key={t.id} style={{paddingTop:10,paddingBottom:4,
+                                  borderBottom:`1px solid ${C.border}`,
+                                  background:isVenc?"rgba(248,113,113,0.04)":"transparent"}}>
+                                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                                    <div style={{flex:1,minWidth:0,marginRight:8}}>
+                                      <div style={{fontSize:12,fontWeight:600,color:A.t1,
+                                        overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                                      <div style={{fontSize:10,color:A.t3,marginTop:1}}>
+                                        {t.date}{t.promesaPago?` · promesa ${t.promesaPago}`:""}
+                                      </div>
+                                    </div>
+                                    <span style={{fontSize:8,fontWeight:700,flexShrink:0,
+                                      color:isVenc?A.red:A.lime,
+                                      background:isVenc?"rgba(248,113,113,0.15)":"rgba(74,222,128,0.12)",
+                                      padding:"3px 8px",borderRadius:6}}>
+                                      {isVenc?"VENCIDO":"VIGENTE"}
+                                    </span>
+                                  </div>
+                                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
+                                    {[
+                                      ["Monto",          mxn(safeNumber(t.snap?.precioConIVA)), isVenc?A.red:A.lime],
+                                      ["Días sin cobrar",`${dias}d`,                            dias>30?A.red:dias>15?A.amber:A.t2],
+                                    ].map(([lbl,val,col])=>(
+                                      <div key={lbl} style={{background:C._dark?"rgba(255,255,255,0.04)":"rgba(0,0,0,0.04)",
+                                        borderRadius:8,padding:"7px 8px"}}>
+                                        <div style={{fontSize:8,color:A.t3,marginBottom:3}}>{lbl}</div>
+                                        <div style={{fontSize:13,fontWeight:700,color:col,fontVariantNumeric:"tabular-nums"}}>{val}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                      <div style={{marginTop:14,display:"flex",justifyContent:"space-between",
+                        padding:"12px 0",borderTop:`2px solid ${C.border}`}}>
+                        <span style={{fontSize:12,fontWeight:800,color:A.t3,letterSpacing:"0.06em",textTransform:"uppercase"}}>Total Cartera</span>
+                        <span style={{fontSize:14,fontWeight:800,color:vencidosTkts.length>0?A.red:A.amber,fontFamily:"'Courier New',monospace"}}>{mxn(carteraMonto)}</span>
+                      </div>
+                    </>
+                  );
+                })()}
+
+                {/* VENCIDOS */}
+                {mDrillDown==="vencidos"&&(()=>{
+                  const sorted=[...vencidosTkts].sort((a,b)=>{
+                    const da=parseDateMX(a.promesaPago),db=parseDateMX(b.promesaPago);
+                    if(!da&&!db)return 0;if(!da)return 1;if(!db)return -1;return da-db;
+                  });
+                  const total=sorted.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
+                  return (
+                    <>
+                      {sorted.map(t=>{
+                        const cl=clients.find(c=>c.id===t.clientId);
+                        const d=parseDateMX(t.promesaPago);
+                        const dias=d?Math.round((Date.now()-d.getTime())/86400000):0;
+                        return (
+                          <div key={t.id} style={{paddingTop:14,paddingBottom:8,
+                            borderBottom:`1px solid ${C.border}`}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                              <div style={{flex:1,minWidth:0,marginRight:8}}>
+                                <div style={{fontSize:13,fontWeight:700,color:A.red,marginBottom:2}}>{cl?.empresa||"Sin cliente"}</div>
+                                <div style={{fontSize:11,color:A.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                                <div style={{fontSize:10,color:A.t3,marginTop:2}}>Prometido {t.promesaPago||"—"}</div>
+                              </div>
+                              <div style={{textAlign:"right",flexShrink:0}}>
+                                <div style={{fontSize:16,fontWeight:800,color:A.red,fontFamily:"'Courier New',monospace"}}>{mxn(safeNumber(t.snap?.precioConIVA))}</div>
+                                <div style={{fontSize:11,fontWeight:700,color:A.red,marginTop:2}}>{dias}d vencido</div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div style={{marginTop:14,display:"flex",justifyContent:"space-between",
+                        padding:"12px 0",borderTop:`2px solid rgba(248,113,113,0.4)`}}>
+                        <span style={{fontSize:12,fontWeight:800,color:A.red,letterSpacing:"0.06em",textTransform:"uppercase"}}>Total Vencido</span>
+                        <span style={{fontSize:14,fontWeight:800,color:A.red,fontFamily:"'Courier New',monospace"}}>{mxn(total)}</span>
+                      </div>
+                    </>
+                  );
+                })()}
+
+              </div>
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }
