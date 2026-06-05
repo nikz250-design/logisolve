@@ -3722,7 +3722,7 @@ function Cotizador({state,dispatch,toast}) {
                             <input type="text" inputMode="numeric"
                               value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)}
                               onChange={e=>updateLinea(i,{_qtyRaw:e.target.value})}
-                              onFocus={e=>e.target.select()}
+                              onFocus={e=>{const t=e.target;setTimeout(()=>t.select(),0);}}
                               onBlur={()=>setLineas(p=>p.map((line,idx)=>{if(idx!==i)return line;const n=parseInt(line._qtyRaw);return {...line,qty:isFinite(n)&&n>=1?n:1,_qtyRaw:undefined};}))}
                               style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:12,fontWeight:700,padding:"5px 0 5px 7px",fontFamily:"'Courier New',monospace"}}/>
                             <span style={{padding:"0 5px",color:C.t3,fontSize:9}}>pz</span>
@@ -4400,7 +4400,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
                             <input type="text" inputMode="numeric"
                               value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)}
                               onChange={e=>updateLinea(i,{_qtyRaw:e.target.value})}
-                              onFocus={e=>e.target.select()}
+                              onFocus={e=>{const t=e.target;setTimeout(()=>t.select(),0);}}
                               onBlur={()=>setLineas(p=>p.map((line,idx)=>{if(idx!==i)return line;const n=parseInt(line._qtyRaw);return {...line,qty:isFinite(n)&&n>=1?n:1,_qtyRaw:undefined};}))}
                               style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:12,fontWeight:700,padding:"5px 0 5px 7px",fontFamily:"'Courier New',monospace"}}/>
                             <span style={{padding:"0 5px",color:C.t3,fontSize:9}}>pz</span>
