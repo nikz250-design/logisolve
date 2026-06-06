@@ -2077,6 +2077,16 @@ const Timeline = React.memo(function Timeline({events, active=false, mobile=fals
   const last   = parsed[parsed.length-1]?.date;
   const totalMs = (first && last && last > first) ? last - first : 0;
 
+  // Segment classification — keyword match on evento field
+  const findEv = kw => parsed.find(e=>(e.evento||'').toLowerCase().includes(kw))?.date||null;
+  const tsEntregado = findEv('entregado');
+  const tsFacturado = findEv('facturado');
+  const tsCobrado   = findEv('cobrado');
+  const segOp    = first&&tsEntregado ? tsEntregado-first : 0;
+  const segAdmin = tsEntregado&&tsFacturado ? tsFacturado-tsEntregado : 0;
+  const segCobro = tsFacturado&&tsCobrado ? tsCobrado-tsFacturado : 0;
+  const hasSegs  = segOp>0||segAdmin>0||segCobro>0;
+
   // If ticket still active, show time since last event
   const nowMs  = Date.now();
   const sinceLastMs = last ? nowMs - last.getTime() : 0;
@@ -2136,8 +2146,53 @@ const Timeline = React.memo(function Timeline({events, active=false, mobile=fals
         </div>
       )}
 
-      {/* Total */}
-      {totalMs > 0 && (
+      {/* Segment classification */}
+      {hasSegs&&(
+        <div style={{marginTop:mobile?12:8,display:"flex",flexDirection:"column",gap:mobile?4:3}}>
+          {segOp>0&&(
+            <div style={{padding:mobile?"7px 10px":"4px 7px",
+              background:`${C.green}0E`,border:`1px solid ${C.green}22`,borderRadius:mobile?7:4,
+              display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{display:"flex",flexDirection:"column",gap:1}}>
+                <span style={{fontSize:mobile?10:7.5,color:C.green,fontWeight:700}}>Tiempo operativo</span>
+                <span style={{fontSize:mobile?8:6.5,color:C.t3}}>Solicitud {"→"} Entregado</span>
+              </div>
+              <span style={{fontSize:mobile?12:8.5,fontWeight:800,color:C.green,fontFamily:"'Courier New',monospace"}}>{fmtTotal(segOp)}</span>
+            </div>
+          )}
+          {segAdmin>0&&(
+            <div style={{padding:mobile?"7px 10px":"4px 7px",
+              background:`${C.yellow}0E`,border:`1px solid ${C.yellow}22`,borderRadius:mobile?7:4,
+              display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{display:"flex",flexDirection:"column",gap:1}}>
+                <span style={{fontSize:mobile?10:7.5,color:C.yellow,fontWeight:700}}>Tiempo administrativo</span>
+                <span style={{fontSize:mobile?8:6.5,color:C.t3}}>Entregado {"→"} Facturado</span>
+              </div>
+              <span style={{fontSize:mobile?12:8.5,fontWeight:800,color:C.yellow,fontFamily:"'Courier New',monospace"}}>{fmtTotal(segAdmin)}</span>
+            </div>
+          )}
+          {segCobro>0&&(
+            <div style={{padding:mobile?"7px 10px":"4px 7px",
+              background:`${C.purple}0E`,border:`1px solid ${C.purple}22`,borderRadius:mobile?7:4,
+              display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{display:"flex",flexDirection:"column",gap:1}}>
+                <span style={{fontSize:mobile?10:7.5,color:C.purple,fontWeight:700}}>Tiempo de cobranza</span>
+                <span style={{fontSize:mobile?8:6.5,color:C.t3}}>Facturado {"→"} Cobrado</span>
+              </div>
+              <span style={{fontSize:mobile?12:8.5,fontWeight:800,color:C.purple,fontFamily:"'Courier New',monospace"}}>{fmtTotal(segCobro)}</span>
+            </div>
+          )}
+          {totalMs>0&&(segAdmin>0||segCobro>0)&&(
+            <div style={{padding:mobile?"5px 10px":"3px 7px",
+              background:C.bg3,border:`1px solid ${C.border}`,borderRadius:mobile?6:3,
+              display:"flex",justifyContent:"space-between",alignItems:"center",opacity:0.7}}>
+              <span style={{fontSize:mobile?8:6.5,color:C.t3,letterSpacing:"0.08em",textTransform:"uppercase"}}>Total</span>
+              <span style={{fontSize:mobile?10:7.5,fontWeight:700,color:C.t2,fontFamily:"'Courier New',monospace"}}>{fmtTotal(totalMs)}</span>
+            </div>
+          )}
+        </div>
+      )}
+      {totalMs>0&&!hasSegs&&(
         <div style={{marginTop:mobile?12:8,padding:mobile?"8px 12px":"5px 8px",
           background:C.bg3,border:`1px solid ${C.border}`,borderRadius:mobile?8:4,
           display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -8296,7 +8351,7 @@ function MEditSheet({ticket, state, dispatch, toast, onClose}) {
 function MPipeline({state,dispatch,toast}) {
   const C = React.useContext(ThemeCtx);
   const {tickets,clients,units} = state;
-  const [filter,setFilter]       = useState("active");
+  const [filter,setFilter]       = useState("all");
   const [sortBy,setSortBy]       = useState("priority");
   const [search,setSearch]       = useState("");
   const [statusSheet,setStatusSheet] = useState(null);
@@ -8352,17 +8407,6 @@ function MPipeline({state,dispatch,toast}) {
   const sortLabel = SORT_OPTS.find(s=>s[0]===sortBy)?.[1] ?? "↕";
 
   const cntOf = st => active.filter(t=>t.status===st).length;
-  const CHIPS=[
-    ["active","Activos", active.filter(t=>!CLOSED_SET.has(t.status)).length, null],
-    ["p1",   "P1 🔴",   active.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status)).length, C.p1],
-    ["venc", "Vencidos",active.filter(t=>{if(!t.promesaPago||t.cobrado)return false;const d=parseDateMX(t.promesaPago);return d&&new Date()>d;}).length, "#e07c00"],
-    ["entregado","Entregado",cntOf("entregado"), A.mint],
-    ["facturado","Facturado",cntOf("facturado"), A.cyan],
-    ["cobrado",  "Cobrado",  cntOf("cobrado"),   A.lime],
-    ["cerrado",  "Cerrado",  cntOf("cerrado"),   A.t2],
-    ["cancelado","Cancelado",cntOf("cancelado"),  C.red],
-    ["all",      "Todos",    active.length, null],
-  ];
 
   return (
     <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
@@ -8370,39 +8414,52 @@ function MPipeline({state,dispatch,toast}) {
       {editSheet&&<MEditSheet ticket={editSheet} state={state} dispatch={dispatch} toast={toast} onClose={()=>setEditSheet(null)}/>}
 
       <div style={{padding:"0 14px"}}>
-        {/* Filter + sort — single row */}
-        <div style={{display:"flex",alignItems:"center",gap:6,padding:"18px 0 14px",overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
-          {CHIPS.map(([v,l,c,ac])=>{
-            const on=filter===v;
-            const dotColor=ac||(on?A.lime:null);
-            return (
-              <button key={v} onClick={()=>setFilter(v)}
-                style={{
-                  flexShrink:0,display:"flex",alignItems:"center",gap:5,
-                  padding:"7px 13px",borderRadius:20,fontSize:11,fontWeight:700,whiteSpace:"nowrap",
-                  background:on?(ac?ac+"22":A.limeDim):"transparent",
-                  border:`1px solid ${on?(ac||A.lime):A.pillBorderInactive}`,
-                  color:on?(ac||A.lime):A.t3,
-                  cursor:"pointer",transition:"all 0.15s",
+        {/* Distribution strip + sort */}
+        <div style={{display:"flex",alignItems:"flex-start",gap:6,padding:"14px 0 10px"}}>
+          <div style={{flex:1,overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
+            <div style={{display:"flex",minWidth:"max-content",gap:2}}>
+              <div onClick={()=>setFilter("all")}
+                style={{display:"flex",flexDirection:"column",alignItems:"center",
+                  minWidth:46,padding:"6px 5px",borderRadius:8,cursor:"pointer",
+                  WebkitTapHighlightColor:"transparent",touchAction:"manipulation",
+                  background:filter==="all"?`${A.lime}18`:"transparent",
+                  border:`1px solid ${filter==="all"?A.lime:C.border}`,
                 }}>
-                {l}
-                {c>0&&<span style={{
-                  fontSize:9,fontWeight:800,borderRadius:9,padding:"1px 5px",
-                  background:on?(ac?ac+"33":A.limeDim):C.bg3,
-                  color:on?(ac||A.lime):A.t3,
-                  border:`1px solid ${on?(ac||A.lime)+"50":A.pillBorderInactive}`,
-                }}>{c}</span>}
-              </button>
-            );
-          })}
-          {/* Sort toggle — at end */}
+                <div style={{fontSize:20,fontWeight:800,color:filter==="all"?A.lime:A.t3,lineHeight:1,marginBottom:4,fontVariantNumeric:"tabular-nums"}}>{active.length}</div>
+                <div style={{fontSize:6.5,color:filter==="all"?A.lime:A.t3,textAlign:"center",lineHeight:1.2}}>Todos</div>
+                {filter==="all"&&<div style={{width:12,height:2,borderRadius:1,background:A.lime,marginTop:3}}/>}
+              </div>
+              <div style={{width:1,background:C.border,alignSelf:"stretch",margin:"4px 3px"}}/>
+              {TICKET_ALL.map(sid=>{
+                const s=TICKET_META[sid];
+                const cnt=cntOf(sid);
+                const isBacklog=BACKLOG_SET.has(sid);
+                const isCart=["entregado","facturado"].includes(sid);
+                const accent=sid==="cancelado"?C.red:isBacklog?A.amber:isCart?A.lime:cnt>0?s.dot:A.t3;
+                const sel=filter===sid;
+                return(
+                  <div key={sid} onClick={()=>setFilter(sel?"all":sid)}
+                    style={{display:"flex",flexDirection:"column",alignItems:"center",
+                      minWidth:46,padding:"6px 5px",borderRadius:8,cursor:"pointer",
+                      WebkitTapHighlightColor:"transparent",touchAction:"manipulation",
+                      background:sel?`${accent}18`:cnt>0?(isBacklog?"rgba(245,197,48,0.07)":isCart?"rgba(74,222,128,0.06)":sid==="cancelado"?"rgba(255,122,122,0.06)":"rgba(255,255,255,0.03)"):"transparent",
+                      border:`1px solid ${sel?accent:cnt>0?(isBacklog?"rgba(245,197,48,0.2)":isCart?"rgba(74,222,128,0.15)":sid==="cancelado"?"rgba(255,122,122,0.15)":C.border):C.border}`,
+                    }}>
+                    <div style={{fontSize:20,fontWeight:800,color:accent,lineHeight:1,marginBottom:4,fontVariantNumeric:"tabular-nums"}}>{cnt}</div>
+                    <div style={{fontSize:6.5,color:cnt>0?accent:A.t3,textAlign:"center",lineHeight:1.2,maxWidth:44}}>{s.label}</div>
+                    {sel&&<div style={{width:12,height:2,borderRadius:1,background:accent,marginTop:3}}/>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
           <button onClick={()=>{
             const idx=SORT_OPTS.findIndex(s=>s[0]===sortBy);
             setSortBy(SORT_OPTS[(idx+1)%SORT_OPTS.length][0]);
           }} style={{
-            flexShrink:0,padding:"7px 11px",borderRadius:20,fontSize:10,fontWeight:700,
+            flexShrink:0,alignSelf:"center",padding:"7px 11px",borderRadius:20,fontSize:10,fontWeight:700,
             background:"transparent",border:`1px solid ${A.pillBorderInactive}`,
-            color:A.t3,cursor:"pointer",whiteSpace:"nowrap",transition:"all 0.15s",
+            color:A.t3,cursor:"pointer",whiteSpace:"nowrap",transition:"all 0.15s",marginTop:4,
           }}>{sortLabel}</button>
         </div>
 
