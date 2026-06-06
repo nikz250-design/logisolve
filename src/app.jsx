@@ -6376,6 +6376,7 @@ function MOps({state,setTab,triggerMargin}) {
   const [heatDay,setHeatDay]       = useState(null); // {dn,yr,mo}
   const [heatViewDate,setHeatViewDate] = useState(()=>new Date());
   const [sparkMode,setSparkMode]   = useState("week"); // "week" | "month"
+  const [sparkSel,setSparkSel]     = useState(null);   // selected point index
   const [sparkMonthDate,setSparkMonthDate] = useState(()=>new Date());
 
   // ── Accent palette — Black/white monochrome
@@ -6473,8 +6474,9 @@ function MOps({state,setTab,triggerMargin}) {
       const dd=String(d.getDate()).padStart(2,"0");
       const mm=String(d.getMonth()+1).padStart(2,"0");
       const ds=`${dd}/${mm}/${d.getFullYear()}`;
+      const tkts=tickets.filter(t=>!t._deleted&&t.date===ds);
       const val=sumSnap(sel_operados(tickets).filter(t=>t.date===ds),"uNeta");
-      days.push({val,today:i===0,label:i===0?"Hoy":`${dd}/${mm}`});
+      days.push({val,today:i===0,label:i===0?"Hoy":`${dd}/${mm}`,ds,tkts});
     }
     return days;
   },[tickets]);
@@ -6492,9 +6494,10 @@ function MOps({state,setTab,triggerMargin}) {
       const dd=String(dn).padStart(2,"0");
       const mm=String(mo+1).padStart(2,"0");
       const ds=`${dd}/${mm}/${yr}`;
+      const tkts=tickets.filter(t=>!t._deleted&&t.date===ds);
       const val=sumSnap(sel_operados(tickets).filter(t=>t.date===ds),"uNeta");
       const isToday=isCurrentMonth&&dn===now.getDate();
-      days.push({val,dn,isToday,label:isToday?"Hoy":`${dn}/${mm}`});
+      days.push({val,dn,isToday,label:isToday?"Hoy":`${dn}/${mm}`,ds,tkts});
     }
     return days;
   },[tickets,sparkMonthDate]);
@@ -6514,7 +6517,7 @@ function MOps({state,setTab,triggerMargin}) {
     const xs=sparkData.map((_,i)=>(i/(pts-1))*W);
     const ys=sparkData.map(d=>H-(Math.max(d.val,0)/maxSpark)*(H-6)-3);
     const line=xs.map((x,i)=>`${i===0?"M":"L"}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(" ");
-    return {line, area:line+` L${W},${H} L0,${H} Z`};
+    return {line, area:line+` L${W},${H} L0,${H} Z`, xs, ys};
   },[sparkData,maxSpark]);
 
   const growthUp = growth!==null&&growth>=0;
@@ -7088,7 +7091,7 @@ function MOps({state,setTab,triggerMargin}) {
                 </span>
               )}
               {[["week","7 días"],["month","Por mes"]].map(([v,l])=>(
-                <button key={v} onClick={()=>setSparkMode(v)}
+                <button key={v} onClick={()=>{setSparkMode(v);setSparkSel(null);}}
                   style={{padding:"4px 10px",borderRadius:14,fontSize:9,fontWeight:700,cursor:"pointer",
                     letterSpacing:"0.04em",
                     background:sparkMode===v?"rgba(143,227,190,0.12)":"transparent",
@@ -7101,72 +7104,209 @@ function MOps({state,setTab,triggerMargin}) {
           </div>
 
           {sparkMode==="week"?(
-            <>
-              <svg viewBox="0 0 280 52" style={{width:"100%",height:52,display:"block",overflow:"visible"}}>
-                <defs>
-                  <linearGradient id="mops-sg" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%"   stopColor={A.lime} stopOpacity="0.25"/>
-                    <stop offset="100%" stopColor={A.lime} stopOpacity="0.02"/>
-                  </linearGradient>
-                </defs>
-                <path d={sparkPath.area} fill="url(#mops-sg)"/>
-                <path d={sparkPath.line} fill="none" stroke={A.lime} strokeWidth="1.6"
-                  strokeLinecap="round" strokeLinejoin="round"/>
-                {sparkData.map((d,i)=>{
-                  if(!d.today) return null;
-                  const x=(i/(sparkData.length-1))*280;
-                  const y=50-(Math.max(d.val,0)/maxSpark)*(50-6)-3;
-                  return (
-                    <g key="td">
-                      <circle cx={x} cy={y} r={10} fill={A.lime} opacity={0.1}/>
-                      <circle cx={x} cy={y} r={5}  fill={A.lime} opacity={0.85}/>
-                    </g>
-                  );
-                })}
-              </svg>
-              <div style={{display:"flex",justifyContent:"space-between",marginTop:10}}>
-                {sparkData.map((d,i)=>(
-                  <div key={i} style={{fontSize:8,color:d.today?A.lime:A.t3,
-                    fontWeight:d.today?800:400,textAlign:"center",letterSpacing:"0.02em"}}>
-                    {d.label}
+            (()=>{
+              const selD = sparkSel!==null ? sparkData[sparkSel] : null;
+              return (
+                <>
+                  <svg viewBox="0 0 280 52" style={{width:"100%",height:52,display:"block",overflow:"visible"}}>
+                    <defs>
+                      <linearGradient id="mops-sg" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"   stopColor={A.lime} stopOpacity="0.25"/>
+                        <stop offset="100%" stopColor={A.lime} stopOpacity="0.02"/>
+                      </linearGradient>
+                    </defs>
+                    <path d={sparkPath.area} fill="url(#mops-sg)"/>
+                    <path d={sparkPath.line} fill="none" stroke={A.lime} strokeWidth="1.6"
+                      strokeLinecap="round" strokeLinejoin="round"/>
+                    {sparkPath.xs&&sparkData.map((d,i)=>{
+                      const x=sparkPath.xs[i], y=sparkPath.ys[i];
+                      const isSel=sparkSel===i;
+                      return (
+                        <g key={i}>
+                          {isSel&&<line x1={x} y1={0} x2={x} y2={52} stroke={A.lime} strokeWidth="0.8" strokeDasharray="3,2" opacity={0.4}/>}
+                          {(d.today||isSel)&&<circle cx={x} cy={y} r={10} fill={A.lime} opacity={0.1}/>}
+                          {(d.today||isSel)&&<circle cx={x} cy={y} r={isSel?6:5} fill={A.lime} opacity={isSel?1:0.85}/>}
+                          {isSel&&d.val>0&&(
+                            <text x={x} y={Math.max(y-10,8)} textAnchor={i<3?"start":i>4?"end":"middle"}
+                              fill={A.lime} fontSize="7" fontWeight="700">
+                              {mxn(d.val)}
+                            </text>
+                          )}
+                          <rect x={x-20} y={0} width={40} height={52} fill="transparent"
+                            style={{cursor:"pointer"}}
+                            onClick={()=>setSparkSel(sparkSel===i?null:i)}/>
+                        </g>
+                      );
+                    })}
+                  </svg>
+                  <div style={{display:"flex",justifyContent:"space-between",marginTop:8}}>
+                    {sparkData.map((d,i)=>(
+                      <div key={i} onClick={()=>setSparkSel(sparkSel===i?null:i)}
+                        style={{fontSize:8,cursor:"pointer",userSelect:"none",
+                          color:sparkSel===i?A.lime:d.today?A.lime:A.t3,
+                          fontWeight:(sparkSel===i||d.today)?800:400,textAlign:"center",letterSpacing:"0.02em",
+                          borderBottom:sparkSel===i?`1.5px solid ${A.lime}`:"1.5px solid transparent",paddingBottom:2}}>
+                        {d.label}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </>
+                  {selD&&(
+                    <div style={{marginTop:14,borderTop:`1px solid ${C.border}`,paddingTop:14}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                        <div style={{fontSize:11,fontWeight:700,color:A.lime}}>{selD.label}</div>
+                        <button onClick={()=>setSparkSel(null)}
+                          style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:8,
+                            padding:"3px 8px",color:A.t3,fontSize:10,cursor:"pointer"}}>✕</button>
+                      </div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,marginBottom:12}}>
+                        {[
+                          {l:"Solicitudes",v:selD.tkts.length,c:"#C084FC"},
+                          {l:"Operadas",v:selD.tkts.filter(t=>OPERADO_SET.has(t.status)).length,c:A.lime},
+                          {l:"Util. neta",v:mxn(selD.val),c:selD.val>=0?A.lime:A.red},
+                        ].map(({l,v,c})=>(
+                          <div key={l} style={{background:"rgba(255,255,255,0.03)",borderRadius:8,padding:"8px 4px",textAlign:"center"}}>
+                            <div style={{fontSize:7,color:A.t3,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:3}}>{l}</div>
+                            <div style={{fontSize:11,fontWeight:800,color:c,fontVariantNumeric:"tabular-nums"}}>{v}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {selD.tkts.length>0?(
+                        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                          {selD.tkts.map(t=>{
+                            const sm=TICKET_META[t.status]||{};
+                            return (
+                              <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,
+                                padding:"10px 12px",borderRadius:10,
+                                background:"rgba(255,255,255,0.03)",border:`1px solid ${C.border}`}}>
+                                <div style={{flex:1,minWidth:0}}>
+                                  <div style={{fontSize:12,fontWeight:600,color:A.t1,
+                                    overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>
+                                    {t.titulo||"Sin título"}
+                                  </div>
+                                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                                    <span style={{fontSize:9,color:sm.color||A.t3}}>{sm.label||t.status}</span>
+                                    {t.priority&&<span style={{fontSize:9,fontWeight:700,
+                                      color:t.priority==="P1"?A.red:t.priority==="P2"?A.amber:A.t3}}>{t.priority}</span>}
+                                  </div>
+                                </div>
+                                <div style={{textAlign:"right",flexShrink:0}}>
+                                  {safeNumber(t.snap?.precioConIVA)>0&&<div style={{fontSize:11,fontWeight:700,color:A.t1,fontVariantNumeric:"tabular-nums"}}>{mxn(safeNumber(t.snap?.precioConIVA))}</div>}
+                                  {safeNumber(t.snap?.uNeta)!==0&&<div style={{fontSize:9,color:safeNumber(t.snap?.uNeta)>=0?A.lime:A.red,fontVariantNumeric:"tabular-nums"}}>{mxn(safeNumber(t.snap?.uNeta))}</div>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ):(
+                        <div style={{textAlign:"center",padding:"12px 0",fontSize:11,color:A.t3}}>Sin tickets este día</div>
+                      )}
+                    </div>
+                  )}
+                </>
+              );
+            })()
           ):(
-            <>
-              {/* Monthly line chart — day by day */}
-              <svg viewBox="0 0 280 52" style={{width:"100%",height:52,display:"block",overflow:"visible"}}>
-                <defs>
-                  <linearGradient id="mops-mg" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%"   stopColor={A.lime} stopOpacity="0.25"/>
-                    <stop offset="100%" stopColor={A.lime} stopOpacity="0.02"/>
-                  </linearGradient>
-                </defs>
-                {sparkMonthPath.area&&<path d={sparkMonthPath.area} fill="url(#mops-mg)"/>}
-                {sparkMonthPath.line&&<path d={sparkMonthPath.line} fill="none" stroke={A.lime} strokeWidth="1.6"
-                  strokeLinecap="round" strokeLinejoin="round"/>}
-                {sparkMonthData.map((d,i)=>{
-                  if(!d.isToday||!sparkMonthPath.xs) return null;
-                  const x=sparkMonthPath.xs[i], y=sparkMonthPath.ys[i];
-                  return (
-                    <g key="td">
-                      <circle cx={x} cy={y} r={10} fill={A.lime} opacity={0.1}/>
-                      <circle cx={x} cy={y} r={5}  fill={A.lime} opacity={0.85}/>
-                    </g>
-                  );
-                })}
-              </svg>
-              {/* X-axis: show every ~5 days + today */}
-              <div style={{display:"flex",justifyContent:"space-between",marginTop:10,position:"relative"}}>
-                {sparkMonthData.filter((_,i)=>i===0||i===sparkMonthData.length-1||(i+1)%5===0).map((d,i)=>(
-                  <div key={i} style={{fontSize:8,color:d.isToday?A.lime:A.t3,
-                    fontWeight:d.isToday?800:400,textAlign:"center",letterSpacing:"0.02em"}}>
-                    {d.isToday?"Hoy":d.dn}
+            (()=>{
+              const selD = sparkSel!==null ? sparkMonthData[sparkSel] : null;
+              return (
+                <>
+                  {/* Monthly line chart — day by day */}
+                  <svg viewBox="0 0 280 52" style={{width:"100%",height:52,display:"block",overflow:"visible"}}>
+                    <defs>
+                      <linearGradient id="mops-mg" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"   stopColor={A.lime} stopOpacity="0.25"/>
+                        <stop offset="100%" stopColor={A.lime} stopOpacity="0.02"/>
+                      </linearGradient>
+                    </defs>
+                    {sparkMonthPath.area&&<path d={sparkMonthPath.area} fill="url(#mops-mg)"/>}
+                    {sparkMonthPath.line&&<path d={sparkMonthPath.line} fill="none" stroke={A.lime} strokeWidth="1.6"
+                      strokeLinecap="round" strokeLinejoin="round"/>}
+                    {sparkMonthPath.xs&&sparkMonthData.map((d,i)=>{
+                      const x=sparkMonthPath.xs[i], y=sparkMonthPath.ys[i];
+                      const isSel=sparkSel===i;
+                      return (
+                        <g key={i}>
+                          {isSel&&<line x1={x} y1={0} x2={x} y2={52} stroke={A.lime} strokeWidth="0.8" strokeDasharray="3,2" opacity={0.4}/>}
+                          {(d.isToday||isSel)&&<circle cx={x} cy={y} r={8} fill={A.lime} opacity={0.1}/>}
+                          {(d.isToday||isSel)&&<circle cx={x} cy={y} r={isSel?5:4} fill={A.lime} opacity={isSel?1:0.85}/>}
+                          {isSel&&d.val>0&&(
+                            <text x={x} y={Math.max(y-8,7)} textAnchor={i<3?"start":i>sparkMonthData.length-4?"end":"middle"}
+                              fill={A.lime} fontSize="6" fontWeight="700">
+                              {mxn(d.val)}
+                            </text>
+                          )}
+                          <rect x={x-Math.max(280/(sparkMonthData.length*2),4)} y={0}
+                            width={Math.max(280/sparkMonthData.length,8)} height={52}
+                            fill="transparent" style={{cursor:"pointer"}}
+                            onClick={()=>setSparkSel(sparkSel===i?null:i)}/>
+                        </g>
+                      );
+                    })}
+                  </svg>
+                  {/* X-axis: show every ~5 days + today */}
+                  <div style={{display:"flex",justifyContent:"space-between",marginTop:8,position:"relative"}}>
+                    {sparkMonthData.filter((_,i)=>i===0||i===sparkMonthData.length-1||(i+1)%5===0).map((d,i)=>(
+                      <div key={i} style={{fontSize:8,color:d.isToday?A.lime:A.t3,
+                        fontWeight:d.isToday?800:400,textAlign:"center",letterSpacing:"0.02em"}}>
+                        {d.isToday?"Hoy":d.dn}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </>
+                  {selD&&(
+                    <div style={{marginTop:14,borderTop:`1px solid ${C.border}`,paddingTop:14}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                        <div style={{fontSize:11,fontWeight:700,color:A.lime}}>{selD.label}</div>
+                        <button onClick={()=>setSparkSel(null)}
+                          style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:8,
+                            padding:"3px 8px",color:A.t3,fontSize:10,cursor:"pointer"}}>✕</button>
+                      </div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,marginBottom:12}}>
+                        {[
+                          {l:"Solicitudes",v:selD.tkts.length,c:"#C084FC"},
+                          {l:"Operadas",v:selD.tkts.filter(t=>OPERADO_SET.has(t.status)).length,c:A.lime},
+                          {l:"Util. neta",v:mxn(selD.val),c:selD.val>=0?A.lime:A.red},
+                        ].map(({l,v,c})=>(
+                          <div key={l} style={{background:"rgba(255,255,255,0.03)",borderRadius:8,padding:"8px 4px",textAlign:"center"}}>
+                            <div style={{fontSize:7,color:A.t3,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:3}}>{l}</div>
+                            <div style={{fontSize:11,fontWeight:800,color:c,fontVariantNumeric:"tabular-nums"}}>{v}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {selD.tkts.length>0?(
+                        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                          {selD.tkts.map(t=>{
+                            const sm=TICKET_META[t.status]||{};
+                            return (
+                              <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,
+                                padding:"10px 12px",borderRadius:10,
+                                background:"rgba(255,255,255,0.03)",border:`1px solid ${C.border}`}}>
+                                <div style={{flex:1,minWidth:0}}>
+                                  <div style={{fontSize:12,fontWeight:600,color:A.t1,
+                                    overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>
+                                    {t.titulo||"Sin título"}
+                                  </div>
+                                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                                    <span style={{fontSize:9,color:sm.color||A.t3}}>{sm.label||t.status}</span>
+                                    {t.priority&&<span style={{fontSize:9,fontWeight:700,
+                                      color:t.priority==="P1"?A.red:t.priority==="P2"?A.amber:A.t3}}>{t.priority}</span>}
+                                  </div>
+                                </div>
+                                <div style={{textAlign:"right",flexShrink:0}}>
+                                  {safeNumber(t.snap?.precioConIVA)>0&&<div style={{fontSize:11,fontWeight:700,color:A.t1,fontVariantNumeric:"tabular-nums"}}>{mxn(safeNumber(t.snap?.precioConIVA))}</div>}
+                                  {safeNumber(t.snap?.uNeta)!==0&&<div style={{fontSize:9,color:safeNumber(t.snap?.uNeta)>=0?A.lime:A.red,fontVariantNumeric:"tabular-nums"}}>{mxn(safeNumber(t.snap?.uNeta))}</div>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ):(
+                        <div style={{textAlign:"center",padding:"12px 0",fontSize:11,color:A.t3}}>Sin tickets este día</div>
+                      )}
+                    </div>
+                  )}
+                </>
+              );
+            })()
           )}
         </div>
 
@@ -7292,12 +7432,12 @@ function MOps({state,setTab,triggerMargin}) {
                     const textC=pct>0.5?(C._dark?"rgba(0,0,0,0.85)":"rgba(255,255,255,0.9)"):A.t3;
                     return (
                       <div key={ci}
-                        onClick={()=>cell.data?setHeatDay(isSel?null:{dn:cell.dn,yr,mo}):null}
+                        onClick={()=>!cell.fut?setHeatDay(isSel?null:{dn:cell.dn,yr,mo}):null}
                         style={{aspectRatio:"1",borderRadius:5,background:bg,
                           border:isSel?`2px solid ${mCfg.hC}`
                             :isToday?`1.5px solid ${mCfg.hC}88`:"none",
                           display:"flex",alignItems:"center",justifyContent:"center",
-                          cursor:cell.data?"pointer":"default"}}>
+                          cursor:cell.fut?"default":"pointer"}}>
                         <span style={{fontSize:9,fontWeight:(isToday||isSel)?800:400,color:textC,userSelect:"none"}}>
                           {cell.dn}
                         </span>
