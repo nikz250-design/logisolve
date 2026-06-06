@@ -6736,8 +6736,9 @@ function MOps({state,setTab,triggerMargin}) {
           {triggerMargin&&(
             <button
               onClick={()=>{
+                const toS=(d="")=>{const p=d.split("/");return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d;};
                 const t=[...tickets].filter(t=>safeNumber(t.snap?.costoTotal)>0)
-                  .sort((a,b)=>b.date.localeCompare(a.date))[0];
+                  .sort((a,b)=>toS(b.date).localeCompare(toS(a.date)))[0];
                 if(t) triggerMargin(t);
               }}
               style={{
@@ -8450,12 +8451,13 @@ function MPipeline({state,dispatch,toast}) {
     }
     const pOrd={P1:0,P2:1,P3:2,P4:3};
     const sOrd=["recibido","validando","sourcing","cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado","cancelado"];
+    const toS = (d="") => { const p=d.split("/"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; };
     return [...arr].sort((a,b)=>{
       if(sortBy==="status")  return sOrd.indexOf(a.status)-sOrd.indexOf(b.status);
       if(sortBy==="cartera") return (b.snap?.precioConIVA||0)-(a.snap?.precioConIVA||0);
-      if(sortBy==="date")    return b.date.localeCompare(a.date);
+      if(sortBy==="date")    return toS(b.date).localeCompare(toS(a.date));
       const pd=(pOrd[a.priority]??3)-(pOrd[b.priority]??3);
-      return pd!==0?pd:b.date.localeCompare(a.date);
+      return pd!==0?pd:toS(b.date).localeCompare(toS(a.date));
     });
   },[active,filter,sortBy,search,clients,units]);
 
