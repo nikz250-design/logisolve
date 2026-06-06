@@ -2063,12 +2063,14 @@ const Timeline = React.memo(function Timeline({events, active=false, mobile=fals
     if(min < 1)  return "+<1 min";
     if(min < 60) return `+${min} min`;
     const h = Math.floor(min/60), m = min%60;
+    if(h >= 24) { const d=Math.floor(h/24), hr=h%24; return hr>0?`+${d}d ${hr}h`:`+${d}d`; }
     return m > 0 ? `+${h}h ${m}min` : `+${h}h`;
   };
   const fmtTotal = ms => {
     const min = Math.round(ms/60000);
     if(min < 60) return `${min} min`;
     const h = Math.floor(min/60), m = min%60;
+    if(h >= 24) { const d=Math.floor(h/24), hr=h%24; return hr>0?`${d}d ${hr}h`:`${d}d`; }
     return m > 0 ? `${h}h ${m}min` : `${h}h`;
   };
 
