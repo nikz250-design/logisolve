@@ -2074,7 +2074,18 @@ const Timeline = React.memo(function Timeline({events, active=false, mobile=fals
     return m > 0 ? `${h}h ${m}min` : `${h}h`;
   };
 
-  // Map evento text to stage status for dot coloring
+  // Segment accent colors — per-stage palette
+  const SC = {
+    respuesta: TICKET_META.recibido.dot,   // #6B9EC8 blue
+    sourcing:  TICKET_META.sourcing.dot,   // #7AA0E0 light-blue
+    compra:    C.orange,                   // orange
+    logistico: TICKET_META.transito.dot,   // #90C848 yellow-green
+    operativo: C.green,                    // mint (summary)
+    admin:     C.yellow,                   // amber
+    cobranza:  C.purple,                   // purple
+  };
+
+  // Map evento text → stage for dot coloring
   const STATUS_KW = [
     ["cobrado","cobrado"],["facturado","facturado"],["entregado","entregado"],
     ["transito","transito"],["tránsito","transito"],
@@ -2094,36 +2105,55 @@ const Timeline = React.memo(function Timeline({events, active=false, mobile=fals
   const last   = parsed[parsed.length-1]?.date;
   const totalMs = (first && last && last > first) ? last - first : 0;
 
-  // Segment classification
-  const findEv = kw => parsed.find(e=>(e.evento||'').toLowerCase().includes(kw))?.date||null;
-  const tsEntregado = findEv('entregado');
-  const tsFacturado = findEv('facturado');
-  const tsCobrado   = findEv('cobrado');
-  const segOp    = first&&tsEntregado ? tsEntregado-first : 0;
-  const segAdmin = tsEntregado&&tsFacturado ? tsFacturado-tsEntregado : 0;
-  const segCobro = tsFacturado&&tsCobrado ? tsCobrado-tsFacturado : 0;
-  const hasSegs  = segOp>0||segAdmin>0||segCobro>0;
+  // Key milestone timestamps (first chronological match per keyword)
+  const findEvDate = kw => parsed.find(e=>(e.evento||'').toLowerCase().includes(kw))?.date||null;
+  const tsValidando  = parsed.find(e=>{const lo=(e.evento||'').toLowerCase();return lo.includes('validando')||lo.includes('validaci');})?.date||null;
+  const tsStockConf  = parsed.find(e=>{const lo=(e.evento||'').toLowerCase();return lo.includes('cotizado')||lo.includes('autorizado')||lo.includes('stock');})?.date||null;
+  const tsComprado   = findEvDate('comprado');
+  const tsEntregado  = findEvDate('entregado');
+  const tsFacturado  = findEvDate('facturado');
+  const tsCobrado    = findEvDate('cobrado');
+
+  // Segment durations
+  const segRespuesta = first&&tsValidando  ? tsValidando-first            : 0;
+  const segSourcing  = tsValidando&&tsStockConf ? tsStockConf-tsValidando : 0;
+  const segCompra    = tsStockConf&&tsComprado  ? tsComprado-tsStockConf  : 0;
+  const segLogistico = tsComprado&&tsEntregado  ? tsEntregado-tsComprado  : 0;
+  const segOp        = first&&tsEntregado   ? tsEntregado-first           : 0;
+  const segAdmin     = tsEntregado&&tsFacturado ? tsFacturado-tsEntregado : 0;
+  const segCobro     = tsFacturado&&tsCobrado   ? tsCobrado-tsFacturado   : 0;
+  const hasSegs      = segOp>0||segAdmin>0||segCobro>0||segRespuesta>0||segSourcing>0||segCompra>0||segLogistico>0;
 
   // Inline segment badge at key milestone event indices
-  const entregadoIdx = parsed.findIndex(e=>(e.evento||'').toLowerCase().includes('entregado'));
-  const facturadoIdx = parsed.findIndex(e=>(e.evento||'').toLowerCase().includes('facturado'));
-  const cobradoIdx   = parsed.findIndex(e=>(e.evento||'').toLowerCase().includes('cobrado'));
+  const findIdx = kw => parsed.findIndex(e=>(e.evento||'').toLowerCase().includes(kw));
+  const validandoIdx  = parsed.findIndex(e=>{const lo=(e.evento||'').toLowerCase();return lo.includes('validando')||lo.includes('validaci');});
+  const stockConfIdx  = parsed.findIndex(e=>{const lo=(e.evento||'').toLowerCase();return lo.includes('cotizado')||lo.includes('autorizado')||lo.includes('stock');});
+  const compradoIdx   = findIdx('comprado');
+  const entregadoIdx  = findIdx('entregado');
+  const facturadoIdx  = findIdx('facturado');
+  const cobradoIdx    = findIdx('cobrado');
   const segAt = i =>
-    i===entregadoIdx&&segOp>0    ? {label:"Operativo",      time:fmtTotal(segOp),    color:C.green}  :
-    i===facturadoIdx&&segAdmin>0  ? {label:"Administrativo", time:fmtTotal(segAdmin), color:C.yellow} :
-    i===cobradoIdx  &&segCobro>0  ? {label:"Cobranza",       time:fmtTotal(segCobro), color:C.purple} :
+    i===validandoIdx &&segRespuesta>0 ? {label:"Respuesta inicial", time:fmtTotal(segRespuesta), color:SC.respuesta} :
+    i===stockConfIdx &&segSourcing>0  ? {label:"Sourcing",          time:fmtTotal(segSourcing),  color:SC.sourcing}  :
+    i===compradoIdx  &&segCompra>0    ? {label:"Compra",            time:fmtTotal(segCompra),    color:SC.compra}    :
+    i===entregadoIdx &&segLogistico>0 ? {label:"Logístico",    time:fmtTotal(segLogistico), color:SC.logistico} :
+    i===facturadoIdx &&segAdmin>0     ? {label:"Administrativo",    time:fmtTotal(segAdmin),     color:SC.admin}     :
+    i===cobradoIdx   &&segCobro>0     ? {label:"Cobranza",          time:fmtTotal(segCobro),     color:SC.cobranza}  :
     null;
 
-  // Color connecting lines/delta badges by which segment they belong to
+  // Connecting line/delta color by segment
   const segLineColor = prevDate => {
-    if(!prevDate) return C.cyan;
+    if(!prevDate) return SC.respuesta;
     const t = prevDate.getTime();
-    if(tsFacturado && t >= tsFacturado.getTime()) return C.purple;
-    if(tsEntregado && t >= tsEntregado.getTime()) return C.yellow;
-    return C.green;
+    if(tsFacturado && t >= tsFacturado.getTime()) return SC.cobranza;
+    if(tsEntregado && t >= tsEntregado.getTime()) return SC.admin;
+    if(tsComprado  && t >= tsComprado.getTime())  return SC.logistico;
+    if(tsStockConf && t >= tsStockConf.getTime()) return SC.compra;
+    if(tsValidando && t >= tsValidando.getTime()) return SC.sourcing;
+    return SC.respuesta;
   };
 
-  // If ticket still active, show time since last event
+  // Active running time
   const nowMs  = Date.now();
   const sinceLastMs = last ? nowMs - last.getTime() : 0;
   const sinceLastMin = Math.round(sinceLastMs / 60000);
@@ -2135,18 +2165,29 @@ const Timeline = React.memo(function Timeline({events, active=false, mobile=fals
   const deltaFont = mobile ? 10 : 8;
   const pad       = mobile ? "10px 14px" : "6px 12px";
 
+  const SegRow = ({color, label, subtitle, time, bold}) => (
+    <div style={{padding:mobile?"7px 10px":"4px 7px",
+      background:`${color}${bold?"14":"0E"}`,border:`1px solid ${color}${bold?"35":"22"}`,
+      borderRadius:mobile?7:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <div style={{display:"flex",flexDirection:"column",gap:1}}>
+        <span style={{fontSize:mobile?10:7.5,color,fontWeight:bold?800:700}}>{label}</span>
+        <span style={{fontSize:mobile?8:6.5,color:C.t3}}>{subtitle}</span>
+      </div>
+      <span style={{fontSize:mobile?(bold?13:12):(bold?9:8.5),fontWeight:800,color,fontFamily:"'Courier New',monospace"}}>{time}</span>
+    </div>
+  );
+
   return (
     <div style={{padding:pad}}>
       {parsed.map((ev, i)=>{
-        const prevDate = i > 0 ? parsed[i-1].date : null;
-        const deltaMs  = (prevDate && ev.date && ev.date > prevDate) ? ev.date - prevDate : 0;
-        const dc       = dotCol(ev);
-        const lineCol  = hasSegs ? segLineColor(prevDate) : C.cyan;
-        const nextLineCol = hasSegs ? segLineColor(ev.date) : C.cyan;
-        const seg      = segAt(i);
+        const prevDate    = i > 0 ? parsed[i-1].date : null;
+        const deltaMs     = (prevDate && ev.date && ev.date > prevDate) ? ev.date - prevDate : 0;
+        const dc          = dotCol(ev);
+        const lineCol     = hasSegs ? segLineColor(prevDate) : C.cyan;
+        const nextLineCol = hasSegs ? segLineColor(ev.date)  : C.cyan;
+        const seg         = segAt(i);
         return (
           <div key={i}>
-            {/* Delta between events — colored by segment */}
             {i > 0 && deltaMs > 0 && (
               <div style={{display:"flex",alignItems:"center",gap:6,margin:`${mobile?4:2}px 0 ${mobile?4:2}px ${Math.floor(dotSize/2)}px`}}>
                 <div style={{width:1,height:mobile?18:14,background:lineCol,opacity:0.45}}/>
@@ -2158,26 +2199,22 @@ const Timeline = React.memo(function Timeline({events, active=false, mobile=fals
             )}
             <div style={{display:"flex",gap:mobile?12:10,alignItems:"flex-start"}}>
               <div style={{display:"flex",flexDirection:"column",alignItems:"center",flexShrink:0}}>
-                {/* Dot colored by stage */}
                 <div style={{width:dotSize,height:dotSize,borderRadius:"50%",
-                  background:dc,
-                  border:`1.5px solid ${dc}99`,
-                  boxShadow: i===parsed.length-1&&active?`0 0 6px ${dc}88`:"none",
+                  background:dc,border:`1.5px solid ${dc}99`,
+                  boxShadow:i===parsed.length-1&&active?`0 0 6px ${dc}88`:"none",
                   flexShrink:0,marginTop:2}}/>
                 {i < parsed.length-1 && (
                   <div style={{width:1,flex:1,background:nextLineCol,opacity:0.3,minHeight:mobile?18:12,marginTop:2}}/>
                 )}
               </div>
-              <div style={{paddingBottom: i<parsed.length-1?(mobile?10:8):0, minWidth:0}}>
+              <div style={{paddingBottom:i<parsed.length-1?(mobile?10:8):0,minWidth:0}}>
                 <div style={{fontSize:tsFont,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:1}}>{fmtTS(ev.ts)}</div>
                 <div style={{fontSize:evFont,color:C.t1,lineHeight:1.3,fontWeight:500}}>{ev.evento}</div>
                 {ev.actor&&<div style={{fontSize:actFont,color:C.t2,marginTop:1}}>by {ev.actor}</div>}
-                {/* Inline segment duration at milestone events */}
                 {seg&&(
                   <div style={{display:"inline-flex",alignItems:"center",gap:4,
                     marginTop:mobile?5:3,padding:mobile?"3px 8px":"2px 6px",
-                    borderRadius:mobile?5:3,
-                    background:`${seg.color}18`,border:`1px solid ${seg.color}40`}}>
+                    borderRadius:mobile?5:3,background:`${seg.color}18`,border:`1px solid ${seg.color}40`}}>
                     <div style={{width:mobile?5:4,height:mobile?5:4,borderRadius:"50%",background:seg.color,flexShrink:0}}/>
                     <span style={{fontSize:mobile?9:7,color:seg.color,fontWeight:700,fontFamily:"'Courier New',monospace"}}>
                       {seg.label} · {seg.time}
@@ -2190,7 +2227,6 @@ const Timeline = React.memo(function Timeline({events, active=false, mobile=fals
         );
       })}
 
-      {/* Active running time */}
       {active && sinceLastMin > 0 && (
         <div style={{display:"flex",alignItems:"center",gap:6,margin:`${mobile?4:2}px 0 ${mobile?8:6}px ${Math.floor(dotSize/2)}px`}}>
           <div style={{width:1,height:mobile?18:14,background:C.green,opacity:0.4}}/>
@@ -2202,42 +2238,19 @@ const Timeline = React.memo(function Timeline({events, active=false, mobile=fals
         </div>
       )}
 
-      {/* Segment summary at bottom */}
       {hasSegs&&(
         <div style={{marginTop:mobile?12:8,display:"flex",flexDirection:"column",gap:mobile?4:3}}>
+          {segRespuesta>0&&<SegRow color={SC.respuesta} label="Respuesta inicial"     subtitle={"Solicitud → Validando"}         time={fmtTotal(segRespuesta)}/>}
+          {segSourcing>0 &&<SegRow color={SC.sourcing}  label="Tiempo de sourcing"    subtitle={"Validando → Stock confirmado"}   time={fmtTotal(segSourcing)}/>}
+          {segCompra>0   &&<SegRow color={SC.compra}    label="Tiempo de compra"      subtitle={"Stock confirmado → Comprado"}    time={fmtTotal(segCompra)}/>}
+          {segLogistico>0&&<SegRow color={SC.logistico} label="Tiempo logístico" subtitle={"Comprado → Entregado"}           time={fmtTotal(segLogistico)}/>}
           {segOp>0&&(
-            <div style={{padding:mobile?"7px 10px":"4px 7px",
-              background:`${C.green}0E`,border:`1px solid ${C.green}22`,borderRadius:mobile?7:4,
-              display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div style={{display:"flex",flexDirection:"column",gap:1}}>
-                <span style={{fontSize:mobile?10:7.5,color:C.green,fontWeight:700}}>Tiempo operativo</span>
-                <span style={{fontSize:mobile?8:6.5,color:C.t3}}>Solicitud {"→"} Entregado</span>
-              </div>
-              <span style={{fontSize:mobile?12:8.5,fontWeight:800,color:C.green,fontFamily:"'Courier New',monospace"}}>{fmtTotal(segOp)}</span>
+            <div style={{marginTop:mobile?2:1}}>
+              <SegRow color={SC.operativo} label="Tiempo operativo total" subtitle={"Solicitud → Entregado"} time={fmtTotal(segOp)} bold/>
             </div>
           )}
-          {segAdmin>0&&(
-            <div style={{padding:mobile?"7px 10px":"4px 7px",
-              background:`${C.yellow}0E`,border:`1px solid ${C.yellow}22`,borderRadius:mobile?7:4,
-              display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div style={{display:"flex",flexDirection:"column",gap:1}}>
-                <span style={{fontSize:mobile?10:7.5,color:C.yellow,fontWeight:700}}>Tiempo administrativo</span>
-                <span style={{fontSize:mobile?8:6.5,color:C.t3}}>Entregado {"→"} Facturado</span>
-              </div>
-              <span style={{fontSize:mobile?12:8.5,fontWeight:800,color:C.yellow,fontFamily:"'Courier New',monospace"}}>{fmtTotal(segAdmin)}</span>
-            </div>
-          )}
-          {segCobro>0&&(
-            <div style={{padding:mobile?"7px 10px":"4px 7px",
-              background:`${C.purple}0E`,border:`1px solid ${C.purple}22`,borderRadius:mobile?7:4,
-              display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div style={{display:"flex",flexDirection:"column",gap:1}}>
-                <span style={{fontSize:mobile?10:7.5,color:C.purple,fontWeight:700}}>Tiempo de cobranza</span>
-                <span style={{fontSize:mobile?8:6.5,color:C.t3}}>Facturado {"→"} Cobrado</span>
-              </div>
-              <span style={{fontSize:mobile?12:8.5,fontWeight:800,color:C.purple,fontFamily:"'Courier New',monospace"}}>{fmtTotal(segCobro)}</span>
-            </div>
-          )}
+          {segAdmin>0 &&<SegRow color={SC.admin}    label="Tiempo administrativo" subtitle={"Entregado → Facturado"} time={fmtTotal(segAdmin)}/>}
+          {segCobro>0 &&<SegRow color={SC.cobranza} label="Tiempo de cobranza"    subtitle={"Facturado → Cobrado"}   time={fmtTotal(segCobro)}/>}
           {totalMs>0&&(segAdmin>0||segCobro>0)&&(
             <div style={{padding:mobile?"5px 10px":"3px 7px",
               background:C.bg3,border:`1px solid ${C.border}`,borderRadius:mobile?6:3,
