@@ -6359,15 +6359,11 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                         {t.payType==="credit"&&<span style={{color:C.yellow}}>Credito · {t.promesaPago||"sin fecha"}</span>}
                         {t.notes&&<span style={{fontStyle:"italic"}}>{t.notes}</span>}
                       </div>
-                      {/* Timeline compacto */}
+                      {/* Timeline completo */}
                       {t.timeline&&t.timeline.length>0&&(
-                        <div style={{padding:"4px 11px 8px",borderTop:`1px solid ${C.border}`}}>
-                          <div style={{fontSize:7,color:C.t3,marginBottom:3}}>TIMELINE ({t.timeline.length} eventos)</div>
-                          {t.timeline.slice(-3).map((ev,j)=>(
-                            <div key={j} style={{fontSize:7,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:1}}>
-                              {fmtTS(ev.ts)} — {ev.evento}{ev.actor?" · "+ev.actor:""}
-                            </div>
-                          ))}
+                        <div style={{borderTop:`1px solid ${C.border}`}}>
+                          <div style={{padding:"4px 11px 2px",fontSize:7,color:C.t3}}>TIMELINE · {t.timeline.length} eventos</div>
+                          <Timeline events={t.timeline} active={false}/>
                         </div>
                       )}
                     </>
@@ -10255,20 +10251,11 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                             ))}
                           </div>
                           {t.timeline&&t.timeline.length>0&&(
-                            <div style={{marginBottom:14}}>
-                              <div style={{fontSize:8,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:8}}>
-                                Últimos eventos
+                            <div style={{marginBottom:14,background:C.bg1,border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden"}}>
+                              <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`}}>
+                                <span style={{fontSize:9,fontWeight:700,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase"}}>Timeline · {t.timeline.length} eventos</span>
                               </div>
-                              {[...t.timeline].reverse().slice(0,3).map((ev,i)=>(
-                                <div key={i} style={{display:"flex",gap:8,alignItems:"flex-start",marginBottom:5}}>
-                                  <div style={{width:4,height:4,borderRadius:"50%",
-                                    background:C.border,marginTop:5,flexShrink:0}}/>
-                                  <div style={{fontSize:10,color:A.t3,flex:1}}>
-                                    <span style={{color:A.t2}}>{ev.evento}</span>
-                                    {ev.ts&&<span style={{marginLeft:6,fontSize:9}}>{fmtTS(ev.ts)}</span>}
-                                  </div>
-                                </div>
-                              ))}
+                              <Timeline events={t.timeline} active={false} mobile/>
                             </div>
                           )}
                           <MAttachments ticket={t} dispatch={dispatch} toast={toast}/>
