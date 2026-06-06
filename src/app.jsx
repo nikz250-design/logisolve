@@ -2200,7 +2200,7 @@ function CentroOps({state}) {
   const totalHoras  = useMemo(()=>active.reduce((s,t)=>s+safeNumber(t.horasOp),0),[active]);
   const uPorHora    = totalHoras>0?utilidadOp/totalHoras:0;
   const uPH         = uPorHora;
-  const p1Active    = useMemo(()=>active.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status)),[active]);
+  const p1Active    = useMemo(()=>active.filter(t=>t.priority==="P1"&&!OPERADO_SET.has(t.status)),[active]);
 
   // By category — only operados
   const byOp = useMemo(()=>OP_TYPES.map(op=>{
@@ -6405,7 +6405,7 @@ function MOps({state,setTab,triggerMargin}) {
   const carteraTkts  = useMemo(()=>sel_cartera(tickets),[tickets]);
   const carteraMonto = useMemo(()=>sumSnap(carteraTkts,"precioConIVA"),[carteraTkts]);
   const pipeline     = useMemo(()=>sel_open(tickets),[tickets]);
-  const p1Active     = useMemo(()=>pipeline.filter(t=>t.priority==="P1"),[pipeline]);
+  const p1Active     = useMemo(()=>pipeline.filter(t=>t.priority==="P1"&&!OPERADO_SET.has(t.status)),[pipeline]);
   // "Acción requerida" = P1 stuck in early stages (not yet sourced/purchased)
   const EARLY_STAGES = new Set(["recibido","validando","sourcing","cotizado"]);
   const p1Bloqueados = useMemo(()=>p1Active.filter(t=>EARLY_STAGES.has(t.status)),[p1Active]);
