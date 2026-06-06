@@ -2060,7 +2060,7 @@ const Timeline = React.memo(function Timeline({events, active=false, mobile=fals
   const parseTS = ts => { try { return new Date(ts); } catch { return null; } };
   const fmtDelta = ms => {
     const min = Math.round(ms/60000);
-    if(min < 1)  return "+&lt;1 min";
+    if(min < 1)  return "+<1 min";
     if(min < 60) return `+${min} min`;
     const h = Math.floor(min/60), m = min%60;
     return m > 0 ? `+${h}h ${m}min` : `+${h}h`;
@@ -2072,12 +2072,27 @@ const Timeline = React.memo(function Timeline({events, active=false, mobile=fals
     return m > 0 ? `${h}h ${m}min` : `${h}h`;
   };
 
+  // Map evento text to stage status for dot coloring
+  const STATUS_KW = [
+    ["cobrado","cobrado"],["facturado","facturado"],["entregado","entregado"],
+    ["transito","transito"],["tránsito","transito"],
+    ["comprado","comprado"],["autorizado","autorizado"],["cotizado","cotizado"],
+    ["sourcing","sourcing"],["validaci","validando"],["validando","validando"],
+    ["cancelado","cancelado"],["cerrado","cerrado"],
+  ];
+  const evStatus = ev => {
+    const lo = (ev.evento||'').toLowerCase();
+    for(const [kw,st] of STATUS_KW) if(lo.includes(kw)) return st;
+    return "recibido";
+  };
+  const dotCol = ev => TICKET_META[evStatus(ev)]?.dot || C.cyan;
+
   const parsed = events.map(ev => ({...ev, date: parseTS(ev.ts)}));
   const first  = parsed[0]?.date;
   const last   = parsed[parsed.length-1]?.date;
   const totalMs = (first && last && last > first) ? last - first : 0;
 
-  // Segment classification — keyword match on evento field
+  // Segment classification
   const findEv = kw => parsed.find(e=>(e.evento||'').toLowerCase().includes(kw))?.date||null;
   const tsEntregado = findEv('entregado');
   const tsFacturado = findEv('facturado');
@@ -2086,6 +2101,25 @@ const Timeline = React.memo(function Timeline({events, active=false, mobile=fals
   const segAdmin = tsEntregado&&tsFacturado ? tsFacturado-tsEntregado : 0;
   const segCobro = tsFacturado&&tsCobrado ? tsCobrado-tsFacturado : 0;
   const hasSegs  = segOp>0||segAdmin>0||segCobro>0;
+
+  // Inline segment badge at key milestone event indices
+  const entregadoIdx = parsed.findIndex(e=>(e.evento||'').toLowerCase().includes('entregado'));
+  const facturadoIdx = parsed.findIndex(e=>(e.evento||'').toLowerCase().includes('facturado'));
+  const cobradoIdx   = parsed.findIndex(e=>(e.evento||'').toLowerCase().includes('cobrado'));
+  const segAt = i =>
+    i===entregadoIdx&&segOp>0    ? {label:"Operativo",      time:fmtTotal(segOp),    color:C.green}  :
+    i===facturadoIdx&&segAdmin>0  ? {label:"Administrativo", time:fmtTotal(segAdmin), color:C.yellow} :
+    i===cobradoIdx  &&segCobro>0  ? {label:"Cobranza",       time:fmtTotal(segCobro), color:C.purple} :
+    null;
+
+  // Color connecting lines/delta badges by which segment they belong to
+  const segLineColor = prevDate => {
+    if(!prevDate) return C.cyan;
+    const t = prevDate.getTime();
+    if(tsFacturado && t >= tsFacturado.getTime()) return C.purple;
+    if(tsEntregado && t >= tsEntregado.getTime()) return C.yellow;
+    return C.green;
+  };
 
   // If ticket still active, show time since last event
   const nowMs  = Date.now();
@@ -2104,40 +2138,60 @@ const Timeline = React.memo(function Timeline({events, active=false, mobile=fals
       {parsed.map((ev, i)=>{
         const prevDate = i > 0 ? parsed[i-1].date : null;
         const deltaMs  = (prevDate && ev.date && ev.date > prevDate) ? ev.date - prevDate : 0;
+        const dc       = dotCol(ev);
+        const lineCol  = hasSegs ? segLineColor(prevDate) : C.cyan;
+        const nextLineCol = hasSegs ? segLineColor(ev.date) : C.cyan;
+        const seg      = segAt(i);
         return (
           <div key={i}>
-            {/* Delta entre eventos */}
+            {/* Delta between events — colored by segment */}
             {i > 0 && deltaMs > 0 && (
               <div style={{display:"flex",alignItems:"center",gap:6,margin:`${mobile?4:2}px 0 ${mobile?4:2}px ${Math.floor(dotSize/2)}px`}}>
-                <div style={{width:1,height:mobile?18:14,background:C.border}}/>
-                <span style={{fontSize:deltaFont,color:C.t3,fontFamily:"'Courier New',monospace",
-                  background:C.bg3,padding:"1px 5px",borderRadius:3,border:`1px solid ${C.border}`}}
-                  dangerouslySetInnerHTML={{__html:fmtDelta(deltaMs)}}/>
+                <div style={{width:1,height:mobile?18:14,background:lineCol,opacity:0.45}}/>
+                <span style={{fontSize:deltaFont,color:lineCol,fontFamily:"'Courier New',monospace",
+                  background:`${lineCol}14`,padding:"1px 5px",borderRadius:3,border:`1px solid ${lineCol}30`}}>
+                  {fmtDelta(deltaMs)}
+                </span>
               </div>
             )}
             <div style={{display:"flex",gap:mobile?12:10,alignItems:"flex-start"}}>
               <div style={{display:"flex",flexDirection:"column",alignItems:"center",flexShrink:0}}>
+                {/* Dot colored by stage */}
                 <div style={{width:dotSize,height:dotSize,borderRadius:"50%",
-                  background: i===parsed.length-1 ? (active?C.green:C.cyan) : C.cyan,
-                  border:`1.5px solid ${i===parsed.length-1?(active?C.green:C.cyan):C.cyanDim}`,
-                  boxShadow: i===parsed.length-1&&active?`0 0 6px ${C.green}88`:"none",
+                  background:dc,
+                  border:`1.5px solid ${dc}99`,
+                  boxShadow: i===parsed.length-1&&active?`0 0 6px ${dc}88`:"none",
                   flexShrink:0,marginTop:2}}/>
-                {i < parsed.length-1 && <div style={{width:1,flex:1,background:C.border,minHeight:mobile?18:12,marginTop:2}}/>}
+                {i < parsed.length-1 && (
+                  <div style={{width:1,flex:1,background:nextLineCol,opacity:0.3,minHeight:mobile?18:12,marginTop:2}}/>
+                )}
               </div>
               <div style={{paddingBottom: i<parsed.length-1?(mobile?10:8):0, minWidth:0}}>
                 <div style={{fontSize:tsFont,color:C.t3,fontFamily:"'Courier New',monospace",marginBottom:1}}>{fmtTS(ev.ts)}</div>
                 <div style={{fontSize:evFont,color:C.t1,lineHeight:1.3,fontWeight:500}}>{ev.evento}</div>
                 {ev.actor&&<div style={{fontSize:actFont,color:C.t2,marginTop:1}}>by {ev.actor}</div>}
+                {/* Inline segment duration at milestone events */}
+                {seg&&(
+                  <div style={{display:"inline-flex",alignItems:"center",gap:4,
+                    marginTop:mobile?5:3,padding:mobile?"3px 8px":"2px 6px",
+                    borderRadius:mobile?5:3,
+                    background:`${seg.color}18`,border:`1px solid ${seg.color}40`}}>
+                    <div style={{width:mobile?5:4,height:mobile?5:4,borderRadius:"50%",background:seg.color,flexShrink:0}}/>
+                    <span style={{fontSize:mobile?9:7,color:seg.color,fontWeight:700,fontFamily:"'Courier New',monospace"}}>
+                      {seg.label} · {seg.time}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         );
       })}
 
-      {/* Tiempo activo si sigue en proceso */}
+      {/* Active running time */}
       {active && sinceLastMin > 0 && (
         <div style={{display:"flex",alignItems:"center",gap:6,margin:`${mobile?4:2}px 0 ${mobile?8:6}px ${Math.floor(dotSize/2)}px`}}>
-          <div style={{width:1,height:mobile?18:14,background:C.border}}/>
+          <div style={{width:1,height:mobile?18:14,background:C.green,opacity:0.4}}/>
           <span style={{fontSize:deltaFont,color:C.green,fontFamily:"'Courier New',monospace",
             background:`${C.green}12`,padding:"1px 5px",borderRadius:3,border:`1px solid ${C.green}33`,
             animation:"pulse 2s infinite"}}>
@@ -2146,7 +2200,7 @@ const Timeline = React.memo(function Timeline({events, active=false, mobile=fals
         </div>
       )}
 
-      {/* Segment classification */}
+      {/* Segment summary at bottom */}
       {hasSegs&&(
         <div style={{marginTop:mobile?12:8,display:"flex",flexDirection:"column",gap:mobile?4:3}}>
           {segOp>0&&(
