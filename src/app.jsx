@@ -3926,7 +3926,7 @@ function Cotizador({state,dispatch,toast}) {
     setLineas([emptyLine(opType,priority,[])]);
     setNotes(""); setHorasOp(0);
     setTimeout(()=>setIsSaving(false), 1500); // reset after 1.5s
-  },[isSaving,lineas,lineSnaps,totalSnap,aggMargen,fecha,opType,opMeta,priority,clientId,supplierId,unitId,status,payType,promesa,activeMods,prob,horasOp,notes,dispatch,toast,clients,units,suppliers]);
+  },[isSaving,lineas,lineSnaps,totalSnap,aggMargen,fecha,opType,opMeta,priority,clientId,supplierId,unitIds,status,payType,promesa,activeMods,prob,horasOp,notes,dispatch,toast,clients,units,suppliers]);
 
   // ── RENDER ──────────────────────────────────────────────────────────────────
   const [catalogQ, setCatalogQ] = useState("");
@@ -4632,7 +4632,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
       script.onerror=()=>{container.remove();toast("Error cargando generador PDF","error");};
       document.head.appendChild(script);
     }
-  },[lineas,lineSnaps,totalSnap,fecha,clientId,unitId,supplierId,vigencia,payType,promesa,notes,iva,clients,units,suppliers,toast]);
+  },[lineas,lineSnaps,totalSnap,fecha,clientId,unitIds,supplierId,vigencia,payType,promesa,notes,iva,clients,units,suppliers,toast]);
 
   const convertirATicket = useCallback(()=>{
     if(isSaving) return;
