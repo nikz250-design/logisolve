@@ -55,23 +55,8 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
-    name: "calcular_precio",
-    description: "Calcula el precio de venta correcto usando la lógica exacta del cotizador de la app. SIEMPRE llama esta herramienta antes de sugerir_cotizacion para obtener precios reales.",
-    input_schema: {
-      type: "object",
-      properties: {
-        costoConIVA:   { type: "number",  description: "Costo de compra incluyendo IVA (precio de proveedor)" },
-        otrosGastos:   { type: "number",  description: "Otros gastos adicionales (flete, gestión, etc.). Default 0" },
-        tipoOp:        { type: "string",  enum: ["consumable","general","tech","heavy","logistics","rescue"], description: "Tipo de operación" },
-        prioridad:     { type: "string",  enum: ["P1","P2","P3","P4"], description: "Prioridad del ticket" },
-        modificadores: { type: "array",   items: { type: "string", enum: ["urgency","offhours","rare"] }, description: "Modificadores activos" },
-      },
-      required: ["costoConIVA","tipoOp","prioridad","modificadores"],
-    },
-  },
-  {
     name: "sugerir_cotizacion",
-    description: "Genera una cotización estructurada lista para crear como ticket. Llama calcular_precio primero para cada pieza, luego llama esta herramienta con los precios calculados.",
+    description: "Genera una cotización estructurada lista para crear como ticket. Llama esta herramienta cuando el usuario pida una cotización.",
     input_schema: {
       type: "object",
       properties: {
@@ -106,38 +91,17 @@ const TOOLS: Anthropic.Tool[] = [
 
 const SYSTEM = `Eres un asistente de operaciones para flotillas de transporte de carga en México. Español, práctico, directo.
 
-Tienes acceso a la app completa mediante herramientas:
-- buscar_unidad: flota completa
+Tienes acceso a la app completa del usuario mediante herramientas de búsqueda:
+- buscar_unidad: flota completa (miles de unidades posibles)
 - buscar_pieza: catálogo de refacciones
 - buscar_tickets: historial de trabajos
-- calcular_precio: calcula precio de venta usando el cotizador real de la app
-- sugerir_cotizacion: genera la cotización estructurada final
-
-COTIZADOR — LÓGICA EXACTA:
-El precio se calcula así:
-  costoBase = costoConIVA / 1.16
-  costoTotal = costoBase + otrosGastos
-  margenEfectivo = margenBase(tipoOp) + bonusPrioridad + suma(modificadores)
-  precioSinIVA = costoTotal × (1 + margenEfectivo/100)
-  precioConIVA = precioSinIVA × 1.16
-  utilidadBruta = precioSinIVA - costoTotal
-  ISR (20%) se descuenta de la utilidad bruta
-
-Tipos de operación y márgenes base (promedio):
-  consumable=27%, general=32%, tech=47%, heavy=52%, logistics=22%, rescue=105%
-
-Bonus por prioridad: P1=+40%, P2=+20%, P3/P4=0%
-Modificadores: urgency=+20%, offhours=+20%, rare=+25%
-
-FLUJO PARA COTIZACIONES:
-1. buscar_pieza (obtener costo de referencia del catálogo)
-2. calcular_precio (por cada pieza, con tipoOp/prioridad/mods apropiados)
-3. sugerir_cotizacion (con los precios ya calculados)
+- sugerir_cotizacion: para generar cotizaciones
 
 REGLAS:
-- Nunca inventes precios sin usar calcular_precio
-- Números solos como "1594" son números económicos de unidades — usa buscar_unidad
-- Respuestas cortas. Sin preamble.
+- Cuando el usuario mencione una unidad (número eco, marca, placa), USA buscar_unidad primero
+- Los números solos como "1594" son números económicos de unidades
+- Respuestas cortas. Sin preamble innecesario.
+- Para cotizaciones, busca piezas primero, luego llama sugerir_cotizacion
 - Puedes hacer múltiples búsquedas en secuencia`;
 
 // ── Search implementations ────────────────────────────────────
@@ -185,51 +149,6 @@ function searchTickets(tickets: any[], query: string): any[] {
   }));
 }
 
-function calcularPrecio(input: any): string {
-  const OPS: Record<string, { baseMin: number; baseMax: number }> = {
-    consumable: { baseMin:20,  baseMax:35  },
-    general:    { baseMin:25,  baseMax:40  },
-    tech:       { baseMin:35,  baseMax:60  },
-    heavy:      { baseMin:35,  baseMax:70  },
-    logistics:  { baseMin:15,  baseMax:30  },
-    rescue:     { baseMin:60,  baseMax:150 },
-  };
-  const PRIORITY_BONUS: Record<string, number> = { P1:40, P2:20, P3:0, P4:0 };
-  const MOD_PCT: Record<string, number> = { urgency:20, offhours:20, rare:25 };
-
-  const costoConIVA  = Number(input.costoConIVA) || 0;
-  const otrosGastos  = Number(input.otrosGastos) || 0;
-  const tipoOp       = input.tipoOp ?? "general";
-  const prioridad    = input.prioridad ?? "P3";
-  const mods: string[] = input.modificadores ?? [];
-
-  const ivaR = 0.16, isrR = 0.20;
-  const costoBase  = costoConIVA / (1 + ivaR);
-  const costoTotal = costoBase + otrosGastos;
-
-  const op  = OPS[tipoOp] ?? OPS.general;
-  const baseMargen = Math.round((op.baseMin + op.baseMax) / 2);
-  const bonusPrioridad = PRIORITY_BONUS[prioridad] ?? 0;
-  const bonusMods = mods.reduce((s, id) => s + (MOD_PCT[id] ?? 0), 0);
-  const margenEfectivo = baseMargen + bonusPrioridad + bonusMods;
-
-  const precioSinIVA = costoTotal * (1 + margenEfectivo / 100);
-  const precioConIVA = precioSinIVA * (1 + ivaR);
-  const uBruta       = precioSinIVA - costoTotal;
-  const isr          = Math.max(uBruta * isrR, 0);
-  const uNeta        = uBruta - isr;
-  const margenNeto   = precioSinIVA > 0 ? (uNeta / precioSinIVA) * 100 : 0;
-
-  const fmt = (n: number) => `$${Math.round(n).toLocaleString("es-MX")}`;
-  return [
-    `Costo c/IVA: ${fmt(costoConIVA)} → costoBase: ${fmt(costoBase)} + gastos: ${fmt(otrosGastos)} = costoTotal: ${fmt(costoTotal)}`,
-    `Margen: ${baseMargen}% base + ${bonusPrioridad}% prioridad + ${bonusMods}% mods = ${margenEfectivo}% efectivo`,
-    `Precio s/IVA: ${fmt(precioSinIVA)} | Precio c/IVA: ${fmt(precioConIVA)}`,
-    `Utilidad bruta: ${fmt(uBruta)} | ISR: ${fmt(isr)} | Utilidad neta: ${fmt(uNeta)} (${margenNeto.toFixed(1)}% margen neto)`,
-    `→ costoEstimado: ${Math.round(costoConIVA)} | precioSugerido: ${Math.round(precioConIVA)}`,
-  ].join("\n");
-}
-
 function executeTool(name: string, input: any, ctx: any): string {
   if (name === "buscar_unidad") {
     const results = searchUnits(ctx.units ?? [], input.query);
@@ -242,9 +161,6 @@ function executeTool(name: string, input: any, ctx: any): string {
     if (!results.length) return `Sin refacciones para "${input.query}" en el catálogo`;
     return `${results.length} pieza(s):\n` +
       results.map((p: any) => `• ${p.nombre} OEM:${p.oem || "-"} AM:${p.aftermarket || "-"} $${p.ultimoPrecio || "?"}`).join("\n");
-  }
-  if (name === "calcular_precio") {
-    return calcularPrecio(input);
   }
   if (name === "buscar_tickets") {
     const results = searchTickets(ctx.tickets ?? [], input.query);
@@ -351,9 +267,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return;
         }
         const resultText = executeTool(t.name, t.input ?? {}, fullContext ?? {});
-        const toolLabel  = t.name === "buscar_unidad"   ? `🔍 Buscando unidad "${t.input?.query}"…`
-                         : t.name === "buscar_pieza"   ? `🔍 Buscando pieza "${t.input?.query}"…`
-                         : t.name === "calcular_precio" ? `🧮 Calculando precio (${t.input?.tipoOp}, ${t.input?.prioridad})…`
+        const toolLabel  = t.name === "buscar_unidad" ? `🔍 Buscando unidad "${t.input?.query}"…`
+                         : t.name === "buscar_pieza"  ? `🔍 Buscando pieza "${t.input?.query}"…`
                          : `🔍 ${t.name}…`;
         send({ type: "searching", text: toolLabel });
         toolResults.push({ type: "tool_result", tool_use_id: t.id, content: resultText });

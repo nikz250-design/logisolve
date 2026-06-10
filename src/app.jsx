@@ -2277,9 +2277,319 @@ const Timeline = React.memo(function Timeline({events, active=false, mobile=fals
 // L9 — MODULES
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ── REPORTE FINANCIERO ────────────────────────────────────────────────────────
+function ReporteFinanciero({state, onClose}) {
+  const C = React.useContext(ThemeCtx);
+  const {tickets, clients, suppliers} = state;
+  const now = new Date();
+  const fechaReporte = now.toLocaleDateString("es-MX",{day:"2-digit",month:"long",year:"numeric"});
+
+  // ── Core selectors ────────────────────────────────────────────────────────
+  const active    = useMemo(()=>sel_active(tickets),[tickets]);
+  const operados  = useMemo(()=>sel_operados(tickets),[tickets]);
+  const cobrados  = useMemo(()=>sel_cobrados(tickets),[tickets]);
+  const cartera   = useMemo(()=>sel_cartera(tickets),[tickets]);
+  const vencidos  = useMemo(()=>sel_vencidos(tickets),[tickets]);
+  const forecast  = useMemo(()=>sel_forecast(tickets),[tickets]);
+  const cancelados= useMemo(()=>tickets.filter(t=>t.status==="cancelado"&&!t._deleted),[tickets]);
+
+  // ── Financial aggregates ──────────────────────────────────────────────────
+  const revenue    = useMemo(()=>sumSnap(operados,"precioConIVA"),[operados]);
+  const costoTotal = useMemo(()=>sumSnap(operados,"costoTotal"),[operados]);
+  const uBruta     = useMemo(()=>sumSnap(operados,"uBruta"),[operados]);
+  const uNeta      = useMemo(()=>sumSnap(operados,"uNeta"),[operados]);
+  const ivaNetoOp  = useMemo(()=>sumSnap(operados,"ivaNeto"),[operados]);
+  const isrOp      = useMemo(()=>sumSnap(operados,"isr"),[operados]);
+  const cashMonto  = useMemo(()=>sumSnap(cobrados,"precioConIVA"),[cobrados]);
+  const cashNeta   = useMemo(()=>sumSnap(cobrados,"uNeta"),[cobrados]);
+  const carteraMonto=useMemo(()=>sumSnap(cartera,"precioConIVA"),[cartera]);
+  const forecastMonto=useMemo(()=>sumSnap(forecast,"precioConIVA"),[forecast]);
+  const margenNeto = revenue>0?(uNeta/revenue)*100:0;
+  const margenBruto= revenue>0?(uBruta/revenue)*100:0;
+  const roi        = costoTotal>0?(uNeta/costoTotal)*100:0;
+  const conversion = (operados.length+cancelados.length)>0
+    ? (operados.length/(operados.length+cancelados.length))*100 : 0;
+
+  // ── Monthly breakdown (last 6 months) ────────────────────────────────────
+  const meses = useMemo(()=>{
+    const result=[];
+    for(let i=5;i>=0;i--){
+      const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+      const mes=d.toLocaleDateString("es-MX",{month:"short",year:"2-digit"});
+      const m=d.getMonth(), y=d.getFullYear();
+      const sub=operados.filter(t=>{const p=parseDateMX(t.date);return p&&p.getMonth()===m&&p.getFullYear()===y;});
+      result.push({mes,revenue:sumSnap(sub,"precioConIVA"),uNeta:sumSnap(sub,"uNeta"),count:sub.length});
+    }
+    return result;
+  },[operados]);
+  const maxMesRev = Math.max(...meses.map(m=>m.revenue),1);
+
+  // ── By op type ────────────────────────────────────────────────────────────
+  const byOp = useMemo(()=>OP_TYPES.map(op=>{
+    const sub=operados.filter(t=>t.opId===op.id);
+    return{label:op.label,short:op.short,count:sub.length,
+      revenue:sumSnap(sub,"precioConIVA"),uNeta:sumSnap(sub,"uNeta"),
+      margen:sumSnap(sub,"precioConIVA")>0?(sumSnap(sub,"uNeta")/sumSnap(sub,"precioConIVA"))*100:0};
+  }).filter(o=>o.count>0).sort((a,b)=>b.revenue-a.revenue),[operados]);
+  const maxOpRev = Math.max(...byOp.map(o=>o.revenue),1);
+
+  // ── By client ─────────────────────────────────────────────────────────────
+  const byClient = useMemo(()=>clients.map(c=>{
+    const sub=operados.filter(t=>t.clientId===c.id);
+    const pend=cartera.filter(t=>t.clientId===c.id);
+    return{label:c.empresa,count:sub.length,
+      revenue:sumSnap(sub,"precioConIVA"),uNeta:sumSnap(sub,"uNeta"),
+      pendiente:sumSnap(pend,"precioConIVA"),
+      margen:sumSnap(sub,"precioConIVA")>0?(sumSnap(sub,"uNeta")/sumSnap(sub,"precioConIVA"))*100:0};
+  }).filter(c=>c.count>0).sort((a,b)=>b.revenue-a.revenue),[operados,cartera,clients]);
+
+  // ── Pipeline distribution ─────────────────────────────────────────────────
+  const pipelineDist = useMemo(()=>TICKET_ALL.map(s=>{
+    const sub=tickets.filter(t=>t.status===s&&!t._deleted);
+    return{status:s,label:TICKET_META[s].label,dot:TICKET_META[s].dot,count:sub.length,
+      monto:sumSnap(sub,"precioConIVA")};
+  }).filter(s=>s.count>0),[tickets]);
+
+  // ── Aging cartera ─────────────────────────────────────────────────────────
+  const aging = useMemo(()=>{
+    const pend=tickets.filter(t=>CARTERA_SET.has(t.status)&&t.payType==="credit"&&!t.cobrado&&!t._deleted&&t.promesaPago);
+    const bucket=(mn,mx)=>{
+      const b=pend.filter(t=>{const d=parseDateMX(t.promesaPago);if(!d)return false;const ms=Date.now()-d.getTime();return ms>=mn*86400000&&(mx==null||ms<mx*86400000);});
+      return{count:b.length,monto:b.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0)};
+    };
+    return{corriente:bucket(-9999,0),a30:bucket(0,30),a60:bucket(30,60),mas60:bucket(60,null)};
+  },[tickets]);
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  const Row = ({label, value, sub, color, bold, border}) => (
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",
+      padding:"7px 0",borderBottom:border!==false?`1px solid ${C.border}`:"none"}}>
+      <span style={{fontSize:11,color:bold?C.t1:C.t2,fontWeight:bold?700:400}}>{label}</span>
+      <div style={{textAlign:"right"}}>
+        <span style={{fontSize:bold?14:12,fontWeight:bold?800:600,color:color||C.t1,fontFamily:"'Courier New',monospace"}}>{value}</span>
+        {sub&&<div style={{fontSize:9,color:C.t3}}>{sub}</div>}
+      </div>
+    </div>
+  );
+  const Section = ({title, children, accent}) => (
+    <div style={{marginBottom:24}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,paddingBottom:6,borderBottom:`2px solid ${accent||C.green}44`}}>
+        <div style={{width:3,height:16,background:accent||C.green,borderRadius:2}}/>
+        <span style={{fontSize:10,fontWeight:800,color:accent||C.green,letterSpacing:"0.08em",textTransform:"uppercase"}}>{title}</span>
+      </div>
+      {children}
+    </div>
+  );
+  const mc = v => v>=25?C.green:v>=15?C.yellow:v>=5?C.orange:C.red;
+
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:9999,background:C.bg0,overflowY:"auto",fontFamily:"system-ui,-apple-system,sans-serif"}}
+      className="reporte-print">
+      {/* Print styles */}
+      <style>{`@media print{.no-print{display:none!important}.reporte-print{position:static!important;overflow:visible!important;}}`}</style>
+
+      {/* Header */}
+      <div className="no-print" style={{position:"sticky",top:0,zIndex:10,background:C.bg0,borderBottom:`1px solid ${C.border}`,padding:"10px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{fontSize:12,fontWeight:700,color:C.t1}}>Reporte Financiero · {fechaReporte}</span>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>window.print()} style={{padding:"6px 14px",background:C.greenDim,border:`1px solid ${C.green}55`,borderRadius:6,color:C.green,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+            Imprimir / PDF
+          </button>
+          <button onClick={onClose} style={{padding:"6px 14px",background:C.bg3,border:`1px solid ${C.border}`,borderRadius:6,color:C.t2,fontSize:11,cursor:"pointer"}}>
+            Cerrar
+          </button>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div style={{maxWidth:900,margin:"0 auto",padding:"28px 24px"}}>
+
+        {/* Title */}
+        <div style={{marginBottom:32,borderBottom:`1px solid ${C.border}`,paddingBottom:16}}>
+          <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>Logisolve · Operaciones</div>
+          <div style={{fontSize:26,fontWeight:800,color:C.t1,marginBottom:2}}>Reporte Financiero</div>
+          <div style={{fontSize:12,color:C.t3}}>Generado el {fechaReporte} · {operados.length} operaciones en historial · {active.filter(t=>!CLOSED_SET.has(t.status)).length} activas</div>
+        </div>
+
+        {/* ── 1. RESUMEN EJECUTIVO ── */}
+        <Section title="Resumen ejecutivo" accent={C.green}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10,marginBottom:12}}>
+            {[
+              {label:"Revenue operado",value:mxn(revenue),sub:`${operados.length} ops · IVA incluido`,color:C.cyan},
+              {label:"Utilidad neta",value:mxn(uNeta),sub:`${fpct(margenNeto)} del revenue`,color:uNeta>=0?C.green:C.red},
+              {label:"Cash cobrado",value:mxn(cashMonto),sub:`${cobrados.length} ops · ${fpct(cashMonto>0?cashNeta/cashMonto*100:0)} margen`,color:C.green},
+              {label:"Cartera pendiente",value:mxn(carteraMonto),sub:`${cartera.length} ops · ${vencidos.length>0?vencidos.length+" vencida"+(vencidos.length>1?"s":""):"Sin vencidos"}`,color:vencidos.length>0?C.red:C.yellow},
+            ].map(({label,value,sub,color})=>(
+              <div key={label} style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:8,padding:"14px 16px"}}>
+                <div style={{fontSize:9,color:C.t3,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.08em"}}>{label}</div>
+                <div style={{fontSize:20,fontWeight:800,color,fontFamily:"'Courier New',monospace"}}>{value}</div>
+                <div style={{fontSize:9,color:C.t3,marginTop:3}}>{sub}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+            {[
+              {label:"Margen neto",value:fpct(margenNeto),color:mc(margenNeto)},
+              {label:"Margen bruto",value:fpct(margenBruto),color:mc(margenBruto)},
+              {label:"ROI sobre costo",value:fpct(roi),color:mc(roi/2)},
+              {label:"Tasa conversión",value:fpct(conversion),color:conversion>=70?C.green:conversion>=50?C.yellow:C.red},
+            ].map(({label,value,color})=>(
+              <div key={label} style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:6,padding:"10px 12px",textAlign:"center"}}>
+                <div style={{fontSize:9,color:C.t3,marginBottom:3}}>{label}</div>
+                <div style={{fontSize:16,fontWeight:800,color,fontFamily:"'Courier New',monospace"}}>{value}</div>
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        {/* ── 2. ESTADO DE RESULTADOS ── */}
+        <Section title="Estado de resultados" accent={C.cyan}>
+          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:8,padding:"4px 16px"}}>
+            <Row label="Revenue (con IVA)" value={mxn(revenue)} bold/>
+            <Row label="  − Costo de producto" value={`(${mxn(costoTotal)})`} color={C.red}/>
+            <Row label="Utilidad bruta" value={mxn(uBruta)} sub={fpct(margenBruto)} color={uBruta>=0?C.green:C.red} bold/>
+            <Row label="  − ISR estimado (30%)" value={`(${mxn(isrOp)})`} color={C.red}/>
+            <Row label="Utilidad neta" value={mxn(uNeta)} sub={fpct(margenNeto)+" del revenue"} color={uNeta>=0?C.green:C.red} bold/>
+            <Row label="" value="" border={false}/>
+            <Row label="IVA trasladado (cobrado al cliente)" value={mxn(revenue - revenue/1.16)} color={C.t2}/>
+            <Row label="IVA neto a pagar al SAT" value={mxn(ivaNetoOp)} color={C.red}/>
+            <Row label="Carga fiscal total (IVA neto + ISR)" value={mxn(ivaNetoOp+isrOp)} color={C.red} bold border={false}/>
+          </div>
+        </Section>
+
+        {/* ── 3. TENDENCIA MENSUAL ── */}
+        <Section title="Tendencia mensual (últimos 6 meses)" accent={C.purple}>
+          <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:8,padding:"16px"}}>
+            <div style={{display:"flex",gap:4,alignItems:"flex-end",height:80,marginBottom:8}}>
+              {meses.map((m,i)=>{
+                const h = maxMesRev>0 ? Math.max((m.revenue/maxMesRev)*72,m.revenue>0?4:0) : 0;
+                return(
+                  <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                    <div style={{fontSize:8,color:C.green,fontFamily:"'Courier New',monospace",visibility:m.revenue>0?"visible":"hidden"}}>
+                      {m.revenue>=1000?`${(m.revenue/1000).toFixed(0)}k`:""}
+                    </div>
+                    <div style={{width:"100%",height:h,background:m.revenue>0?`${C.green}88`:C.border,borderRadius:"3px 3px 0 0",transition:"height 0.3s"}}/>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{display:"flex",gap:4}}>
+              {meses.map((m,i)=>(
+                <div key={i} style={{flex:1,textAlign:"center"}}>
+                  <div style={{fontSize:8,color:C.t3}}>{m.mes}</div>
+                  <div style={{fontSize:7,color:m.count>0?C.t2:C.t4}}>{m.count>0?m.count+" op":"-"}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Section>
+
+        {/* ── 4. POR TIPO DE OPERACIÓN ── */}
+        {byOp.length>0&&(
+          <Section title="Por tipo de operación" accent={C.yellow}>
+            <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 80px 100px 100px 70px",gap:0,padding:"6px 12px",borderBottom:`1px solid ${C.border}`}}>
+                {["Tipo","Ops","Revenue","U. Neta","Margen"].map(h=>(
+                  <span key={h} style={{fontSize:8,color:C.t3,fontWeight:700,textAlign:h==="Tipo"?"left":"right"}}>{h}</span>
+                ))}
+              </div>
+              {byOp.map((op,i)=>(
+                <div key={op.label} style={{display:"grid",gridTemplateColumns:"1fr 80px 100px 100px 70px",gap:0,padding:"8px 12px",
+                  borderBottom:i<byOp.length-1?`1px solid ${C.border}`:"none",background:i%2===0?"transparent":`${C.green}04`}}>
+                  <span style={{fontSize:11,color:C.t1,fontWeight:600}}>{op.label}</span>
+                  <span style={{fontSize:11,color:C.t2,textAlign:"right",fontFamily:"'Courier New',monospace"}}>{op.count}</span>
+                  <span style={{fontSize:11,color:C.cyan,textAlign:"right",fontFamily:"'Courier New',monospace"}}>{mxn(op.revenue)}</span>
+                  <span style={{fontSize:11,color:op.uNeta>=0?C.green:C.red,textAlign:"right",fontFamily:"'Courier New',monospace"}}>{mxn(op.uNeta)}</span>
+                  <span style={{fontSize:11,color:mc(op.margen),textAlign:"right",fontFamily:"'Courier New',monospace"}}>{fpct(op.margen)}</span>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
+
+        {/* ── 5. POR CLIENTE ── */}
+        {byClient.length>0&&(
+          <Section title="Por cliente" accent={C.blue}>
+            <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 60px 100px 100px 80px 70px",gap:0,padding:"6px 12px",borderBottom:`1px solid ${C.border}`}}>
+                {["Cliente","Ops","Revenue","U. Neta","Pendiente","Margen"].map(h=>(
+                  <span key={h} style={{fontSize:8,color:C.t3,fontWeight:700,textAlign:h==="Cliente"?"left":"right"}}>{h}</span>
+                ))}
+              </div>
+              {byClient.map((c,i)=>(
+                <div key={c.label} style={{display:"grid",gridTemplateColumns:"1fr 60px 100px 100px 80px 70px",gap:0,padding:"8px 12px",
+                  borderBottom:i<byClient.length-1?`1px solid ${C.border}`:"none"}}>
+                  <span style={{fontSize:11,color:C.t1,fontWeight:600}}>{c.label}</span>
+                  <span style={{fontSize:11,color:C.t2,textAlign:"right",fontFamily:"'Courier New',monospace"}}>{c.count}</span>
+                  <span style={{fontSize:11,color:C.cyan,textAlign:"right",fontFamily:"'Courier New',monospace"}}>{mxn(c.revenue)}</span>
+                  <span style={{fontSize:11,color:c.uNeta>=0?C.green:C.red,textAlign:"right",fontFamily:"'Courier New',monospace"}}>{mxn(c.uNeta)}</span>
+                  <span style={{fontSize:11,color:c.pendiente>0?C.yellow:C.t3,textAlign:"right",fontFamily:"'Courier New',monospace"}}>{c.pendiente>0?mxn(c.pendiente):"—"}</span>
+                  <span style={{fontSize:11,color:mc(c.margen),textAlign:"right",fontFamily:"'Courier New',monospace"}}>{fpct(c.margen)}</span>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
+
+        {/* ── 6. CARTERA Y PIPELINE ── */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:24}}>
+          {/* Aging */}
+          <div>
+            <Section title="Aging de cartera" accent={C.yellow}>
+              <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:8,padding:"4px 16px"}}>
+                <Row label="Corriente (no vencido)" value={mxn(aging.corriente.monto)} sub={`${aging.corriente.count} op.`} color={C.green}/>
+                <Row label="Vencido 1–30 días" value={mxn(aging.a30.monto)} sub={`${aging.a30.count} op.`} color={C.yellow}/>
+                <Row label="Vencido 31–60 días" value={mxn(aging.a60.monto)} sub={`${aging.a60.count} op.`} color={C.orange}/>
+                <Row label="Vencido > 60 días" value={mxn(aging.mas60.monto)} sub={`${aging.mas60.count} op.`} color={C.red} border={false}/>
+              </div>
+            </Section>
+          </div>
+          {/* Pipeline */}
+          <div>
+            <Section title="Estado del pipeline" accent={C.purple}>
+              <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 16px"}}>
+                {pipelineDist.map((p,i)=>(
+                  <div key={p.status} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                    padding:"5px 0",borderBottom:i<pipelineDist.length-1?`1px solid ${C.border}`:"none"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <div style={{width:7,height:7,borderRadius:"50%",background:p.dot,flexShrink:0}}/>
+                      <span style={{fontSize:10,color:C.t2}}>{p.label}</span>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <span style={{fontSize:10,fontWeight:700,color:C.t1,fontFamily:"'Courier New',monospace"}}>{p.count}</span>
+                      <span style={{fontSize:9,color:C.t3,marginLeft:6,fontFamily:"'Courier New',monospace"}}>{p.monto>0?mxn(p.monto):""}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          </div>
+        </div>
+
+        {/* ── 7. FORECAST ── */}
+        {forecast.length>0&&(
+          <Section title="Forecast (cotizado + autorizado)" accent={C.t3}>
+            <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:8,padding:"4px 16px"}}>
+              <Row label="Monto en forecast" value={mxn(forecastMonto)} sub={`${forecast.length} ops`} color={C.cyan}/>
+              <Row label="Utilidad estimada ponderada" value={mxn(sumSnap(forecast,"uNeta"))} color={C.green} border={false}/>
+            </div>
+          </Section>
+        )}
+
+        {/* Footer */}
+        <div style={{marginTop:32,paddingTop:12,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontSize:9,color:C.t4}}>Logisolve · Reporte generado {fechaReporte}</span>
+          <span style={{fontSize:9,color:C.t4}}>Datos en tiempo real desde dispositivo</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── CENTRO DE OPERACIONES (Dashboard) ────────────────────────────────────────
 function CentroOps({state}) {
   const C = React.useContext(ThemeCtx);
+  const [showReporte, setShowReporte] = useState(false);
   const {tickets,clients,suppliers,units} = state;
   const [drillDown, setDrillDown] = useState(null);
   const [pipelineFilter, setPipelineFilter] = useState(null);
@@ -2391,6 +2701,14 @@ function CentroOps({state}) {
 
   return (
     <div style={{padding:"10px 13px",maxWidth:1300,margin:"0 auto"}}>
+      {showReporte&&<ReporteFinanciero state={state} onClose={()=>setShowReporte(false)}/>}
+
+      {/* Header row with report button */}
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:6}}>
+        <button onClick={()=>setShowReporte(true)} style={{padding:"5px 14px",background:C.greenDim,border:`1px solid ${C.green}44`,borderRadius:6,color:C.green,fontSize:10,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+          📊 Reporte financiero
+        </button>
+      </div>
 
       {/* Alertas */}
       {(p1Active.length>0||vencidos.length>0)&&(
@@ -6498,6 +6816,7 @@ function MOps({state,setTab,triggerMargin}) {
   const [sparkMode,setSparkMode]   = useState("week"); // "week" | "month"
   const [sparkSel,setSparkSel]     = useState(null);   // selected point index
   const [sparkMonthDate,setSparkMonthDate] = useState(()=>new Date());
+  const [showReporte, setShowReporte] = useState(false);
 
   // ── Accent palette — Black/white monochrome
   const A = makeA(C);
@@ -6645,6 +6964,7 @@ function MOps({state,setTab,triggerMargin}) {
 
   return (
     <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
+      {showReporte&&<ReporteFinanciero state={state} onClose={()=>setShowReporte(false)}/>}
 
       {/* ══ ALERT BANNER — breaks layout, appears FIRST ══════════════════════ */}
       {(p1Bloqueados.length>0||p1EnProceso.length>0||vencidos.length>0)&&(
@@ -6728,7 +7048,7 @@ function MOps({state,setTab,triggerMargin}) {
       )}
 
       <div style={{padding:"0 16px"}}>
-        {/* ── Period tabs + IA button ── */}
+        {/* ── Period tabs + IA + Reporte buttons ── */}
         <div style={{display:"flex",gap:6,padding:"20px 0 20px",overflowX:"auto",
           scrollbarWidth:"none",msOverflowStyle:"none",alignItems:"center"}}>
           {[["today","Hoy"],["week","7d"],["month","30d"],["3m","3M"]].map(([v,l])=>(
@@ -6759,6 +7079,12 @@ function MOps({state,setTab,triggerMargin}) {
               ⚡ IA
             </button>
           )}
+          <button onClick={()=>setShowReporte(true)} style={{
+            flexShrink:0,padding:"7px 14px",borderRadius:20,fontSize:11,fontWeight:700,
+            background:C.greenDim,border:`1px solid ${C.green}44`,color:C.green,
+            cursor:"pointer",marginLeft:triggerMargin?"6px":"auto",whiteSpace:"nowrap"}}>
+            📊 Reporte
+          </button>
         </div>
 
         {/* ══ HERO CARD ══════════════════════════════════════ */}
@@ -14203,11 +14529,32 @@ function App() {
           if(maxSeq>=_seq){_seq=maxSeq+1;try{localStorage.setItem("logisolve_seq",String(_seq));}catch{}}
         }
       };
+      // Merge tickets ticket-by-ticket: prefer the version with the most recent
+      // timeline event so local changes that didn't sync yet are never overwritten.
+      const mergeTickets = (supaList, localList) => {
+        if(!Array.isArray(localList)||!localList.length) return supaList||[];
+        if(!Array.isArray(supaList)||!supaList.length)  return localList;
+        const localMap = new Map(localList.map(t=>[t.id,t]));
+        const supaMap  = new Map(supaList.map(t=>[t.id,t]));
+        const allIds   = new Set([...localMap.keys(),...supaMap.keys()]);
+        return Array.from(allIds).map(id=>{
+          const sup=supaMap.get(id), loc=localMap.get(id);
+          if(!sup) return loc;
+          if(!loc) return sup;
+          const supTs=sup.timeline?.at(-1)?.ts||'';
+          const locTs=loc.timeline?.at(-1)?.ts||'';
+          return locTs>supTs ? loc : sup;
+        });
+      };
       try {
         await seedIfEmpty();
         const data = await loadAllFromSupabase();
-        if(data) { dispatch({type:"IMPORT",data}); bumpSeq(data.tickets); opLog.push("LOAD_OK"); }
-        else {
+        if(data) {
+          // Always merge with localStorage so unsynced local changes win
+          const stored = loadFromStorage();
+          const merged = { ...data, tickets: mergeTickets(data.tickets, stored?.tickets) };
+          dispatch({type:"IMPORT",data:merged}); bumpSeq(merged.tickets); opLog.push("LOAD_OK");
+        } else {
           const stored = loadFromStorage();
           if(stored) { dispatch({type:"IMPORT", data:stored}); bumpSeq(stored.tickets); }
           toast("Sin datos Supabase — usando datos locales del dispositivo","info");
@@ -14240,6 +14587,7 @@ function App() {
           pendingQueue.push({type:"full_sync", ts: Date.now()});
           setOffline();
           opLog.push("SYNC_DEFERRED", {reason:"offline"});
+          savingRef.current = false; // must reset so next sync isn't blocked
           return;
         }
         // Flush any pending queue first
