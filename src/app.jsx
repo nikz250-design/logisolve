@@ -7644,11 +7644,32 @@ function App() {
         }, 7);
         if(maxSeq >= _seq) _seq = maxSeq + 1;
       };
+      // Merge tickets ticket-by-ticket: prefer the version with the most recent
+      // timeline event so local changes that didn't sync yet are never overwritten.
+      const mergeTickets = (supaList, localList) => {
+        if(!Array.isArray(localList)||!localList.length) return supaList||[];
+        if(!Array.isArray(supaList)||!supaList.length)  return localList;
+        const localMap = new Map(localList.map(t=>[t.id,t]));
+        const supaMap  = new Map(supaList.map(t=>[t.id,t]));
+        const allIds   = new Set([...localMap.keys(),...supaMap.keys()]);
+        return Array.from(allIds).map(id=>{
+          const sup=supaMap.get(id), loc=localMap.get(id);
+          if(!sup) return loc;
+          if(!loc) return sup;
+          const supTs=sup.timeline?.at(-1)?.ts||'';
+          const locTs=loc.timeline?.at(-1)?.ts||'';
+          return locTs>supTs ? loc : sup;
+        });
+      };
       try {
         await seedIfEmpty();
         const data = await loadAllFromSupabase();
-        if(data) { dispatch({type:"IMPORT",data}); bumpSeq(data.tickets); opLog.push("LOAD_OK"); }
-        else {
+        if(data) {
+          // Always merge with localStorage so unsynced local changes win
+          const stored = loadFromStorage();
+          const merged = { ...data, tickets: mergeTickets(data.tickets, stored?.tickets) };
+          dispatch({type:"IMPORT",data:merged}); bumpSeq(merged.tickets); opLog.push("LOAD_OK");
+        } else {
           const stored = loadFromStorage();
           if(stored) { dispatch({type:"IMPORT", data:stored}); bumpSeq(stored.tickets); }
           toast("Sin datos Supabase — usando datos locales del dispositivo","info");
@@ -7681,6 +7702,7 @@ function App() {
           pendingQueue.push({type:"full_sync", ts: Date.now()});
           setOffline();
           opLog.push("SYNC_DEFERRED", {reason:"offline"});
+          savingRef.current = false; // must reset so next sync isn't blocked
           return;
         }
         // Flush any pending queue first
