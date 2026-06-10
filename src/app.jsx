@@ -6858,7 +6858,11 @@ function MOps({state,setTab,triggerMargin}) {
   const gastosOp      = useMemo(()=>sumSnap(operados,"gastos"),[operados]);
   const uBrutaOp      = useMemo(()=>sumSnap(operados,"uBruta"),[operados]);
   const ivaNetoOp     = useMemo(()=>sumSnap(operados,"ivaNeto"),[operados]);
+  const ivaTrasladOp  = useMemo(()=>sumSnap(operados,"ivaTraslad"),[operados]);
+  const ivaAcredOp    = useMemo(()=>sumSnap(operados,"ivaAcred"),[operados]);
   const isrOp         = useMemo(()=>sumSnap(operados,"isr"),[operados]);
+  const margenOpBruto     = totalFact - costoProducto;
+  const resultadoAntesIVA = margenOpBruto - gastosOp;
   const cargaFiscal   = ivaNetoOp + isrOp;
   const eficienciaFiscal = uBrutaOp>0?(totalNeta/uBrutaOp)*100:0;
   const roi           = costoProducto>0?(totalNeta/costoProducto)*100:0;
@@ -8091,13 +8095,18 @@ function MOps({state,setTab,triggerMargin}) {
           </div>
           {/* Rows */}
           {[
-            {label:"Revenue operado",   val:mxn(totalFact),          col:A.lime,     bold:true},
-            {label:"− Costo producto",  val:mxn(costoProducto),      col:A.t2},
-            {label:"− Gastos operativos",val:mxn(gastosOp),          col:A.t2},
-            {label:"Utilidad bruta",    val:mxn(uBrutaOp),           col:uBrutaOp>=0?"#8FE3BE":A.red, bold:true},
-            {label:"− ISR estimado",    val:mxn(isrOp),              col:A.amber},
-            {label:"Utilidad neta",     val:mxn(totalNeta),          col:totalNeta>=0?"#8FE3BE":A.red, bold:true},
-            {label:"Cash cobrado",      val:mxn(cashTotal),          col:"#8FE3BE"},
+            {label:"Revenue operado (IVA incl.)",   val:mxn(totalFact),             col:A.lime,  bold:true},
+            {label:"− Costo producto (IVA incl.)",  val:mxn(costoProducto),         col:A.t2},
+            {label:"Margen operativo bruto",         val:mxn(margenOpBruto),         col:margenOpBruto>=0?"#8FE3BE":A.red, bold:true, divider:true},
+            {label:"− Gastos operativos",            val:mxn(gastosOp),              col:A.t2},
+            {label:"Resultado antes ajuste IVA",     val:mxn(resultadoAntesIVA),     col:A.t2,    bold:true, divider:true},
+            {label:"IVA trasladable",                val:mxn(ivaTrasladOp),          col:A.t3,    indent:true},
+            {label:"IVA acreditable",                val:mxn(ivaAcredOp),            col:A.t3,    indent:true},
+            {label:"− IVA neto SAT",                val:mxn(ivaNetoOp),             col:A.amber},
+            {label:"Utilidad antes ISR",             val:mxn(uBrutaOp),              col:uBrutaOp>=0?"#8FE3BE":A.red, bold:true, divider:true},
+            {label:"− ISR estimado",                val:mxn(isrOp),                 col:A.amber},
+            {label:"Utilidad neta estimada",         val:mxn(totalNeta),             col:totalNeta>=0?"#8FE3BE":A.red, bold:true, divider:true},
+            {label:"Cash cobrado",                   val:mxn(cashTotal),             col:"#8FE3BE"},
             {label:"Markup promedio",   val:fpct(markupProm),        col:A.lime},
             {label:"Rentabilidad neta", val:fpct(margen),            col:margen>=20?"#8FE3BE":margen>=10?"#F3F4F6":A.amber},
             {label:"ROI operativo",     val:fpct(roi),               col:roi>=25?"#8FE3BE":A.amber},
@@ -8114,16 +8123,17 @@ function MOps({state,setTab,triggerMargin}) {
             {label:"Forecast utilidad", val:mxn(forecastUtil),       col:forecastUtil>0?A.lime:A.t2},
             {label:"P1 activos",        val:String(p1Active.length), col:p1Active.length>0?A.red:A.t3, bold:p1Active.length>0},
             {label:"P2 activos",        val:String(p2Active.length), col:p2Active.length>0?A.amber:A.t3},
-          ].map(({label,val,col,bold},i,arr)=>(
+          ].map(({label,val,col,bold,divider,indent},i,arr)=>(
             <div key={label} style={{
               display:"flex",justifyContent:"space-between",alignItems:"center",
-              padding:"12px 22px",
+              padding:indent?"6px 22px 6px 34px":"12px 22px",
+              borderTop:divider?`1px solid ${C.borderHi}`:"none",
               borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none",
               background:bold?(C._dark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.02)"):"transparent",
             }}>
-              <span style={{fontSize:12,color:A.t2,letterSpacing:"0.01em"}}>{label}</span>
+              <span style={{fontSize:indent?11:12,color:indent?A.t3:A.t2,letterSpacing:"0.01em"}}>{label}</span>
               <span style={{
-                fontSize:bold?15:13,fontWeight:bold?800:600,
+                fontSize:bold?15:indent?11:13,fontWeight:bold?800:600,
                 color:col,fontFamily:"'Courier New',monospace",
                 letterSpacing:"0.01em",
               }}>{val}</span>
