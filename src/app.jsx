@@ -2448,7 +2448,7 @@ function ReporteFinanciero({state, onClose}) {
             <Row label="Revenue (con IVA)" value={mxn(revenue)} bold/>
             <Row label="  − Costo de producto" value={`(${mxn(costoTotal)})`} color={C.red}/>
             <Row label="Utilidad bruta" value={mxn(uBruta)} sub={fpct(margenBruto)} color={uBruta>=0?C.green:C.red} bold/>
-            <Row label="  − ISR estimado (30%)" value={`(${mxn(isrOp)})`} color={C.red}/>
+            <Row label="  − ISR estimado (20% default, ajustable por op.)" value={`(${mxn(isrOp)})`} color={C.red}/>
             <Row label="Utilidad neta" value={mxn(uNeta)} sub={fpct(margenNeto)+" del revenue"} color={uNeta>=0?C.green:C.red} bold/>
             <Row label="" value="" border={false}/>
             <Row label="IVA trasladado (cobrado al cliente)" value={mxn(revenue - revenue/1.16)} color={C.t2}/>
