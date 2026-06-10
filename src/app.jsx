@@ -8092,10 +8092,12 @@ function MOps({state,setTab,triggerMargin}) {
           {/* Rows */}
           {[
             {label:"Revenue operado",   val:mxn(totalFact),          col:A.lime,     bold:true},
-            {label:"Costo producto",    val:mxn(costoProducto),      col:A.t2},
-            {label:"Gastos operativos", val:mxn(gastosOp),           col:A.t2},
+            {label:"− Costo producto",  val:mxn(costoProducto),      col:A.t2},
+            {label:"− Gastos operativos",val:mxn(gastosOp),          col:A.t2},
+            {label:"Utilidad bruta",    val:mxn(uBrutaOp),           col:uBrutaOp>=0?"#8FE3BE":A.red, bold:true},
+            {label:"− ISR estimado",    val:mxn(isrOp),              col:A.amber},
+            {label:"Utilidad neta",     val:mxn(totalNeta),          col:totalNeta>=0?"#8FE3BE":A.red, bold:true},
             {label:"Cash cobrado",      val:mxn(cashTotal),          col:"#8FE3BE"},
-            {label:"Utilidad operativa",val:mxn(totalNeta),          col:totalNeta>=0?"#8FE3BE":A.red, bold:true},
             {label:"Markup promedio",   val:fpct(markupProm),        col:A.lime},
             {label:"Rentabilidad neta", val:fpct(margen),            col:margen>=20?"#8FE3BE":margen>=10?"#F3F4F6":A.amber},
             {label:"ROI operativo",     val:fpct(roi),               col:roi>=25?"#8FE3BE":A.amber},
@@ -9174,8 +9176,8 @@ function MCotizador({state,dispatch,toast}) {
   const [priority,setPriority]  = useState("P3");
   const [opType,setOpType]      = useState("consumable");
   const [activeMods,setActiveMods] = useState([]);
-  const [iva]                   = useState(16);
-  const [isr]                   = useState(20);
+  const [iva, setIva]           = useState(16);
+  const [isr, setIsr]           = useState(20);
   const [lineas,setLineas]      = useState([emptyLine("consumable","P3",[])]);
   const [partQ,setPartQ]        = useState({});
   const [pickerOpen,setPickerOpen] = useState({});
@@ -9677,6 +9679,26 @@ function MCotizador({state,dispatch,toast}) {
             <MField label="Promesa de pago" value={promesa} onChange={setPromesa}
               placeholder="DD/MM/AAAA" color={A.amber}/>
           )}
+          {/* Parámetros fiscales */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+            <div>
+              <div style={{fontSize:9,color:A.t3,marginBottom:6,letterSpacing:"0.12em",textTransform:"uppercase",fontWeight:700}}>IVA %</div>
+              <input type="number" min={0} step={0.1} value={iva}
+                onChange={e=>setIva(Number(e.target.value))}
+                style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.04)",
+                  border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 14px",
+                  color:A.t1,fontSize:14,fontWeight:700,outline:"none",fontFamily:"'Courier New',monospace"}}/>
+            </div>
+            <div>
+              <div style={{fontSize:9,color:A.t3,marginBottom:6,letterSpacing:"0.12em",textTransform:"uppercase",fontWeight:700}}>ISR %</div>
+              <input type="number" min={0} step={0.1} value={isr}
+                onChange={e=>setIsr(Number(e.target.value))}
+                style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.04)",
+                  border:`1px solid ${C.amber}44`,borderRadius:10,padding:"11px 14px",
+                  color:A.amber,fontSize:14,fontWeight:700,outline:"none",fontFamily:"'Courier New',monospace"}}/>
+            </div>
+          </div>
+
           <div style={{marginBottom:14}}>
             <div style={{fontSize:9,color:A.t3,marginBottom:8,letterSpacing:"0.14em",
               textTransform:"uppercase",fontWeight:700}}>Notas</div>
