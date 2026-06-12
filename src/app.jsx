@@ -6773,13 +6773,13 @@ function MBtn({label,color,bg,border,onClick,full,small}) {
     }}>{label}</button>
   );
 }
-function MField({label,value,onChange,type="text",placeholder,suffix,color}) {
+function MField({label,value,onChange,onFocus,onBlur,type="text",inputMode,placeholder,suffix,color}) {
   const C = React.useContext(ThemeCtx);
   return (
     <div style={{marginBottom:10}}>
       {label&&<div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase",fontWeight:600}}>{label}</div>}
       <div style={{display:"flex",alignItems:"center",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden",minHeight:48}}>
-        <input type={type} value={value} placeholder={placeholder||""} onChange={e=>onChange(e.target.value)}
+        <input type={type} inputMode={inputMode} value={value} placeholder={placeholder||""} onChange={e=>onChange(e.target.value)} onFocus={onFocus} onBlur={onBlur}
           style={{flex:1,background:"transparent",border:"none",outline:"none",color:color||C.t1,
             fontSize:16,/* 16px prevents iOS auto-zoom on focus */
             padding:"12px 14px",fontFamily:"inherit"}}/>
@@ -9527,8 +9527,10 @@ function MCotizador({state,dispatch,toast}) {
                 <MField label="Costo unitario (c/IVA)" value={String(l.costoUnit||"")}
                   type="number" suffix="$"
                   onChange={v=>upd(i,{costoUnit:safeNumber(v),manualPrice:String(safeNumber(v))})}/>
-                <MField label="Cant." value={String(l.qty||1)} type="number"
-                  onChange={v=>upd(i,{qty:Math.max(1,safeNumber(v,1))||1})}/>
+                <MField label="Cant." value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)} type="text" inputMode="numeric"
+                  onFocus={()=>upd(i,{_qtyRaw:""})}
+                  onChange={v=>upd(i,{_qtyRaw:v})}
+                  onBlur={()=>{const n=parseInt(l._qtyRaw);upd(i,{qty:isFinite(n)&&n>=1?n:l.qty||1,_qtyRaw:undefined});}}/>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
                 <MField label="Gasolina / flete" value={String(l.gasolina||"")} type="number" suffix="$"
