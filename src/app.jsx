@@ -1518,7 +1518,7 @@ const KPI = React.memo(function KPI({label,value,color,sub,accent,alert}) {
   );
 })
 
-function Field({label,value,onChange,prefix="$",suffix,hint,hi,min=0,step=1,type="text",disabled,placeholder,rows}) {
+function Field({label,value,onChange,onFocus,onBlur,prefix="$",suffix,hint,hi,min=0,step=1,type="text",inputMode,disabled,placeholder,rows}) {
   const st={flex:1,background:"transparent",border:"none",outline:"none",color:hi?C.cyan:disabled?C.t3:C.t1,fontSize:hi?13:11,fontWeight:hi?700:400,padding:"7px 0",fontFamily:"'Courier New',monospace"};
   return (
     <div style={{marginBottom:7}}>
@@ -1529,8 +1529,8 @@ function Field({label,value,onChange,prefix="$",suffix,hint,hi,min=0,step=1,type
           <textarea rows={rows} value={String(value)} disabled={disabled} placeholder={placeholder||""}
             onChange={e=>onChange(e.target.value)} style={{...st,resize:"vertical",paddingTop:7}}/>
         ):(
-          <input type={type} value={value} min={type==="number"?min:undefined} step={type==="number"?step:undefined} disabled={disabled} placeholder={placeholder||""}
-            onChange={e=>{const v=e.target.value;onChange(v);}} style={st}/>
+          <input type={type} inputMode={inputMode} value={value} min={type==="number"?min:undefined} step={type==="number"?step:undefined} disabled={disabled} placeholder={placeholder||""}
+            onChange={e=>{const v=e.target.value;onChange(v);}} onFocus={onFocus} onBlur={onBlur} style={st}/>
         )}
         {suffix&&<span style={{padding:"0 6px",color:C.t3,fontSize:10,flexShrink:0}}>{suffix}</span>}
       </div>
@@ -6563,7 +6563,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                           <Field label="Descripción PDF (aparece en cotización)" value={l.descripcionPDF||""} onChange={v=>updLinea(idx,{descripcionPDF:v})} prefix="" hint="Dejar vacío para usar texto por defecto" rows={2}/>
                           {/* Qty, costo, gasolina, otros */}
                           <div style={{display:"grid",gridTemplateColumns:"70px 1fr 1fr 1fr",gap:5,marginBottom:5}}>
-                            <Field label="Cant." value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)} onChange={v=>updLinea(idx,{_qtyRaw:v})} onBlur={()=>{const n=parseInt(l._qtyRaw);updLinea(idx,{qty:isFinite(n)&&n>=1?n:1,_qtyRaw:undefined});}} prefix="" suffix="pz" type="text" inputMode="numeric"/>
+                            <Field label="Cant." value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)} onChange={v=>updLinea(idx,{_qtyRaw:v})} onFocus={()=>updLinea(idx,{_qtyRaw:""})} onBlur={()=>{const n=parseInt(l._qtyRaw);updLinea(idx,{qty:isFinite(n)&&n>=1?n:1,_qtyRaw:undefined});}} prefix="" suffix="pz" type="text" inputMode="numeric"/>
                             <Field label="Costo unit. c/IVA" value={l.costoUnit||0} onChange={v=>updLinea(idx,{costoUnit:v})} onBlur={()=>updLinea(idx,{costoUnit:safeNumber(l.costoUnit)})} type="text" inputMode="decimal"/>
                             <Field label="Gasolina" value={l.gasolina||0} onChange={v=>updLinea(idx,{gasolina:v})} onBlur={()=>updLinea(idx,{gasolina:safeNumber(l.gasolina)})} type="text" inputMode="decimal"/>
                             <Field label="Otros gastos" value={l.otros||0} onChange={v=>updLinea(idx,{otros:v})} onBlur={()=>updLinea(idx,{otros:safeNumber(l.otros)})} type="text" inputMode="decimal"/>
@@ -10997,8 +10997,11 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                               <div style={{display:"grid",gridTemplateColumns:"60px 1fr 1fr",gap:6}}>
                                 <div>
                                   <div style={{fontSize:8,color:A.t3,marginBottom:3}}>Cant.</div>
-                                  <input type="number" inputMode="numeric" min="1" value={l.qty}
-                                    onChange={e=>mLsfn(idx,"qty")(Number(e.target.value)||1)}
+                                  <input type="text" inputMode="numeric"
+                                    value={l._qtyRaw!==undefined ? l._qtyRaw : String(l.qty||1)}
+                                    onChange={e=>mLsfn(idx,"_qtyRaw")(e.target.value)}
+                                    onFocus={()=>mLsfn(idx,"_qtyRaw")("")}
+                                    onBlur={()=>{const n=parseInt(l._qtyRaw);setMLineas(ls=>ls.map((line,i)=>i===idx?{...line,qty:isFinite(n)&&n>=1?n:line.qty||1,_qtyRaw:undefined}:line));}}
                                     style={{width:"100%",boxSizing:"border-box",
                                       background:"rgba(255,255,255,0.03)",border:`1px solid ${C.border}`,
                                       borderRadius:8,padding:"8px 6px",color:A.lime,fontSize:13,
