@@ -10284,8 +10284,8 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
     // Unit costs — divide stored totals by qty to show per-piece values
     const unitCostoIVA = (((s.costoBase||0)*(1+ivaR_e)) / savedQty).toFixed(2);
     const unitPrecioIVA = ((safeNumber(s.precioConIVA)||0) / savedQty).toFixed(2);
-    // Compute existing lines before setEf so kitMode can depend on it
-    const existingLineas = (t.lineas||[]).filter(l=>l.titulo);
+    // Compute existing lines — accept any non-empty line object
+    const existingLineas = (t.lineas||[]).filter(l=>l && typeof l==='object' && (l.titulo||l.descripcion||l.partRef||l.costoUnit));
     setEf({titulo:t.titulo||"",kitMode:t.kitMode||existingLineas.length>0,
            status:t.status,clientId:t.clientId||"",supplierId:t.supplierId||"",
            unitId:t.unitId||"",payType:t.payType||"contado",promesaPago:t.promesaPago||"",
@@ -10364,7 +10364,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
           manualPrice:safeNumber(ef.precioIVA)*newQty,ventaConIVA:true,mode:"manual",
           gasolina:gastos,otros:0,iva,isr});
       }
-      newLineas = [];
+      newLineas = t.lineas||[];
       newTitulo = ef.titulo || t.titulo;
     }
 
@@ -10686,7 +10686,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                             onClick={()=>{
                               const next=!ef.kitMode;
                               sfn("kitMode")(next);
-                              if(next) setMLineas([]);
+                              if(next && mLineas.length===0) setMLineas([{titulo:"",partRef:"",qty:1,costoUnit:"",precioUnit:"",descripcionPDF:""}]);
                             }}>
                             <div>
                               <div style={{fontSize:11,fontWeight:600,color:ef.kitMode?A.lime:A.t2}}>Integrar como kit</div>
