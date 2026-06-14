@@ -14778,26 +14778,26 @@ function App() {
         </div>
       </div>
 
-      {/* ── Nav móvil nativa — 4 tabs + FAB ── */}
+      {/* ── Nav móvil nativa — píldora flotante ── */}
       {mobileView&&(
         <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:150,
-          paddingBottom:"env(safe-area-inset-bottom,0px)"}}>
+          paddingBottom:"env(safe-area-inset-bottom,0px)",pointerEvents:"none"}}>
+          <div style={{margin:"0 auto 10px",maxWidth:520,padding:"0 18px",boxSizing:"border-box",pointerEvents:"auto"}}>
           <div style={{
-            margin:"0 auto 10px",maxWidth:660,padding:"0 12px",boxSizing:"border-box"}}>
-          <div style={{
-            background: darkMode ? "rgba(15,17,22,0.78)" : "rgba(255,255,255,0.92)",
-            backdropFilter:"blur(44px) saturate(2.8) brightness(1.01)",WebkitBackdropFilter:"blur(44px) saturate(2.8) brightness(1.01)",
-            border: darkMode ? "1px solid rgba(255,255,255,0.09)" : "1px solid rgba(0,0,0,0.10)",
-            borderRadius:28,
-            display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr 1fr",
+            background: darkMode ? "rgba(8,9,11,0.97)" : "rgba(255,255,255,0.97)",
+            backdropFilter:"blur(48px) saturate(3)",WebkitBackdropFilter:"blur(48px) saturate(3)",
+            border: darkMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.09)",
+            borderRadius:44,
+            display:"flex",alignItems:"center",
+            padding:"5px 5px",
             boxShadow: darkMode
-              ? "0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.06) inset"
-              : "0 4px 24px rgba(0,0,0,0.10), 0 1px 0 rgba(255,255,255,1) inset"}}>
+              ? "0 12px 40px rgba(0,0,0,0.7), 0 2px 8px rgba(0,0,0,0.5)"
+              : "0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.06)"}}>
           {[
             {id:"ops",        label:"Centro",   icon:"⊙"},
             {id:"tickets",    label:"Pipeline", icon:"◈"},
             {id:"historial",  label:"Historial",icon:"☰"},
-            {id:"ia",         label:"Resumen",   icon:"✦"},
+            {id:"ia",         label:"Resumen",  icon:"✦"},
             {id:"cobranza",   label:"Cobros",   icon:"$"},
             {id:"__mas__",    label:"Más",      icon:"···"},
           ].map(t=>{
@@ -14805,23 +14805,32 @@ function App() {
             const badge = t.id==="tickets"&&abiertas>0?abiertas : t.id==="ops"&&p1Active>0?p1Active : isMore&&vencidos>0?vencidos : 0;
             const moreActive = ["unidades","catalogo","proveedores","clientes","ajustes","cartera","cotizador","refacciones","sourcing","chat"].includes(tab);
             const active = isMore ? (moreActive||masOpen) : tab===t.id;
+            const activeCol = darkMode ? "#ffffff" : "#1a1a1a";
+            const inactiveCol = darkMode ? "rgba(255,255,255,0.38)" : "rgba(0,0,0,0.35)";
             return (
               <button key={t.id}
                 onClick={()=>{ if(isMore){setMasOpen(v=>!v);}else{setTab(t.id);setMasOpen(false);} }}
-                style={{padding:"10px 4px",
+                style={{
+                  flex:1,
+                  padding:"9px 4px 8px",
                   border:"none",cursor:"pointer",
-                  background:"transparent",
-                  borderTop:`2px solid ${active?(darkMode?C.blue:"#2A9768"):"transparent"}`,
+                  background: active
+                    ? (darkMode ? "rgba(255,255,255,0.11)" : "rgba(0,0,0,0.07)")
+                    : "transparent",
+                  borderRadius:36,
                   position:"relative",display:"flex",flexDirection:"column",alignItems:"center",gap:3,
-                  minHeight:52,touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
-                <span style={{fontSize:20,lineHeight:1,color:active?(darkMode?C.blue:"#2A9768"):C.t3,
-                  fontWeight:active?700:400}}>{t.icon}</span>
-                <span style={{fontSize:10,color:active?(darkMode?C.blue:"#2A9768"):C.t3,
-                  letterSpacing:"0.03em",fontWeight:active?600:400}}>{t.label}</span>
-                {badge>0&&<span style={{position:"absolute",top:8,right:"calc(50% - 18px)",
-                  minWidth:16,height:16,borderRadius:8,padding:"0 3px",
+                  minHeight:50,touchAction:"manipulation",WebkitTapHighlightColor:"transparent",
+                  transition:"background 0.18s ease"}}>
+                <span style={{fontSize:18,lineHeight:1,color:active?activeCol:inactiveCol,
+                  fontWeight:active?700:400,transition:"color 0.18s ease"}}>{t.icon}</span>
+                <span style={{fontSize:9,color:active?activeCol:inactiveCol,
+                  letterSpacing:"0.04em",fontWeight:active?700:400,
+                  transition:"color 0.18s ease"}}>{t.label}</span>
+                {badge>0&&<span style={{position:"absolute",top:6,right:"calc(50% - 16px)",
+                  minWidth:15,height:15,borderRadius:8,padding:"0 3px",
                   background:t.id==="ops"?C.p1dot:isMore?C.p1dot:C.p2dot,
-                  fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",color:darkMode?"#0D0F12":"#fff"}}>{badge}</span>}
+                  fontSize:8,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",
+                  color:"#fff",boxShadow:"0 0 0 2px "+(darkMode?"#08090b":"#fff")}}>{badge}</span>}
               </button>
             );
           })}
