@@ -6856,6 +6856,8 @@ function MOps({state,setTab,triggerMargin}) {
   const [mDrillDown, setMDrillDown] = useState(null);
   const [mPipelineFilter, setMPipelineFilter] = useState(null);
   const [period,setPeriod]     = useState("month");
+  const [customFrom,setCustomFrom] = useState("");
+  const [customTo,setCustomTo]     = useState(()=>new Date().toISOString().slice(0,10));
   const [heatMetric,setHeatMetric] = useState("venta");
   const [heatDay,setHeatDay]       = useState(null); // {dn,yr,mo}
   const [heatViewDate,setHeatViewDate] = useState(()=>new Date());
@@ -6868,7 +6870,14 @@ function MOps({state,setTab,triggerMargin}) {
   const A = makeA(C);
 
   // ── Periods ───────────────────────────────────────────────────────────────
-  const range     = useMemo(()=>buildRange(period),[period]);
+  const range     = useMemo(()=>{
+    if(period==="custom"){
+      const from=customFrom?new Date(customFrom):new Date(2000,0,1);
+      const to=customTo?new Date(customTo+"T23:59:59"):new Date();
+      return {from,to};
+    }
+    return buildRange(period);
+  },[period,customFrom,customTo]);
   const prevRange = useMemo(()=>{
     const ms=range.to-range.from;
     return {from:new Date(range.from.getTime()-ms),to:new Date(range.from)};
@@ -7010,7 +7019,7 @@ function MOps({state,setTab,triggerMargin}) {
   },[sparkData,maxSpark]);
 
   const growthUp = growth!==null&&growth>=0;
-  const pLabel   = {"today":"Hoy","week":"7 días","month":"30 días","3m":"90 días"}[period]||"Período";
+  const pLabel   = {"today":"Hoy","week":"7 días","month":"Este mes","3m":"3 meses","custom":"Rango"}[period]||"Período";
 
   return (
     <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
@@ -7099,9 +7108,9 @@ function MOps({state,setTab,triggerMargin}) {
 
       <div style={{padding:"0 16px"}}>
         {/* ── Period tabs + IA + Reporte buttons ── */}
-        <div style={{display:"flex",gap:6,padding:"20px 0 20px",overflowX:"auto",
+        <div style={{display:"flex",gap:6,padding:"20px 0 8px",overflowX:"auto",
           scrollbarWidth:"none",msOverflowStyle:"none",alignItems:"center"}}>
-          {[["today","Hoy"],["week","7d"],["month","30d"],["3m","3M"]].map(([v,l])=>(
+          {[["today","Hoy"],["week","Semana"],["month","Mes"],["3m","3M"],["custom","Rango ▸"]].map(([v,l])=>(
             <button key={v} onClick={()=>setPeriod(v)}
               className={period===v?"glass-pill-active":"glass-pill-inactive"}
               style={{
@@ -7112,6 +7121,23 @@ function MOps({state,setTab,triggerMargin}) {
               {l}
             </button>
           ))}
+        </div>
+        {period==="custom"&&(
+          <div style={{display:"flex",gap:8,alignItems:"center",paddingBottom:14}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",marginBottom:4,textTransform:"uppercase"}}>Desde</div>
+              <input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)}
+                style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.05)",border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",color:A.t1,fontSize:14,outline:"none",colorScheme:C._dark?"dark":"light"}}/>
+            </div>
+            <div style={{color:A.t3,fontSize:16,paddingTop:18}}>—</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",marginBottom:4,textTransform:"uppercase"}}>Hasta</div>
+              <input type="date" value={customTo} onChange={e=>setCustomTo(e.target.value)}
+                style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.05)",border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",color:A.t1,fontSize:14,outline:"none",colorScheme:C._dark?"dark":"light"}}/>
+            </div>
+          </div>
+        )}
+        <div style={{display:"flex",gap:6,paddingBottom:14,overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none",alignItems:"center"}}>
           {triggerMargin&&(
             <button
               onClick={()=>{
@@ -10223,21 +10249,22 @@ function MAttachments({ticket, dispatch, toast}) {
 function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
   const C = React.useContext(ThemeCtx);
   const {tickets,clients,units,suppliers} = state;
-  const [period,setPeriod]   = useState("week");
+  const [period,setPeriod]       = useState("week");
+  const [customFrom,setCustomFrom] = useState("");
+  const [customTo,setCustomTo]     = useState(()=>new Date().toISOString().slice(0,10));
   const [search,setSearch]   = useState("");
   const [expandId,setExpandId] = useState(null);
   const [editId,setEditId]   = useState(null);
 
   // ── Period range ──────────────────────────────────────────────────────────
   const range = useMemo(()=>{
-    const now=new Date(); const from=new Date(now);
-    if(period==="today")       { from.setHours(0,0,0,0); }
-    else if(period==="week")   { from.setDate(now.getDate()-7); }
-    else if(period==="month")  { from.setDate(now.getDate()-30); }
-    else if(period==="3m")     { from.setDate(now.getDate()-90); }
-    else                       { from.setFullYear(2000); } // "all"
-    return {from,to:now};
-  },[period]);
+    if(period==="custom"){
+      const from=customFrom?new Date(customFrom):new Date(2000,0,1);
+      const to=customTo?new Date(customTo+"T23:59:59"):new Date();
+      return {from,to};
+    }
+    return buildRange(period);
+  },[period,customFrom,customTo]);
 
   const inRange = useCallback(t=>{
     const d=parseDateMX(t.date); return d&&d>=range.from&&d<=range.to;
@@ -10503,8 +10530,8 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
       <div style={{padding:"0 14px"}}>
 
         {/* Period + search */}
-        <div style={{display:"flex",gap:6,padding:"18px 0 12px",overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
-          {[["today","Hoy"],["week","7d"],["month","30d"],["3m","3M"],["all","Todo"]].map(([v,l])=>(
+        <div style={{display:"flex",gap:6,padding:"18px 0 10px",overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none"}}>
+          {[["today","Hoy"],["week","Semana"],["month","Mes"],["3m","3M"],["all","Todo"],["custom","Rango ▸"]].map(([v,l])=>(
             <button key={v} onClick={()=>setPeriod(v)}
               className={period===v?"glass-pill-active":"glass-pill-inactive"}
               style={{
@@ -10514,6 +10541,21 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
               }}>{l}</button>
           ))}
         </div>
+        {period==="custom"&&(
+          <div style={{display:"flex",gap:8,alignItems:"center",paddingBottom:12}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",marginBottom:4,textTransform:"uppercase"}}>Desde</div>
+              <input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)}
+                style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.05)",border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",color:A.t1,fontSize:14,outline:"none",colorScheme:C._dark?"dark":"light"}}/>
+            </div>
+            <div style={{color:A.t3,fontSize:16,paddingTop:18}}>—</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",marginBottom:4,textTransform:"uppercase"}}>Hasta</div>
+              <input type="date" value={customTo} onChange={e=>setCustomTo(e.target.value)}
+                style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.05)",border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",color:A.t1,fontSize:14,outline:"none",colorScheme:C._dark?"dark":"light"}}/>
+            </div>
+          </div>
+        )}
 
         <input value={search} onChange={e=>setSearch(e.target.value)}
           placeholder="Buscar por título, ID, cliente..."
