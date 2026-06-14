@@ -656,11 +656,14 @@ const buildRange = (period) => {
   const now=new Date(); const from=new Date(now);
   if     (period==="today") from.setHours(0,0,0,0);
   else if(period==="week")  from.setDate(now.getDate()-7);
-  else if(period==="month") from.setDate(now.getDate()-30);
+  else if(period==="month") { from.setDate(1); from.setHours(0,0,0,0); }
   else if(period==="3m")    from.setDate(now.getDate()-90);
   else                      from.setFullYear(2000); // "all"
   return {from,to:now};
 };
+// Date conversion helpers — keep promesaPago stored as DD/MM/YYYY internally
+const toDateInput  = s => { if(!s) return ""; const p=s.split("/"); return p.length===3?`${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}`:""; };
+const fromDateInput= s => { if(!s) return ""; const p=s.split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:""; };
 const mxn   = n => new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2}).format(n||0);
 const fpct  = n => ((n||0).toFixed(1))+"%";
 const clamp = (v,mn,mx) => Math.min(Math.max(v,mn),mx);
@@ -765,12 +768,14 @@ const SEED_PARTS = [
   {id:"PRT-00004",nombre:"Empaque candelero Eaton",oem:"S-14753",aftermarket:"",aplicacion:"Eaton Fuller / transmisiones 10 velocidades",notas:"Solo original — no hay aftermarket confiable",proveedor:"Refaccionaria Diesel El Cerrito",ultimoPrecio:150,ultimaFecha:"13/05/2026"},
 ];
 
+const DEFAULT_EMPRESA = {nombre:"Logisolve",subtitulo:"Logistics · Supply · Solutions",responsable:"Alejandro Saucedo",rfc:"SAME9612277T9",tel:"5562321807",correo:"",banco:"",clabe:""};
 const initialState = {
   tickets:   SEED_TICKETS,
   clients:   SEED_CLIENTS,
   suppliers: SEED_SUPPLIERS,
   units:     SEED_UNITS,
   parts:     SEED_PARTS,
+  empresa:   DEFAULT_EMPRESA,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -785,7 +790,7 @@ function loadFromStorage() {
   } catch { return null; }
 }
 function saveToStorage(s) {
-  const payload = {version:STORAGE_VER,savedAt:nowISO(),data:{tickets:s.tickets,clients:s.clients,suppliers:s.suppliers,units:s.units,parts:s.parts}};
+  const payload = {version:STORAGE_VER,savedAt:nowISO(),data:{tickets:s.tickets,clients:s.clients,suppliers:s.suppliers,units:s.units,parts:s.parts,empresa:s.empresa}};
   try { localStorage.setItem(STORAGE_KEY,JSON.stringify(payload)); }
   catch(e) {
     // Quota exceeded (flota grande) — guardar sin unidades; Supabase es la fuente primaria
@@ -872,8 +877,10 @@ function reducer(state,action) {
         suppliers: merge(d.suppliers, state.suppliers),
         units:     merge(d.units,     state.units),
         parts:     merge(d.parts,     state.parts),
+        empresa:   d.empresa ? {...DEFAULT_EMPRESA,...d.empresa} : state.empresa,
       };
     }
+    case "SET_EMPRESA": return {...state, empresa:{...state.empresa,...action.patch}};
     case "RESET": return {...initialState};
     case "NOOP":  return state; // trigger effects without mutation
     default: return state;
@@ -1013,7 +1020,8 @@ function PDFPreviewModal({tkt,cl,un,supp,onClose}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // PDF GENERATOR — formato oficial Logisolve
 // ═══════════════════════════════════════════════════════════════════════════════
-function generarCotizacionPDF(tkt, cl, un, supp) {
+function generarCotizacionPDF(tkt, cl, un, supp, empresa={}) {
+  const emp = {...DEFAULT_EMPRESA, ...empresa};
   const totals = calculateTicketTotals(tkt);
   const folio = mkFolio(tkt,"COT");
 
@@ -1150,13 +1158,13 @@ function generarCotizacionPDF(tkt, cl, un, supp) {
     <div class="page">
       <div class="top-header">
         <div class="brand">
-          <h1>LOGISOLVE</h1>
-          <p>Logistics &middot; Supply &middot; Solutions</p>
+          <h1>${emp.nombre}</h1>
+          <p>${emp.subtitulo.replace(/·/g,"&middot;")}</p>
         </div>
         <div class="issuer">
-          <strong>Alejandro Saucedo</strong><br>
-          RFC: SAME9612277T9<br>
-          Tel. 5562321807
+          <strong>${emp.responsable}</strong><br>
+          RFC: ${emp.rfc}<br>
+          Tel. ${emp.tel}${emp.correo?`<br>${emp.correo}`:""}
         </div>
       </div>
       <div class="hero">
@@ -1428,7 +1436,7 @@ function generarActaRecepcionPDF(tkt, cl, un) {
   }
 }
 // Modal de confirmacion PDF
-function PDFConfirm({tkt,cl,un,supp,onClose}) {
+function PDFConfirm({tkt,cl,un,supp,empresa,onClose}) {
   const C = React.useContext(ThemeCtx);
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -1442,7 +1450,7 @@ function PDFConfirm({tkt,cl,un,supp,onClose}) {
         <div style={{height:1,background:C.border,marginBottom:14}}/>
         <div style={{fontSize:10,color:C.t2,marginBottom:12}}>¿Generar cotización PDF ahora?</div>
         <div style={{display:"flex",gap:8}}>
-          <button onClick={()=>{generarCotizacionPDF(tkt,cl,un,supp);onClose();}}
+          <button onClick={()=>{generarCotizacionPDF(tkt,cl,un,supp,empresa);onClose();}}
             style={{flex:1,padding:"9px",background:C.blue,border:"none",borderRadius:4,color:C.t1,fontSize:11,fontWeight:700,cursor:"pointer"}}>
             Generar PDF
           </button>
@@ -3612,7 +3620,7 @@ function Tickets({state,dispatch,toast,scheduleHardDelete}) {
                             Cobrado
                           </button>
                         )}
-                        <button onClick={e=>{e.stopPropagation();const cl=clients.find(c=>c.id===t.clientId);const un=units.find(u=>u.id===t.unitId);const supp=suppliers.find(s=>s.id===t.supplierId);generarCotizacionPDF(t,cl,un,supp);}}
+                        <button onClick={e=>{e.stopPropagation();const cl=clients.find(c=>c.id===t.clientId);const un=units.find(u=>u.id===t.unitId);const supp=suppliers.find(s=>s.id===t.supplierId);generarCotizacionPDF(t,cl,un,supp,state.empresa);}}
                           style={{padding:"3px 10px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,fontSize:9,cursor:"pointer",fontWeight:600}}>
                           Cotizacion PDF
                         </button>
@@ -3922,7 +3930,7 @@ function Cotizador({state,dispatch,toast}) {
 
     opLog.push("TKT_CREATED", {id:tkt.id, titulo});
     toast("Ticket registrado: "+tkt.id,"success");
-    setPdfPending({tkt,cl,un,supp});
+    setPdfPending({tkt,cl,un,supp,empresa:state.empresa});
     setLineas([emptyLine(opType,priority,[])]);
     setNotes(""); setHorasOp(0);
     setTimeout(()=>setIsSaving(false), 1500); // reset after 1.5s
@@ -4065,8 +4073,8 @@ function Cotizador({state,dispatch,toast}) {
               {payType==="credit"&&(
                 <div style={{marginBottom:0,marginTop:0}}>
                   <div style={{fontSize:7,color:C.t3,marginBottom:2}}>PROMESA DE PAGO</div>
-                  <input value={promesa} onChange={e=>setPromesa(e.target.value)} placeholder="DD/MM/AAAA"
-                    style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 6px",color:C.yellow,fontSize:10,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace"}}/>
+                  <input type="date" value={toDateInput(promesa)} onChange={e=>setPromesa(fromDateInput(e.target.value))}
+                    style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 6px",color:C.yellow,fontSize:10,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace",colorScheme:C._dark?"dark":"light"}}/>
                 </div>
               )}
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginTop:4}}>
@@ -4746,8 +4754,8 @@ function CotizadorRefacciones({state,dispatch,toast}) {
               {payType==="credit"&&(
                 <div style={{marginBottom:5}}>
                   <div style={{fontSize:7,color:C.t3,marginBottom:2}}>PROMESA DE PAGO</div>
-                  <input value={promesa} onChange={e=>setPromesa(e.target.value)} placeholder="DD/MM/AAAA"
-                    style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 6px",color:C.yellow,fontSize:10,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace"}}/>
+                  <input type="date" value={toDateInput(promesa)} onChange={e=>setPromesa(fromDateInput(e.target.value))}
+                    style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 6px",color:C.yellow,fontSize:10,outline:"none",boxSizing:"border-box",fontFamily:"'Courier New',monospace",colorScheme:C._dark?"dark":"light"}}/>
                 </div>
               )}
               <div className="ref-half-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:5}}>
@@ -5662,6 +5670,16 @@ function Ajustes({state,dispatch,toast}) {
   const [previewData, setPreviewData] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
   const [importMode, setImportMode] = useState("merge"); // "merge" | "replace"
+  const [empEdits, setEmpEdits] = useState(()=>({...DEFAULT_EMPRESA,...(state.empresa||{})}));
+  const empField = (k,label,hint) => (
+    <div key={k} style={{marginBottom:7}}>
+      <div style={{fontSize:7,color:C.t3,letterSpacing:"0.12em",marginBottom:2,textTransform:"uppercase"}}>{label}</div>
+      <input value={empEdits[k]||""} placeholder={hint||""}
+        onChange={e=>setEmpEdits(p=>({...p,[k]:e.target.value}))}
+        onBlur={()=>dispatch({type:"SET_EMPRESA",patch:{[k]:empEdits[k]}})}
+        style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 7px",color:C.t1,fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+    </div>
+  );
 
   const savedAt=(()=>{try{const r=localStorage.getItem(STORAGE_KEY);if(r){const p=JSON.parse(r);return p.savedAt?new Date(p.savedAt).toLocaleString("es-MX"):"---";}}catch(_e){}return "---";})();
 
@@ -5859,6 +5877,21 @@ function Ajustes({state,dispatch,toast}) {
 
       <div style={{fontSize:7,color:C.t3,letterSpacing:"0.2em",marginBottom:9}}>AJUSTES DEL SISTEMA</div>
       {[
+        {title:"MI EMPRESA",content:(
+          <div style={{padding:11}}>
+            <div style={{fontSize:8,color:C.t3,marginBottom:9}}>Estos datos aparecen en el PDF de cotización. Se guardan automáticamente al salir de cada campo.</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+              {empField("nombre","Nombre de empresa","Logisolve")}
+              {empField("responsable","Responsable","Nombre completo")}
+              {empField("rfc","RFC","XXXX999999XX9")}
+              {empField("tel","Teléfono","10 dígitos")}
+              {empField("correo","Correo","correo@empresa.com")}
+              {empField("subtitulo","Subtítulo PDF","Logistics · Supply · Solutions")}
+              {empField("banco","Banco","BBVA / Banorte / etc.")}
+              {empField("clabe","CLABE interbancaria","18 dígitos")}
+            </div>
+          </div>
+        )},
         {title:"PERSISTENCIA",content:(
           <div style={{padding:11}}>
             <div style={{fontSize:9,color:C.t2,marginBottom:5}}>Guardado automático en Supabase + localStorage.</div>
@@ -6014,6 +6047,7 @@ function MAjustes({state,dispatch,toast}) {
   const [exporting,setExporting]=useState(false);
   const [exportingAudit,setExportingAudit]=useState(false);
   const [importMode,setImportMode]=useState("merge");
+  const [empEdits,setEmpEdits]=useState(()=>({...DEFAULT_EMPRESA,...(state.empresa||{})}));
 
   const savedAt=(()=>{try{const r=localStorage.getItem(STORAGE_KEY);if(r){const p=JSON.parse(r);return p.savedAt?new Date(p.savedAt).toLocaleString("es-MX"):"---";}}catch(_e){}return "---";})();
 
@@ -6127,6 +6161,18 @@ function MAjustes({state,dispatch,toast}) {
       {confirmClearUnits&&<Confirm msg={`Eliminar las ${state.units.length} unidades de la flotilla?`} onConfirm={()=>{dispatch({type:"UNITS_CLEAR"});setConfirmClearUnits(false);toast("Flotilla eliminada","info");}} onCancel={()=>setConfirmClearUnits(false)}/>}
 
       <div style={{fontSize:11,color:C.t3,letterSpacing:"0.15em",textTransform:"uppercase",fontWeight:700,marginBottom:14}}>Ajustes del sistema</div>
+
+      <Card title="MI EMPRESA">
+        <div style={{fontSize:13,color:C.t2,marginBottom:12}}>Datos que aparecen en el PDF de cotización.</div>
+        {[["nombre","Nombre"],["responsable","Responsable"],["rfc","RFC"],["tel","Teléfono"],["correo","Correo"],["banco","Banco"],["clabe","CLABE"]].map(([k,label])=>(
+          <div key={k} style={{marginBottom:10}}>
+            <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase",fontWeight:600}}>{label}</div>
+            <input value={empEdits[k]||""} onChange={e=>setEmpEdits(p=>({...p,[k]:e.target.value}))}
+              onBlur={()=>dispatch({type:"SET_EMPRESA",patch:{[k]:empEdits[k]}})}
+              style={{width:"100%",boxSizing:"border-box",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 14px",color:C.t1,fontSize:15,outline:"none"}}/>
+          </div>
+        ))}
+      </Card>
 
       <Card title="PERSISTENCIA">
         <div style={{fontSize:13,color:C.t2,marginBottom:4}}>Guardado automático en Supabase + localStorage.</div>
@@ -6454,7 +6500,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                 <div style={{fontSize:9,fontWeight:700,color:(t.snap?.uNeta||0)>=0?C.green:C.red,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap"}}>{hide?"---":mxn((t.snap?.uNeta||0))}</div>
                 <div style={{display:"flex",gap:3}}>
                   {!editing&&<button onClick={e=>startEdit(t,e)} style={{padding:"2px 5px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:8,cursor:"pointer"}}>Editar</button>}
-                  {!editing&&<button onClick={e=>{e.stopPropagation();const cl2=clients.find(c=>c.id===t.clientId);const un2=units?.find(u=>u.id===t.unitId);const su2=suppliers?.find(s=>s.id===t.supplierId);generarCotizacionPDF(t,cl2,un2,su2);}} style={{padding:"2px 5px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,fontSize:8,cursor:"pointer"}}>PDF</button>}
+                  {!editing&&<button onClick={e=>{e.stopPropagation();const cl2=clients.find(c=>c.id===t.clientId);const un2=units?.find(u=>u.id===t.unitId);const su2=suppliers?.find(s=>s.id===t.supplierId);generarCotizacionPDF(t,cl2,un2,su2,state.empresa);}} style={{padding:"2px 5px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,fontSize:8,cursor:"pointer"}}>PDF</button>}
                   {!editing&&<button onClick={e=>{e.stopPropagation();setConfirm(t);}} style={{padding:"2px 4px",background:"transparent",border:`1px solid ${C.red}44`,borderRadius:3,color:C.red,fontSize:9,cursor:"pointer",fontWeight:700}}>x</button>}
                 </div>
                 <div style={{fontSize:9,color:C.t3,textAlign:"center"}}>{exp?"^":"v"}</div>
@@ -6500,7 +6546,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                         />
                       </div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6,marginBottom:6}}>
-                        {ef.payType==="credit"&&<Field label="Promesa" value={ef.promesaPago} onChange={sfn("promesaPago")} prefix="" hint="DD/MM/AAAA"/>}
+                        {ef.payType==="credit"&&<Field label="Promesa" type="date" value={toDateInput(ef.promesaPago)} onChange={v=>sfn("promesaPago")(fromDateInput(v))} prefix=""/>}
                         <Sel label="Prob." value={ef.prob} onChange={sfn("prob")} options={PROB.map(p=>({value:p.id,label:p.label+" ("+p.pct+"%)"}))}/>
                         <Field label="Horas op." value={ef.horasOp} onChange={sfn("horasOp")} prefix="" suffix="h" type="number" min={0} step={0.5}/>
                         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
@@ -9008,7 +9054,7 @@ function MPipeline({state,dispatch,toast}) {
                         <button onClick={e=>{e.stopPropagation();
                           const c2=clients.find(c=>c.id===t.clientId);
                           const u2=units.find(u=>u.id===t.unitId);
-                          generarCotizacionPDF(t,c2,u2,null).catch(()=>toast("Error PDF","error"));}}
+                          generarCotizacionPDF(t,c2,u2,null,state.empresa).catch(()=>toast("Error PDF","error"));}}
                           style={{padding:"7px 14px",borderRadius:10,background:"transparent",
                             border:`1px solid ${C.border}`,color:A.t2,fontSize:10,
                             fontWeight:600,cursor:"pointer",letterSpacing:"0.06em"}}>
@@ -9314,7 +9360,7 @@ function MCotizador({state,dispatch,toast}) {
       }
     });
     toast("Ticket: "+tkt.id,"success");
-    setPdfPending({tkt,cl,un,supp});
+    setPdfPending({tkt,cl,un,supp,empresa:state.empresa});
     setLineas([emptyLine(opType,priority,[])]);
     setNotes(""); setPartQ({});
     setClientId(""); setUnitIds([]); setSupplierId("");
@@ -9688,8 +9734,7 @@ function MCotizador({state,dispatch,toast}) {
           <MSel label="Pago" value={payType} onChange={setPayType}
             options={[{value:"contado",label:"Contado — sin seguimiento"},{value:"credit",label:"Crédito — genera cartera"}]}/>
           {payType==="credit"&&(
-            <MField label="Promesa de pago" value={promesa} onChange={setPromesa}
-              placeholder="DD/MM/AAAA" color={A.amber}/>
+            <MField label="Promesa de pago" type="date" value={toDateInput(promesa)} onChange={v=>setPromesa(fromDateInput(v))} color={A.amber}/>
           )}
           {/* Parámetros fiscales */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
@@ -10628,7 +10673,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                             <button onClick={()=>{
                               const c2=clients.find(c=>c.id===t.clientId);
                               const u2=units.find(u=>u.id===t.unitId);
-                              generarCotizacionPDF(t,c2,u2,null).catch(()=>toast("Error PDF","error"));
+                              generarCotizacionPDF(t,c2,u2,null,state.empresa).catch(()=>toast("Error PDF","error"));
                             }} style={{
                               flex:1,padding:"9px 14px",borderRadius:10,background:"transparent",
                               border:`1px solid ${C.border}`,color:A.t2,
@@ -10708,8 +10753,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                           <MSel label="Pago" value={ef.payType} onChange={sfn("payType")}
                             options={[{value:"contado",label:"Contado"},{value:"credit",label:"Crédito"}]}/>
                           {ef.payType==="credit"&&(
-                            <MField label="Promesa de pago" value={ef.promesaPago}
-                              onChange={sfn("promesaPago")} placeholder="DD/MM/AAAA" color={A.amber}/>
+                            <MField label="Promesa de pago" type="date" value={toDateInput(ef.promesaPago)} onChange={v=>sfn("promesaPago")(fromDateInput(v))} color={A.amber}/>
                           )}
                           {/* ── Campos individuales (ocultos en kit mode) ── */}
                           {!ef.kitMode&&(<>
