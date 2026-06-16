@@ -768,7 +768,7 @@ const SEED_PARTS = [
   {id:"PRT-00004",nombre:"Empaque candelero Eaton",oem:"S-14753",aftermarket:"",aplicacion:"Eaton Fuller / transmisiones 10 velocidades",notas:"Solo original — no hay aftermarket confiable",proveedor:"Refaccionaria Diesel El Cerrito",ultimoPrecio:150,ultimaFecha:"13/05/2026"},
 ];
 
-const DEFAULT_EMPRESA = {nombre:"Logisolve",subtitulo:"Logistics · Supply · Solutions",responsable:"Alejandro Saucedo",rfc:"SAME9612277T9",tel:"5562321807",correo:"",banco:"",clabe:""};
+const DEFAULT_EMPRESA = {nombre:"Logisolve",subtitulo:"Logistics · Supply · Solutions",responsable:"Alejandro Saucedo",rfc:"SAME9612277T9",tel:"5562321807",correo:"",banco:"",clabe:"",tasaIVA:16,tasaISR:20};
 const initialState = {
   tickets:   SEED_TICKETS,
   clients:   SEED_CLIENTS,
@@ -3967,8 +3967,8 @@ function Cotizador({state,dispatch,toast}) {
   const [prob,      setProb]      = useState("high");
   const [horasOp,   setHorasOp]   = useState(0);
   const [notes,     setNotes]     = useState("");
-  const [iva,       setIva]       = useState(16);
-  const [isr,       setIsr]       = useState(20);
+  const [iva,       setIva]       = useState(()=>safeNumber(state.empresa?.tasaIVA,16));
+  const [isr,       setIsr]       = useState(()=>safeNumber(state.empresa?.tasaISR,20));
   const [cIVA,      setCIVA]      = useState(true);
   const [vIVA,      setVIVA]      = useState(true);
   // Multi-line
@@ -4614,7 +4614,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
   const [payType,    setPayType]    = useState("contado");
   const [promesa,    setPromesa]    = useState("");
   const [notes,      setNotes]      = useState("");
-  const [iva,        setIva]        = useState(16);
+  const [iva,        setIva]        = useState(()=>safeNumber(state.empresa?.tasaIVA,16));
   const [cIVA,       setCIVA]       = useState(true);
   const [vIVA,       setVIVA]       = useState(true);
   const [globalMargen, setGlobalMargen] = useState(30);
@@ -6045,6 +6045,41 @@ function Ajustes({state,dispatch,toast}) {
     finally { setExportingAudit(false); }
   };
 
+  const [exportingCSV, setExportingCSV] = useState(false);
+  const exportCSVContable = () => {
+    if(exportingCSV) return;
+    setExportingCSV(true);
+    try {
+      const esc = v => { const s=String(v??''); return (s.includes(',')||s.includes('"')||s.includes('\n'))?'"'+s.replace(/"/g,'""')+'"':s; };
+      const COLS = ["folio","fecha","cliente","subtotal","iva","isr","total","status","cobrado","promesaPago"];
+      const rows = state.tickets.filter(t=>!t._deleted).map(t=>{
+        const cl = state.clients.find(c=>c.id===t.clientId);
+        const ivaPct = safeNumber(t.snap?.params?.iva,16)/100;
+        const subtotal = safeNumber(t.snap?.precioSinIVA??t.snap?.precioConIVA/(1+ivaPct));
+        return {
+          folio:        t.id||"",
+          fecha:        t.date||"",
+          cliente:      cl?.empresa||cl?.nombre||t.clientId||"",
+          subtotal:     subtotal.toFixed(2),
+          iva:          safeNumber(t.snap?.ivaTraslad).toFixed(2),
+          isr:          safeNumber(t.snap?.isr).toFixed(2),
+          total:        safeNumber(t.snap?.precioConIVA).toFixed(2),
+          status:       t.status||"",
+          cobrado:      t.cobrado?"SI":"NO",
+          promesaPago:  t.promesaPago||"",
+        };
+      });
+      const csv = [COLS.join(','), ...rows.map(r=>COLS.map(c=>esc(r[c])).join(','))].join('\n');
+      const blob = new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href=url; a.download=`logisolve-contable-${Date.now()}.csv`; a.click();
+      URL.revokeObjectURL(url);
+      toast(`CSV exportado: ${rows.length} tickets`,"success");
+    } catch(e) { toast("Error al exportar CSV","error"); }
+    finally { setExportingCSV(false); }
+  };
+
   return (
     <div style={{padding:"10px 13px",maxWidth:640,margin:"0 auto"}}>
       {confirmReset&&<Confirm msg="Restablecer todos los datos al estado inicial?" onConfirm={()=>{dispatch({type:"RESET"});setConfirmReset(false);toast("Sistema restablecido","info");}} onCancel={()=>setConfirmReset(false)}/>}
@@ -6066,6 +6101,25 @@ function Ajustes({state,dispatch,toast}) {
               {empField("banco","Banco","BBVA / Banorte / etc.")}
               {empField("clabe","CLABE interbancaria","18 dígitos")}
             </div>
+            <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
+              <div style={{fontSize:8,color:C.t3,marginBottom:7}}>TASAS FISCALES — se aplican como predeterminado en nuevas cotizaciones.</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                <div>
+                  <div style={{fontSize:7,color:C.t3,letterSpacing:"0.12em",marginBottom:2,textTransform:"uppercase"}}>IVA %</div>
+                  <input type="number" min={0} max={99} step={0.1} value={empEdits.tasaIVA??16}
+                    onChange={e=>setEmpEdits(p=>({...p,tasaIVA:e.target.value}))}
+                    onBlur={()=>dispatch({type:"SET_EMPRESA",patch:{tasaIVA:safeNumber(empEdits.tasaIVA,16)}})}
+                    style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 7px",color:C.t1,fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+                <div>
+                  <div style={{fontSize:7,color:C.t3,letterSpacing:"0.12em",marginBottom:2,textTransform:"uppercase"}}>ISR %</div>
+                  <input type="number" min={0} max={99} step={0.1} value={empEdits.tasaISR??20}
+                    onChange={e=>setEmpEdits(p=>({...p,tasaISR:e.target.value}))}
+                    onBlur={()=>dispatch({type:"SET_EMPRESA",patch:{tasaISR:safeNumber(empEdits.tasaISR,20)}})}
+                    style={{width:"100%",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"5px 7px",color:C.t1,fontSize:11,outline:"none",boxSizing:"border-box"}}/>
+                </div>
+              </div>
+            </div>
           </div>
         )},
         {title:"PERSISTENCIA",content:(
@@ -6083,9 +6137,15 @@ function Ajustes({state,dispatch,toast}) {
         {title:"EXPORTAR BACKUP",content:(
           <div style={{padding:11}}>
             <div style={{fontSize:9,color:C.t2,marginBottom:7}}>Exporta todos los datos como JSON. También guarda una copia en localStorage.</div>
-            <button onClick={exportData} disabled={exporting} style={{padding:"6px 14px",background:exporting?C.bg2:C.blue,border:"none",borderRadius:3,color:exporting?C.t3:C.t1,fontSize:11,fontWeight:700,cursor:exporting?"not-allowed":"pointer"}}>
-              {exporting?"Exportando…":"⬇ Exportar JSON"}
-            </button>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <button onClick={exportData} disabled={exporting} style={{padding:"6px 14px",background:exporting?C.bg2:C.blue,border:"none",borderRadius:3,color:exporting?C.t3:C.t1,fontSize:11,fontWeight:700,cursor:exporting?"not-allowed":"pointer"}}>
+                {exporting?"Exportando…":"⬇ Exportar JSON"}
+              </button>
+              <button onClick={exportCSVContable} disabled={exportingCSV} style={{padding:"6px 14px",background:exportingCSV?C.bg2:"#166534",border:"none",borderRadius:3,color:exportingCSV?C.t3:"#86efac",fontSize:11,fontWeight:700,cursor:exportingCSV?"not-allowed":"pointer"}}>
+                {exportingCSV?"Exportando…":"⬇ CSV Contable"}
+              </button>
+            </div>
+            <div style={{fontSize:8,color:C.t3,marginTop:6}}>CSV incluye: folio, fecha, cliente, subtotal, IVA, ISR, total, status, cobrado, promesaPago — compatible con Excel/Contpaq.</div>
           </div>
         )},
         {title:"VER Y GESTIONAR BACKUPS (localStorage)",content:(
@@ -6222,6 +6282,7 @@ function MAjustes({state,dispatch,toast}) {
   const [confirmClearUnits,setConfirmClearUnits]=useState(false);
   const [exporting,setExporting]=useState(false);
   const [exportingAudit,setExportingAudit]=useState(false);
+  const [exportingCSV,setExportingCSV]=useState(false);
   const [importMode,setImportMode]=useState("merge");
   const [empEdits,setEmpEdits]=useState(()=>({...DEFAULT_EMPRESA,...(state.empresa||{})}));
 
@@ -6275,6 +6336,29 @@ function MAjustes({state,dispatch,toast}) {
       toast(`Auditoría exportada: ${rows.length} tickets`,"success");
     }catch(e){toast("Error al exportar auditoría: "+e?.message,"error");}
     finally{setExportingAudit(false);}
+  };
+
+  const exportCSVContable=()=>{
+    if(exportingCSV) return;
+    setExportingCSV(true);
+    try{
+      const esc=v=>{const s=String(v??'');return(s.includes(',')||s.includes('"')||s.includes('\n'))?'"'+s.replace(/"/g,'""')+'"':s;};
+      const COLS=["folio","fecha","cliente","subtotal","iva","isr","total","status","cobrado","promesaPago"];
+      const rows=state.tickets.filter(t=>!t._deleted).map(t=>{
+        const cl=state.clients.find(c=>c.id===t.clientId);
+        const ivaPct=safeNumber(t.snap?.params?.iva,16)/100;
+        const subtotal=safeNumber(t.snap?.precioSinIVA??t.snap?.precioConIVA/(1+ivaPct));
+        return{folio:t.id||"",fecha:t.date||"",cliente:cl?.empresa||cl?.nombre||t.clientId||"",subtotal:subtotal.toFixed(2),iva:safeNumber(t.snap?.ivaTraslad).toFixed(2),isr:safeNumber(t.snap?.isr).toFixed(2),total:safeNumber(t.snap?.precioConIVA).toFixed(2),status:t.status||"",cobrado:t.cobrado?"SI":"NO",promesaPago:t.promesaPago||""};
+      });
+      const csv=[COLS.join(','),...rows.map(r=>COLS.map(c=>esc(r[c])).join(','))].join('\n');
+      const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url; a.download=`logisolve-contable-${Date.now()}.csv`; a.click();
+      URL.revokeObjectURL(url);
+      toast(`CSV exportado: ${rows.length} tickets`,"success");
+    }catch(e){toast("Error al exportar CSV","error");}
+    finally{setExportingCSV(false);}
   };
 
   const importUnitsJSON=(file,mode="merge")=>{
@@ -6348,6 +6432,20 @@ function MAjustes({state,dispatch,toast}) {
               style={{width:"100%",boxSizing:"border-box",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 14px",color:C.t1,fontSize:15,outline:"none"}}/>
           </div>
         ))}
+        <div style={{paddingTop:12,marginTop:4,borderTop:`1px solid ${C.border}`}}>
+          <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:10,textTransform:"uppercase",fontWeight:600}}>TASAS FISCALES (predeterminadas en cotizaciones)</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            {[["tasaIVA","IVA %",16],["tasaISR","ISR %",20]].map(([k,label,def])=>(
+              <div key={k}>
+                <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase",fontWeight:600}}>{label}</div>
+                <input type="number" min={0} max={99} step={0.1} value={empEdits[k]??def}
+                  onChange={e=>setEmpEdits(p=>({...p,[k]:e.target.value}))}
+                  onBlur={()=>dispatch({type:"SET_EMPRESA",patch:{[k]:safeNumber(empEdits[k],def)}})}
+                  style={{width:"100%",boxSizing:"border-box",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 14px",color:C.t1,fontSize:15,outline:"none"}}/>
+              </div>
+            ))}
+          </div>
+        </div>
       </Card>
 
       <Card title="PERSISTENCIA">
@@ -6380,6 +6478,10 @@ function MAjustes({state,dispatch,toast}) {
       <Card title="EXPORTAR BACKUP">
         <div style={{fontSize:13,color:C.t2,marginBottom:12}}>Exporta todos los datos como JSON y guarda copia en localStorage.</div>
         <MBtn label={exporting?"Exportando…":"⬇ Exportar JSON"} full color={C.t1} bg={exporting?C.bg2:C.blue} border={exporting?C.border:C.blue} onClick={exportData}/>
+        <div style={{marginTop:10}}>
+          <MBtn label={exportingCSV?"Exportando…":"⬇ CSV Contable"} full color={exportingCSV?C.t3:"#86efac"} bg={exportingCSV?C.bg2:"#166534"} border={exportingCSV?C.border:"#166534"} onClick={exportCSVContable}/>
+          <div style={{fontSize:11,color:C.t3,marginTop:6,lineHeight:1.5}}>Folio · Fecha · Cliente · Subtotal · IVA · ISR · Total · Status · Cobrado · Promesa. Compatible con Excel / Contpaq.</div>
+        </div>
       </Card>
 
       <Card title="IMPORTAR FLOTILLA (JSON)">
@@ -9445,8 +9547,8 @@ function MCotizador({state,dispatch,toast}) {
   const [priority,setPriority]  = useState("P3");
   const [opType,setOpType]      = useState("consumable");
   const [activeMods,setActiveMods] = useState([]);
-  const [iva, setIva]           = useState(16);
-  const [isr, setIsr]           = useState(20);
+  const [iva, setIva]           = useState(()=>safeNumber(state.empresa?.tasaIVA,16));
+  const [isr, setIsr]           = useState(()=>safeNumber(state.empresa?.tasaISR,20));
   const [lineas,setLineas]      = useState([emptyLine("consumable","P3",[])]);
   const [partQ,setPartQ]        = useState({});
   const [pickerOpen,setPickerOpen] = useState({});
