@@ -1464,9 +1464,185 @@ function PDFConfirm({tkt,cl,un,supp,empresa,onClose}) {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// L8 — UI PRIMITIVES
-// ═══════════════════════════════════════════════════════════════════════════════
+// ── Sourcing Board — comparador de precios por proveedor ──────────────────────
+function SourcingBoard({tkt, suppliers, dispatch, toast}) {
+  const C = React.useContext(ThemeCtx);
+  const lime  = "#8FE3BE";
+  const red   = "#EF4444";
+  const amber = "#F59E0B";
+  const EMPTY = {proveedor:"",precio:"",entrega:"1",disponible:true,notas:""};
+  const [form, setForm]   = useState(EMPTY);
+  const [adding,setAdding] = useState(false);
+  const sf = k => v => setForm(p=>({...p,[k]:v}));
+
+  const opts = tkt.sourcingOpts || [];
+
+  const addOpt = () => {
+    if(!form.proveedor.trim()||!form.precio) { toast("Ingresa proveedor y precio","error"); return; }
+    const opt = {
+      id:"so-"+Date.now().toString().slice(-6),
+      proveedor:form.proveedor.trim(),
+      precio:safeNumber(form.precio),
+      entrega:safeNumber(form.entrega,1)||1,
+      disponible:form.disponible,
+      notas:form.notas.trim(),
+      ts:nowISO(),
+    };
+    dispatch({type:"TKT_UPDATE",id:tkt.id,patch:{sourcingOpts:[...opts,opt]}});
+    setForm(EMPTY); setAdding(false);
+    toast("Opción agregada","success");
+  };
+
+  const delOpt = id => dispatch({type:"TKT_UPDATE",id:tkt.id,patch:{sourcingOpts:opts.filter(o=>o.id!==id)}});
+
+  const usarOpt = opt => {
+    const supp = suppliers.find(s=>
+      s.nombre.toLowerCase().includes(opt.proveedor.toLowerCase())||
+      opt.proveedor.toLowerCase().includes(s.nombre.toLowerCase())
+    );
+    const iva    = tkt.snap?.params?.iva  || 16;
+    const isr    = tkt.snap?.params?.isr  || 20;
+    const margin = tkt.snap?.params?.margin || 30;
+    const newSnap = computeSnap({
+      costo:safeNumber(opt.precio), gasolina:0, otros:0,
+      iva, isr, compraConIVA:true, ventaConIVA:true, mode:"auto", margin,
+    });
+    const newLineas = [{
+      titulo:tkt.titulo||"Pieza", partRef:tkt.partRef||"", qty:1,
+      costoUnit:safeNumber(opt.precio), gasolina:0, otros:0,
+      mode:"auto", manualPrice:newSnap.precioConIVA.toFixed(2),
+      snap:newSnap, lineTotal:newSnap.precioConIVA, descripcionPDF:"",
+    }];
+    dispatch({type:"TKT_UPDATE",id:tkt.id,patch:{
+      status:"cotizado",
+      supplierId: supp?.id || tkt.supplierId || "",
+      lineas:newLineas, snap:newSnap,
+      sourcingSeleccionado:opt.id,
+    }});
+    toast("Precio aplicado — listo para cotizar ✓","success");
+  };
+
+  const iStyle = {width:"100%",boxSizing:"border-box",background:C.bg0,
+    border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 11px",
+    color:C.t1,fontSize:14,outline:"none",fontFamily:"inherit"};
+
+  return (
+    <div style={{marginBottom:14,padding:"14px 14px 4px",background:C._dark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.02)",
+      border:`1px solid ${C.border}`,borderRadius:12}}>
+      <div style={{fontSize:8,color:C.t3,letterSpacing:"0.18em",textTransform:"uppercase",fontWeight:700,marginBottom:12}}>
+        Opciones de sourcing · {opts.length} cotizaciones
+      </div>
+
+      {opts.length===0&&!adding&&(
+        <div style={{textAlign:"center",padding:"16px 0 12px",color:C.t3,fontSize:13}}>
+          Sin opciones. Agrega precios de distintos proveedores para comparar.
+        </div>
+      )}
+
+      {opts.map(opt=>{
+        const sel = opt.id===tkt.sourcingSeleccionado;
+        return (
+          <div key={opt.id} style={{
+            display:"flex",alignItems:"center",gap:10,
+            padding:"11px 12px",marginBottom:6,
+            background:sel?`${lime}0D`:`${C._dark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.02)"}`,
+            border:`1px solid ${sel?lime+"44":C.border}`,borderRadius:10,
+          }}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:13,fontWeight:700,color:C.t1,marginBottom:3}}>
+                {opt.proveedor}
+                {sel&&<span style={{marginLeft:8,fontSize:9,color:lime,fontWeight:700,background:`${lime}1A`,padding:"1px 6px",borderRadius:4}}>SELECCIONADO</span>}
+              </div>
+              <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+                <span style={{fontSize:15,fontWeight:800,color:lime,fontFamily:"'Courier New',monospace"}}>{mxn(opt.precio)}</span>
+                <span style={{fontSize:10,color:C.t3}}>· {opt.entrega}d hábiles</span>
+                <span style={{fontSize:10,color:opt.disponible?lime:red,fontWeight:600}}>
+                  {opt.disponible?"● Disponible":"○ Sin stock"}
+                </span>
+              </div>
+              {opt.notas&&<div style={{fontSize:10,color:C.t3,marginTop:3}}>{opt.notas}</div>}
+            </div>
+            <div style={{display:"flex",gap:5,flexShrink:0}}>
+              <button onClick={()=>delOpt(opt.id)}
+                style={{width:28,height:28,borderRadius:7,background:"transparent",
+                  border:`1px solid ${C.border}`,color:C.t3,fontSize:16,cursor:"pointer",
+                  display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>
+                ×
+              </button>
+              {!sel&&opt.disponible&&(
+                <button onClick={()=>usarOpt(opt)}
+                  style={{padding:"5px 14px",borderRadius:8,background:`${lime}15`,
+                    border:`1px solid ${lime}44`,color:lime,fontSize:12,
+                    fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+                  Usar →
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+
+      {adding ? (
+        <div style={{background:C.bg1,border:`1px solid ${C.borderHi}`,borderRadius:10,padding:12,marginBottom:10}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+            <div>
+              <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Proveedor</div>
+              <input value={form.proveedor} onChange={e=>sf("proveedor")(e.target.value)}
+                placeholder="Nombre del proveedor" style={iStyle}/>
+            </div>
+            <div>
+              <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Precio c/IVA $</div>
+              <input type="text" inputMode="decimal" value={form.precio} onChange={e=>sf("precio")(e.target.value)}
+                placeholder="0.00"
+                style={{...iStyle,color:lime,fontWeight:700,fontFamily:"'Courier New',monospace"}}/>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+            <div>
+              <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Entrega (días)</div>
+              <input type="text" inputMode="numeric" value={form.entrega} onChange={e=>sf("entrega")(e.target.value)}
+                style={iStyle}/>
+            </div>
+            <div>
+              <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Disponible</div>
+              <button onClick={()=>sf("disponible")(!form.disponible)}
+                style={{width:"100%",padding:"9px",borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:13,
+                  border:`1px solid ${form.disponible?lime+"55":C.border}`,
+                  background:form.disponible?`${lime}10`:"transparent",
+                  color:form.disponible?lime:C.t3}}>
+                {form.disponible?"✓ Sí":"✗ No"}
+              </button>
+            </div>
+          </div>
+          <div style={{marginBottom:10}}>
+            <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Notas (opcional)</div>
+            <input value={form.notas} onChange={e=>sf("notas")(e.target.value)}
+              placeholder="Número de parte, condición, etc." style={iStyle}/>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={addOpt}
+              style={{flex:1,padding:"10px",borderRadius:8,background:`${lime}15`,
+                border:`1px solid ${lime}44`,color:lime,fontSize:13,fontWeight:700,cursor:"pointer"}}>
+              Agregar opción
+            </button>
+            <button onClick={()=>{setAdding(false);setForm(EMPTY);}}
+              style={{padding:"10px 14px",borderRadius:8,background:"transparent",
+                border:`1px solid ${C.border}`,color:C.t3,fontSize:13,cursor:"pointer"}}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={()=>setAdding(true)}
+          style={{width:"100%",marginBottom:10,padding:"10px",borderRadius:10,
+            background:"transparent",border:`1px dashed ${C.border}`,
+            color:C.t3,fontSize:13,cursor:"pointer",letterSpacing:"0.04em"}}>
+          + Agregar opción
+        </button>
+      )}
+    </div>
+  );
+}
 const Logo = React.memo(function Logo() {
   const C = React.useContext(ThemeCtx);
   return (
@@ -6723,6 +6899,12 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                         {t.payType==="credit"&&<span style={{color:C.yellow}}>Credito · {t.promesaPago||"sin fecha"}</span>}
                         {t.notes&&<span style={{fontStyle:"italic"}}>{t.notes}</span>}
                       </div>
+                      {/* Sourcing board — solo cuando el ticket está en sourcing */}
+                      {t.status==="sourcing"&&(
+                        <div style={{padding:"10px 11px"}}>
+                          <SourcingBoard tkt={t} suppliers={suppliers} dispatch={dispatch} toast={toast}/>
+                        </div>
+                      )}
                       {/* Timeline completo */}
                       {t.timeline&&t.timeline.length>0&&(
                         <div style={{borderTop:`1px solid ${C.border}`}}>
@@ -9053,6 +9235,11 @@ function MPipeline({state,dispatch,toast}) {
                     </div>
                     {t.notes&&<div style={{fontSize:11,color:A.t2,padding:"10px 12px",background:C._dark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.03)",
                       borderRadius:10,marginBottom:12,border:`1px solid ${C.border}`}}>{t.notes}</div>}
+
+                    {/* Sourcing board — solo cuando el ticket está en sourcing */}
+                    {t.status==="sourcing"&&(
+                      <SourcingBoard tkt={t} suppliers={suppliers} dispatch={dispatch} toast={toast}/>
+                    )}
 
                     {/* Timeline completo */}
                     {(t.timeline||[]).length > 0 && (
