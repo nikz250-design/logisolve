@@ -9008,7 +9008,7 @@ function MEditSheet({ticket, state, dispatch, toast, onClose}) {
 // ── MPipeline — Pipeline móvil ───────────────────────────────────────────────
 function MPipeline({state,dispatch,toast}) {
   const C = React.useContext(ThemeCtx);
-  const {tickets,clients,units} = state;
+  const {tickets,clients,units,suppliers} = state;
   const [filter,setFilter]       = useState("all");
   const [sortBy,setSortBy]       = useState("priority");
   const [search,setSearch]       = useState("");
