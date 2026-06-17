@@ -9570,15 +9570,20 @@ function MPipeline({state,dispatch,toast}) {
                             cursor:"pointer",letterSpacing:"0.06em"}}>
                           Editar ✎
                         </button>
-                        <button onClick={e=>{e.stopPropagation();
-                          const c2=clients.find(c=>c.id===t.clientId);
-                          const u2=units.find(u=>u.id===t.unitId);
-                          generarCotizacionPDF(t,c2,u2,null,state.empresa).catch(()=>toast("Error PDF","error"));}}
-                          style={{padding:"7px 14px",borderRadius:10,background:"transparent",
-                            border:`1px solid ${C.border}`,color:A.t2,fontSize:10,
-                            fontWeight:600,cursor:"pointer",letterSpacing:"0.06em"}}>
-                          COT ↗
-                        </button>
+                        {t.snap&&(
+                          <button onClick={e=>{e.stopPropagation();
+                            const c2=clients.find(c=>c.id===t.clientId);
+                            const u2=units.find(u=>u.id===t.unitId);
+                            generarCotizacionPDF(t,c2,u2,null,state.empresa).catch(()=>toast("Error PDF","error"));}}
+                            style={{padding:"7px 14px",borderRadius:10,
+                              background:t.status==="cotizado"?`${A.lime}18`:"transparent",
+                              border:`1px solid ${t.status==="cotizado"?A.lime+"55":C.border}`,
+                              color:t.status==="cotizado"?A.lime:A.t2,
+                              fontSize:10,fontWeight:t.status==="cotizado"?700:600,
+                              cursor:"pointer",letterSpacing:"0.04em"}}>
+                            📄 Cotización PDF
+                          </button>
+                        )}
                         <button onClick={e=>{e.stopPropagation();
                           const c2=clients.find(c=>c.id===t.clientId);
                           const u2=units.find(u=>u.id===t.unitId);
