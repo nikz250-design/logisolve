@@ -1470,22 +1470,30 @@ function SourcingBoard({tkt, suppliers, dispatch, toast}) {
   const lime  = "#8FE3BE";
   const red   = "#EF4444";
   const amber = "#F59E0B";
-  const EMPTY = {proveedor:"",precio:"",entrega:"1",disponible:true,notas:""};
-  const [form, setForm]   = useState(EMPTY);
-  const [adding,setAdding] = useState(false);
+  const blueC = "#7AA0E0";
+  const EMPTY = {proveedor:"",marca:"",partNum:"",precio:"",garantia:"",entrega:"1",disponible:true,notas:""};
+  const [form, setForm]     = useState(EMPTY);
+  const [adding, setAdding] = useState(false);
+  const [decidingId, setDecidingId] = useState(null);
   const sf = k => v => setForm(p=>({...p,[k]:v}));
 
   const opts = tkt.sourcingOpts || [];
+  const disponibles = opts.filter(o=>o.disponible && safeNumber(o.precio)>0);
+  const cheapestId  = disponibles.length ? disponibles.reduce((a,b)=>safeNumber(a.precio)<=safeNumber(b.precio)?a:b).id : null;
+  const fastestId   = disponibles.length ? disponibles.reduce((a,b)=>safeNumber(a.entrega)<=safeNumber(b.entrega)?a:b).id : null;
 
   const addOpt = () => {
     if(!form.proveedor.trim()||!form.precio) { toast("Ingresa proveedor y precio","error"); return; }
     const opt = {
       id:"so-"+Date.now().toString().slice(-6),
-      proveedor:form.proveedor.trim(),
-      precio:safeNumber(form.precio),
-      entrega:safeNumber(form.entrega,1)||1,
+      proveedor: form.proveedor.trim(),
+      marca:     form.marca.trim(),
+      partNum:   form.partNum.trim(),
+      precio:    safeNumber(form.precio),
+      garantia:  form.garantia.trim(),
+      entrega:   safeNumber(form.entrega,1)||1,
       disponible:form.disponible,
-      notas:form.notas.trim(),
+      notas:     form.notas.trim(),
       ts:nowISO(),
     };
     dispatch({type:"TKT_UPDATE",id:tkt.id,patch:{sourcingOpts:[...opts,opt]}});
@@ -1495,20 +1503,27 @@ function SourcingBoard({tkt, suppliers, dispatch, toast}) {
 
   const delOpt = id => dispatch({type:"TKT_UPDATE",id:tkt.id,patch:{sourcingOpts:opts.filter(o=>o.id!==id)}});
 
-  const usarOpt = opt => {
+  const DECISIONS = [
+    {k:"precio",       label:"Mejor precio"},
+    {k:"calidad",      label:"Mejor calidad"},
+    {k:"disponibilidad",label:"Disponibilidad"},
+    {k:"unica",        label:"Única opción"},
+  ];
+
+  const confirmarUso = (opt, decision) => {
     const supp = suppliers.find(s=>
       s.nombre.toLowerCase().includes(opt.proveedor.toLowerCase())||
       opt.proveedor.toLowerCase().includes(s.nombre.toLowerCase())
     );
-    const iva    = tkt.snap?.params?.iva  || 16;
-    const isr    = tkt.snap?.params?.isr  || 20;
-    const margin = tkt.snap?.params?.margin || 30;
+    const iva    = tkt.snap?.params?.iva   || 16;
+    const isr    = tkt.snap?.params?.isr   || 20;
+    const margin = tkt.snap?.params?.margin|| 30;
     const newSnap = computeSnap({
       costo:safeNumber(opt.precio), gasolina:0, otros:0,
       iva, isr, compraConIVA:true, ventaConIVA:true, mode:"auto", margin,
     });
     const newLineas = [{
-      titulo:tkt.titulo||"Pieza", partRef:tkt.partRef||"", qty:1,
+      titulo:tkt.titulo||"Pieza", partRef:opt.partNum||tkt.partRef||"", qty:1,
       costoUnit:safeNumber(opt.precio), gasolina:0, otros:0,
       mode:"auto", manualPrice:newSnap.precioConIVA.toFixed(2),
       snap:newSnap, lineTotal:newSnap.precioConIVA, descripcionPDF:"",
@@ -1518,8 +1533,26 @@ function SourcingBoard({tkt, suppliers, dispatch, toast}) {
       supplierId: supp?.id || tkt.supplierId || "",
       lineas:newLineas, snap:newSnap,
       sourcingSeleccionado:opt.id,
+      sourcingDecision:decision,
     }});
+    setDecidingId(null);
     toast("Precio aplicado — listo para cotizar ✓","success");
+  };
+
+  const copyWhatsApp = () => {
+    if(!opts.length){ toast("Sin opciones para copiar","error"); return; }
+    const txt = opts.map(o=>{
+      const parts = [`*${o.proveedor}*`];
+      if(o.marca)   parts.push(o.marca);
+      if(o.partNum) parts.push(`(${o.partNum})`);
+      parts.push(mxn(o.precio));
+      if(o.garantia) parts.push(o.garantia+" garantía");
+      parts.push(o.disponible ? "disponible inmediata" : "sin stock");
+      return parts.join(" · ");
+    }).join("\n");
+    navigator.clipboard.writeText(`*${tkt.titulo||"Solicitud"}*\n\n${txt}\n\n_Precios incluyen IVA_`)
+      .then(()=>toast("Copiado para WhatsApp ✓","success"))
+      .catch(()=>toast("No se pudo copiar","error"));
   };
 
   const iStyle = {width:"100%",boxSizing:"border-box",background:C.bg0,
@@ -1527,10 +1560,21 @@ function SourcingBoard({tkt, suppliers, dispatch, toast}) {
     color:C.t1,fontSize:14,outline:"none",fontFamily:"inherit"};
 
   return (
-    <div style={{marginBottom:14,padding:"14px 14px 4px",background:C._dark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.02)",
+    <div style={{marginBottom:14,padding:"14px 14px 8px",background:C._dark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.02)",
       border:`1px solid ${C.border}`,borderRadius:12}}>
-      <div style={{fontSize:8,color:C.t3,letterSpacing:"0.18em",textTransform:"uppercase",fontWeight:700,marginBottom:12}}>
-        Opciones de sourcing · {opts.length} cotizaciones
+
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{fontSize:8,color:C.t3,letterSpacing:"0.18em",textTransform:"uppercase",fontWeight:700}}>
+          Opciones de sourcing · {opts.length} cotizaciones
+        </div>
+        {opts.length>0&&(
+          <button onClick={copyWhatsApp}
+            style={{padding:"4px 10px",borderRadius:7,background:"transparent",
+              border:`1px solid ${C.border}`,color:C.t3,fontSize:10,cursor:"pointer",fontWeight:600}}>
+            📋 WhatsApp
+          </button>
+        )}
       </div>
 
       {opts.length===0&&!adding&&(
@@ -1541,83 +1585,135 @@ function SourcingBoard({tkt, suppliers, dispatch, toast}) {
 
       {opts.map(opt=>{
         const sel = opt.id===tkt.sourcingSeleccionado;
+        const isCheapest = cheapestId===opt.id && disponibles.length>1;
+        const isFastest  = fastestId===opt.id  && disponibles.length>1 && fastestId!==cheapestId;
+        const isDeciding = decidingId===opt.id;
         return (
           <div key={opt.id} style={{
-            display:"flex",alignItems:"center",gap:10,
-            padding:"11px 12px",marginBottom:6,
-            background:sel?`${lime}0D`:`${C._dark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.02)"}`,
+            padding:"11px 12px",marginBottom:8,
+            background:sel?`${lime}0D`:C._dark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.02)",
             border:`1px solid ${sel?lime+"44":C.border}`,borderRadius:10,
           }}>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:13,fontWeight:700,color:C.t1,marginBottom:3}}>
-                {opt.proveedor}
-                {sel&&<span style={{marginLeft:8,fontSize:9,color:lime,fontWeight:700,background:`${lime}1A`,padding:"1px 6px",borderRadius:4}}>SELECCIONADO</span>}
+            {/* Fila 1: proveedor + badges + delete */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:5}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap",marginBottom:2}}>
+                  <span style={{fontSize:13,fontWeight:700,color:C.t1}}>{opt.proveedor}</span>
+                  {opt.marca&&<span style={{fontSize:10,color:C.t3,fontWeight:600}}>{opt.marca}</span>}
+                </div>
+                <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                  {sel&&<span style={{fontSize:9,color:lime,fontWeight:700,background:`${lime}1A`,padding:"1px 6px",borderRadius:4}}>SELECCIONADO</span>}
+                  {isCheapest&&<span style={{fontSize:9,color:lime,fontWeight:700,background:`${lime}15`,padding:"1px 6px",borderRadius:4}}>+ BARATO</span>}
+                  {isFastest&&<span style={{fontSize:9,color:amber,fontWeight:700,background:`${amber}15`,padding:"1px 6px",borderRadius:4}}>+ RÁPIDO</span>}
+                </div>
+                {opt.partNum&&<div style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",marginTop:3}}>P/N {opt.partNum}</div>}
               </div>
-              <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-                <span style={{fontSize:15,fontWeight:800,color:lime,fontFamily:"'Courier New',monospace"}}>{mxn(opt.precio)}</span>
-                <span style={{fontSize:10,color:C.t3}}>· {opt.entrega}d hábiles</span>
-                <span style={{fontSize:10,color:opt.disponible?lime:red,fontWeight:600}}>
-                  {opt.disponible?"● Disponible":"○ Sin stock"}
-                </span>
-              </div>
-              {opt.notas&&<div style={{fontSize:10,color:C.t3,marginTop:3}}>{opt.notas}</div>}
-            </div>
-            <div style={{display:"flex",gap:5,flexShrink:0}}>
               <button onClick={()=>delOpt(opt.id)}
-                style={{width:28,height:28,borderRadius:7,background:"transparent",
+                style={{width:26,height:26,borderRadius:6,background:"transparent",
                   border:`1px solid ${C.border}`,color:C.t3,fontSize:16,cursor:"pointer",
-                  display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>
+                  display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1,flexShrink:0,marginLeft:8}}>
                 ×
               </button>
-              {!sel&&opt.disponible&&(
-                <button onClick={()=>usarOpt(opt)}
-                  style={{padding:"5px 14px",borderRadius:8,background:`${lime}15`,
-                    border:`1px solid ${lime}44`,color:lime,fontSize:12,
-                    fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
-                  Usar →
-                </button>
-              )}
             </div>
+
+            {/* Fila 2: precio + detalles */}
+            <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",marginBottom:opt.notas?4:0}}>
+              <span style={{fontSize:17,fontWeight:800,color:lime,fontFamily:"'Courier New',monospace"}}>{mxn(opt.precio)}</span>
+              <span style={{fontSize:10,color:C.t3}}>· {opt.entrega}d hábiles</span>
+              {opt.garantia&&<span style={{fontSize:10,color:blueC}}>· {opt.garantia}</span>}
+              <span style={{fontSize:10,color:opt.disponible?lime:red,fontWeight:600}}>
+                {opt.disponible?"● Disponible":"○ Sin stock"}
+              </span>
+            </div>
+            {opt.notas&&<div style={{fontSize:10,color:C.t3,marginBottom:2}}>{opt.notas}</div>}
+
+            {/* Usar → con selector de decisión */}
+            {!sel&&opt.disponible&&(
+              isDeciding ? (
+                <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
+                  <div style={{fontSize:9,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>¿Por qué eliges esta opción?</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>
+                    {DECISIONS.map(d=>(
+                      <button key={d.k} onClick={()=>confirmarUso(opt,d.k)}
+                        style={{padding:"8px 10px",borderRadius:8,background:`${lime}10`,
+                          border:`1px solid ${lime}30`,color:lime,fontSize:11,
+                          fontWeight:600,cursor:"pointer",textAlign:"left"}}>
+                        {d.label}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={()=>setDecidingId(null)}
+                    style={{fontSize:11,color:C.t3,background:"transparent",border:"none",cursor:"pointer",padding:0}}>
+                    Cancelar
+                  </button>
+                </div>
+              ) : (
+                <div style={{marginTop:8,display:"flex",justifyContent:"flex-end"}}>
+                  <button onClick={()=>setDecidingId(opt.id)}
+                    style={{padding:"6px 16px",borderRadius:8,background:`${lime}15`,
+                      border:`1px solid ${lime}44`,color:lime,fontSize:12,
+                      fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+                    Usar →
+                  </button>
+                </div>
+              )
+            )}
           </div>
         );
       })}
 
+      {/* Formulario agregar */}
       {adding ? (
         <div style={{background:C.bg1,border:`1px solid ${C.borderHi}`,borderRadius:10,padding:12,marginBottom:10}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
             <div>
-              <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Proveedor</div>
+              <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Proveedor *</div>
               <input value={form.proveedor} onChange={e=>sf("proveedor")(e.target.value)}
-                placeholder="Nombre del proveedor" style={iStyle}/>
+                placeholder="Diesel Ec, Remar…" style={iStyle}/>
             </div>
             <div>
-              <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Precio c/IVA $</div>
-              <input type="text" inputMode="decimal" value={form.precio} onChange={e=>sf("precio")(e.target.value)}
-                placeholder="0.00"
-                style={{...iStyle,color:lime,fontWeight:700,fontFamily:"'Courier New',monospace"}}/>
+              <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Marca</div>
+              <input value={form.marca} onChange={e=>sf("marca")(e.target.value)}
+                placeholder="ACP, Bendix, Wabco…" style={iStyle}/>
             </div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
             <div>
-              <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Entrega (días)</div>
-              <input type="text" inputMode="numeric" value={form.entrega} onChange={e=>sf("entrega")(e.target.value)}
-                style={iStyle}/>
+              <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Número de parte</div>
+              <input value={form.partNum} onChange={e=>sf("partNum")(e.target.value)}
+                placeholder="4324709202…" style={{...iStyle,fontFamily:"'Courier New',monospace"}}/>
             </div>
             <div>
-              <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Disponible</div>
+              <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Precio c/IVA $ *</div>
+              <input type="text" inputMode="decimal" value={form.precio} onChange={e=>sf("precio")(e.target.value)}
+                placeholder="0.00" style={{...iStyle,color:lime,fontWeight:700,fontFamily:"'Courier New',monospace"}}/>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 76px",gap:8,marginBottom:8}}>
+            <div>
+              <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Garantía</div>
+              <input value={form.garantia} onChange={e=>sf("garantia")(e.target.value)}
+                placeholder="3 meses, 1 año…" style={iStyle}/>
+            </div>
+            <div>
+              <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Entrega (días)</div>
+              <input type="text" inputMode="numeric" value={form.entrega} onChange={e=>sf("entrega")(e.target.value)} style={iStyle}/>
+            </div>
+            <div>
+              <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Stock</div>
               <button onClick={()=>sf("disponible")(!form.disponible)}
-                style={{width:"100%",padding:"9px",borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:13,
+                style={{width:"100%",height:42,borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:13,
                   border:`1px solid ${form.disponible?lime+"55":C.border}`,
                   background:form.disponible?`${lime}10`:"transparent",
                   color:form.disponible?lime:C.t3}}>
-                {form.disponible?"✓ Sí":"✗ No"}
+                {form.disponible?"✓":"✗"}
               </button>
             </div>
           </div>
           <div style={{marginBottom:10}}>
             <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Notas (opcional)</div>
             <input value={form.notas} onChange={e=>sf("notas")(e.target.value)}
-              placeholder="Número de parte, condición, etc." style={iStyle}/>
+              placeholder="Condición, observaciones, ref…" style={iStyle}/>
           </div>
           <div style={{display:"flex",gap:8}}>
             <button onClick={addOpt}
@@ -1634,12 +1730,115 @@ function SourcingBoard({tkt, suppliers, dispatch, toast}) {
         </div>
       ) : (
         <button onClick={()=>setAdding(true)}
-          style={{width:"100%",marginBottom:10,padding:"10px",borderRadius:10,
+          style={{width:"100%",marginBottom:6,padding:"10px",borderRadius:10,
             background:"transparent",border:`1px dashed ${C.border}`,
             color:C.t3,fontSize:13,cursor:"pointer",letterSpacing:"0.04em"}}>
-          + Agregar opción
+          + Agregar cotización proveedor
         </button>
       )}
+    </div>
+  );
+}
+
+function FichaTecnicaBlock({tkt, units, dispatch, C, A}) {
+  const [pn, setPn] = useState(tkt.fichaPartNum||"");
+  const [fn, setFn] = useState(tkt.fichaNotes||"");
+  const unit = units.find(u=>u.id===(tkt.fichaUnitId||tkt.unitId));
+
+  const iStyle = {width:"100%",boxSizing:"border-box",background:C.bg0,
+    border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 11px",
+    color:C.t1,fontSize:14,outline:"none",fontFamily:"inherit"};
+
+  const lbl = (txt) => (
+    <div style={{fontSize:8,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4,fontWeight:600}}>{txt}</div>
+  );
+
+  return (
+    <div style={{marginBottom:14,padding:"13px 14px 12px",
+      background:C._dark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.02)",
+      border:`1px solid ${C.border}`,borderRadius:12}}>
+      <div style={{fontSize:8,color:A.t3,letterSpacing:"0.18em",textTransform:"uppercase",fontWeight:700,marginBottom:12}}>
+        Ficha técnica
+      </div>
+
+      {/* Buscador de unidad de la flotilla */}
+      <div style={{marginBottom:10}}>
+        {lbl("Unidad (busca por eco, placa, marca)")}
+        <UnitPicker
+          units={units}
+          value={tkt.fichaUnitId||tkt.unitId||""}
+          onChange={uid=>dispatch({type:"TKT_UPDATE",id:tkt.id,patch:{fichaUnitId:uid}})}
+          mobile={true}
+          placeholder="Eco., placa, marca o VIN…"/>
+      </div>
+
+      {/* Datos técnicos de la unidad seleccionada */}
+      {unit&&(
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10,
+          padding:"10px 12px",background:C.bg1,borderRadius:8,border:`1px solid ${C.border}`}}>
+          {unit.economico&&(
+            <div>
+              <div style={{fontSize:8,color:C.t3,textTransform:"uppercase",marginBottom:2}}>Eco.</div>
+              <div style={{fontSize:13,fontWeight:800,color:C.t1,fontFamily:"'Courier New',monospace"}}>{unit.economico}</div>
+            </div>
+          )}
+          {unit.anio&&(
+            <div>
+              <div style={{fontSize:8,color:C.t3,textTransform:"uppercase",marginBottom:2}}>Año</div>
+              <div style={{fontSize:13,fontWeight:700,color:C.t1}}>{unit.anio}</div>
+            </div>
+          )}
+          {(unit.marca||unit.modelo)&&(
+            <div style={{gridColumn:"1 / -1"}}>
+              <div style={{fontSize:8,color:C.t3,textTransform:"uppercase",marginBottom:2}}>Unidad</div>
+              <div style={{fontSize:12,color:C.t1}}>{[unit.marca,unit.modelo].filter(Boolean).join(" ")}</div>
+            </div>
+          )}
+          {unit.motor&&(
+            <div>
+              <div style={{fontSize:8,color:C.t3,textTransform:"uppercase",marginBottom:2}}>Motor</div>
+              <div style={{fontSize:11,color:C.t1}}>{unit.motor}</div>
+            </div>
+          )}
+          {unit.transmision&&(
+            <div>
+              <div style={{fontSize:8,color:C.t3,textTransform:"uppercase",marginBottom:2}}>Transmisión</div>
+              <div style={{fontSize:11,color:C.t1}}>{unit.transmision}</div>
+            </div>
+          )}
+          {unit.config&&(
+            <div>
+              <div style={{fontSize:8,color:C.t3,textTransform:"uppercase",marginBottom:2}}>Config.</div>
+              <div style={{fontSize:11,color:C.t1}}>{unit.config}</div>
+            </div>
+          )}
+          {unit.vin&&(
+            <div style={{gridColumn:"1 / -1"}}>
+              <div style={{fontSize:8,color:C.t3,textTransform:"uppercase",marginBottom:2}}>VIN</div>
+              <div style={{fontSize:10,color:C.t3,fontFamily:"'Courier New',monospace",wordBreak:"break-all"}}>{unit.vin}</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Número de parte validado */}
+      <div style={{marginBottom:8}}>
+        {lbl("Número de parte validado")}
+        <input value={pn} onChange={e=>setPn(e.target.value)}
+          onBlur={()=>dispatch({type:"TKT_UPDATE",id:tkt.id,patch:{fichaPartNum:pn}})}
+          placeholder="Ej. 4324709202, A0002500370…"
+          style={{...iStyle,fontFamily:"'Courier New',monospace"}}/>
+      </div>
+
+      {/* Notas técnicas */}
+      <div>
+        {lbl("Notas técnicas / investigación")}
+        <textarea value={fn} onChange={e=>setFn(e.target.value)}
+          onBlur={()=>dispatch({type:"TKT_UPDATE",id:tkt.id,patch:{fichaNotes:fn}})}
+          placeholder="Relación del diferencial, compatibilidades, marcas validadas, observaciones…"
+          rows={3}
+          style={{...iStyle,resize:"vertical",lineHeight:1.5}}/>
+      </div>
     </div>
   );
 }
@@ -8433,7 +8632,7 @@ function MOps({state,setTab,triggerMargin}) {
               borderRadius:12,padding:"10px 22px",cursor:"pointer",
               fontSize:13,fontWeight:600,color:A.lime,letterSpacing:"0.04em",
             }}>
-              + Nueva cotización
+              + Nuevo Caso
             </button>
           </div>
         )}
@@ -8505,7 +8704,7 @@ function MOps({state,setTab,triggerMargin}) {
                 letterSpacing:"0.02em",touchAction:"manipulation",
                 boxShadow:`0 4px 20px ${A.limeDim}`,
               }}>
-              + Nueva cotización
+              + Nuevo Caso
             </button>
           </div>
         </div>
@@ -9337,6 +9536,11 @@ function MPipeline({state,dispatch,toast}) {
                     </div>
                     {t.notes&&<div style={{fontSize:11,color:A.t2,padding:"10px 12px",background:C._dark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.03)",
                       borderRadius:10,marginBottom:12,border:`1px solid ${C.border}`}}>{t.notes}</div>}
+
+                    {/* Ficha técnica — recibido, validando y sourcing */}
+                    {["recibido","validando","sourcing"].includes(t.status)&&(
+                      <FichaTecnicaBlock tkt={t} units={units} dispatch={dispatch} C={C} A={A}/>
+                    )}
 
                     {/* Sourcing board — solo cuando el ticket está en sourcing */}
                     {t.status==="sourcing"&&(
@@ -14531,7 +14735,7 @@ function MasSheet({open,onClose,tab,setTab}) {
   const items=[
     {id:"chat",        label:"Chat IA",     icon:"💬", desc:"Asistente IA"},
     {id:"sourcing",    label:"Sourcing",   icon:"⚡", desc:"AI Copilot"},
-    {id:"cotizador",  label:"Cotizador",  icon:"🧾", desc:"Nueva cotización"},
+    {id:"cotizador",  label:"Cotizador",  icon:"🧾", desc:"Nuevo Caso"},
     {id:"cartera",    label:"Cartera",    icon:"💳", desc:"Por cobrar"},
     {id:"flota",      label:"Flota",      icon:"🚛", desc:"Control flota"},
     {id:"unidades",   label:"Flotilla",   icon:"🚚", desc:"Vehículos"},
