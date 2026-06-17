@@ -14728,6 +14728,141 @@ function MInteligencia({state}) {
 
 // ── MasSheet — bottom sheet del menú "Más" ───────────────────────────────────
 
+// ── NuevoCasoSheet — captura rápida de solicitud/caso ────────────────────────
+function NuevoCasoSheet({open, onClose, state, dispatch, toast, onCreated}) {
+  const C = React.useContext(ThemeCtx);
+  const {clients, units} = state;
+
+  const [titulo,   setTitulo]   = useState("");
+  const [clientId, setClientId] = useState("");
+  const [unitId,   setUnitId]   = useState("");
+  const [priority, setPriority] = useState("P3");
+  const [saving,   setSaving]   = useState(false);
+
+  const reset = () => { setTitulo(""); setClientId(""); setUnitId(""); setPriority("P3"); setSaving(false); };
+
+  const crear = () => {
+    if(!titulo.trim()) { toast("Describe la necesidad","error"); return; }
+    setSaving(true);
+    const tkt = {
+      id: mkTicketId(),
+      titulo: titulo.trim(),
+      opId: "consumable", opShort: "CONS",
+      priority,
+      clientId, supplierId:"", unitId, unitIds: unitId?[unitId]:[],
+      familia: classifyFamilia(titulo),
+      partRef:"", date: todayMX(), status:"recibido",
+      payType:"contado", promesaPago:"", cobrado:false,
+      mods:[], prob:"high", horasOp:0, notes:"",
+      mode:"auto", lineas:[], snap:null,
+      timeline:[{ts:nowISO(),evento:"Caso recibido",actor:"Operador"}],
+      history:[mkEvent("created",{titulo,status:"recibido",priority})],
+    };
+    dispatch({type:"TKT_ADD",t:tkt});
+    toast("Caso creado → Pipeline","success");
+    reset();
+    onClose();
+    if(onCreated) onCreated();
+  };
+
+  if(!open) return null;
+
+  const PRIOS = [
+    {k:"P1",label:"P1 — Unidad detenida",   color:"#EF4444"},
+    {k:"P2",label:"P2 — Operación comprometida", color:"#F59E0B"},
+    {k:"P3",label:"P3 — Preventivo urgente",color:"#8FE3BE"},
+    {k:"P4",label:"P4 — Normal",            color:"#7AA0E0"},
+  ];
+
+  const iStyle = {width:"100%",boxSizing:"border-box",
+    background:C.bg0,border:`1px solid ${C.border}`,borderRadius:12,
+    padding:"13px 16px",color:C.t1,fontSize:15,outline:"none",fontFamily:"inherit",lineHeight:1.4};
+
+  const lbl = txt => (
+    <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase",
+      fontWeight:700,marginBottom:8}}>{txt}</div>
+  );
+
+  return (
+    <>
+      <div onClick={()=>{reset();onClose();}}
+        style={{position:"fixed",inset:0,zIndex:300,
+          background:"rgba(0,0,0,0.6)",backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)"}}/>
+      <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:301,
+        background:C._dark?"rgba(10,12,16,0.98)":"rgba(255,255,255,0.98)",
+        backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",
+        borderRadius:"28px 28px 0 0",
+        borderTop:`1px solid ${C.border}`,
+        padding:`20px 20px calc(28px + env(safe-area-inset-bottom,0px))`,
+        boxShadow:"0 -12px 60px rgba(0,0,0,0.5)",
+        maxHeight:"88vh",overflowY:"auto"}}>
+
+        {/* Handle */}
+        <div style={{display:"flex",justifyContent:"center",marginBottom:20}}>
+          <div style={{width:40,height:4,borderRadius:2,background:C.border}}/>
+        </div>
+
+        <div style={{fontSize:18,fontWeight:800,color:C.t1,marginBottom:4}}>Nuevo Caso</div>
+        <div style={{fontSize:12,color:C.t3,marginBottom:22}}>
+          Captura la necesidad ahora. La cotización viene después.
+        </div>
+
+        {/* Necesidad */}
+        <div style={{marginBottom:18}}>
+          {lbl("¿Qué necesitan?")}
+          <textarea value={titulo} onChange={e=>setTitulo(e.target.value)}
+            placeholder={"Secador AD-9 para la Ram 4000\nDiferencial con relación 8-39 para Sterling\nHidráulico de clutch — unidad varada"}
+            rows={3}
+            style={{...iStyle,resize:"none"}}
+            autoFocus/>
+        </div>
+
+        {/* Prioridad */}
+        <div style={{marginBottom:18}}>
+          {lbl("Prioridad")}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            {PRIOS.map(p=>(
+              <button key={p.k} onClick={()=>setPriority(p.k)}
+                style={{padding:"10px 12px",borderRadius:12,cursor:"pointer",
+                  border:`1px solid ${priority===p.k?p.color+"66":C.border}`,
+                  background:priority===p.k?p.color+"15":"transparent",
+                  color:priority===p.k?p.color:C.t3,
+                  fontSize:12,fontWeight:priority===p.k?700:400,textAlign:"left"}}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Cliente */}
+        <div style={{marginBottom:18}}>
+          {lbl("Cliente (opcional)")}
+          <ClientPicker clients={clients} value={clientId} onChange={setClientId}
+            placeholder="Buscar cliente…" mobile={true}/>
+        </div>
+
+        {/* Unidad */}
+        <div style={{marginBottom:24}}>
+          {lbl("Unidad de la flotilla (opcional)")}
+          <UnitPicker units={units} value={unitId} onChange={setUnitId}
+            placeholder="Eco., placa, marca o VIN…" mobile={true}/>
+        </div>
+
+        {/* Crear */}
+        <button onClick={crear} disabled={saving||!titulo.trim()}
+          style={{width:"100%",padding:"16px",borderRadius:16,cursor:saving||!titulo.trim()?"not-allowed":"pointer",
+            background:saving||!titulo.trim()?"rgba(143,227,190,0.15)":"#8FE3BE",
+            border:"none",
+            color:saving||!titulo.trim()?"rgba(143,227,190,0.5)":"#0A1F14",
+            fontSize:16,fontWeight:800,letterSpacing:"0.02em",
+            transition:"all 0.15s ease"}}>
+          {saving?"Creando…":"Crear Caso → Pipeline"}
+        </button>
+      </div>
+    </>
+  );
+}
+
 // ── MasSheet — bottom sheet del menú "Más" ───────────────────────────────────
 function MasSheet({open,onClose,tab,setTab}) {
   const C = React.useContext(ThemeCtx);
@@ -15066,6 +15201,7 @@ function App() {
   const [mobileView,setMobileView]=useState(()=>window.innerWidth<1024);
   const [quickOpen,setQuickOpen]=useState(false); // scroll-lock compat
   const [masOpen,setMasOpen]=useState(false);
+  const [nuevoCasoOpen,setNuevoCasoOpen]=useState(false);
   const [darkMode,setDarkMode]=useState(()=>{
     try { return localStorage.getItem("logisolve_theme")!=="light"; } catch{ return true; }
   });
@@ -15435,10 +15571,10 @@ function App() {
         </button>
       )}
 
-      {/* FAB — Nueva cotización */}
-      {mobileView&&tab!=="cotizador"&&(
+      {/* FAB — Nuevo Caso */}
+      {mobileView&&(
         <button className="fab-liquid"
-          onClick={()=>setTab("cotizador")}
+          onClick={()=>setNuevoCasoOpen(true)}
           style={{position:"fixed",
             right:20,bottom:`calc(76px + env(safe-area-inset-bottom,0px) + 10px)`,
             zIndex:160}}>
@@ -15448,6 +15584,11 @@ function App() {
 
       {/* MasSheet — bottom sheet for "Más" modules */}
       {mobileView&&<MasSheet open={masOpen} onClose={()=>setMasOpen(false)} tab={tab} setTab={t=>{setTab(t);setMasOpen(false);}}/>}
+
+      {/* NuevoCasoSheet — captura rápida de caso/solicitud */}
+      {mobileView&&<NuevoCasoSheet open={nuevoCasoOpen} onClose={()=>setNuevoCasoOpen(false)}
+        state={state} dispatch={dispatch} toast={toast}
+        onCreated={()=>setTab("tickets")}/>}
 
       {/* Content */}
       <div style={{paddingBottom:mobileView?"calc(90px + env(safe-area-inset-bottom,0px))":0,
