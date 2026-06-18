@@ -14727,25 +14727,37 @@ function NuevoCasoSheet({open, onClose, state, dispatch, toast, onCreated}) {
 
   const reset = () => { setTitulo(""); setClientId(""); setUnitId(""); setPriority("P3"); setSaving(false); };
 
+  const lineasTexto = titulo.split("\n").map(s=>s.trim()).filter(Boolean);
+  const esMulti = lineasTexto.length > 1;
+
   const crear = () => {
     if(!titulo.trim()) { toast("Describe la necesidad","error"); return; }
     setSaving(true);
+    const tituloFinal = esMulti ? lineasTexto.join(" / ") : lineasTexto[0]||titulo.trim();
+    const lineas = esMulti
+      ? lineasTexto.map(t=>({
+          titulo:t, partRef:"", qty:1, costoUnit:0,
+          gasolina:0, otros:0, mode:"auto", manualPrice:"0",
+          customMgn:false, customVal:27, descripcionPDF:"",
+          lineTotal:0, lineTotalSinIVA:0, unitPrice:0, unitSinIVA:0, snap:null,
+        }))
+      : [];
     const tkt = {
       id: mkTicketId(),
-      titulo: titulo.trim(),
+      titulo: tituloFinal,
       opId: "consumable", opShort: "CONS",
       priority,
       clientId, supplierId:"", unitId, unitIds: unitId?[unitId]:[],
-      familia: classifyFamilia(titulo),
+      familia: classifyFamilia(tituloFinal),
       partRef:"", date: todayMX(), status:"recibido",
       payType:"contado", promesaPago:"", cobrado:false,
       mods:[], prob:"high", horasOp:0, notes:"",
-      mode:"auto", lineas:[], snap:null,
+      mode: esMulti?"multilinea":"auto", lineas, snap:null,
       timeline:[{ts:nowISO(),evento:"Caso recibido",actor:"Operador"}],
-      history:[mkEvent("created",{titulo,status:"recibido",priority})],
+      history:[mkEvent("created",{titulo:tituloFinal,status:"recibido",priority})],
     };
     dispatch({type:"TKT_ADD",t:tkt});
-    toast("Caso creado → Pipeline","success");
+    toast(esMulti?`${lineasTexto.length} productos → Pipeline`:"Caso creado → Pipeline","success");
     reset();
     onClose();
     if(onCreated) onCreated();
@@ -14801,6 +14813,18 @@ function NuevoCasoSheet({open, onClose, state, dispatch, toast, onCreated}) {
             rows={3}
             style={{...iStyle,resize:"none"}}
             autoFocus/>
+          {esMulti&&(
+            <div style={{display:"flex",gap:6,marginTop:7,flexWrap:"wrap"}}>
+              {lineasTexto.map((t,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:5,
+                  background:"rgba(143,227,190,0.1)",border:"1px solid rgba(143,227,190,0.3)",
+                  borderRadius:8,padding:"4px 10px"}}>
+                  <span style={{fontSize:9,color:"rgba(143,227,190,0.6)",fontWeight:700}}>#{i+1}</span>
+                  <span style={{fontSize:11,color:C.t1,maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Prioridad */}
