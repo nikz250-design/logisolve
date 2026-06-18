@@ -925,8 +925,14 @@ function reducer(state,action) {
         });
         return ts.filter(t => best.get(t.id) === t);
       };
+      // Migration: tickets where cobrado=true but status wasn't updated to "cobrado"
+      // (old reducer bug). Promote them so they leave the Entregado column.
+      const PAID_STATUS = new Set(["cobrado","cerrado"]);
+      const fixCobrado = (ts) => Array.isArray(ts)
+        ? ts.map(t => (t.cobrado && !PAID_STATUS.has(t.status)) ? {...t, status:"cobrado"} : t)
+        : ts;
       return {
-        tickets:   dedupTickets(merge(d.tickets,   state.tickets)),
+        tickets:   fixCobrado(dedupTickets(merge(d.tickets,   state.tickets))),
         clients:   merge(d.clients,   state.clients),
         suppliers: merge(d.suppliers, state.suppliers),
         units:     merge(d.units,     state.units),
