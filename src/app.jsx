@@ -633,7 +633,19 @@ function utilidadPonderada(uNeta, probId) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // Active non-deleted tickets
-const sel_active     = (ts) => { const seen=new Set(); return ts.filter(t=>{if(t._deleted||seen.has(t.id)) return false; seen.add(t.id); return true;}); };
+const sel_active     = (ts) => {
+  // LWW dedup: when same ID appears more than once, keep the one with the most recent timeline event
+  const best = new Map();
+  ts.forEach(t => {
+    if (t._deleted) return;
+    const prev = best.get(t.id);
+    if (!prev) { best.set(t.id, t); return; }
+    const tTs = t.timeline?.at(-1)?.ts || t.updatedAt || "";
+    const pTs = prev.timeline?.at(-1)?.ts || prev.updatedAt || "";
+    if (tTs > pTs) best.set(t.id, t);
+  });
+  return ts.filter(t => !t._deleted && best.get(t.id) === t);
+};
 
 // Operado: work already done (entregado/facturado/cobrado/cerrado)
 const sel_operados   = (ts) => sel_active(ts).filter(t=>OPERADO_SET.has(t.status));
@@ -9349,7 +9361,7 @@ function MPipeline({state,dispatch,toast,focusTicketId}) {
     P4:{dot:C.p4, dim:C.p4dim},
   };
 
-  const active   = useMemo(()=>tickets.filter(t=>!t._deleted),[tickets]);
+  const active   = useMemo(()=>sel_active(tickets),[tickets]);
   const filtered = useMemo(()=>{
     let arr=active;
     if(filter==="active")   arr=arr.filter(t=>!CLOSED_SET.has(t.status));
@@ -10793,11 +10805,8 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
     const d=parseDateMX(t.date); return d&&d>=range.from&&d<=range.to;
   },[range]);
 
-  // ── All non-deleted ───────────────────────────────────────────────────────
-  const allActive = useMemo(()=>{
-    const seen=new Set();
-    return tickets.filter(t=>{if(t._deleted||seen.has(t.id)) return false; seen.add(t.id); return true;});
-  },[tickets]);
+  // ── All non-deleted (LWW dedup) ───────────────────────────────────────────
+  const allActive = useMemo(()=>sel_active(tickets),[tickets]);
 
   const filtered = useMemo(()=>{
     let arr=allActive.filter(inRange);
@@ -12499,7 +12508,7 @@ function MInteligencia({state}) {
     const norm = s => (s||"").toLowerCase().trim().replace(/\s+/g," ");
     // Clave invariante al orden de palabras: "kit primer sayer" y "primer sayer kit" → misma entrada
     const normKey = s => norm(s).split(" ").sort().join(" ");
-    tickets.filter(t => !t._deleted).forEach(t => {
+    sel_active(tickets).forEach(t => {
       const tDate = parseDate(t.date);
       const rev = safeNumber(t.snap?.precioConIVA);
       const util = safeNumber(t.snap?.uNeta);
@@ -15057,8 +15066,7 @@ function MCobranza({state, dispatch, toast}) {
   const [tab, setTab] = React.useState("por_cobrar"); // "por_cobrar" | "cobrado"
   const [search, setSearch] = React.useState("");
 
-  const active = React.useMemo(() =>
-    tickets.filter(t => !t._deleted), [tickets]);
+  const active = React.useMemo(() => sel_active(tickets), [tickets]);
 
   const cartera = React.useMemo(() =>
     active.filter(t => CARTERA_SET.has(t.status))
