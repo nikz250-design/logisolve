@@ -9307,7 +9307,7 @@ function MEditSheet({ticket, state, dispatch, toast, onClose}) {
 }
 
 // ── MPipeline — Pipeline móvil ───────────────────────────────────────────────
-function MPipeline({state,dispatch,toast}) {
+function MPipeline({state,dispatch,toast,focusTicketId}) {
   const C = React.useContext(ThemeCtx);
   const {tickets,clients,units,suppliers} = state;
   const [filter,setFilter]       = useState("all");
@@ -9316,6 +9316,10 @@ function MPipeline({state,dispatch,toast}) {
   const [statusSheet,setStatusSheet] = useState(null);
   const [editSheet,setEditSheet]  = useState(null);
   const [expandId,setExpandId]   = useState(null);
+
+  React.useEffect(()=>{
+    if(focusTicketId) setExpandId(focusTicketId);
+  },[focusTicketId]);
 
   // Accent palette — glassmorphism
   const A = makeA(C);
@@ -14717,50 +14721,71 @@ function MInteligencia({state}) {
 // ── NuevoCasoSheet — captura rápida de solicitud/caso ────────────────────────
 function NuevoCasoSheet({open, onClose, state, dispatch, toast, onCreated}) {
   const C = React.useContext(ThemeCtx);
-  const {clients, units} = state;
+  const {clients, units, parts} = state;
 
-  const [titulo,   setTitulo]   = useState("");
-  const [clientId, setClientId] = useState("");
-  const [unitId,   setUnitId]   = useState("");
-  const [priority, setPriority] = useState("P3");
-  const [saving,   setSaving]   = useState(false);
+  const [lineas,     setLineas]     = useState([{texto:"",costoUnit:0,partRef:""}]);
+  const [clientId,   setClientId]   = useState("");
+  const [unitId,     setUnitId]     = useState("");
+  const [priority,   setPriority]   = useState("P3");
+  const [saving,     setSaving]     = useState(false);
+  const [focusedIdx, setFocusedIdx] = useState(null);
 
-  const reset = () => { setTitulo(""); setClientId(""); setUnitId(""); setPriority("P3"); setSaving(false); };
+  const reset = () => {
+    setLineas([{texto:"",costoUnit:0,partRef:""}]);
+    setClientId(""); setUnitId(""); setPriority("P3"); setSaving(false); setFocusedIdx(null);
+  };
 
-  const lineasTexto = titulo.split("\n").map(s=>s.trim()).filter(Boolean);
-  const esMulti = lineasTexto.length > 1;
+  const updL  = (i,patch) => setLineas(ls=>ls.map((l,j)=>j===i?{...l,...patch}:l));
+  const addL  = () => setLineas(ls=>[...ls,{texto:"",costoUnit:0,partRef:""}]);
+  const delL  = i  => setLineas(ls=>ls.length>1?ls.filter((_,j)=>j!==i):ls);
+
+  const catRes = i => {
+    const q=(lineas[i]?.texto||"").toLowerCase().trim();
+    if(q.length<2) return [];
+    return (parts||[]).filter(p=>
+      p.nombre.toLowerCase().includes(q)||
+      (p.oem||"").toLowerCase().includes(q)||
+      (p.aftermarket||"").toLowerCase().includes(q)
+    ).slice(0,5);
+  };
+
+  const selPart = (i,p) => {
+    updL(i,{texto:p.nombre,costoUnit:p.ultimoPrecio||0,partRef:p.oem||p.aftermarket||""});
+    setFocusedIdx(null);
+  };
+
+  const validas = lineas.filter(l=>l.texto.trim());
 
   const crear = () => {
-    if(!titulo.trim()) { toast("Describe la necesidad","error"); return; }
+    if(!validas.length) { toast("Describe la necesidad","error"); return; }
     setSaving(true);
-    const tituloFinal = esMulti ? lineasTexto.join(" / ") : lineasTexto[0]||titulo.trim();
-    const lineas = esMulti
-      ? lineasTexto.map(t=>({
-          titulo:t, partRef:"", qty:1, costoUnit:0,
-          gasolina:0, otros:0, mode:"auto", manualPrice:"0",
-          customMgn:false, customVal:27, descripcionPDF:"",
-          lineTotal:0, lineTotalSinIVA:0, unitPrice:0, unitSinIVA:0, snap:null,
+    const esMulti = validas.length > 1;
+    const tituloFinal = esMulti ? validas.map(l=>l.texto.trim()).join(" / ") : validas[0].texto.trim();
+    const lineasTicket = esMulti
+      ? validas.map(l=>({
+          titulo:l.texto.trim(), partRef:l.partRef||"", qty:1,
+          costoUnit:l.costoUnit||0, gasolina:0, otros:0, mode:"auto",
+          manualPrice:String(l.costoUnit||0), customMgn:false, customVal:27,
+          descripcionPDF:"", lineTotal:0, lineTotalSinIVA:0, unitPrice:0, unitSinIVA:0, snap:null,
         }))
       : [];
+    const id = mkTicketId();
     const tkt = {
-      id: mkTicketId(),
-      titulo: tituloFinal,
-      opId: "consumable", opShort: "CONS",
-      priority,
-      clientId, supplierId:"", unitId, unitIds: unitId?[unitId]:[],
-      familia: classifyFamilia(tituloFinal),
-      partRef:"", date: todayMX(), status:"recibido",
+      id, titulo:tituloFinal, opId:"consumable", opShort:"CONS", priority,
+      clientId, supplierId:"", unitId, unitIds:unitId?[unitId]:[],
+      familia:classifyFamilia(tituloFinal),
+      partRef:validas.map(l=>l.partRef).filter(Boolean).join(", "),
+      date:todayMX(), status:"recibido",
       payType:"contado", promesaPago:"", cobrado:false,
       mods:[], prob:"high", horasOp:0, notes:"",
-      mode: esMulti?"multilinea":"auto", lineas, snap:null,
+      mode:esMulti?"multilinea":"auto", lineas:lineasTicket, snap:null,
       timeline:[{ts:nowISO(),evento:"Caso recibido",actor:"Operador"}],
       history:[mkEvent("created",{titulo:tituloFinal,status:"recibido",priority})],
     };
     dispatch({type:"TKT_ADD",t:tkt});
-    toast(esMulti?`${lineasTexto.length} productos → Pipeline`:"Caso creado → Pipeline","success");
-    reset();
-    onClose();
-    if(onCreated) onCreated();
+    toast(esMulti?`${validas.length} productos → Pipeline`:"Caso creado → Pipeline","success");
+    reset(); onClose();
+    if(onCreated) onCreated(id);
   };
 
   if(!open) return null;
@@ -14771,10 +14796,6 @@ function NuevoCasoSheet({open, onClose, state, dispatch, toast, onCreated}) {
     {k:"P3",label:"P3 — Preventivo urgente",color:"#8FE3BE"},
     {k:"P4",label:"P4 — Normal",            color:"#7AA0E0"},
   ];
-
-  const iStyle = {width:"100%",boxSizing:"border-box",
-    background:C.bg0,border:`1px solid ${C.border}`,borderRadius:12,
-    padding:"13px 16px",color:C.t1,fontSize:15,outline:"none",fontFamily:"inherit",lineHeight:1.4};
 
   const lbl = txt => (
     <div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase",
@@ -14805,26 +14826,97 @@ function NuevoCasoSheet({open, onClose, state, dispatch, toast, onCreated}) {
           Captura la necesidad ahora. La cotización viene después.
         </div>
 
-        {/* Necesidad */}
+        {/* Productos — un input por producto con autocomplete */}
         <div style={{marginBottom:18}}>
-          {lbl("¿Qué necesitan?")}
-          <textarea value={titulo} onChange={e=>setTitulo(e.target.value)}
-            placeholder={"Secador AD-9 para la Ram 4000\nDiferencial con relación 8-39 para Sterling\nHidráulico de clutch — unidad varada"}
-            rows={3}
-            style={{...iStyle,resize:"none"}}
-            autoFocus/>
-          {esMulti&&(
-            <div style={{display:"flex",gap:6,marginTop:7,flexWrap:"wrap"}}>
-              {lineasTexto.map((t,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:5,
-                  background:"rgba(143,227,190,0.1)",border:"1px solid rgba(143,227,190,0.3)",
-                  borderRadius:8,padding:"4px 10px"}}>
-                  <span style={{fontSize:9,color:"rgba(143,227,190,0.6)",fontWeight:700}}>#{i+1}</span>
-                  <span style={{fontSize:11,color:C.t1,maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t}</span>
+          {lbl(`¿Qué necesitan?${validas.length>1?` · ${validas.length} productos`:""}`)}
+          {lineas.map((l,i)=>{
+            const results = catRes(i);
+            const open = focusedIdx===i && results.length>0;
+            return (
+              <div key={i} style={{position:"relative",marginBottom:8}}>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <div style={{flex:1,position:"relative"}}>
+                    <input
+                      id={`nc-linea-${i}`}
+                      value={l.texto}
+                      onChange={e=>updL(i,{texto:e.target.value,costoUnit:0,partRef:""})}
+                      onFocus={()=>setFocusedIdx(i)}
+                      onBlur={()=>setTimeout(()=>setFocusedIdx(v=>v===i?null:v),180)}
+                      onKeyDown={e=>{
+                        if(e.key==="Enter"){
+                          e.preventDefault();
+                          if(i===lineas.length-1) addL();
+                          else document.getElementById(`nc-linea-${i+1}`)?.focus();
+                        }
+                        if(e.key==="Backspace"&&!l.texto&&lineas.length>1){
+                          e.preventDefault(); delL(i);
+                          setTimeout(()=>document.getElementById(`nc-linea-${Math.max(0,i-1)}`)?.focus(),0);
+                        }
+                      }}
+                      autoFocus={i===0}
+                      placeholder={i===0?"Junta turbo ISB, filtro, diferencial…":"Agregar otro producto…"}
+                      style={{width:"100%",boxSizing:"border-box",
+                        background:C.bg0,
+                        border:`1px solid ${open?C.cyan+"88":l.costoUnit>0?"rgba(143,227,190,0.4)":C.border}`,
+                        borderRadius:open?"10px 10px 0 0":10,
+                        padding:"11px 14px",paddingRight:l.costoUnit>0?80:14,
+                        color:C.t1,fontSize:13,outline:"none",fontFamily:"inherit"}}/>
+                    {l.costoUnit>0&&(
+                      <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",
+                        fontSize:10,color:"#8FE3BE",fontFamily:"'Courier New',monospace",fontWeight:700,
+                        pointerEvents:"none"}}>
+                        {mxn(l.costoUnit)}
+                      </span>
+                    )}
+                    {open&&(
+                      <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:400,
+                        background:C.bg1,border:`1px solid ${C.cyan+"88"}`,borderTop:"none",
+                        borderRadius:"0 0 10px 10px",overflow:"hidden",
+                        boxShadow:"0 8px 24px rgba(0,0,0,0.5)"}}>
+                        {results.map((p,pi)=>(
+                          <div key={p.id}
+                            onPointerDown={e=>{e.preventDefault();selPart(i,p);}}
+                            style={{padding:"9px 14px",cursor:"pointer",
+                              borderBottom:pi<results.length-1?`1px solid ${C.border}`:"none",
+                              display:"flex",justifyContent:"space-between",alignItems:"center",
+                              background:pi%2===0?"transparent":"rgba(255,255,255,0.02)"}}>
+                            <div style={{minWidth:0,flex:1}}>
+                              <div style={{fontSize:12,color:C.t1,fontWeight:600,
+                                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
+                              {(p.oem||p.aftermarket)&&(
+                                <div style={{fontSize:10,color:C.cyan,fontFamily:"'Courier New',monospace"}}>
+                                  {p.oem||p.aftermarket}
+                                </div>
+                              )}
+                            </div>
+                            {p.ultimoPrecio>0&&(
+                              <span style={{fontSize:11,color:C.yellow,fontFamily:"'Courier New',monospace",
+                                fontWeight:700,flexShrink:0,marginLeft:8}}>
+                                {mxn(p.ultimoPrecio)}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {lineas.length>1&&(
+                    <button onClick={()=>delL(i)}
+                      style={{width:34,height:34,flexShrink:0,borderRadius:8,
+                        background:"transparent",border:`1px solid ${C.border}`,
+                        color:C.t3,fontSize:17,cursor:"pointer",lineHeight:1,
+                        display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
+              </div>
+            );
+          })}
+          <button onClick={addL}
+            style={{width:"100%",padding:"9px",borderRadius:10,marginTop:2,
+              background:"transparent",border:`1px dashed ${C.border}`,
+              color:C.t3,fontSize:12,cursor:"pointer"}}>
+            + Agregar otro producto
+          </button>
         </div>
 
         {/* Prioridad */}
@@ -14859,13 +14951,13 @@ function NuevoCasoSheet({open, onClose, state, dispatch, toast, onCreated}) {
         </div>
 
         {/* Crear */}
-        <button onClick={crear} disabled={saving||!titulo.trim()}
-          style={{width:"100%",padding:"16px",borderRadius:16,cursor:saving||!titulo.trim()?"not-allowed":"pointer",
-            background:saving||!titulo.trim()?"rgba(143,227,190,0.15)":"#8FE3BE",
+        <button onClick={crear} disabled={saving||!validas.length}
+          style={{width:"100%",padding:"16px",borderRadius:16,
+            cursor:saving||!validas.length?"not-allowed":"pointer",
+            background:saving||!validas.length?"rgba(143,227,190,0.15)":"#8FE3BE",
             border:"none",
-            color:saving||!titulo.trim()?"rgba(143,227,190,0.5)":"#0A1F14",
-            fontSize:16,fontWeight:800,letterSpacing:"0.02em",
-            transition:"all 0.15s ease"}}>
+            color:saving||!validas.length?"rgba(143,227,190,0.5)":"#0A1F14",
+            fontSize:16,fontWeight:800,letterSpacing:"0.02em",transition:"all 0.15s ease"}}>
           {saving?"Creando…":"Crear Caso → Pipeline"}
         </button>
       </div>
@@ -15212,6 +15304,7 @@ function App() {
   const [quickOpen,setQuickOpen]=useState(false); // scroll-lock compat
   const [masOpen,setMasOpen]=useState(false);
   const [nuevoCasoOpen,setNuevoCasoOpen]=useState(false);
+  const [pipelineFocusId,setPipelineFocusId]=useState(null);
   const [darkMode,setDarkMode]=useState(()=>{
     try { return localStorage.getItem("logisolve_theme")!=="light"; } catch{ return true; }
   });
@@ -15598,14 +15691,14 @@ function App() {
       {/* NuevoCasoSheet — captura rápida de caso/solicitud */}
       {mobileView&&<NuevoCasoSheet open={nuevoCasoOpen} onClose={()=>setNuevoCasoOpen(false)}
         state={state} dispatch={dispatch} toast={toast}
-        onCreated={()=>setTab("tickets")}/>}
+        onCreated={id=>{setPipelineFocusId(id);setTab("tickets");}}/>}
 
       {/* Content */}
       <div style={{paddingBottom:mobileView?"calc(90px + env(safe-area-inset-bottom,0px))":0,
         WebkitOverflowScrolling:"touch",
         maxWidth:mobileView?680:undefined,margin:mobileView?"0 auto":undefined}}>
         {tab==="ops"        &&(mobileView?<MOps       state={state} setTab={setTab} triggerMargin={triggerMargin}/>      :<CentroOps   state={state}/>)}
-        {tab==="tickets"    &&(mobileView?<MPipeline  state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Tickets     state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete}/>)}
+        {tab==="tickets"    &&(mobileView?<MPipeline  state={state} dispatch={dispatchWithDelete} toast={toast} focusTicketId={pipelineFocusId}/>         :<Tickets     state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete}/>)}
         {tab==="historial"  &&(mobileView?<MHistorial state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>:<Historial   state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>)}
         {tab==="cotizador"  &&(mobileView?<MCotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Cotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="refacciones"&&(mobileView?<MCotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>:<CotizadorRefacciones state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
