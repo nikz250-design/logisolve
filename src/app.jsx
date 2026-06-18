@@ -11277,27 +11277,6 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
                                 color:A.t1,fontSize:13,outline:"none",fontFamily:"inherit"}}/>
                           </div>
 
-                          {/* ── Kit mode ── */}
-                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
-                            padding:"9px 12px",borderRadius:10,marginBottom:10,
-                            background:ef.kitMode?"rgba(43,181,160,0.08)":"rgba(255,255,255,0.03)",
-                            border:`1px solid ${ef.kitMode?C.blue+"55":C.border}`,cursor:"pointer"}}
-                            onClick={()=>{
-                              const next=!ef.kitMode;
-                              sfn("kitMode")(next);
-                              if(next && mLineas.length===0) setMLineas([{titulo:"",partRef:"",qty:1,costoUnit:"",precioUnit:"",descripcionPDF:""}]);
-                            }}>
-                            <div>
-                              <div style={{fontSize:11,fontWeight:600,color:ef.kitMode?A.lime:A.t2}}>Integrar como kit</div>
-                              <div style={{fontSize:9,color:A.t3,marginTop:2}}>Agrupa las líneas como un paquete en el PDF</div>
-                            </div>
-                            <div style={{width:36,height:20,borderRadius:10,background:ef.kitMode?C.blue:"rgba(255,255,255,0.1)",
-                              position:"relative",flexShrink:0,transition:"background 150ms"}}>
-                              <div style={{position:"absolute",top:2,left:ef.kitMode?18:2,width:16,height:16,
-                                borderRadius:"50%",background:"#fff",transition:"left 150ms"}}/>
-                            </div>
-                          </div>
-
                           <MSel label="Estado" value={ef.status} onChange={sfn("status")}
                             options={TICKET_ALL.map(s=>({value:s,label:(TICKET_META[s]?.label||s)}))}/>
                           <ClientPicker clients={clients} value={ef.clientId||""} onChange={sfn("clientId")} mobile/>
@@ -11562,31 +11541,6 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
                                   </div>
                                 )}
                               </div>
-                              {/* ── KB HINT ── */}
-                              {kbHints[idx]&&l.titulo.trim().length>=3&&(
-                                <div style={{marginBottom:8,background:`${C.cyan}0E`,border:`1px solid ${C.cyan}30`,borderRadius:8,padding:"9px 12px"}}>
-                                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
-                                    <span style={{fontSize:10,fontWeight:700,color:A.cyan,letterSpacing:"0.06em",display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
-                                      {kbHints[idx].familiaLabel&&<span style={{background:`${A.cyan}20`,color:A.cyan,borderRadius:6,padding:"2px 7px",fontSize:8,fontWeight:800,letterSpacing:"0.15em"}}>{kbHints[idx].familiaLabel.toUpperCase()}</span>}
-                                      ★ {kbHints[idx].resolved} entregado{kbHints[idx].resolved!==1?"s":""}
-                                      {kbHints[idx].canceled>0&&<span style={{color:A.red}}>{kbHints[idx].canceled} cancel.</span>}
-                                      {kbHints[idx].rate!==null&&<span style={{color:kbHints[idx].rate>=80?A.lime:kbHints[idx].rate>=50?A.amber:A.red}}>{kbHints[idx].rate}% éxito</span>}
-                                    </span>
-                                    {kbHints[idx].avgCosto>0&&(
-                                      <button onPointerDown={e=>{e.preventDefault();applyKBHint(idx,kbHints[idx]);}}
-                                        style={{padding:"4px 10px",fontSize:10,fontWeight:700,background:A.blueDim,border:`1px solid ${A.blueHi}`,borderRadius:6,color:A.cyan,cursor:"pointer",touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
-                                        ← Aplicar costo
-                                      </button>
-                                    )}
-                                  </div>
-                                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"4px 16px",fontSize:11,color:A.t2}}>
-                                    {kbHints[idx].avgUtil!==null&&<span>Util. prom. <b style={{color:A.lime,fontFamily:"monospace"}}>{mxn(Math.round(kbHints[idx].avgUtil))}</b></span>}
-                                    {kbHints[idx].avgOpH!==null&&<span>Tiempo <b style={{color:A.t1}}>{kbHints[idx].avgOpH.toFixed(1)}h</b></span>}
-                                    {kbHints[idx].topSuppName&&<span style={{gridColumn:"1/-1"}}>Proveedor <b style={{color:A.t1}}>{kbHints[idx].topSuppName}</b></span>}
-                                    {kbHints[idx].lastDate&&<span style={{color:A.t3}}>Última vez {kbHints[idx].lastDate}</span>}
-                                  </div>
-                                </div>
-                              )}
                               <input value={l.partRef} onChange={e=>mLsfn(idx,"partRef")(e.target.value)}
                                 placeholder="No. parte / referencia"
                                 style={{width:"100%",boxSizing:"border-box",marginBottom:6,
