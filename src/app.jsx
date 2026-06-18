@@ -10748,7 +10748,7 @@ function MAttachments({ticket, dispatch, toast}) {
   );
 }
 
-function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
+function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,initialEditId}) {
   const C = React.useContext(ThemeCtx);
   const {tickets,clients,units,suppliers} = state;
   const [period,setPeriod]       = useState("week");
@@ -10757,6 +10757,13 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
   const [search,setSearch]   = useState("");
   const [expandId,setExpandId] = useState(null);
   const [editId,setEditId]   = useState(null);
+
+  const initialEditHandled = React.useRef(false);
+  React.useEffect(()=>{
+    if(!initialEditId||initialEditHandled.current) return;
+    const t=tickets.find(tk=>tk.id===initialEditId);
+    if(t){ initialEditHandled.current=true; setExpandId(t.id); setEditId(t.id); openEdit(t); }
+  });  // intentionally no deps — runs every render until handled
 
   // ── Period range ──────────────────────────────────────────────────────────
   const range = useMemo(()=>{
@@ -10911,11 +10918,14 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
       const lineasConSnap = mLineas.map(l => {
         const qL = Math.max(1, Math.round(safeNumber(l.qty)||1));
         const costo = safeNumber(l.costoUnit) * qL;
-        const snap = computeSnap({costo,compraConIVA:true,mode:"manual",manualPrice:safeNumber(l.precioUnit)*qL,ventaConIVA:true,gasolina:0,otros:0,iva,isr});
+        const snap = ef.quoteMode
+          ? computeSnap({costo,compraConIVA:true,mode:"auto",margin:mgn,gasolina:0,otros:0,iva,isr})
+          : computeSnap({costo,compraConIVA:true,mode:"manual",manualPrice:safeNumber(l.precioUnit)*qL,ventaConIVA:true,gasolina:0,otros:0,iva,isr});
+        const unitPrice = ef.quoteMode ? snap.precioConIVA/Math.max(1,qL) : safeNumber(l.precioUnit);
         return {titulo:l.titulo||"Sin descripción", partRef:l.partRef||"",
                 snap, qty:qL, descripcionPDF:l.descripcionPDF||"",
                 costoUnit:safeNumber(l.costoUnit),
-                unitPrice:safeNumber(l.precioUnit),
+                unitPrice,
                 lineTotal:snap.precioConIVA};
       });
       const totalPrecio = lineasConSnap.reduce((s,l)=>s+l.snap.precioConIVA,0);
@@ -11607,26 +11617,46 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                                       outline:"none",fontFamily:"inherit"}}/>
                                 </div>
                                 <div>
-                                  <div style={{fontSize:8,color:A.t3,marginBottom:3}}>Precio unit. c/IVA</div>
-                                  <input type="number" inputMode="decimal" value={l.precioUnit}
-                                    onChange={e=>mLsfn(idx,"precioUnit")(e.target.value)}
-                                    placeholder="0"
-                                    style={{width:"100%",boxSizing:"border-box",
-                                      background:"rgba(255,255,255,0.03)",border:`1px solid ${C.border}`,
-                                      borderRadius:8,padding:"8px 10px",color:A.cyan,fontSize:12,
-                                      outline:"none",fontFamily:"inherit"}}/>
+                                  <div style={{fontSize:8,color:A.t3,marginBottom:3}}>
+                                    {ef.quoteMode?"Precio calc. c/IVA":"Precio unit. c/IVA"}
+                                  </div>
+                                  {ef.quoteMode?(()=>{
+                                    const mgn=effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
+                                    const qL=Math.max(1,safeNumber(l.qty)||1);
+                                    const autoSnap=computeSnap({costo:safeNumber(l.costoUnit)*qL,compraConIVA:true,mode:"auto",margin:mgn,gasolina:0,otros:0,iva:ef._iva||16,isr:ef._isr||20});
+                                    const unitP=autoSnap.precioConIVA/qL;
+                                    return <div style={{width:"100%",boxSizing:"border-box",
+                                      background:"rgba(43,181,160,0.07)",border:`1px solid ${C.blue}55`,
+                                      borderRadius:8,padding:"8px 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                                      <span style={{color:A.lime,fontSize:12,fontWeight:700,fontVariantNumeric:"tabular-nums"}}>
+                                        {unitP>0?mxn(unitP):"—"}
+                                      </span>
+                                      <span style={{fontSize:8,color:A.t3}}>{mgn}%</span>
+                                    </div>;
+                                  })():(
+                                    <input type="number" inputMode="decimal" value={l.precioUnit}
+                                      onChange={e=>mLsfn(idx,"precioUnit")(e.target.value)}
+                                      placeholder="0"
+                                      style={{width:"100%",boxSizing:"border-box",
+                                        background:"rgba(255,255,255,0.03)",border:`1px solid ${C.border}`,
+                                        borderRadius:8,padding:"8px 10px",color:A.cyan,fontSize:12,
+                                        outline:"none",fontFamily:"inherit"}}/>
+                                  )}
                                 </div>
                               </div>
                               {safeNumber(l.costoUnit)>0&&(()=>{
                                 const qL=Math.max(1,safeNumber(l.qty)||1);
                                 const mgn=effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
-                                const snap=computeSnap({costo:safeNumber(l.costoUnit)*qL,compraConIVA:true,mode:"manual",manualPrice:safeNumber(l.precioUnit)*qL,ventaConIVA:true,gasolina:0,otros:0,iva:ef._iva||16,isr:ef._isr||20});
+                                const snap=ef.quoteMode
+                                  ?computeSnap({costo:safeNumber(l.costoUnit)*qL,compraConIVA:true,mode:"auto",margin:mgn,gasolina:0,otros:0,iva:ef._iva||16,isr:ef._isr||20})
+                                  :computeSnap({costo:safeNumber(l.costoUnit)*qL,compraConIVA:true,mode:"manual",manualPrice:safeNumber(l.precioUnit)*qL,ventaConIVA:true,gasolina:0,otros:0,iva:ef._iva||16,isr:ef._isr||20});
                                 return (
                                   <div style={{marginTop:6,fontSize:9,color:A.t3,fontVariantNumeric:"tabular-nums"}}>
                                     Total línea: <span style={{color:A.t1,fontWeight:700}}>{mxn(snap.precioConIVA)}</span>
                                     <span style={{color:snap.uNeta>=0?A.lime:A.red,marginLeft:8}}>
                                       Util: {mxn(snap.uNeta)}
                                     </span>
+                                    {ef.quoteMode&&<span style={{color:A.t3,marginLeft:6}}>· {mgn}%</span>}
                                   </div>
                                 );
                               })()}
@@ -11638,7 +11668,14 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                               fontSize:10,color:A.t2,fontVariantNumeric:"tabular-nums"}}>
                               <span style={{color:A.t3}}>Total {mLineas.length} líneas: </span>
                               <span style={{fontWeight:800,color:A.t1}}>
-                                {mxn(mLineas.reduce((s,l)=>s+safeNumber(l.precioUnit)*Math.max(1,safeNumber(l.qty)||1),0))}
+                                {mxn(mLineas.reduce((s,l)=>{
+                                  const qL=Math.max(1,safeNumber(l.qty)||1);
+                                  if(ef.quoteMode){
+                                    const mgn=effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
+                                    return s+computeSnap({costo:safeNumber(l.costoUnit)*qL,compraConIVA:true,mode:"auto",margin:mgn,gasolina:0,otros:0,iva:ef._iva||16,isr:ef._isr||20}).precioConIVA;
+                                  }
+                                  return s+safeNumber(l.precioUnit)*qL;
+                                },0))}
                               </span>
                               <span style={{fontSize:9,color:A.t3,marginLeft:6}}>(reemplaza costo/precio de arriba)</span>
                             </div>
@@ -15305,6 +15342,7 @@ function App() {
   const [masOpen,setMasOpen]=useState(false);
   const [nuevoCasoOpen,setNuevoCasoOpen]=useState(false);
   const [pipelineFocusId,setPipelineFocusId]=useState(null);
+  const [historialFocusId,setHistorialFocusId]=useState(null);
   const [darkMode,setDarkMode]=useState(()=>{
     try { return localStorage.getItem("logisolve_theme")!=="light"; } catch{ return true; }
   });
@@ -15691,7 +15729,7 @@ function App() {
       {/* NuevoCasoSheet — captura rápida de caso/solicitud */}
       {mobileView&&<NuevoCasoSheet open={nuevoCasoOpen} onClose={()=>setNuevoCasoOpen(false)}
         state={state} dispatch={dispatch} toast={toast}
-        onCreated={id=>{setPipelineFocusId(id);setTab("tickets");}}/>}
+        onCreated={id=>{setHistorialFocusId(id);setTab("historial");}}/>}
 
       {/* Content */}
       <div style={{paddingBottom:mobileView?"calc(90px + env(safe-area-inset-bottom,0px))":0,
@@ -15699,7 +15737,7 @@ function App() {
         maxWidth:mobileView?680:undefined,margin:mobileView?"0 auto":undefined}}>
         {tab==="ops"        &&(mobileView?<MOps       state={state} setTab={setTab} triggerMargin={triggerMargin}/>      :<CentroOps   state={state}/>)}
         {tab==="tickets"    &&(mobileView?<MPipeline  state={state} dispatch={dispatchWithDelete} toast={toast} focusTicketId={pipelineFocusId}/>         :<Tickets     state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete}/>)}
-        {tab==="historial"  &&(mobileView?<MHistorial state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>:<Historial   state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>)}
+        {tab==="historial"  &&(mobileView?<MHistorial state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete} initialEditId={historialFocusId}/>:<Historial   state={state} dispatch={dispatchWithDelete} toast={toast} scheduleHardDelete={scheduleHardDelete} cancelHardDelete={cancelHardDelete}/>)}
         {tab==="cotizador"  &&(mobileView?<MCotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Cotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="refacciones"&&(mobileView?<MCotizador state={state} dispatch={dispatchWithDelete} toast={toast}/>:<CotizadorRefacciones state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="cartera"    &&(mobileView?<MCartera   state={state} dispatch={dispatchWithDelete} toast={toast}/>         :<Cartera     state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
