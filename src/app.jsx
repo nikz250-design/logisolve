@@ -633,8 +633,9 @@ function utilidadPonderada(uNeta, probId) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // Active non-deleted tickets
+const PIPE_STATUS_ORD = ["recibido","validando","sourcing","cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado","cancelado"];
 const sel_active     = (ts) => {
-  // LWW dedup: when same ID appears more than once, keep the one with the most recent timeline event
+  // LWW dedup: same ID → most recent timeline event wins; tiebreak by status priority
   const best = new Map();
   ts.forEach(t => {
     if (t._deleted) return;
@@ -642,7 +643,10 @@ const sel_active     = (ts) => {
     if (!prev) { best.set(t.id, t); return; }
     const tTs = t.timeline?.at(-1)?.ts || t.updatedAt || "";
     const pTs = prev.timeline?.at(-1)?.ts || prev.updatedAt || "";
-    if (tTs > pTs) best.set(t.id, t);
+    if (tTs > pTs) { best.set(t.id, t); return; }
+    if (tTs === pTs && PIPE_STATUS_ORD.indexOf(t.status) > PIPE_STATUS_ORD.indexOf(prev.status)) {
+      best.set(t.id, t);
+    }
   });
   return ts.filter(t => !t._deleted && best.get(t.id) === t);
 };
@@ -900,8 +904,29 @@ function reducer(state,action) {
       // Never overwrite production data with empty or null from a partial Supabase failure.
       const merge = (incoming, current) =>
         Array.isArray(incoming) && incoming.length > 0 ? incoming : current;
+      // Dedup tickets: same ID → keep the one with most recent timeline event.
+      // Tiebreaker: most advanced pipeline status wins (Cobrado > Entregado, etc.)
+      const PIPE_ORD = ["recibido","validando","sourcing","cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado","cancelado"];
+      const dedupTickets = (ts) => {
+        if (!Array.isArray(ts)) return ts;
+        const best = new Map();
+        ts.forEach(t => {
+          const prev = best.get(t.id);
+          if (!prev) { best.set(t.id, t); return; }
+          // Non-deleted always beats deleted
+          if (t._deleted && !prev._deleted) return;
+          if (!t._deleted && prev._deleted) { best.set(t.id, t); return; }
+          const tTs = t.timeline?.at(-1)?.ts || t.updatedAt || "";
+          const pTs = prev.timeline?.at(-1)?.ts || prev.updatedAt || "";
+          if (tTs > pTs) { best.set(t.id, t); return; }
+          if (tTs === pTs && PIPE_ORD.indexOf(t.status) > PIPE_ORD.indexOf(prev.status)) {
+            best.set(t.id, t);
+          }
+        });
+        return ts.filter(t => best.get(t.id) === t);
+      };
       return {
-        tickets:   merge(d.tickets,   state.tickets),
+        tickets:   dedupTickets(merge(d.tickets,   state.tickets)),
         clients:   merge(d.clients,   state.clients),
         suppliers: merge(d.suppliers, state.suppliers),
         units:     merge(d.units,     state.units),
