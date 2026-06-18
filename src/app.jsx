@@ -633,7 +633,7 @@ function utilidadPonderada(uNeta, probId) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // Active non-deleted tickets
-const sel_active     = (ts) => ts.filter(t=>!t._deleted);
+const sel_active     = (ts) => { const seen=new Set(); return ts.filter(t=>{if(t._deleted||seen.has(t.id)) return false; seen.add(t.id); return true;}); };
 
 // Operado: work already done (entregado/facturado/cobrado/cerrado)
 const sel_operados   = (ts) => sel_active(ts).filter(t=>OPERADO_SET.has(t.status));
@@ -817,7 +817,11 @@ function saveToStorage(s) {
 function reducer(state,action) {
   switch(action.type) {
     // TICKETS
-    case "TKT_ADD":    return {...state,tickets:[action.t,...state.tickets]};
+    case "TKT_ADD": {
+      // Prevent duplicate IDs (defensive against double-dispatch or sync race)
+      if(state.tickets.some(t=>t.id===action.t.id)) return state;
+      return {...state,tickets:[action.t,...state.tickets]};
+    }
     case "TKT_UPDATE": {
       const patch = {...action.patch};
       // Sync cobrado when status changes via edit
@@ -10790,7 +10794,10 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
   },[range]);
 
   // ── All non-deleted ───────────────────────────────────────────────────────
-  const allActive = useMemo(()=>tickets.filter(t=>!t._deleted),[tickets]);
+  const allActive = useMemo(()=>{
+    const seen=new Set();
+    return tickets.filter(t=>{if(t._deleted||seen.has(t.id)) return false; seen.add(t.id); return true;});
+  },[tickets]);
 
   const filtered = useMemo(()=>{
     let arr=allActive.filter(inRange);
