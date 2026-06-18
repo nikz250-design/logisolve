@@ -11289,6 +11289,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                           <MSel label="Estado" value={ef.status} onChange={sfn("status")}
                             options={TICKET_ALL.map(s=>({value:s,label:(TICKET_META[s]?.label||s)}))}/>
                           <ClientPicker clients={clients} value={ef.clientId||""} onChange={sfn("clientId")} mobile/>
+                          <SupplierPicker suppliers={suppliers} value={ef.supplierId||""} onChange={sfn("supplierId")} mobile/>
                           <UnitPicker units={units} value={ef.unitId||""} onChange={sfn("unitId")} mobile/>
                           <MSel label="Pago" value={ef.payType} onChange={sfn("payType")}
                             options={[{value:"contado",label:"Contado"},{value:"credit",label:"Crédito"}]}/>
