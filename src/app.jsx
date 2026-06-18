@@ -11287,8 +11287,8 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
                           {ef.payType==="credit"&&(
                             <MField label="Promesa de pago" type="date" value={toDateInput(ef.promesaPago)} onChange={v=>sfn("promesaPago")(fromDateInput(v))} color={A.amber}/>
                           )}
-                          {/* ── Campos individuales (ocultos en kit mode) ── */}
-                          {!ef.kitMode&&(<>
+                          {/* ── Campos individuales (solo para ticket sin líneas) ── */}
+                          {mLineas.length===0&&(<>
                           {/* ── Cantidad ── */}
                           <div style={{marginBottom:8}}>
                             <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>Cantidad (piezas)</div>
@@ -11631,7 +11631,6 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
                                   return s+safeNumber(l.precioUnit)*qL;
                                 },0))}
                               </span>
-                              <span style={{fontSize:9,color:A.t3,marginLeft:6}}>(reemplaza costo/precio de arriba)</span>
                             </div>
                           )}
 
