@@ -1095,7 +1095,7 @@ function generarCotizacionPDF(tkt, cl, un, supp, empresa={}) {
           <td>01</td>
           <td>${tkt.titulo||"Kit"}</td>
           <td>${componentList}${unTag}</td>
-          <td class="money">${fmtMXN(totals.total)}</td>
+          <td class="money">${fmtMXN(totals.subtotal)}</td>
         </tr>`;
       })()
     // ── NORMAL MODE: una fila por componente ────────────────────────────────
@@ -1115,7 +1115,7 @@ function generarCotizacionPDF(tkt, cl, un, supp, empresa={}) {
       <td>${String(i+1).padStart(2,"0")}</td>
       <td>${concepto}</td>
       <td>${desc}${unTag}${refTag}</td>
-      <td class="money">${fmtMXN(fin.lineTotal)}</td>
+      <td class="money">${fmtMXN(fin.lineTotalSinIVA)}</td>
     </tr>`;
   }).join("");
 
@@ -1199,7 +1199,7 @@ function generarCotizacionPDF(tkt, cl, un, supp, empresa={}) {
           <th style="width:32px">No.</th>
           <th style="width:150px">Concepto</th>
           <th>Descripci&oacute;n t&eacute;cnica / operativa</th>
-          <th style="width:100px;text-align:right">Importe</th>
+          <th style="width:100px;text-align:right">Importe s/IVA</th>
         </tr></thead>
         <tbody>${filas}</tbody>
       </table>
