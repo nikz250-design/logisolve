@@ -471,7 +471,7 @@ function effectiveMargin(opId, priority, mods, custom, customVal) {
 // ── MIGRACIÓN DE LÍNEAS — compatibilidad total con tickets viejos ─────────────
 function migrateLinea(l, fallbackSnap, ivaR=0.16) {
   if (!l) return null;
-  return {
+  const out = {
     titulo:       safeStr(l.titulo) || safeStr(l.title) || "Sin descripción",
     partRef:      safeStr(l.partRef),
     qty:          safeNumber(l.qty, 1) || 1,
@@ -485,6 +485,11 @@ function migrateLinea(l, fallbackSnap, ivaR=0.16) {
     descripcionPDF: safeStr(l.descripcionPDF),
     snap:         l.snap || fallbackSnap,
   };
+  // Pass explicit financial fields through so resolveLineFinancials doesn't
+  // fall back to snap.precioConIVA (line total) and multiply by qty again.
+  if (l.unitPrice != null) out.unitPrice = safeNumber(l.unitPrice);
+  if (l.lineTotal != null) out.lineTotal = safeNumber(l.lineTotal);
+  return out;
 }
 
 // ── HELPER CENTRALIZADO DE TOTALES ───────────────────────────────────────────
