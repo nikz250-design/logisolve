@@ -10858,7 +10858,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
     const unitPrecioIVA = ((safeNumber(s.precioConIVA)||0) / savedQty).toFixed(2);
     // Compute existing lines — accept any non-empty line object
     const existingLineas = (t.lineas||[]).filter(l=>l && typeof l==='object' && (l.titulo||l.descripcion||l.partRef||l.costoUnit));
-    setEf({titulo:t.titulo||"",kitMode:t.kitMode||existingLineas.length>0,
+    setEf({titulo:t.titulo||"",kitMode:t.kitMode||false,
            status:t.status,clientId:t.clientId||"",supplierId:t.supplierId||"",
            unitId:t.unitId||"",payType:t.payType||"contado",promesaPago:t.promesaPago||"",
            notes:t.notes||"",priority:t.priority||"P3",
@@ -10907,9 +10907,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
       const lineasConSnap = mLineas.map(l => {
         const qL = Math.max(1, Math.round(safeNumber(l.qty)||1));
         const costo = safeNumber(l.costoUnit) * qL;
-        const snap = ef.quoteMode
-          ? computeSnap({costo,compraConIVA:true,mode:"auto",margin:mgn,gasolina:0,otros:0,iva,isr})
-          : computeSnap({costo,compraConIVA:true,mode:"manual",manualPrice:safeNumber(l.precioUnit)*qL,ventaConIVA:true,gasolina:0,otros:0,iva,isr});
+        const snap = computeSnap({costo,compraConIVA:true,mode:"manual",manualPrice:safeNumber(l.precioUnit)*qL,ventaConIVA:true,gasolina:0,otros:0,iva,isr});
         return {titulo:l.titulo||"Sin descripción", partRef:l.partRef||"",
                 snap, qty:qL, descripcionPDF:l.descripcionPDF||"",
                 costoUnit:safeNumber(l.costoUnit),
@@ -11363,15 +11361,6 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                               )}
                             </div>
                           </div>
-                          {/* ── Gasolina / Flete / Otros ── */}
-                          <div style={{marginBottom:8}}>
-                            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>Gasolina / Flete / Otros ($)</div>
-                            <input type="number" inputMode="decimal" value={ef._gastos||""} onChange={e=>sfn("_gastos")(e.target.value)}
-                              placeholder="0"
-                              style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.03)",
-                                border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",
-                                color:A.amber,fontSize:14,outline:"none",fontFamily:"inherit"}}/>
-                          </div>
                           {/* Live preview — single item only */}
                           {safeNumber(ef.costoIVA)>0&&(()=>{
                             const qty=Math.max(1,safeNumber(ef.qty)||1);
@@ -11401,6 +11390,15 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                             );
                           })()}
                           </>)}
+                          {/* ── Gasolina / Flete / Otros (siempre visible) ── */}
+                          <div style={{marginBottom:8}}>
+                            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>Gasolina / Flete / Otros ($)</div>
+                            <input type="number" inputMode="decimal" value={ef._gastos||""} onChange={e=>sfn("_gastos")(e.target.value)}
+                              placeholder="0"
+                              style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.03)",
+                                border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",
+                                color:A.amber,fontSize:14,outline:"none",fontFamily:"inherit"}}/>
+                          </div>
                           {/* ── Modo: Manual / Cotizador (siempre visible) ── */}
                           <div style={{display:"flex",gap:6,marginBottom:12}}>
                             {[{v:false,l:"Manual"},{v:true,l:"⚙ Cotizador"}].map(({v,l})=>(
@@ -11606,43 +11604,25 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) 
                                 </div>
                                 <div>
                                   <div style={{fontSize:8,color:A.t3,marginBottom:3}}>Precio unit. c/IVA</div>
-                                  {ef.quoteMode?(()=>{
-                                    const mgn=effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
-                                    const qL=Math.max(1,safeNumber(l.qty)||1);
-                                    const autoSnap=computeSnap({costo:safeNumber(l.costoUnit)*qL,compraConIVA:true,mode:"auto",margin:mgn,gasolina:0,otros:0,iva:ef._iva||16,isr:ef._isr||20});
-                                    const unitP=autoSnap.precioConIVA/qL;
-                                    return <div style={{width:"100%",boxSizing:"border-box",
-                                      background:"rgba(43,181,160,0.07)",border:`1px solid ${C.blue}55`,
-                                      borderRadius:8,padding:"8px 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                                      <span style={{color:A.lime,fontSize:12,fontWeight:700,fontVariantNumeric:"tabular-nums"}}>
-                                        {unitP>0?mxn(unitP):"—"}
-                                      </span>
-                                      <span style={{fontSize:8,color:A.t3}}>{mgn}%</span>
-                                    </div>;
-                                  })():(
-                                    <input type="number" inputMode="decimal" value={l.precioUnit}
-                                      onChange={e=>mLsfn(idx,"precioUnit")(e.target.value)}
-                                      placeholder="0"
-                                      style={{width:"100%",boxSizing:"border-box",
-                                        background:"rgba(255,255,255,0.03)",border:`1px solid ${C.border}`,
-                                        borderRadius:8,padding:"8px 10px",color:A.cyan,fontSize:12,
-                                        outline:"none",fontFamily:"inherit"}}/>
-                                  )}
+                                  <input type="number" inputMode="decimal" value={l.precioUnit}
+                                    onChange={e=>mLsfn(idx,"precioUnit")(e.target.value)}
+                                    placeholder="0"
+                                    style={{width:"100%",boxSizing:"border-box",
+                                      background:"rgba(255,255,255,0.03)",border:`1px solid ${C.border}`,
+                                      borderRadius:8,padding:"8px 10px",color:A.cyan,fontSize:12,
+                                      outline:"none",fontFamily:"inherit"}}/>
                                 </div>
                               </div>
                               {safeNumber(l.costoUnit)>0&&(()=>{
                                 const qL=Math.max(1,safeNumber(l.qty)||1);
                                 const mgn=effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
-                                const snap=ef.quoteMode
-                                  ?computeSnap({costo:safeNumber(l.costoUnit)*qL,compraConIVA:true,mode:"auto",margin:mgn,gasolina:0,otros:0,iva:ef._iva||16,isr:ef._isr||20})
-                                  :computeSnap({costo:safeNumber(l.costoUnit)*qL,compraConIVA:true,mode:"manual",manualPrice:safeNumber(l.precioUnit)*qL,ventaConIVA:true,gasolina:0,otros:0,iva:ef._iva||16,isr:ef._isr||20});
+                                const snap=computeSnap({costo:safeNumber(l.costoUnit)*qL,compraConIVA:true,mode:"manual",manualPrice:safeNumber(l.precioUnit)*qL,ventaConIVA:true,gasolina:0,otros:0,iva:ef._iva||16,isr:ef._isr||20});
                                 return (
                                   <div style={{marginTop:6,fontSize:9,color:A.t3,fontVariantNumeric:"tabular-nums"}}>
                                     Total línea: <span style={{color:A.t1,fontWeight:700}}>{mxn(snap.precioConIVA)}</span>
                                     <span style={{color:snap.uNeta>=0?A.lime:A.red,marginLeft:8}}>
                                       Util: {mxn(snap.uNeta)}
                                     </span>
-                                    {ef.quoteMode&&<span style={{color:A.t3,marginLeft:6}}>· {mgn}% margen</span>}
                                   </div>
                                 );
                               })()}
