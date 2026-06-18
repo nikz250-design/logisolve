@@ -10765,6 +10765,14 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
     if(t){ initialEditHandled.current=true; setExpandId(t.id); setEditId(t.id); openEdit(t); }
   });  // intentionally no deps — runs every render until handled
 
+  // Auto-sync title from mLineas when user hasn't manually overridden it
+  React.useEffect(()=>{
+    if(!editId||!mLineas.length) return;
+    const auto=mLineas.filter(l=>l.titulo?.trim()).map(l=>l.titulo.trim()).join(" / ");
+    if(!auto) return;
+    setEf(p=>p._titleManual?p:{...p,titulo:auto});
+  },[mLineas,editId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Period range ──────────────────────────────────────────────────────────
   const range = useMemo(()=>{
     if(period==="custom"){
@@ -10881,6 +10889,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
            quoteMode:false,
            opType:t.opId||"consumable",
            activeMods:[...(t.mods||[])],
+           _titleManual:false,
     });
     // Restore existing lines if present and valid
     setMLineas(existingLineas.length > 0
@@ -11268,14 +11277,30 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
                           </div>
 
                           {/* ── Título ── */}
-                          <div style={{marginBottom:10}}>
-                            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>Título de la operación</div>
-                            <input value={ef.titulo||""} onChange={e=>sfn("titulo")(e.target.value)}
-                              placeholder="Ej: Horquilla clutch Freightliner M2 106"
-                              style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.03)",
-                                border:`1px solid ${C.borderHi}`,borderRadius:10,padding:"10px 12px",
-                                color:A.t1,fontSize:13,outline:"none",fontFamily:"inherit"}}/>
-                          </div>
+                          {(()=>{
+                            const autoT=mLineas.filter(l=>l.titulo?.trim()).map(l=>l.titulo.trim()).join(" / ");
+                            const isDiverged=ef._titleManual&&autoT&&ef.titulo!==autoT;
+                            return(
+                            <div style={{marginBottom:10}}>
+                              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
+                                <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase"}}>Título de la operación</div>
+                                {isDiverged&&(
+                                  <button onClick={()=>setEf(p=>({...p,titulo:autoT,_titleManual:false}))}
+                                    style={{fontSize:9,color:A.lime,background:"transparent",border:"none",cursor:"pointer",
+                                      padding:"2px 6px",borderRadius:6,letterSpacing:"0.06em",
+                                      background:"rgba(43,181,160,0.1)"}}>
+                                    ↺ Auto
+                                  </button>
+                                )}
+                              </div>
+                              <input value={ef.titulo||""} onChange={e=>setEf(p=>({...p,titulo:e.target.value,_titleManual:true}))}
+                                placeholder="Ej: Horquilla clutch Freightliner M2 106"
+                                style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.03)",
+                                  border:`1px solid ${C.borderHi}`,borderRadius:10,padding:"10px 12px",
+                                  color:A.t1,fontSize:13,outline:"none",fontFamily:"inherit"}}/>
+                            </div>
+                            );
+                          })()}
 
                           <MSel label="Estado" value={ef.status} onChange={sfn("status")}
                             options={TICKET_ALL.map(s=>({value:s,label:(TICKET_META[s]?.label||s)}))}/>
