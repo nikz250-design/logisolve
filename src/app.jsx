@@ -1155,11 +1155,6 @@ function generarCotizacionPDF(tkt, cl, un, supp, empresa={}) {
       .detail-table th{background:#000;color:#fff;padding:8px 10px;text-align:left;font-size:9.5px}
       .detail-table td{border:1px solid #e5e5e5;padding:9px 10px;vertical-align:top;font-size:10.5px;line-height:1.5}
       .money{text-align:right;white-space:nowrap;font-weight:700}
-      /* ── TOTALS ── */
-      .totals{width:280px;margin-left:auto;margin-top:10px;border-collapse:collapse}
-      .totals td{border:1px solid #e3e3e3;padding:7px 11px;font-size:10px}
-      .totals td:last-child{text-align:right;font-weight:700}
-      .grand-total td{background:#000;color:#fff;font-weight:800}
       /* ── STACKED SECTIONS ── */
       .blocks-row{margin-top:auto;padding-top:16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;width:70%}
       .block{margin-bottom:0}
@@ -1203,12 +1198,12 @@ function generarCotizacionPDF(tkt, cl, un, supp, empresa={}) {
           <th>Descripci&oacute;n t&eacute;cnica / operativa</th>
           <th style="width:100px;text-align:right">Importe s/IVA</th>
         </tr></thead>
-        <tbody>${filas}</tbody>
-      </table>
-      <table class="totals">
-        <tr><td>Subtotal</td><td>${fmtMXN(totals.subtotal)} MXN</td></tr>
-        <tr><td>IVA (${totals.ivaPct}%)</td><td>${fmtMXN(totals.ivaAmt)} MXN</td></tr>
-        <tr class="grand-total"><td>TOTAL &middot; IVA INCLUIDO</td><td>${fmtMXN(totals.total)} MXN</td></tr>
+        <tbody>
+          ${filas}
+          <tr><td colspan="3" style="text-align:right;font-size:10px;border-top:2px solid #e5e5e5;padding:7px 11px;border-left:none;border-bottom:1px solid #e5e5e5">Subtotal</td><td class="money" style="border-top:2px solid #e5e5e5">${fmtMXN(totals.subtotal)} MXN</td></tr>
+          <tr><td colspan="3" style="text-align:right;font-size:10px;padding:7px 11px;border-left:none;border-bottom:1px solid #e5e5e5">IVA (${totals.ivaPct}%)</td><td class="money">${fmtMXN(totals.ivaAmt)} MXN</td></tr>
+          <tr style="background:#000;color:#fff"><td colspan="3" style="text-align:right;font-size:10px;font-weight:800;padding:8px 11px;border-left:none">TOTAL &middot; IVA INCLUIDO</td><td class="money" style="color:#fff">${fmtMXN(totals.total)} MXN</td></tr>
+        </tbody>
       </table>
       <div class="blocks-row">
         <div class="block">
