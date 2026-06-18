@@ -505,17 +505,24 @@ const calcMarkup = (precioSinIVA, costoTotal) =>
 function resolveLineFinancials(ml, fallbackSnap, qty) {
   const lsnap = ml.snap || fallbackSnap || {};
   const q = Math.max(safeNumber(qty, 1), 1);
-  // Prefer explicit fields (post-Fase2 saves)
+  // post-Fase2: snap was computed for the full line (costoUnit × qty), so
+  // snap.precioConIVA IS the lineTotal — never multiply by q again.
+  const postFase2 = ml.lineTotal != null;
   const unitPrice = safeNumber(
     ml.unitPrice ?? lsnap.unitPrice ?? lsnap.precioUnitario ?? lsnap.precioConIVA
   );
   const unitSinIVA = safeNumber(
     ml.unitSinIVA ?? lsnap.unitSinIVA ?? lsnap.precioSinIVA
   );
-  // If explicit lineTotal exists, use it — don't multiply again
-  const lineTotal        = ml.lineTotal != null ? safeNumber(ml.lineTotal) : unitPrice * q;
-  const lineTotalSinIVA  = ml.lineTotalSinIVA != null ? safeNumber(ml.lineTotalSinIVA) : unitSinIVA * q;
-  return { unitPrice, lineTotal, unitSinIVA, lineTotalSinIVA, qty: q };
+  const lineTotal = postFase2
+    ? safeNumber(ml.lineTotal)
+    : unitPrice * q;
+  const lineTotalSinIVA = ml.lineTotalSinIVA != null
+    ? safeNumber(ml.lineTotalSinIVA)
+    : postFase2
+      ? safeNumber(lsnap.precioSinIVA)   // snap is already for full qty
+      : unitSinIVA * q;
+  return { unitPrice, lineTotal, unitSinIVA, lineTotalSinIVA, qty: q, postFase2 };
 }
 
 function calculateTicketTotals(ticket) {
@@ -554,13 +561,14 @@ function calculateTicketTotals(ticket) {
     // Defensive validation (qty is always ≥1 via safeNumber guard above)
 
     const fin = resolveLineFinancials(ml, snap, qty);
-
-    const lineIVA    = safeNumber(lsnap.ivaTraslad) * qty;
-    const lineCosto  = safeNumber(lsnap.costoTotal) * qty;
-    const lineUNeta  = safeNumber(lsnap.uNeta) * qty;
-    const lineUBruta = safeNumber(lsnap.uBruta) * qty;
-    const lineISR    = safeNumber(lsnap.isr) * qty;
-    const lineIVANeto= safeNumber(lsnap.ivaNeto) * qty;
+    // post-Fase2: snap was computed for the full line qty — use values directly
+    const mult = fin.postFase2 ? 1 : qty;
+    const lineIVA    = safeNumber(lsnap.ivaTraslad) * mult;
+    const lineCosto  = safeNumber(lsnap.costoTotal) * mult;
+    const lineUNeta  = safeNumber(lsnap.uNeta) * mult;
+    const lineUBruta = safeNumber(lsnap.uBruta) * mult;
+    const lineISR    = safeNumber(lsnap.isr) * mult;
+    const lineIVANeto= safeNumber(lsnap.ivaNeto) * mult;
 
     subtotal   += fin.lineTotalSinIVA;
     ivaAmt     += lineIVA;
