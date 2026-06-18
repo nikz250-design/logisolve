@@ -1131,7 +1131,7 @@ function generarCotizacionPDF(tkt, cl, un, supp, empresa={}) {
   const innerHTML = `
     <style>
       *{box-sizing:border-box;margin:0;padding:0}
-      .page{width:794px;background:#fff;padding:36px 46px 28px;font-family:Arial,Helvetica,sans-serif;color:#111;font-size:12px;line-height:1.45}
+      .page{width:794px;min-height:1059px;background:#fff;padding:36px 46px 28px;font-family:Arial,Helvetica,sans-serif;color:#111;font-size:12px;line-height:1.45;display:flex;flex-direction:column}
       /* ── HEADER ── */
       .top-header{border:1px solid #dcdcdc;padding:16px 20px;display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0}
       .brand h1{font-size:26px;font-weight:800;margin:0;color:#0a0a0a}
@@ -1161,7 +1161,7 @@ function generarCotizacionPDF(tkt, cl, un, supp, empresa={}) {
       .totals td:last-child{text-align:right;font-weight:700}
       .grand-total td{background:#000;color:#fff;font-weight:800}
       /* ── STACKED SECTIONS ── */
-      .blocks-row{margin-top:12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;width:70%}
+      .blocks-row{margin-top:auto;padding-top:16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;width:70%}
       .block{margin-bottom:0}
       .block h3{font-size:7.5px;font-weight:800;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.06em}
       .block ul{list-style:none;padding:0}
