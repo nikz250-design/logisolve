@@ -1156,12 +1156,12 @@ function generarCotizacionPDF(tkt, cl, un, supp, empresa={}) {
       .detail-table td{border:1px solid #e5e5e5;padding:9px 10px;vertical-align:top;font-size:10.5px;line-height:1.5}
       .money{text-align:right;white-space:nowrap;font-weight:700}
       /* ── STACKED SECTIONS ── */
-      .blocks-row{margin-top:auto;padding-top:16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;width:70%}
-      .block{margin-bottom:0}
-      .block h3{font-size:9px;font-weight:800;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em}
+      .blocks-row{margin-top:auto;padding-top:20px;display:flex;flex-direction:column;gap:0}
+      .block{margin-bottom:10px}
+      .block h3{font-size:10px;font-weight:800;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.04em}
       .block ul{list-style:none;padding:0}
-      .block li{font-size:8.5px;line-height:1.45;margin-bottom:3px;padding-left:9px;position:relative;color:#444}
-      .block li::before{content:"·";position:absolute;left:1px;color:#888}
+      .block li{font-size:9.5px;line-height:1.5;margin-bottom:2px;padding-left:10px;position:relative;color:#333}
+      .block li::before{content:"·";position:absolute;left:2px;color:#666}
       /* ── FOOTER ── */
       .footer{margin-top:12px;border-top:1px solid #e5e5e5;padding-top:7px;display:flex;justify-content:space-between;font-size:8.5px;color:#777}
     </style>
