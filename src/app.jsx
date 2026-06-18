@@ -1104,7 +1104,7 @@ function generarCotizacionPDF(tkt, cl, un, supp, empresa={}) {
     const qty     = safeNumber(ml.qty, 1) || 1;
     const fin     = resolveLineFinancials(ml, tkt.snap, qty);
     const concepto = qty > 1
-      ? `${qty} unidades ${ml.titulo||"Sin descripci\u00f3n"}`
+      ? `${qty} ${ml.titulo||"Sin descripci\u00f3n"}`
       : (ml.titulo||"Sin descripci\u00f3n");
     const desc    = (ml.descripcionPDF && ml.descripcionPDF !== ml.titulo && !/^\d+\s/.test(ml.descripcionPDF))
       ? ml.descripcionPDF
