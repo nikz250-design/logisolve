@@ -1161,12 +1161,12 @@ function generarCotizacionPDF(tkt, cl, un, supp, empresa={}) {
       .totals td:last-child{text-align:right;font-weight:700}
       .grand-total td{background:#000;color:#fff;font-weight:800}
       /* ── STACKED SECTIONS ── */
-      .blocks-row{margin-top:14px}
-      .block{margin-bottom:8px}
-      .block h3{font-size:10px;font-weight:800;margin-bottom:5px}
+      .blocks-row{margin-top:12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;width:70%}
+      .block{margin-bottom:0}
+      .block h3{font-size:7.5px;font-weight:800;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.06em}
       .block ul{list-style:none;padding:0}
-      .block li{font-size:9.5px;line-height:1.5;margin-bottom:3px;padding-left:12px;position:relative}
-      .block li::before{content:"·";position:absolute;left:2px;color:#555}
+      .block li{font-size:7px;line-height:1.4;margin-bottom:2px;padding-left:8px;position:relative;color:#444}
+      .block li::before{content:"·";position:absolute;left:1px;color:#888}
       /* ── FOOTER ── */
       .footer{margin-top:12px;border-top:1px solid #e5e5e5;padding-top:7px;display:flex;justify-content:space-between;font-size:8.5px;color:#777}
     </style>
