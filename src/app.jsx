@@ -866,8 +866,18 @@ function reducer(state,action) {
     case "TKT_COBRADO": return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,cobrado:true,status:"cobrado",timeline:[...(t.timeline||[]),{ts:nowISO(),evento:"Cobrado",actor:"Operador"}],history:[...(t.history||[]),mkEvent("cobrado")]})};
     case "TKT_TIMELINE": return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,timeline:[...(t.timeline||[]),{ts:nowISO(),evento:action.evento,actor:action.actor||"Operador"}]})};
     case "TKT_BULK_RENAME": { // action.map: [{oldId,newId}]
-      const idMap=new Map(action.map.map(({oldId,newId})=>[oldId,newId]));
-      return {...state,tickets:state.tickets.map(t=>idMap.has(t.id)?{...t,id:idMap.get(t.id)}:t)};
+      const idMap = new Map(action.map.map(({oldId,newId})=>[oldId,newId]));
+      // IDs of tickets NOT being renamed — if renamed ID collides, drop the seed
+      const keptIds = new Set(state.tickets.filter(t=>!idMap.has(t.id)).map(t=>t.id));
+      return {...state, tickets: state.tickets
+        .map(t => {
+          if (!idMap.has(t.id)) return t;
+          const newId = idMap.get(t.id);
+          if (keptIds.has(newId)) return null; // collision with real ticket → discard seed
+          return {...t, id: newId};
+        })
+        .filter(Boolean)
+      };
     }
     case "CLI_ADD":    return {...state,clients:[...state.clients,action.c]};
     case "CLI_UPDATE": return {...state,clients:state.clients.map(c=>c.id===action.id?{...c,...action.patch}:c)};
@@ -15473,6 +15483,10 @@ function App() {
           return locTs>supTs ? loc : sup;
         });
       };
+      // Known seed IDs that may have leaked into Supabase — purge them silently
+      const SEED_ORIG_IDS = ["TKT-20260512-001","TKT-20260513-001","TKT-20260513-002","TKT-20260513-003","TKT-20260514-001","TKT-20260514-002","TKT-20260514-003"];
+      SEED_ORIG_IDS.forEach(id => deleteRow("tickets", id));
+
       try {
         await seedIfEmpty();
         const data = await loadAllFromSupabase();
