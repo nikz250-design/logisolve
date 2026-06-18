@@ -1109,7 +1109,7 @@ function generarCotizacionPDF(tkt, cl, un, supp, empresa={}) {
     const desc    = (ml.descripcionPDF && ml.descripcionPDF !== ml.titulo && !/^\d+\s/.test(ml.descripcionPDF))
       ? ml.descripcionPDF
       : i === 0
-        ? "Suministro e integraci\u00f3n de componente compatible para continuidad operativa. Validaci\u00f3n y coordinaci\u00f3n operativa. Entrega directa en CEDIS SMO."
+        ? "Suministro e integraci\u00f3n de componente compatible para continuidad operativa de unidad en CEDIS SMO"
         : "";
     const unTag   = unidadStr && i === 0 ? `<br><br><strong>Unidad:</strong> ${unidadStr}` : "";
     const refTag  = ml.partRef ? `<br><br><strong>Clave:</strong> ${ml.partRef}` : "";
