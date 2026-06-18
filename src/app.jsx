@@ -10830,7 +10830,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
   // Auto-sync title from mLineas when user hasn't manually overridden it
   React.useEffect(()=>{
     if(!editId||!mLineas.length) return;
-    const auto=mLineas.filter(l=>l.titulo?.trim()).map(l=>{const q=Math.max(1,safeNumber(l.qty)||1);return q>1?`${l.titulo.trim()} x${q}`:l.titulo.trim();}).join(" / ");
+    const auto=mLineas.filter(l=>l.titulo?.trim()).map(l=>{const q=Math.max(1,safeNumber(l.qty)||1);return q>1?`${q} ${l.titulo.trim()}`:l.titulo.trim();}).join(" / ");
     if(!auto) return;
     setEf(p=>p._titleManual?p:{...p,titulo:auto});
   },[mLineas,editId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -10943,7 +10943,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
         mode:"manual",manualPrice:totalPrecio,ventaConIVA:true,
         gasolina:gastos,otros:0,iva,isr});
       newLineas = lineasConSnap;
-      newTitulo = ef.titulo || lineasConSnap.map(l=>l.qty>1?`${l.titulo} x${l.qty}`:l.titulo).join(" / ");
+      newTitulo = ef.titulo || lineasConSnap.map(l=>l.qty>1?`${l.qty} ${l.titulo}`:l.titulo).join(" / ");
       newQty = lineasConSnap.reduce((s,l)=>s+l.qty,0);
     } else {
       // Single-line mode (legacy)
@@ -11278,7 +11278,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
 
                           {/* ── Título ── */}
                           {(()=>{
-                            const autoT=mLineas.filter(l=>l.titulo?.trim()).map(l=>{const q=Math.max(1,safeNumber(l.qty)||1);return q>1?`${l.titulo.trim()} x${q}`:l.titulo.trim();}).join(" / ");
+                            const autoT=mLineas.filter(l=>l.titulo?.trim()).map(l=>{const q=Math.max(1,safeNumber(l.qty)||1);return q>1?`${q} ${l.titulo.trim()}`:l.titulo.trim();}).join(" / ");
                             const isDiverged=ef._titleManual&&autoT&&ef.titulo!==autoT;
                             return(
                             <div style={{marginBottom:10}}>
