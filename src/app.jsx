@@ -10765,14 +10765,6 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
     if(t){ initialEditHandled.current=true; setExpandId(t.id); setEditId(t.id); openEdit(t); }
   });  // intentionally no deps — runs every render until handled
 
-  // Auto-sync title from mLineas when user hasn't manually overridden it
-  React.useEffect(()=>{
-    if(!editId||!mLineas.length) return;
-    const auto=mLineas.filter(l=>l.titulo?.trim()).map(l=>l.titulo.trim()).join(" / ");
-    if(!auto) return;
-    setEf(p=>p._titleManual?p:{...p,titulo:auto});
-  },[mLineas,editId]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // ── Period range ──────────────────────────────────────────────────────────
   const range = useMemo(()=>{
     if(period==="custom"){
@@ -10834,6 +10826,14 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
   const mLsfn = (idx,k) => v => setMLineas(ls=>ls.map((l,i)=>i===idx?{...l,[k]:v}:l));
   const addMLinea = () => setMLineas(ls=>[...ls,{titulo:"",partRef:"",qty:1,costoUnit:"",precioUnit:"",descripcionPDF:""}]);
   const delMLinea = idx => setMLineas(ls=>ls.filter((_,i)=>i!==idx));
+
+  // Auto-sync title from mLineas when user hasn't manually overridden it
+  React.useEffect(()=>{
+    if(!editId||!mLineas.length) return;
+    const auto=mLineas.filter(l=>l.titulo?.trim()).map(l=>l.titulo.trim()).join(" / ");
+    if(!auto) return;
+    setEf(p=>p._titleManual?p:{...p,titulo:auto});
+  },[mLineas,editId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Catalog search for mobile line editing
   const [mCatalogIdx, setMCatalogIdx] = useState(null);
