@@ -11006,7 +11006,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
     const existingLineas = (t.lineas||[]).filter(l=>l && typeof l==='object' && (l.titulo||l.descripcion||l.partRef||l.costoUnit));
     setEf({titulo:t.titulo||"",kitMode:t.kitMode||false,
            status:t.status,clientId:t.clientId||"",supplierId:t.supplierId||"",
-           unitId:t.unitId||"",payType:t.payType||"contado",promesaPago:t.promesaPago||"",
+           unitIds:getTicketUnitIds(t),payType:t.payType||"contado",promesaPago:t.promesaPago||"",
            notes:t.notes||"",priority:t.priority||"P3",
            costoIVA:String(safeNumber(unitCostoIVA)||0),
            _gastos:String(safeNumber(s.gastos)||0),
@@ -11094,6 +11094,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
       ...rest, titulo:newTitulo, qty:newQty, snap:newSnap, lineas:newLineas,
       kitMode:ef.kitMode||false,
       opId:ef.opType||"consumable", opShort:opMeta.short, mods:ef.activeMods||[],
+      unitIds:[...(ef.unitIds||[])], unitId:(ef.unitIds||[])[0]||"",
     }});
     toast("Actualizado","success");
     setEditId(null);
@@ -11433,7 +11434,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
                             options={TICKET_ALL.map(s=>({value:s,label:(TICKET_META[s]?.label||s)}))}/>
                           <ClientPicker clients={clients} value={ef.clientId||""} onChange={sfn("clientId")} mobile/>
                           <SupplierPicker suppliers={suppliers} value={ef.supplierId||""} onChange={sfn("supplierId")} mobile/>
-                          <UnitPicker units={units} value={ef.unitId||""} onChange={sfn("unitId")} mobile/>
+                          <MultiUnitPicker units={units} values={ef.unitIds||[]} onChange={ids=>setEf(p=>({...p,unitIds:ids}))} mobile/>
                           <MSel label="Pago" value={ef.payType} onChange={sfn("payType")}
                             options={[{value:"contado",label:"Contado"},{value:"credit",label:"Crédito"}]}/>
                           {ef.payType==="credit"&&(
