@@ -10482,11 +10482,13 @@ function MCartera({state,dispatch,toast}) {
 
   const A = makeA(C);
 
-  const creditTkts = useMemo(()=>tickets.filter(t=>!t._deleted&&t.payType==="credit"&&t.status!=="cancelado"),[tickets]);
-  // Use status as source of truth — ignore cobrado flag (may be stale in DB)
-  const pendientes = useMemo(()=>creditTkts.filter(t=>CARTERA_SET.has(t.status)),[creditTkts]);
-  const cobradas   = useMemo(()=>creditTkts.filter(t=>t.status==="cobrado"),[creditTkts]);
-  const cerradas   = useMemo(()=>creditTkts.filter(t=>t.status==="cerrado"),[creditTkts]);
+  const active     = useMemo(()=>sel_active(tickets),[tickets]);
+  const creditTkts = useMemo(()=>active.filter(t=>t.payType==="credit"&&t.status!=="cancelado"),[active]);
+  // pendientes = credit-only (accounts receivable concept)
+  const pendientes = useMemo(()=>creditTkts.filter(t=>CARTERA_SET.has(t.status)&&!t.cobrado),[creditTkts]);
+  // cobradas = ALL paid tickets regardless of payType
+  const cobradas   = useMemo(()=>active.filter(t=>PAID_SET.has(t.status)||t.cobrado),[active]);
+  const cerradas   = useMemo(()=>active.filter(t=>t.status==="cerrado"),[active]);
   const totalPend  = useMemo(()=>pendientes.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[pendientes]);
   const totalCob   = useMemo(()=>cobradas.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0),[cobradas]);
 
