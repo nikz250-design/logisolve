@@ -9439,6 +9439,59 @@ function MPipeline({state,dispatch,toast,focusTicketId}) {
 
   const cntOf = st => active.filter(t=>t.status===st).length;
 
+  const filterLabel = filter==="all"?"Todos":filter==="active"?"Activos":filter==="p1"?"P1":filter==="venc"?"Vencidos":(TICKET_META[filter]?.label||filter);
+
+  const exportXLS = () => {
+    const headers = ["Folio","Fecha","Operación","Estado","Prioridad","Cliente","Unidad / Eco.","Tipo Pago","Subtotal s/IVA","IVA","Total c/IVA","Utilidad Neta","Promesa Pago","Cobrado","Notas"];
+    const PAY = {credit:"Crédito",cash:"Contado",transfer:"Transferencia"};
+    const rows = filtered.map(t => {
+      const cl = clients.find(c=>c.id===t.clientId);
+      const unitIds = getTicketUnitIds(t);
+      const un = units.find(u=>unitIds.includes(u.id));
+      return [
+        mkFolio(t,"OP"),
+        t.date||"",
+        t.titulo||"",
+        TICKET_META[t.status]?.label||t.status,
+        t.priority||"",
+        cl?.empresa||"",
+        un ? `${un.economico||""} ${un.marca||""} ${un.modelo||""}`.trim() : "",
+        PAY[t.payType]||t.payType||"",
+        safeNumber(t.snap?.precioSinIVA),
+        safeNumber(t.snap?.ivaTraslad),
+        safeNumber(t.snap?.precioConIVA),
+        safeNumber(t.snap?.uNeta),
+        t.promesaPago||"",
+        t.cobrado?"Sí":"No",
+        t.notes||"",
+      ];
+    });
+    const NUM_COLS = new Set([8,9,10,11]); // 0-indexed money columns
+    const toCell = (v,ci) => NUM_COLS.has(ci)
+      ? `<td style="mso-number-format:'#,##0.00';text-align:right">${Number(v).toFixed(2)}</td>`
+      : `<td>${String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;")}</td>`;
+    const totalConIVA = filtered.reduce((s,t)=>s+safeNumber(t.snap?.precioConIVA),0);
+    const totalUNeta  = filtered.reduce((s,t)=>s+safeNumber(t.snap?.uNeta),0);
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Pipeline ${filterLabel}</x:Name></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>
+<table border="1" style="border-collapse:collapse;font-family:Arial;font-size:11px">
+<thead><tr>${headers.map(h=>`<th style="background:#111;color:#fff;font-weight:bold;padding:6px 8px;white-space:nowrap">${h}</th>`).join("")}</tr></thead>
+<tbody>
+${rows.map(r=>`<tr>${r.map((v,ci)=>toCell(v,ci)).join("")}</tr>`).join("\n")}
+<tr style="font-weight:bold;background:#f0f0f0">
+  <td colspan="10" style="text-align:right;padding:6px 8px">TOTAL (${filtered.length} ops)</td>
+  <td style="mso-number-format:'#,##0.00';text-align:right;font-weight:bold">${totalConIVA.toFixed(2)}</td>
+  <td style="mso-number-format:'#,##0.00';text-align:right;font-weight:bold">${totalUNeta.toFixed(2)}</td>
+  <td colspan="3"></td>
+</tr>
+</tbody></table></body></html>`;
+    const blob = new Blob([html],{type:"application/vnd.ms-excel;charset=utf-8;"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href=url; a.download=`pipeline_${filterLabel.toLowerCase().replace(/\s+/g,"_")}_${new Date().toISOString().slice(0,10)}.xls`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div style={{minHeight:"100vh",background:"transparent",paddingBottom:40}}>
       {statusSheet&&<StatusFlowSheet tkt={statusSheet} dispatch={dispatch} toast={toast} onClose={()=>setStatusSheet(null)}/>}
@@ -9492,6 +9545,11 @@ function MPipeline({state,dispatch,toast,focusTicketId}) {
             background:"transparent",border:`1px solid ${A.pillBorderInactive}`,
             color:A.t3,cursor:"pointer",whiteSpace:"nowrap",transition:"all 0.15s",marginTop:4,
           }}>{sortLabel}</button>
+          <button onClick={exportXLS} title={`Exportar ${filterLabel} a Excel`} style={{
+            flexShrink:0,alignSelf:"center",padding:"7px 10px",borderRadius:20,fontSize:10,fontWeight:700,
+            background:"rgba(43,181,160,0.1)",border:`1px solid ${A.mint}`,
+            color:A.mint,cursor:"pointer",whiteSpace:"nowrap",transition:"all 0.15s",marginTop:4,
+          }}>⬇ XLS</button>
         </div>
 
         {/* Buscador */}
