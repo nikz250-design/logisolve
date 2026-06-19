@@ -861,8 +861,8 @@ function reducer(state,action) {
       })};
     }
     case "TKT_DELETE":   return {...state,tickets:state.tickets.filter(t=>t.id!==action.id)};
-    case "TKT_SOFT_DEL": return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,_deleted:true,_deletedAt:nowISO()})};
-    case "TKT_RESTORE":  return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,_deleted:false,_deletedAt:null})};
+    case "TKT_SOFT_DEL": return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,_deleted:true,_deletedAt:nowISO(),updatedAt:nowISO(),timeline:[...(t.timeline||[]),{ts:nowISO(),evento:"Eliminado",actor:"Operador"}]})};
+    case "TKT_RESTORE":  return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,_deleted:false,_deletedAt:null,updatedAt:nowISO()})};
     case "TKT_COBRADO": return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,cobrado:true,status:"cobrado",timeline:[...(t.timeline||[]),{ts:nowISO(),evento:"Cobrado",actor:"Operador"}],history:[...(t.history||[]),mkEvent("cobrado")]})};
     case "TKT_TIMELINE": return {...state,tickets:state.tickets.map(t=>t.id!==action.id?t:{...t,timeline:[...(t.timeline||[]),{ts:nowISO(),evento:action.evento,actor:action.actor||"Operador"}]})};
     case "TKT_BULK_RENAME": { // action.map: [{oldId,newId}]
@@ -11382,7 +11382,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
                               </button>
                             )}
                             {!CLOSED_SET.has(t.status)&&(
-                              <button onClick={()=>{dispatch({type:"TKT_SOFT_DEL",id:t.id});toast("Eliminado","info");setExpandId(null);}}
+                              <button onClick={()=>{dispatch({type:"TKT_SOFT_DEL",id:t.id});scheduleHardDelete(t.id);toast("Eliminado","info");setExpandId(null);}}
                                 style={{padding:"9px 12px",borderRadius:10,background:"transparent",
                                   border:"1px solid rgba(232,72,72,0.25)",color:A.red,fontSize:11,cursor:"pointer"}}>
                                 🗑
@@ -15536,17 +15536,16 @@ function App() {
           const sup=supaMap.get(id), loc=localMap.get(id);
           if(!sup) return loc;
           if(!loc) return sup;
-          const supTs=sup.timeline?.at(-1)?.ts||'';
-          const locTs=loc.timeline?.at(-1)?.ts||'';
+          const tTs = t => t.timeline?.at(-1)?.ts || t._deletedAt || t.updatedAt || '';
+          const supTs=tTs(sup), locTs=tTs(loc);
           return locTs>supTs ? loc : sup;
         });
       };
-      // Known seed IDs that may have leaked into Supabase — purge them silently
-      const SEED_ORIG_IDS = ["TKT-20260512-001","TKT-20260513-001","TKT-20260513-002","TKT-20260513-003","TKT-20260514-001","TKT-20260514-002","TKT-20260514-003"];
-      SEED_ORIG_IDS.forEach(id => deleteRow("tickets", id));
-
       try {
         await seedIfEmpty();
+        // Purge known demo IDs that may have leaked into Supabase (after seed so we don't trigger re-seed)
+        const SEED_ORIG_IDS = ["TKT-20260512-001","TKT-20260513-001","TKT-20260513-002","TKT-20260513-003","TKT-20260514-001","TKT-20260514-002","TKT-20260514-003"];
+        SEED_ORIG_IDS.forEach(id => deleteRow("tickets", id));
         const data = await loadAllFromSupabase();
         if(data) {
           // Always merge with localStorage so unsynced local changes win
@@ -15591,15 +15590,17 @@ function App() {
         }
         // Flush any pending queue first
         pendingQueue.flush();
-        // Upsert current rows
+        // Upsert non-deleted rows; remove soft-deleted from Supabase immediately
+        const [alive, softDel] = [state.tickets.filter(t=>!t._deleted), state.tickets.filter(t=>t._deleted)];
         await Promise.all([
-          ...state.tickets.map(t=>upsertRow("tickets",t.id,t)),
+          ...alive.map(t=>upsertRow("tickets",t.id,t)),
+          ...softDel.map(t=>deleteRow("tickets",t.id)),
           ...state.clients.map(c=>upsertRow("clients",c.id,c)),
           ...state.suppliers.map(s=>upsertRow("suppliers",s.id,s)),
           ...state.units.map(u=>upsertRow("units",u.id,u)),
           ...state.parts.map(p=>upsertRow("parts",p.id,p)),
         ]);
-        // Delete removed rows
+        // Delete hard-deleted rows
         deletedRef.current.tickets.forEach(id=>{ deleteRow("tickets",id); deletedRef.current.tickets.delete(id); });
         deletedRef.current.clients.forEach(id=>{ deleteRow("clients",id); deletedRef.current.clients.delete(id); });
         deletedRef.current.suppliers.forEach(id=>{ deleteRow("suppliers",id); deletedRef.current.suppliers.delete(id); });
