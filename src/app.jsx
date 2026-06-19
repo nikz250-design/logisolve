@@ -658,7 +658,7 @@ const sel_operados   = (ts) => sel_active(ts).filter(t=>OPERADO_SET.has(t.status
 const sel_cobrados   = (ts) => sel_active(ts).filter(t=>CASH_SET.has(t.status));
 
 // Cartera: delivered/invoiced but not yet paid — business rule lives here
-const sel_cartera    = (ts) => sel_active(ts).filter(t=>CARTERA_SET.has(t.status));
+const sel_cartera    = (ts) => sel_active(ts).filter(t=>CARTERA_SET.has(t.status)&&!t.cobrado);
 
 // Vencidos: cartera past the promesa de pago date
 const sel_vencidos   = (ts) => sel_cartera(ts).filter(t=>{
@@ -15168,12 +15168,12 @@ function MCobranza({state, dispatch, toast}) {
   const active = React.useMemo(() => sel_active(tickets), [tickets]);
 
   const cartera = React.useMemo(() =>
-    active.filter(t => CARTERA_SET.has(t.status))
+    active.filter(t => CARTERA_SET.has(t.status) && !t.cobrado)
       .sort((a,b) => (b.snap?.precioConIVA||0) - (a.snap?.precioConIVA||0)),
     [active]);
 
   const cobrados = React.useMemo(() =>
-    active.filter(t => PAID_SET.has(t.status))
+    active.filter(t => PAID_SET.has(t.status) || t.cobrado)
       .sort((a,b) => {
         const toS = d => { const p=(d||"").split("/"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; };
         return toS(b.date).localeCompare(toS(a.date));
