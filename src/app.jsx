@@ -10984,6 +10984,19 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
     setEf(p=>p._titleManual?p:{...p,titulo:auto});
   },[mLineas,editId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Catalog search for title field (single-line mode)
+  const [titleDropOpen, setTitleDropOpen] = useState(false);
+  const titleCatResults = React.useMemo(()=>{
+    const q=(ef.titulo||"").toLowerCase().trim();
+    if(q.length<2) return [];
+    return (state.parts||[]).filter(p=>
+      (p.nombre||"").toLowerCase().includes(q)||
+      (p.oem||"").toLowerCase().includes(q)||
+      (p.aftermarket||"").toLowerCase().includes(q)||
+      (p.aplicacion||"").toLowerCase().includes(q)
+    ).slice(0,6);
+  },[ef.titulo,state.parts]);
+
   // Catalog search for mobile line editing
   const [mCatalogIdx, setMCatalogIdx] = useState(null);
   const mCatalogResults = React.useMemo(()=>{
@@ -11443,11 +11456,56 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
                                   </button>
                                 )}
                               </div>
-                              <input value={ef.titulo||""} onChange={e=>setEf(p=>({...p,titulo:e.target.value,_titleManual:true}))}
-                                placeholder="Ej: Horquilla clutch Freightliner M2 106"
-                                style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.03)",
-                                  border:`1px solid ${C.borderHi}`,borderRadius:10,padding:"10px 12px",
-                                  color:A.t1,fontSize:13,outline:"none",fontFamily:"inherit"}}/>
+                              <div style={{position:"relative"}}>
+                                <input value={ef.titulo||""}
+                                  onChange={e=>{setEf(p=>({...p,titulo:e.target.value,_titleManual:true}));setTitleDropOpen(true);}}
+                                  onFocus={()=>setTitleDropOpen(true)}
+                                  onBlur={()=>setTimeout(()=>setTitleDropOpen(false),180)}
+                                  placeholder="Ej: Horquilla clutch Freightliner M2 106"
+                                  style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.03)",
+                                    border:`1px solid ${titleDropOpen&&(ef.titulo||"").trim().length>=2?C.blueHi:C.borderHi}`,
+                                    borderRadius:titleDropOpen&&(ef.titulo||"").trim().length>=2?"10px 10px 0 0":10,
+                                    padding:"10px 12px",color:A.t1,fontSize:13,outline:"none",fontFamily:"inherit"}}/>
+                                {titleDropOpen&&(ef.titulo||"").trim().length>=2&&(
+                                  <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:300,
+                                    background:C.bg1,border:`1px solid ${C.blueHi}`,borderTop:"none",
+                                    borderRadius:"0 0 10px 10px",overflow:"hidden",
+                                    boxShadow:"0 8px 24px rgba(0,0,0,0.5)"}}>
+                                    {titleCatResults.map((p,pi)=>(
+                                      <div key={p.id}
+                                        onPointerDown={e=>{e.preventDefault();setEf(pr=>({...pr,titulo:p.nombre,_titleManual:true}));setTitleDropOpen(false);}}
+                                        style={{padding:"9px 12px",cursor:"pointer",
+                                          borderBottom:`1px solid ${C.border}`,
+                                          display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                                        <div style={{minWidth:0,flex:1}}>
+                                          <div style={{fontSize:12,color:A.t1,fontWeight:600,
+                                            overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
+                                          {p.oem&&<div style={{fontSize:10,color:A.cyan,fontFamily:"'Courier New',monospace"}}>{p.oem}</div>}
+                                        </div>
+                                        {p.ultimoPrecio>0&&<span style={{fontSize:11,color:A.lime,fontFamily:"'Courier New',monospace",fontWeight:700,flexShrink:0,marginLeft:8}}>{mxn(p.ultimoPrecio)}</span>}
+                                      </div>
+                                    ))}
+                                    <div
+                                      onPointerDown={e=>{
+                                        e.preventDefault();
+                                        const nombre=(ef.titulo||"").trim();
+                                        if(!nombre) return;
+                                        const exists=(state.parts||[]).find(p=>(p.nombre||"").toLowerCase()===nombre.toLowerCase());
+                                        if(!exists){dispatch({type:"PART_ADD",p:{id:mkPartId(),nombre,oem:"",aftermarket:"",aplicacion:"",notas:`Historial ${todayMX()}`,proveedor:"",ultimoPrecio:safeNumber(ef.costoIVA)||0,ultimaFecha:todayMX(),frecuencia:1}});toast("Agregado al catálogo","success");}
+                                        else toast("Ya existe en el catálogo","info");
+                                        setTitleDropOpen(false);
+                                      }}
+                                      style={{padding:"10px 12px",cursor:"pointer",display:"flex",alignItems:"center",gap:8,
+                                        background:titleCatResults.length===0?"rgba(43,181,160,0.06)":"transparent"}}>
+                                      <span style={{fontSize:16,color:A.cyan,lineHeight:1}}>+</span>
+                                      <div>
+                                        <div style={{fontSize:12,fontWeight:700,color:A.cyan}}>Agregar al catálogo</div>
+                                        {titleCatResults.length===0&&<div style={{fontSize:10,color:A.t3,marginTop:1}}>Sin coincidencias · "{(ef.titulo||"").trim()}"</div>}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                             );
                           })()}
