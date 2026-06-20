@@ -15033,7 +15033,9 @@ function NuevoCasoSheet({open, onClose, state, dispatch, toast, onCreated}) {
           {lbl(`¿Qué necesitan?${validas.length>1?` · ${validas.length} productos`:""}`)}
           {lineas.map((l,i)=>{
             const results = catRes(i);
-            const open = focusedIdx===i && results.length>0;
+            const q = (l.texto||"").trim();
+            const dropOpen = focusedIdx===i && q.length>=2;
+            const noMatches = dropOpen && results.length===0;
             return (
               <div key={i} style={{position:"relative",marginBottom:8}}>
                 <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -15059,8 +15061,8 @@ function NuevoCasoSheet({open, onClose, state, dispatch, toast, onCreated}) {
                       placeholder={i===0?"Junta turbo ISB, filtro, diferencial…":"Agregar otro producto…"}
                       style={{width:"100%",boxSizing:"border-box",
                         background:C.bg0,
-                        border:`1px solid ${open?C.cyan+"88":l.costoUnit>0?"rgba(143,227,190,0.4)":C.border}`,
-                        borderRadius:open?"10px 10px 0 0":10,
+                        border:`1px solid ${dropOpen?C.cyan+"88":l.costoUnit>0?"rgba(143,227,190,0.4)":C.border}`,
+                        borderRadius:dropOpen?"10px 10px 0 0":10,
                         padding:"11px 14px",paddingRight:l.costoUnit>0?80:14,
                         color:C.t1,fontSize:13,outline:"none",fontFamily:"inherit"}}/>
                     {l.costoUnit>0&&(
@@ -15070,7 +15072,7 @@ function NuevoCasoSheet({open, onClose, state, dispatch, toast, onCreated}) {
                         {mxn(l.costoUnit)}
                       </span>
                     )}
-                    {open&&(
+                    {dropOpen&&(
                       <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:400,
                         background:C.bg1,border:`1px solid ${C.cyan+"88"}`,borderTop:"none",
                         borderRadius:"0 0 10px 10px",overflow:"hidden",
@@ -15079,7 +15081,7 @@ function NuevoCasoSheet({open, onClose, state, dispatch, toast, onCreated}) {
                           <div key={p.id}
                             onPointerDown={e=>{e.preventDefault();selPart(i,p);}}
                             style={{padding:"9px 14px",cursor:"pointer",
-                              borderBottom:pi<results.length-1?`1px solid ${C.border}`:"none",
+                              borderBottom:`1px solid ${C.border}`,
                               display:"flex",justifyContent:"space-between",alignItems:"center",
                               background:pi%2===0?"transparent":"rgba(255,255,255,0.02)"}}>
                             <div style={{minWidth:0,flex:1}}>
@@ -15099,6 +15101,36 @@ function NuevoCasoSheet({open, onClose, state, dispatch, toast, onCreated}) {
                             )}
                           </div>
                         ))}
+                        <div
+                          onPointerDown={e=>{
+                            e.preventDefault();
+                            const nombre=q;
+                            const exists=(parts||[]).find(p=>p.nombre.toLowerCase()===nombre.toLowerCase());
+                            if(!exists){
+                              dispatch({type:"PART_ADD",p:{
+                                id:mkPartId(),nombre,oem:"",aftermarket:"",aplicacion:"",
+                                notas:`Nuevo Caso ${todayMX()}`,proveedor:"",ultimoPrecio:0,
+                                ultimaFecha:todayMX(),frecuencia:1,
+                              }});
+                              toast("Agregado al catálogo","success");
+                            }
+                            setFocusedIdx(null);
+                          }}
+                          style={{padding:"10px 14px",cursor:"pointer",display:"flex",
+                            alignItems:"center",gap:10,
+                            background:noMatches?"rgba(43,181,160,0.08)":"transparent"}}>
+                          <span style={{fontSize:16,color:C.cyan,lineHeight:1}}>+</span>
+                          <div>
+                            <div style={{fontSize:12,fontWeight:700,color:C.cyan}}>
+                              Agregar al catálogo
+                            </div>
+                            {noMatches&&(
+                              <div style={{fontSize:10,color:C.t3,marginTop:1}}>
+                                Sin coincidencias · "{q}"
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
