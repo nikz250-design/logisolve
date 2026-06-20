@@ -9780,7 +9780,7 @@ ${rows.map(r=>`<tr>${r.map((v,ci)=>toCell(v,ci)).join("")}</tr>`).join("\n")}
 
 // ── MCotizador — Flujo unificado mobile ────────────────────────────────────────
 // ── PartPicker — Autocomplete inteligente del catálogo ──────────────────────
-function PartPicker({parts, value, onChange, onSelect, placeholder, mobile, onOpenChange}) {
+function PartPicker({parts, value, onChange, onSelect, onAddToCatalog, placeholder, mobile, onOpenChange}) {
   const C = React.useContext(ThemeCtx);
   const [open, setOpen] = useState(false);
   const ref  = useRef();
@@ -9808,7 +9808,17 @@ function PartPicker({parts, value, onChange, onSelect, placeholder, mobile, onOp
     ).slice(0,10);
   },[value,parts]);
 
-  const showDropdown = open && (results.length>0 || (value||"").trim().length>0);
+  const q = (value||"").trim();
+  const showDropdown = open && (results.length>0 || q.length>0);
+  const noMatches = q.length>=2 && results.length===0;
+
+  const handleAdd = e => {
+    e.preventDefault();
+    if(!q) return;
+    onSelect({nombre:q, oem:"", ultimoPrecio:0});
+    if(onAddToCatalog) onAddToCatalog(q);
+    setOpen(false);
+  };
 
   return (
     <div ref={ref} style={{position:"relative",flex:1}}>
@@ -9851,12 +9861,20 @@ function PartPicker({parts, value, onChange, onSelect, placeholder, mobile, onOp
               )}
             </div>
           ))}
-          {(value||"").trim().length>2&&(
-            <div onMouseDown={e=>{e.preventDefault();onSelect({nombre:(value||"").trim(),oem:"",ultimoPrecio:0});setOpen(false);}}
-              onTouchEnd={e=>{e.preventDefault();onSelect({nombre:(value||"").trim(),oem:"",ultimoPrecio:0});setOpen(false);}}
-              style={{padding:"11px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:18,color:"#F5F5F7",lineHeight:1}}>＋</span>
-              <span style={{fontSize:13,color:"#F5F5F7",fontWeight:600}}>Agregar "{(value||"").trim().slice(0,30)}"</span>
+          {q.length>0&&(
+            <div onMouseDown={handleAdd} onTouchEnd={handleAdd}
+              style={{padding:"11px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:8,
+                background:noMatches?"rgba(43,181,160,0.06)":"transparent",
+                borderTop:results.length>0?`1px solid ${C.border}`:"none"}}>
+              <span style={{fontSize:18,color:noMatches?C.cyan:"#F5F5F7",lineHeight:1}}>＋</span>
+              <div>
+                <div style={{fontSize:13,fontWeight:700,color:noMatches?C.cyan:"#F5F5F7"}}>
+                  {noMatches?"Agregar al catálogo":`Usar "${q.slice(0,30)}"`}
+                </div>
+                {noMatches&&<div style={{fontSize:10,color:C.t3,marginTop:1}}>
+                  Sin coincidencias · se guardará para futuras búsquedas
+                </div>}
+              </div>
             </div>
           )}
         </div>
@@ -10189,6 +10207,10 @@ function MCotizador({state,dispatch,toast}) {
                 value={partQ[i]!==undefined?partQ[i]:(l.titulo||"")}
                 onChange={v=>{setPartQ(q=>({...q,[i]:v}));upd(i,{titulo:v});}}
                 onSelect={p=>selectPart(i,p)}
+                onAddToCatalog={nombre=>{
+                  const exists=(state.parts||[]).find(p=>safeLower(p.nombre)===safeLower(nombre));
+                  if(!exists){dispatch({type:"PART_ADD",p:{id:mkPartId(),nombre:nombre.trim(),oem:"",aftermarket:"",aplicacion:"",notas:`Cotizador ${todayMX()}`,proveedor:"",ultimoPrecio:l.costoUnit||0,ultimaFecha:todayMX(),frecuencia:1}});toast("Agregado al catálogo","success");}
+                }}
                 onOpenChange={v=>setPickerOpen(m=>({...m,[i]:v}))}
                 mobile
               />
@@ -11691,6 +11713,43 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
                                         </div>
                                       </div>
                                     ))}
+                                  </div>
+                                )}
+                                {mCatalogIdx===idx&&mCatalogResults.length===0&&(mLineas[idx]?.titulo||"").trim().length>=2&&(
+                                  <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:200,
+                                    background:C.bg1,border:`1px solid ${C.border}`,borderTop:"none",
+                                    borderRadius:"0 0 8px 8px",boxShadow:"0 4px 16px rgba(0,0,0,0.4)"}}>
+                                    <div
+                                      onPointerDown={e=>{
+                                        e.preventDefault();
+                                        const titulo=(mLineas[idx]?.titulo||"").trim();
+                                        if(!titulo) return;
+                                        const partRef=(mLineas[idx]?.partRef||"").trim();
+                                        const costoUnit=safeNumber(mLineas[idx]?.costoUnit)||0;
+                                        const existing=(state.parts||[]).find(p=>(p.nombre||"").toLowerCase()===titulo.toLowerCase());
+                                        if(!existing){
+                                          dispatch({type:"PART_ADD",p:{
+                                            id:mkPartId(),nombre:titulo,oem:partRef,aftermarket:"",
+                                            aplicacion:"",notas:`Cotizador ${todayMX()}`,
+                                            proveedor:"",ultimoPrecio:costoUnit,
+                                            ultimaFecha:todayMX(),frecuencia:1,
+                                          }});
+                                          toast("Agregado al catálogo","success");
+                                        } else {
+                                          toast("Ya existe en el catálogo","info");
+                                        }
+                                        setMCatalogIdx(null);
+                                      }}
+                                      style={{padding:"11px 14px",cursor:"pointer",display:"flex",
+                                        alignItems:"center",gap:10}}>
+                                      <span style={{fontSize:18,color:A.cyan,lineHeight:1}}>+</span>
+                                      <div>
+                                        <div style={{fontSize:12,fontWeight:700,color:A.cyan}}>Agregar al catálogo</div>
+                                        <div style={{fontSize:10,color:A.t3,marginTop:2}}>
+                                          "{(mLineas[idx]?.titulo||"").trim()}"
+                                        </div>
+                                      </div>
+                                    </div>
                                   </div>
                                 )}
                               </div>
