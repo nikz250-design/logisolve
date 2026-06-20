@@ -11490,7 +11490,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
                               {ef.quoteMode?(()=>{
                                 const mgn=effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
                                 const qty=Math.max(1,safeNumber(ef.qty)||1);
-                                const unitCalc=safeNumber(ef.costoIVA)>0?computeSnap({costo:safeNumber(ef.costoIVA),compraConIVA:true,mode:"auto",margin:mgn,gasolina:0,otros:0,iva:ef._iva||16,isr:ef._isr||20}).precioConIVA:0;
+                                const unitCalc=safeNumber(ef.costoIVA)>0?computeSnap({costo:safeNumber(ef.costoIVA),compraConIVA:true,mode:"auto",margin:mgn,gasolina:safeNumber(ef._gastos)||0,otros:0,iva:ef._iva||16,isr:ef._isr||20}).precioConIVA:0;
                                 return <div style={{width:"100%",boxSizing:"border-box",background:"rgba(43,181,160,0.06)",
                                   border:`1px solid ${C.blue}44`,borderRadius:10,padding:"10px 12px",
                                   color:A.lime,fontSize:14,fontWeight:700,fontVariantNumeric:"tabular-nums",
