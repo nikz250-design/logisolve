@@ -15310,6 +15310,149 @@ function MasSheet({open,onClose,tab,setTab}) {
   );
 }
 
+// ── CobrosHeatMap — Calendario de calor de cobros ────────────────────────────
+function CobrosHeatMap({cobrados, clients, mxn, A, C}) {
+  const [viewDate, setViewDate] = React.useState(()=>new Date());
+  const [selDay,   setSelDay]   = React.useState(null); // YYYY-MM-DD
+
+  const getCobradoDate = t => {
+    const ev = (t.timeline||[]).slice().reverse().find(e=>e.evento==="Cobrado"||e.evento==="cobrado");
+    if(ev?.ts) return ev.ts.slice(0,10);
+    if(t.date){const p=t.date.split("/");if(p.length===3) return `${p[2]}-${p[1]}-${p[0]}`;}
+    return null;
+  };
+
+  const byDay = React.useMemo(()=>{
+    const map={};
+    cobrados.forEach(t=>{
+      const d=getCobradoDate(t);
+      if(!d) return;
+      if(!map[d]) map[d]={total:0,tkts:[]};
+      map[d].total+=safeNumber(t.snap?.precioConIVA);
+      map[d].tkts.push(t);
+    });
+    return map;
+  },[cobrados]);
+
+  const year=viewDate.getFullYear(), month=viewDate.getMonth();
+  const firstDow=(new Date(year,month,1).getDay()+6)%7; // 0=Lun
+  const daysInMonth=new Date(year,month+1,0).getDate();
+  const cells=[];
+  for(let i=0;i<42;i++){
+    const dn=i-firstDow+1;
+    cells.push((dn>=1&&dn<=daysInMonth)?`${year}-${String(month+1).padStart(2,"0")}-${String(dn).padStart(2,"0")}`:null);
+  }
+  // trim trailing empty rows
+  while(cells.length>7&&cells.slice(-7).every(c=>!c)) cells.splice(-7);
+
+  const maxTotal=Math.max(...Object.values(byDay).map(d=>d.total),1);
+  const today=new Date().toISOString().slice(0,10);
+  const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  const DIAS=["L","M","X","J","V","S","D"];
+
+  const monthPfx=`${year}-${String(month+1).padStart(2,"0")}`;
+  const monthTkts=Object.entries(byDay).filter(([d])=>d.startsWith(monthPfx));
+  const monthTotal=monthTkts.reduce((s,[,v])=>s+v.total,0);
+  const monthCount=monthTkts.reduce((s,[,v])=>s+v.tkts.length,0);
+
+  const selData=selDay?byDay[selDay]:null;
+
+  return (
+    <div style={{marginBottom:20}}>
+      {/* Header mes + navegación */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <button onClick={()=>setViewDate(d=>{const n=new Date(d);n.setMonth(n.getMonth()-1);return n;})}
+          style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:8,
+            width:34,height:34,cursor:"pointer",color:C.t2,fontSize:18,lineHeight:1}}>‹</button>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:14,fontWeight:800,color:C.t1}}>{MESES[month]} {year}</div>
+          {monthTotal>0&&<div style={{fontSize:10,color:"#8FE3BE",marginTop:1}}>{monthCount} cobro{monthCount!==1?"s":""} · {mxn(monthTotal)}</div>}
+        </div>
+        <button onClick={()=>setViewDate(d=>{const n=new Date(d);n.setMonth(n.getMonth()+1);return n;})}
+          style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:8,
+            width:34,height:34,cursor:"pointer",color:C.t2,fontSize:18,lineHeight:1}}>›</button>
+      </div>
+
+      {/* Encabezados días */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:4}}>
+        {DIAS.map(d=><div key={d} style={{textAlign:"center",fontSize:9,color:C.t3,fontWeight:700}}>{d}</div>)}
+      </div>
+
+      {/* Celdas del calendario */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
+        {cells.map((day,i)=>{
+          if(!day) return <div key={i}/>;
+          const data=byDay[day];
+          const intensity=data?Math.pow(data.total/maxTotal,0.5):0;
+          const isSel=day===selDay, isToday=day===today;
+          const bg=data
+            ?`rgba(143,227,190,${0.1+intensity*0.82})`
+            :isToday?"rgba(43,181,160,0.07)":"transparent";
+          return (
+            <div key={day} onClick={()=>setSelDay(v=>v===day?null:day)}
+              style={{
+                aspectRatio:"1",borderRadius:7,cursor:data?"pointer":"default",
+                display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+                border:isSel?`2px solid ${C.cyan}`:isToday?`1px solid ${C.blueHi}`:`1px solid ${C.border}`,
+                background:isSel?`rgba(43,181,160,${0.08+intensity*0.35})`:bg,
+                transition:"background 0.15s",
+              }}>
+              <span style={{fontSize:10,fontWeight:isSel||isToday?800:data?600:400,
+                color:data?`rgba(143,227,190,${0.5+intensity*0.5})`:isToday?C.cyan:C.t4||C.t3}}>
+                {parseInt(day.slice(8))}
+              </span>
+              {data&&<div style={{width:3,height:3,borderRadius:"50%",marginTop:1,
+                background:`rgba(143,227,190,${0.5+intensity*0.5})`}}/>}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Leyenda */}
+      <div style={{display:"flex",alignItems:"center",gap:6,marginTop:10,justifyContent:"flex-end"}}>
+        <span style={{fontSize:9,color:C.t3}}>Menos</span>
+        {[0.1,0.3,0.55,0.78,1].map((op,i)=>(
+          <div key={i} style={{width:12,height:12,borderRadius:3,
+            background:`rgba(143,227,190,${op})`,border:`1px solid ${C.border}`}}/>
+        ))}
+        <span style={{fontSize:9,color:C.t3}}>Más</span>
+      </div>
+
+      {/* Detalle del día seleccionado */}
+      {selData&&(
+        <div style={{marginTop:14}}>
+          <div style={{fontSize:9,color:C.cyan,letterSpacing:"0.14em",textTransform:"uppercase",
+            fontWeight:800,marginBottom:8}}>
+            {selDay.slice(8)}/{selDay.slice(5,7)}/{selDay.slice(0,4)}
+            &nbsp;·&nbsp;{selData.tkts.length} op{selData.tkts.length!==1?"s":""}
+            &nbsp;·&nbsp;{mxn(selData.total)}
+          </div>
+          {selData.tkts.map(t=>{
+            const cl=clients.find(c=>c.id===t.clientId);
+            return (
+              <div key={t.id} style={{background:C.bg1,border:`1px solid rgba(43,181,160,0.2)`,
+                borderRadius:12,padding:"10px 12px",marginBottom:6,
+                display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:11,fontWeight:700,color:C.t1,
+                    overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                  <div style={{fontSize:10,color:C.t3,marginTop:2}}>
+                    {mkFolio(t,"OP")}&nbsp;·&nbsp;{cl?.empresa||"Sin cliente"}
+                  </div>
+                </div>
+                <span style={{fontSize:13,fontWeight:800,color:"#8FE3BE",
+                  fontFamily:"'Courier New',monospace",flexShrink:0}}>
+                  {mxn(safeNumber(t.snap?.precioConIVA))}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MCobranza({state, dispatch, toast}) {
   const C = React.useContext(ThemeCtx);
   const A = makeA(C);
@@ -15468,10 +15611,21 @@ function MCobranza({state, dispatch, toast}) {
           </>
         )}
 
-        {tab==="cobrado" && listItems.map(t => <CobranzaCard key={t.id} t={t} clients={clients}
-          C={C} A={A} mxn={mxn} daysSince={daysSince} action={null}
-          dispatch={dispatch} toast={toast}
-        />)}
+        {tab==="cobrado" && (
+          <>
+            <CobrosHeatMap cobrados={cobrados} clients={clients} mxn={mxn} A={A} C={C}/>
+            {listItems.length>0&&(
+              <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase",
+                fontWeight:700,marginBottom:8}}>
+                Todos ({listItems.length})
+              </div>
+            )}
+            {listItems.map(t => <CobranzaCard key={t.id} t={t} clients={clients}
+              C={C} A={A} mxn={mxn} daysSince={daysSince} action={null}
+              dispatch={dispatch} toast={toast}
+            />)}
+          </>
+        )}
       </div>
     </div>
   );
