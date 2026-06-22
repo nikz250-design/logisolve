@@ -15316,8 +15316,14 @@ function CobrosHeatMap({cobrados, clients, mxn, A, C}) {
   const [selDay,   setSelDay]   = React.useState(null); // YYYY-MM-DD
 
   const getCobradoDate = t => {
-    const ev = (t.timeline||[]).slice().reverse().find(e=>e.evento==="Cobrado"||e.evento==="cobrado");
-    if(ev?.ts) return ev.ts.slice(0,10);
+    // Busca el evento de cobro en el timeline (cualquier variante del nombre)
+    const ev = (t.timeline||[]).slice().reverse().find(e=>{
+      const ev=(e.evento||"").toLowerCase();
+      return ev==="cobrado"||ev==="cobrado ✓"||ev==="pagado"||ev.includes("cobr");
+    });
+    if(ev?.ts) return ev.ts.slice(0,10); // YYYY-MM-DD
+    // Si no hay evento pero el ticket está cobrado, usa updatedAt o fecha del ticket
+    if(t.updatedAt) return t.updatedAt.slice(0,10);
     if(t.date){const p=t.date.split("/");if(p.length===3) return `${p[2]}-${p[1]}-${p[0]}`;}
     return null;
   };
@@ -15467,14 +15473,19 @@ function MCobranza({state, dispatch, toast}) {
       .sort((a,b) => (b.snap?.precioConIVA||0) - (a.snap?.precioConIVA||0)),
     [active]);
 
+  // allCobrados — sin límite, para el mapa de calor (necesita ver todos los días)
+  const allCobrados = React.useMemo(() =>
+    active.filter(t => PAID_SET.has(t.status) || t.cobrado),
+    [active]);
+
   const cobrados = React.useMemo(() =>
-    active.filter(t => PAID_SET.has(t.status) || t.cobrado)
+    allCobrados
       .sort((a,b) => {
         const toS = d => { const p=(d||"").split("/"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; };
         return toS(b.date).localeCompare(toS(a.date));
       })
-      .slice(0, 40),
-    [active]);
+      .slice(0, 60),
+    [allCobrados]);
 
   const pendiente = cartera.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0);
 
@@ -15613,7 +15624,7 @@ function MCobranza({state, dispatch, toast}) {
 
         {tab==="cobrado" && (
           <>
-            <CobrosHeatMap cobrados={cobrados} clients={clients} mxn={mxn} A={A} C={C}/>
+            <CobrosHeatMap cobrados={allCobrados} clients={clients} mxn={mxn} A={A} C={C}/>
             {listItems.length>0&&(
               <div style={{fontSize:9,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase",
                 fontWeight:700,marginBottom:8}}>
