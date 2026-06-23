@@ -635,7 +635,8 @@ function utilidadPonderada(uNeta, probId) {
 // Active non-deleted tickets
 const PIPE_STATUS_ORD = ["recibido","validando","sourcing","cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado","cancelado"];
 const sel_active     = (ts) => {
-  // LWW dedup: same ID → most recent timeline event wins; tiebreak by status priority
+  // LWW dedup: same ID → most recent timeline event wins; tiebreak by status priority.
+  // Returns Array.from(best.values()) so duplicates in ts (same ref or same ID) can't sneak through.
   const best = new Map();
   ts.forEach(t => {
     if (t._deleted) return;
@@ -648,7 +649,7 @@ const sel_active     = (ts) => {
       best.set(t.id, t);
     }
   });
-  return ts.filter(t => !t._deleted && best.get(t.id) === t);
+  return Array.from(best.values());
 };
 
 // Operado: work already done (entregado/facturado/cobrado/cerrado)
@@ -933,7 +934,7 @@ function reducer(state,action) {
             best.set(t.id, t);
           }
         });
-        return ts.filter(t => best.get(t.id) === t);
+        return Array.from(best.values());
       };
       // Migration: tickets where cobrado=true but status wasn't updated to "cobrado"
       // (old reducer bug). Promote them so they leave the Entregado column.
@@ -15479,12 +15480,12 @@ function MCobranza({state, dispatch, toast}) {
     [active]);
 
   const cobrados = React.useMemo(() =>
-    allCobrados
+    [...allCobrados]
       .sort((a,b) => {
         const toS = d => { const p=(d||"").split("/"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; };
         return toS(b.date).localeCompare(toS(a.date));
       })
-      .slice(0, 60),
+      .slice(0, 40),
     [allCobrados]);
 
   const pendiente = cartera.reduce((s,t)=>s+(t.snap?.precioConIVA||0),0);
