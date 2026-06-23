@@ -938,10 +938,24 @@ function reducer(state,action) {
       };
       // Migration: tickets where cobrado=true but status wasn't updated to "cobrado"
       // (old reducer bug). Promote them so they leave the Entregado column.
+      // IMPORTANT: we also bump the timeline so mergeTickets gives locTs > supTs and
+      // the promoted version beats the stale Supabase copy until the sync persists it.
       const PAID_STATUS = new Set(["cobrado","cerrado"]);
-      const fixCobrado = (ts) => Array.isArray(ts)
-        ? ts.map(t => (t.cobrado && !PAID_STATUS.has(t.status)) ? {...t, status:"cobrado"} : t)
-        : ts;
+      const fixCobrado = (ts) => {
+        if (!Array.isArray(ts)) return ts;
+        const now = new Date().toISOString();
+        return ts.map(t => {
+          if (t.cobrado && !PAID_STATUS.has(t.status)) {
+            return {
+              ...t,
+              status: "cobrado",
+              updatedAt: now,
+              timeline: [...(t.timeline||[]), {ts: now, evento: "Cobrado", actor: "Sistema"}],
+            };
+          }
+          return t;
+        });
+      };
       return {
         tickets:   fixCobrado(dedupTickets(merge(d.tickets,   state.tickets))),
         clients:   merge(d.clients,   state.clients),
@@ -15844,6 +15858,8 @@ function App() {
       };
       // Merge tickets ticket-by-ticket: prefer the version with the most recent
       // timeline event so local changes that didn't sync yet are never overwritten.
+      // Tiebreak on equal timestamps: more-advanced pipeline status wins (cobrado > facturado).
+      const MERGE_PIPE_ORD = ["recibido","validando","sourcing","cotizado","autorizado","comprado","transito","entregado","facturado","cobrado","cerrado","cancelado"];
       const mergeTickets = (supaList, localList) => {
         if(!Array.isArray(localList)||!localList.length) return supaList||[];
         if(!Array.isArray(supaList)||!supaList.length)  return localList;
@@ -15856,7 +15872,10 @@ function App() {
           if(!loc) return sup;
           const tTs = t => t.timeline?.at(-1)?.ts || t._deletedAt || t.updatedAt || '';
           const supTs=tTs(sup), locTs=tTs(loc);
-          return locTs>supTs ? loc : sup;
+          if(locTs > supTs) return loc;
+          if(supTs > locTs) return sup;
+          // Equal timestamps: pick the more-advanced pipeline status
+          return MERGE_PIPE_ORD.indexOf(loc.status) >= MERGE_PIPE_ORD.indexOf(sup.status) ? loc : sup;
         });
       };
       try {
