@@ -15514,8 +15514,12 @@ function MCobranza({state, dispatch, toast}) {
     );
   };
 
-  const porFacturar = applySearch(cartera.filter(t=>t.status==="entregado"));
-  const porCobrar   = applySearch(cartera.filter(t=>t.status==="facturado"));
+  // Exclude from "Por cobrar/facturar" any ticket that is already in allCobrados,
+  // regardless of what the status field says (belt-and-suspenders against stale data).
+  const cobradosIds = React.useMemo(() => new Set(allCobrados.map(t => t.id)), [allCobrados]);
+
+  const porFacturar = applySearch(cartera.filter(t=>t.status==="entregado" && !cobradosIds.has(t.id)));
+  const porCobrar   = applySearch(cartera.filter(t=>t.status==="facturado" && !cobradosIds.has(t.id)));
 
   const mxn = n => safeNumber(n).toLocaleString("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2});
   const daysSince = dateStr => {
