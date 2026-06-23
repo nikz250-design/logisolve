@@ -11434,13 +11434,11 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
                                 Cobrar ✓
                               </button>
                             )}
-                            {!CLOSED_SET.has(t.status)&&(
-                              <button onClick={()=>{dispatch({type:"TKT_SOFT_DEL",id:t.id});scheduleHardDelete(t.id);toast("Eliminado","info");setExpandId(null);}}
+                            <button onClick={()=>{dispatch({type:"TKT_SOFT_DEL",id:t.id});scheduleHardDelete(t.id);toast("Eliminado","info");setExpandId(null);}}
                                 style={{padding:"9px 12px",borderRadius:10,background:"transparent",
                                   border:"1px solid rgba(232,72,72,0.25)",color:A.red,fontSize:11,cursor:"pointer"}}>
                                 🗑
                               </button>
-                            )}
                           </div>
                         </div>
                       )}
