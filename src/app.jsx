@@ -945,7 +945,7 @@ function reducer(state,action) {
         if (!Array.isArray(ts)) return ts;
         const now = new Date().toISOString();
         return ts.map(t => {
-          if (t.cobrado && !PAID_STATUS.has(t.status)) {
+          if (t.cobrado && !PAID_STATUS.has(t.status) && !t._deleted) {
             return {
               ...t,
               status: "cobrado",
@@ -15929,11 +15929,13 @@ function App() {
         }
         // Flush any pending queue first
         pendingQueue.flush();
-        // Upsert non-deleted rows; remove soft-deleted from Supabase immediately
-        const [alive, softDel] = [state.tickets.filter(t=>!t._deleted), state.tickets.filter(t=>t._deleted)];
+        // Upsert ALL tickets (alive + soft-deleted tombstones with _deleted:true).
+        // Soft-deleted rows are upserted rather than deleted so Supabase keeps the
+        // tombstone — this prevents deleted tickets from reappearing on reload if the
+        // final hard-DELETE to Supabase ever fails silently.
+        // Hard-deleted IDs (from deletedRef, after TKT_DELETE) still get deleted below.
         await Promise.all([
-          ...alive.map(t=>upsertRow("tickets",t.id,t)),
-          ...softDel.map(t=>deleteRow("tickets",t.id)),
+          ...state.tickets.map(t=>upsertRow("tickets",t.id,t)),
           ...state.clients.map(c=>upsertRow("clients",c.id,c)),
           ...state.suppliers.map(s=>upsertRow("suppliers",s.id,s)),
           ...state.units.map(u=>upsertRow("units",u.id,u)),
