@@ -15371,8 +15371,10 @@ function CobrosHeatMap({cobrados, clients, mxn, A, C}) {
 
   const monthPfx=`${year}-${String(month+1).padStart(2,"0")}`;
   const monthTkts=Object.entries(byDay).filter(([d])=>d.startsWith(monthPfx));
-  const monthTotal=monthTkts.reduce((s,[,v])=>s+v.total,0);
-  const monthCount=monthTkts.reduce((s,[,v])=>s+v.tkts.length,0);
+  const monthTotal   = monthTkts.reduce((s,[,v])=>s+v.total,0);
+  const monthCount   = monthTkts.reduce((s,[,v])=>s+v.tkts.length,0);
+  const monthIvaNeto = monthTkts.reduce((s,[,v])=>s+v.tkts.reduce((a,t)=>a+safeNumber(t.snap?.ivaNeto),0),0);
+  const monthIsr     = monthTkts.reduce((s,[,v])=>s+v.tkts.reduce((a,t)=>a+safeNumber(t.snap?.isr),0),0);
 
   const selData=selDay?byDay[selDay]:null;
 
@@ -15386,6 +15388,19 @@ function CobrosHeatMap({cobrados, clients, mxn, A, C}) {
         <div style={{textAlign:"center"}}>
           <div style={{fontSize:14,fontWeight:800,color:C.t1}}>{MESES[month]} {year}</div>
           {monthTotal>0&&<div style={{fontSize:10,color:"#8FE3BE",marginTop:1}}>{monthCount} cobro{monthCount!==1?"s":""} · {mxn(monthTotal)}</div>}
+          {monthTotal>0&&(
+            <div style={{display:"flex",gap:12,justifyContent:"center",marginTop:5,flexWrap:"wrap"}}>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}>
+                <span style={{fontSize:7,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase"}}>IVA neto SAT</span>
+                <span style={{fontSize:11,fontWeight:700,color:C.yellow,fontFamily:"'Courier New',monospace"}}>{mxn(monthIvaNeto)}</span>
+              </div>
+              <div style={{width:1,background:C.border,alignSelf:"stretch"}}/>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}>
+                <span style={{fontSize:7,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase"}}>ISR estimado</span>
+                <span style={{fontSize:11,fontWeight:700,color:C.purple,fontFamily:"'Courier New',monospace"}}>{mxn(monthIsr)}</span>
+              </div>
+            </div>
+          )}
         </div>
         <button onClick={()=>setViewDate(d=>{const n=new Date(d);n.setMonth(n.getMonth()+1);return n;})}
           style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:8,
