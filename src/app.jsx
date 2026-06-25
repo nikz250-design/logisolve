@@ -15438,36 +15438,148 @@ function CobrosHeatMap({cobrados, clients, mxn, A, C}) {
       </div>
 
       {/* Detalle del día seleccionado */}
-      {selData&&(
-        <div style={{marginTop:14}}>
-          <div style={{fontSize:9,color:C.cyan,letterSpacing:"0.14em",textTransform:"uppercase",
-            fontWeight:800,marginBottom:8}}>
-            {selDay.slice(8)}/{selDay.slice(5,7)}/{selDay.slice(0,4)}
-            &nbsp;·&nbsp;{selData.tkts.length} op{selData.tkts.length!==1?"s":""}
-            &nbsp;·&nbsp;{mxn(selData.total)}
+      {selData&&(()=>{
+        // Sumar todos los campos financieros del día
+        const tot = selData.tkts.reduce((s,t)=>{
+          const sn = t.snap||{};
+          return {
+            precioConIVA: s.precioConIVA + safeNumber(sn.precioConIVA),
+            precioSinIVA: s.precioSinIVA + safeNumber(sn.precioSinIVA),
+            costoBase:    s.costoBase    + safeNumber(sn.costoBase),
+            gastos:       s.gastos       + safeNumber(sn.gastos),
+            costoTotal:   s.costoTotal   + safeNumber(sn.costoTotal),
+            ivaTraslad:   s.ivaTraslad   + safeNumber(sn.ivaTraslad),
+            ivaAcred:     s.ivaAcred     + safeNumber(sn.ivaAcred),
+            ivaNeto:      s.ivaNeto      + safeNumber(sn.ivaNeto),
+            isr:          s.isr          + safeNumber(sn.isr),
+            uBruta:       s.uBruta       + safeNumber(sn.uBruta),
+            uNeta:        s.uNeta        + safeNumber(sn.uNeta),
+            cargaFiscal:  s.cargaFiscal  + safeNumber(sn.cargaFiscal),
+          };
+        },{precioConIVA:0,precioSinIVA:0,costoBase:0,gastos:0,costoTotal:0,
+           ivaTraslad:0,ivaAcred:0,ivaNeto:0,isr:0,uBruta:0,uNeta:0,cargaFiscal:0});
+
+        // Barra proporcional: costo / fiscal / utilidad
+        const base  = Math.max(tot.precioConIVA, 1);
+        const pCost = Math.max(tot.costoTotal / base * 100, 0);
+        const pIva  = Math.max(tot.ivaNeto    / base * 100, 0);
+        const pIsr  = Math.max(tot.isr        / base * 100, 0);
+        const pUtil = Math.max(100 - pCost - pIva - pIsr, 0);
+
+        const row = (label, val, color, note) => (
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+            padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
+            <div>
+              <span style={{fontSize:11,color:C.t2}}>{label}</span>
+              {note&&<span style={{fontSize:9,color:C.t3,marginLeft:6}}>{note}</span>}
+            </div>
+            <span style={{fontSize:12,fontWeight:700,color,fontFamily:"'Courier New',monospace",
+              flexShrink:0,marginLeft:8}}>{mxn(val)}</span>
           </div>
-          {selData.tkts.map(t=>{
-            const cl=clients.find(c=>c.id===t.clientId);
-            return (
-              <div key={t.id} style={{background:C.bg1,border:`1px solid rgba(43,181,160,0.2)`,
-                borderRadius:12,padding:"10px 12px",marginBottom:6,
-                display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:11,fontWeight:700,color:C.t1,
-                    overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
-                  <div style={{fontSize:10,color:C.t3,marginTop:2}}>
-                    {mkFolio(t,"OP")}&nbsp;·&nbsp;{cl?.empresa||"Sin cliente"}
-                  </div>
-                </div>
-                <span style={{fontSize:13,fontWeight:800,color:"#8FE3BE",
-                  fontFamily:"'Courier New',monospace",flexShrink:0}}>
-                  {mxn(safeNumber(t.snap?.precioConIVA))}
-                </span>
+        );
+
+        return (
+          <div style={{marginTop:14}}>
+            {/* Header día */}
+            <div style={{fontSize:9,color:C.cyan,letterSpacing:"0.14em",textTransform:"uppercase",
+              fontWeight:800,marginBottom:12}}>
+              {selDay.slice(8)}/{selDay.slice(5,7)}/{selDay.slice(0,4)}
+              &nbsp;·&nbsp;{selData.tkts.length} op{selData.tkts.length!==1?"s":""}
+              &nbsp;·&nbsp;{mxn(tot.precioConIVA)}
+            </div>
+
+            {/* Barra de desglose visual */}
+            <div style={{marginBottom:14}}>
+              <div style={{display:"flex",height:10,borderRadius:5,overflow:"hidden",gap:1}}>
+                <div style={{width:`${pCost}%`,background:"rgba(251,146,60,0.7)"}}/>
+                <div style={{width:`${pIva}%`, background:"rgba(239,68,68,0.65)"}}/>
+                <div style={{width:`${pIsr}%`, background:"rgba(167,139,250,0.7)"}}/>
+                <div style={{width:`${pUtil}%`,background:"rgba(52,211,153,0.75)"}}/>
               </div>
-            );
-          })}
-        </div>
-      )}
+              <div style={{display:"flex",gap:10,marginTop:5,flexWrap:"wrap"}}>
+                {[
+                  ["Costo","rgba(251,146,60,0.8)",pCost],
+                  ["IVA neto SAT","rgba(239,68,68,0.8)",pIva],
+                  ["ISR","rgba(167,139,250,0.8)",pIsr],
+                  ["Utilidad","rgba(52,211,153,0.8)",pUtil],
+                ].map(([l,c,p])=>(
+                  <div key={l} style={{display:"flex",alignItems:"center",gap:4}}>
+                    <div style={{width:8,height:8,borderRadius:2,background:c,flexShrink:0}}/>
+                    <span style={{fontSize:8,color:C.t3}}>{l} {p.toFixed(0)}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Tabla de desglose */}
+            <div style={{background:C.bg1,border:`1px solid rgba(43,181,160,0.2)`,
+              borderRadius:14,padding:"4px 14px 2px",marginBottom:12}}>
+
+              <div style={{fontSize:8,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase",
+                fontWeight:700,padding:"8px 0 4px",borderBottom:`1px solid ${C.border}`}}>
+                Ingresos
+              </div>
+              {row("Total cobrado (c/IVA)",  tot.precioConIVA, "#8FE3BE")}
+              {row("Subtotal sin IVA",       tot.precioSinIVA, C.t1)}
+
+              <div style={{fontSize:8,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase",
+                fontWeight:700,padding:"8px 0 4px",borderBottom:`1px solid ${C.border}`}}>
+                Costos
+              </div>
+              {row("Costo de producto",  tot.costoBase,  "rgba(251,146,60,0.9)")}
+              {tot.gastos>0&&row("Gastos / Flete", tot.gastos, "rgba(251,146,60,0.7)")}
+              {row("Costo total",        tot.costoTotal, C.t1)}
+
+              <div style={{fontSize:8,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase",
+                fontWeight:700,padding:"8px 0 4px",borderBottom:`1px solid ${C.border}`}}>
+                Utilidad
+              </div>
+              {row("Utilidad bruta",  tot.uBruta, C.t1)}
+              {row("Utilidad neta",   tot.uNeta,  tot.uNeta>=0?"rgba(52,211,153,0.9)":"rgba(239,68,68,0.9)")}
+
+              <div style={{fontSize:8,color:C.t3,letterSpacing:"0.12em",textTransform:"uppercase",
+                fontWeight:700,padding:"8px 0 4px",borderBottom:`1px solid ${C.border}`}}>
+                Carga fiscal
+              </div>
+              {row("IVA cobrado al cliente",    tot.ivaTraslad, C.t2)}
+              {row("IVA acreditable (compras)", tot.ivaAcred,   C.t2, "−")}
+              {row("IVA neto SAT",              tot.ivaNeto,    "rgba(239,68,68,0.9)", "a pagar")}
+              {row("ISR a apartar",             tot.isr,        "rgba(167,139,250,0.9)", `~${tot.precioSinIVA>0?(tot.isr/tot.precioSinIVA*100).toFixed(0):0}%`)}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                padding:"7px 0 8px"}}>
+                <span style={{fontSize:12,fontWeight:800,color:C.t1}}>Carga fiscal total</span>
+                <span style={{fontSize:13,fontWeight:900,color:"rgba(239,68,68,0.95)",
+                  fontFamily:"'Courier New',monospace"}}>{mxn(tot.cargaFiscal)}</span>
+              </div>
+            </div>
+
+            {/* Lista de ops del día */}
+            {selData.tkts.map(t=>{
+              const cl=clients.find(c=>c.id===t.clientId);
+              return (
+                <div key={t.id} style={{background:C.bg1,border:`1px solid rgba(43,181,160,0.15)`,
+                  borderRadius:12,padding:"10px 12px",marginBottom:6,
+                  display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:11,fontWeight:700,color:C.t1,
+                      overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                    <div style={{fontSize:10,color:C.t3,marginTop:2}}>
+                      {mkFolio(t,"OP")}&nbsp;·&nbsp;{cl?.empresa||"Sin cliente"}
+                    </div>
+                    {t.snap&&<div style={{fontSize:9,color:C.t3,marginTop:1}}>
+                      Utilidad neta: <span style={{color:safeNumber(t.snap.uNeta)>=0?"rgba(52,211,153,0.8)":"rgba(239,68,68,0.8)",fontWeight:700}}>{mxn(safeNumber(t.snap.uNeta))}</span>
+                    </div>}
+                  </div>
+                  <span style={{fontSize:13,fontWeight:800,color:"#8FE3BE",
+                    fontFamily:"'Courier New',monospace",flexShrink:0}}>
+                    {mxn(safeNumber(t.snap?.precioConIVA))}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
     </div>
   );
 }
