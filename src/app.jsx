@@ -15452,25 +15452,34 @@ function CobrosHeatMap({cobrados, clients, mxn, A, C}) {
             ivaNeto:      s.ivaNeto      + safeNumber(sn.ivaNeto),
             isr:          s.isr          + safeNumber(sn.isr),
             uBruta:       s.uBruta       + safeNumber(sn.uBruta),
-            uNeta:        s.uNeta        + safeNumber(sn.uNeta),
-            cargaFiscal:  s.cargaFiscal  + safeNumber(sn.cargaFiscal),
           };
         },{precioConIVA:0,precioSinIVA:0,costoBase:0,gastos:0,costoTotal:0,
-           ivaTraslad:0,ivaAcred:0,ivaNeto:0,isr:0,uBruta:0,uNeta:0,cargaFiscal:0});
+           ivaTraslad:0,ivaAcred:0,ivaNeto:0,isr:0,uBruta:0});
 
-        // Siempre calcular en línea — snap.cargaFiscal no existe en tickets viejos
-        const cargaFiscalTotal = tot.ivaNeto + tot.isr;
-        // Efectivo real = lo que queda después de separar IVA neto e ISR
-        const efectivoReal = tot.uBruta - cargaFiscalTotal;
-        const uAntesISR    = tot.uBruta - tot.ivaNeto;
+        // Derivados — siempre calculados en línea (no depender de snap.cargaFiscal)
+        const uAntesISR       = tot.uBruta - tot.ivaNeto;
+        const uNeta           = uAntesISR  - tot.isr;
+        const cargaFiscalTotal= tot.ivaNeto + tot.isr;
+        // Métricas
+        const markup    = tot.costoTotal>0 ? (tot.precioSinIVA-tot.costoTotal)/tot.costoTotal*100 : 0;
+        const margen    = tot.precioSinIVA>0 ? uNeta/tot.precioSinIVA*100 : 0;
+        const rentab    = tot.precioConIVA>0 ? uNeta/tot.precioConIVA*100 : 0;
+        const roi       = tot.costoTotal>0  ? uNeta/tot.costoTotal*100    : 0;
 
-        // Barra: costo (gris) / carga fiscal (amber) / utilidad (verde)
+        // Barra: costo (gris) / carga fiscal (amber) / efectivo (verde)
         const base    = Math.max(tot.precioConIVA, 1);
-        const pCost   = Math.min(tot.costoTotal      / base * 100, 100);
-        const pFiscal = Math.min(cargaFiscalTotal    / base * 100, Math.max(0, 100 - pCost));
+        const pCost   = Math.min(tot.costoTotal    / base * 100, 100);
+        const pFiscal = Math.min(cargaFiscalTotal  / base * 100, Math.max(0, 100 - pCost));
         const pUtil   = Math.max(0, 100 - pCost - pFiscal);
 
-        const row = (label, val, color, {bold=false, indent=false}={}) => (
+        const sec = (label) => (
+          <div style={{fontSize:8,color:A.t3,letterSpacing:"0.13em",textTransform:"uppercase",
+            fontWeight:700,padding:"8px 14px 5px",borderBottom:`1px solid ${C.border}`,
+            background:C._dark?"rgba(255,255,255,0.015)":"rgba(0,0,0,0.015)"}}>
+            {label}
+          </div>
+        );
+        const row = (label, val, color, {bold=false, indent=false, pct=false}={}) => (
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
             padding: indent ? "6px 14px 6px 26px" : "10px 14px",
             borderBottom:`1px solid ${C.border}`,
@@ -15478,13 +15487,15 @@ function CobrosHeatMap({cobrados, clients, mxn, A, C}) {
           }}>
             <span style={{fontSize:indent?10:11,color:indent?A.t3:A.t2}}>{label}</span>
             <span style={{fontSize:bold?14:indent?10:12,fontWeight:bold?800:600,
-              color,fontFamily:"'Courier New',monospace"}}>{mxn(val)}</span>
+              color,fontFamily:"'Courier New',monospace"}}>
+              {pct ? fpct(val) : mxn(val)}
+            </span>
           </div>
         );
 
         return (
           <div style={{marginTop:14}}>
-            {/* Header día */}
+            {/* Header */}
             <div style={{fontSize:9,color:C.cyan,letterSpacing:"0.14em",textTransform:"uppercase",
               fontWeight:800,marginBottom:10}}>
               {selDay.slice(8)}/{selDay.slice(5,7)}/{selDay.slice(0,4)}
@@ -15495,12 +15506,12 @@ function CobrosHeatMap({cobrados, clients, mxn, A, C}) {
             {/* Barra proporcional */}
             <div style={{marginBottom:12}}>
               <div style={{display:"flex",height:8,borderRadius:4,overflow:"hidden",gap:1}}>
-                <div style={{width:`${pCost}%`,  background:`${A.t3}99`}}/>
+                <div style={{width:`${pCost}%`,  background:`${A.t3}88`}}/>
                 <div style={{width:`${pFiscal}%`,background:`${C.yellow}99`}}/>
-                <div style={{width:`${pUtil}%`,  background:"rgba(143,227,190,0.75)"}}/>
+                <div style={{width:`${pUtil}%`,  background:"rgba(143,227,190,0.8)"}}/>
               </div>
               <div style={{display:"flex",gap:10,marginTop:4,flexWrap:"wrap"}}>
-                {[["Costo",`${A.t3}cc`,pCost],["Carga fiscal",`${C.yellow}cc`,pFiscal],["Utilidad","rgba(143,227,190,0.85)",pUtil]]
+                {[["Costo",`${A.t3}bb`,pCost],["Carga fiscal",`${C.yellow}bb`,pFiscal],["Efectivo","rgba(143,227,190,0.9)",pUtil]]
                   .map(([l,c,p])=>(
                     <div key={l} style={{display:"flex",alignItems:"center",gap:4}}>
                       <div style={{width:7,height:7,borderRadius:2,background:c,flexShrink:0}}/>
@@ -15510,34 +15521,50 @@ function CobrosHeatMap({cobrados, clients, mxn, A, C}) {
               </div>
             </div>
 
-            {/* Tabla estilo Resumen Financiero */}
+            {/* Tabla */}
             <div style={{background:C.bg1,border:`1px solid rgba(43,181,160,0.18)`,
               borderRadius:12,overflow:"hidden",marginBottom:12}}>
-              {row("Revenue (c/IVA)",        tot.precioConIVA, "#8FE3BE",                    {bold:true})}
-              {row("− Costo total",          tot.costoTotal,   A.t2)}
-              {row("Costo de producto",      tot.costoBase,    A.t3,                          {indent:true})}
-              {tot.gastos>0&&row("Gastos / Flete", tot.gastos, A.t3,                         {indent:true})}
-              {row("Utilidad bruta",         tot.uBruta,       tot.uBruta>=0?"#8FE3BE":C.red,{bold:true})}
-              {row("IVA trasladable",        tot.ivaTraslad,   A.t3,                          {indent:true})}
-              {row("IVA acreditable",        tot.ivaAcred,     A.t3,                          {indent:true})}
-              {row("− IVA neto SAT",         tot.ivaNeto,      A.amber)}
-              {row("Utilidad antes ISR",     uAntesISR,        uAntesISR>=0?"#8FE3BE":C.red, {bold:true})}
-              {row("− ISR a apartar",        tot.isr,           A.amber)}
-              {row("Utilidad neta (sin IVA)",tot.uNeta,         tot.uNeta>=0?"#8FE3BE":C.red, {bold:true})}
-              {row("− IVA neto SAT",         tot.ivaNeto,       A.amber)}
-              {row("Efectivo real (bolsillo)",efectivoReal,     efectivoReal>=0?"#8FE3BE":C.red, {bold:true})}
+
+              {sec("Ingresos")}
+              {row("Revenue (IVA incl.)", tot.precioConIVA, "#8FE3BE", {bold:true})}
+
+              {sec("Costos")}
+              {row("Costo de producto",  tot.costoBase,  A.t3, {indent:true})}
+              {tot.gastos>0&&row("Gastos / Flete", tot.gastos, A.t3, {indent:true})}
+              {row("Costo total",        tot.costoTotal, A.t2)}
+
+              {sec("Resultado operativo")}
+              {row("Utilidad bruta",     tot.uBruta, tot.uBruta>=0?"#8FE3BE":C.red, {bold:true})}
+
+              {sec("Impuestos")}
+              {row("IVA trasladable",    tot.ivaTraslad, A.t3, {indent:true})}
+              {row("IVA acreditable",    tot.ivaAcred,   A.t3, {indent:true})}
+              {row("− IVA neto SAT",     tot.ivaNeto,    A.amber)}
+              {row("Utilidad antes ISR", uAntesISR, uAntesISR>=0?"#8FE3BE":C.red, {bold:true})}
+              {row("− ISR estimado",     tot.isr,        A.amber)}
+              {row("Utilidad neta",      uNeta, uNeta>=0?"#8FE3BE":C.red, {bold:true})}
+
+              {sec("Flujo")}
+              {row("Efectivo real (bolsillo)", uNeta, uNeta>=0?"#8FE3BE":C.red, {bold:true})}
+
+              {sec("Resumen")}
+              {row("Carga fiscal total", cargaFiscalTotal, C.red, {bold:true})}
+              {row("Markup",       markup, A.amber,  {pct:true})}
+              {row("Margen neto",  margen, margen>=20?"#8FE3BE":margen>=10?A.t1:A.amber, {pct:true})}
+              {row("Rentabilidad", rentab, rentab>=15?"#8FE3BE":rentab>=8?A.t1:A.amber,  {pct:true})}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-                padding:"10px 14px",
-                background:C._dark?"rgba(255,122,122,0.06)":"rgba(224,85,85,0.05)"}}>
-                <span style={{fontSize:12,fontWeight:800,color:C.t1}}>Carga fiscal total</span>
-                <span style={{fontSize:14,fontWeight:900,color:C.red,
-                  fontFamily:"'Courier New',monospace"}}>{mxn(cargaFiscalTotal)}</span>
+                padding:"10px 14px"}}>
+                <span style={{fontSize:11,color:A.t2}}>ROI</span>
+                <span style={{fontSize:12,fontWeight:600,color:roi>=25?"#8FE3BE":roi>=10?A.t1:A.amber,
+                  fontFamily:"'Courier New',monospace"}}>{fpct(roi)}</span>
               </div>
             </div>
 
             {/* Lista de ops del día */}
             {selData.tkts.map(t=>{
               const cl=clients.find(c=>c.id===t.clientId);
+              const sn=t.snap||{};
+              const tUNeta=safeNumber(sn.uBruta)-safeNumber(sn.ivaNeto)-safeNumber(sn.isr);
               return (
                 <div key={t.id} style={{background:C.bg1,border:`1px solid rgba(43,181,160,0.15)`,
                   borderRadius:12,padding:"10px 12px",marginBottom:6,
@@ -15549,7 +15576,7 @@ function CobrosHeatMap({cobrados, clients, mxn, A, C}) {
                       {mkFolio(t,"OP")}&nbsp;·&nbsp;{cl?.empresa||"Sin cliente"}
                     </div>
                     {t.snap&&<div style={{fontSize:9,color:C.t3,marginTop:1}}>
-                      Utilidad neta: <span style={{color:safeNumber(t.snap.uNeta)>=0?"#8FE3BE":C.red,fontWeight:700}}>{mxn(safeNumber(t.snap.uNeta))}</span>
+                      Efectivo: <span style={{color:tUNeta>=0?"#8FE3BE":C.red,fontWeight:700}}>{mxn(tUNeta)}</span>
                     </div>}
                   </div>
                   <span style={{fontSize:13,fontWeight:800,color:"#8FE3BE",
