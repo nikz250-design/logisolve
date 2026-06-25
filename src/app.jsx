@@ -15458,13 +15458,17 @@ function CobrosHeatMap({cobrados, clients, mxn, A, C}) {
         },{precioConIVA:0,precioSinIVA:0,costoBase:0,gastos:0,costoTotal:0,
            ivaTraslad:0,ivaAcred:0,ivaNeto:0,isr:0,uBruta:0,uNeta:0,cargaFiscal:0});
 
+        // Siempre calcular en línea — snap.cargaFiscal no existe en tickets viejos
+        const cargaFiscalTotal = tot.ivaNeto + tot.isr;
+        // Efectivo real = lo que queda después de separar IVA neto e ISR
+        const efectivoReal = tot.uBruta - cargaFiscalTotal;
+        const uAntesISR    = tot.uBruta - tot.ivaNeto;
+
         // Barra: costo (gris) / carga fiscal (amber) / utilidad (verde)
         const base    = Math.max(tot.precioConIVA, 1);
-        const pCost   = Math.min(tot.costoTotal   / base * 100, 100);
-        const pFiscal = Math.min(tot.cargaFiscal  / base * 100, Math.max(0, 100 - pCost));
+        const pCost   = Math.min(tot.costoTotal      / base * 100, 100);
+        const pFiscal = Math.min(cargaFiscalTotal    / base * 100, Math.max(0, 100 - pCost));
         const pUtil   = Math.max(0, 100 - pCost - pFiscal);
-
-        const uAntesISR = tot.uBruta - tot.ivaNeto;
 
         const row = (label, val, color, {bold=false, indent=false}={}) => (
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
@@ -15518,14 +15522,16 @@ function CobrosHeatMap({cobrados, clients, mxn, A, C}) {
               {row("IVA acreditable",        tot.ivaAcred,     A.t3,                          {indent:true})}
               {row("− IVA neto SAT",         tot.ivaNeto,      A.amber)}
               {row("Utilidad antes ISR",     uAntesISR,        uAntesISR>=0?"#8FE3BE":C.red, {bold:true})}
-              {row("− ISR a apartar",        tot.isr,          A.amber)}
-              {row("Utilidad neta",          tot.uNeta,        tot.uNeta>=0?"#8FE3BE":C.red, {bold:true})}
+              {row("− ISR a apartar",        tot.isr,           A.amber)}
+              {row("Utilidad neta (sin IVA)",tot.uNeta,         tot.uNeta>=0?"#8FE3BE":C.red, {bold:true})}
+              {row("− IVA neto SAT",         tot.ivaNeto,       A.amber)}
+              {row("Efectivo real (bolsillo)",efectivoReal,     efectivoReal>=0?"#8FE3BE":C.red, {bold:true})}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
                 padding:"10px 14px",
                 background:C._dark?"rgba(255,122,122,0.06)":"rgba(224,85,85,0.05)"}}>
                 <span style={{fontSize:12,fontWeight:800,color:C.t1}}>Carga fiscal total</span>
                 <span style={{fontSize:14,fontWeight:900,color:C.red,
-                  fontFamily:"'Courier New',monospace"}}>{mxn(tot.cargaFiscal)}</span>
+                  fontFamily:"'Courier New',monospace"}}>{mxn(cargaFiscalTotal)}</span>
               </div>
             </div>
 
