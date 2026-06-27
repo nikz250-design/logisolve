@@ -15270,6 +15270,391 @@ function NuevoCasoSheet({open, onClose, state, dispatch, toast, onCreated}) {
   );
 }
 
+// ── MDiagnostico — Reporte de diagnóstico técnico ────────────────────────────
+const DC = {
+  orange:"#e0662a", teal:"#1f6f5c", black:"#141414", ink:"#222",
+  grey:"#6b6b6b",   hair:"#cfcfcf", soft:"#f5f5f5",
+  green:"#2e7d32",  yellow:"#e6a900", amber:"#ef8a1a", red:"#c62828", slate:"#cfcfcf",
+};
+const D_GRAVEDAD = [
+  {k:"Baja",c:DC.green},{k:"Media",c:DC.yellow},
+  {k:"Alta",c:DC.amber},{k:"Crítica · No operar",c:DC.red},
+];
+const D_CERTEZA = [
+  {k:"Confirmado (95-100%)",c:DC.green},
+  {k:"Alta probabilidad (80-95%)",c:DC.yellow},
+  {k:"Requiere pruebas (<80%)",c:DC.amber},
+];
+const D_TIPOS = ["Mecánica","Eléctrica","Electrónica","Hidráulica","Neumática","Emisiones"];
+const D_ESTADOS = [
+  {k:"correcto",c:DC.green, label:"Correcto"},
+  {k:"atencion",c:DC.yellow,label:"Requiere atención"},
+  {k:"falla",   c:DC.red,   label:"Falla encontrada"},
+  {k:"ninsp",   c:DC.slate, label:"No inspeccionado"},
+];
+const D_SISTEMAS = [
+  ["Códigos de falla (DTC)",   "Activos / inactivos con escáner. ¿Derate / limp?"],
+  ["Sistema de combustible",   "Filtros, agua/separador, aire en línea, presión de transferencia."],
+  ["Presión de riel / bomba",  "Lectura en vivo; SCV/regulador, bomba de alta, sensor de riel."],
+  ["Admisión de aire",         "Filtro de aire, fugas de turbo/VGT, intercooler, sensor MAP."],
+  ["Emisiones (EGR/DPF/SCR)", "EGR pegada, DPF/SCR, regeneración pendiente."],
+  ["Sensores base",            "CKP / CMP, pedal/TPS, temperaturas."],
+  ["Mecánico / escape",        "Compresión, sincronización, restricción de escape."],
+];
+const D_VALORES_BASE = [
+  {param:"Presión de riel",         objetivo:"",medido:""},
+  {param:"Voltaje de batería (V)",  objetivo:"",medido:""},
+  {param:"Presión de turbo / boost",objetivo:"",medido:""},
+  {param:"RPM (ralentí / límite)",  objetivo:"",medido:""},
+  {param:"Temp. refrigerante (°C)", objetivo:"",medido:""},
+];
+const D_DISP = ["Inmediata","24 hrs","48 hrs","Sobre pedido"];
+const DIAG_DRAFT_KEY = "logisolve:diag:campo:v1";
+const dEstadoOf = (k) => D_ESTADOS.find(e=>e.k===k);
+function diagTodayISO() {
+  const d=new Date(), p=n=>String(n).padStart(2,"0");
+  return {ymd:`${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}`,mx:d.toLocaleDateString("es-MX")};
+}
+function diagBlank() {
+  const t=diagTodayISO();
+  return {
+    folio:`DIAG-${t.ymd}-`,fecha:t.mx,gravedad:"",certeza:"",tipo:[],
+    unidad:{cliente:"",eco:"",marca:"",anio:"",vin:"",placa:"",motor:"",km:""},
+    sintoma:"",
+    dtc:[{codigo:"",desc:"",estado:"Activo"}],
+    valores:D_VALORES_BASE.map(v=>({...v})),
+    inspeccion:D_SISTEMAS.map(([s,r])=>({sistema:s,revisar:r,estado:"",obs:""})),
+    diag:{datos:"",interpretacion:"",causa:"",consecuencia:""},
+    tiempo:{horas:"",disp:""},
+    acciones:"",
+    refacciones:[{cant:"",desc:"",pn:""}],
+  };
+}
+const DIAG_CSS=`
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+.ls-root{background:#e9e9ea;min-height:100%;padding:14px 10px 96px;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:${DC.ink};}
+.ls-paper{max-width:820px;margin:0 auto;background:#fff;border:1px solid #ddd;border-radius:8px;padding:20px 18px;box-shadow:0 2px 14px rgba(0,0,0,.08);}
+.ls-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+.ls-brand{font-size:24px;font-weight:800;letter-spacing:.5px;color:${DC.black};}
+.ls-tag{font-size:10px;color:${DC.grey};letter-spacing:.5px;margin-top:2px;}
+.ls-contact{font-size:10.5px;color:${DC.ink};text-align:right;line-height:1.5;}
+.ls-rule{height:2px;background:${DC.orange};margin:8px 0 12px;border-radius:2px;}
+.ls-titlebar{background:${DC.black};color:#fff;border-radius:5px;padding:9px 12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;font-weight:800;font-size:14px;}
+.ls-folio{font-weight:400;font-size:11px;}
+.ls-inp{border:none;border-bottom:1px solid #fff8;background:transparent;color:#fff;font:inherit;font-size:11px;padding:1px 2px;}
+.ls-inp-w{width:130px;}.ls-inp-s{width:54px;border-bottom:1px solid ${DC.hair};color:${DC.ink};text-align:center;}
+.ls-inp:focus{outline:none;border-bottom-color:${DC.orange};}
+.ls-bar{background:${DC.soft};border:1px solid #e3e3e3;border-radius:6px;padding:8px 10px;margin-top:8px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;}
+.ls-barcol{flex-direction:column;align-items:flex-start;gap:6px;}
+.ls-bark{font-size:11px;font-weight:800;color:${DC.ink};letter-spacing:.3px;}
+.ls-chips{display:flex;flex-wrap:wrap;gap:6px;}
+.ls-chip{font-size:11.5px;padding:6px 11px;border:1px solid ${DC.hair};background:#fff;border-radius:999px;color:${DC.grey};cursor:pointer;line-height:1;}
+.ls-chip.on{color:${DC.ink};font-weight:700;}
+.ls-dispwrap{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.ls-seclabel{color:${DC.teal};font-size:11.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;margin:16px 0 7px;}
+.ls-grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;}
+.ls-field{display:flex;align-items:baseline;gap:6px;border-bottom:1px solid ${DC.hair};padding:3px 0;}
+.ls-flbl{font-size:10.5px;font-weight:700;color:${DC.ink};white-space:nowrap;min-width:84px;}
+.ls-finp{flex:1;border:none;background:transparent;font:inherit;font-size:12px;padding:2px 0;min-width:0;}
+.ls-finp:focus,.ls-cinp:focus,.ls-area:focus,.ls-sel:focus{outline:none;}
+.ls-finp:focus{box-shadow:inset 0 -2px 0 ${DC.orange};}
+.ls-boxhdr{background:${DC.black};color:#fff;font-size:11px;font-weight:700;padding:5px 9px;border-radius:5px 5px 0 0;margin-top:14px;}
+.ls-box{border:1px solid #e0e0e0;border-top:none;border-radius:0 0 5px 5px;padding:8px 9px;}
+.ls-comm{font-size:11px;color:${DC.ink};line-height:1.7;background:${DC.soft};}
+.ls-area{width:100%;border:none;background:transparent;font:inherit;font-size:12px;resize:none;overflow:hidden;line-height:1.5;min-height:42px;}
+.ls-tbl{width:100%;border-collapse:collapse;font-size:11.5px;}
+.ls-tbl th{background:${DC.black};color:#fff;font-size:10.5px;text-align:left;padding:6px 7px;font-weight:700;}
+.ls-tbl td{border:1px solid #e6e6e6;padding:2px 5px;vertical-align:middle;}
+.ls-cinp{width:100%;border:none;background:transparent;font:inherit;font-size:11.5px;padding:5px 2px;min-width:0;}
+.ls-cinp:focus{box-shadow:inset 0 -2px 0 ${DC.orange};}
+.ls-strong{font-weight:700;color:${DC.red};}
+.ls-sel{width:100%;border:none;background:transparent;font:inherit;font-size:11.5px;padding:4px 2px;}
+.ls-del{border:none;background:#f1f1f1;color:#b00;width:24px;height:24px;border-radius:6px;cursor:pointer;font-size:12px;}
+.ls-add{margin-top:6px;border:1px dashed ${DC.teal};background:${DC.teal}10;color:${DC.teal};font-weight:600;font-size:11.5px;padding:7px 12px;border-radius:7px;cursor:pointer;width:100%;}
+.ls-legend{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:8px;}
+.ls-legitem{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:${DC.ink};}
+.ls-insplist{display:flex;flex-direction:column;gap:7px;}
+.ls-insp{border:1px solid #e6e6e6;border-radius:7px;padding:8px 9px;background:#fff;}
+.ls-insphead{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.ls-inspsis{font-size:12px;font-weight:700;color:${DC.ink};}
+.ls-dots{display:flex;gap:8px;}
+.ls-dotbtn{border:none;background:transparent;padding:5px;cursor:pointer;line-height:0;border-radius:50%;}
+.ls-dotbtn:active{background:#0001;}
+.ls-insprev{font-size:10.5px;color:${DC.grey};margin-top:3px;}
+.ls-inspstat{font-size:11px;font-weight:700;margin-top:4px;}
+.ls-obs{border-bottom:1px solid #ececec;margin-top:5px;}
+.ls-firmas{display:flex;gap:24px;margin-top:26px;}
+.ls-firmas>div{flex:1;}
+.ls-firmline{border-bottom:1px solid #999;height:34px;}
+.ls-firmlbl{font-size:9.5px;color:${DC.grey};font-style:italic;text-align:center;margin-top:3px;}
+.ls-actions-diag{position:fixed;left:0;right:0;bottom:56px;background:#fff;border-top:1px solid #ddd;padding:10px 14px;display:flex;align-items:center;gap:10px;justify-content:flex-end;box-shadow:0 -2px 12px rgba(0,0,0,.08);z-index:50;}
+.ls-savemsg{font-size:11px;color:${DC.grey};margin-right:auto;}
+.ls-btn{border:none;border-radius:9px;padding:11px 18px;font-size:14px;font-weight:700;cursor:pointer;}
+.ls-primary{background:${DC.teal};color:#fff;}
+.ls-ghost{background:#f0f0f0;color:${DC.ink};}
+@media(max-width:560px){.ls-grid2{grid-template-columns:1fr;}.ls-firmas{gap:14px;}}
+@media print{
+  @page{margin:12mm;}
+  .ls-root{background:#fff;padding:0;}
+  .ls-noprint{display:none!important;}
+  .ls-paper{box-shadow:none;border:none;border-radius:0;max-width:100%;padding:0;}
+  .ls-insp,.ls-bar,.ls-tbl,.ls-firmas,.ls-boxhdr,.ls-box{break-inside:avoid;}
+  .ls-finp,.ls-cinp,.ls-area,.ls-sel,.ls-inp,.ls-inp-s{box-shadow:none!important;}
+  body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+}`;
+
+function DDot({color,size=13,ring=false}) {
+  return <span style={{display:"inline-block",width:size,height:size,borderRadius:"50%",
+    background:color,border:`1.5px solid ${ring?"#111":"#888"}`,
+    boxShadow:ring?`0 0 0 2px ${color}55`:"none",flexShrink:0}}/>;
+}
+function DAutoTextarea({value,onChange,placeholder,minRows=2}) {
+  const ref=useRef(null);
+  const resize=useCallback(()=>{const el=ref.current;if(!el)return;el.style.height="auto";el.style.height=el.scrollHeight+"px";},[]);
+  useEffect(()=>{resize();},[value,resize]);
+  return <textarea ref={ref} className="ls-area" rows={minRows} value={value} placeholder={placeholder}
+    onChange={e=>{onChange(e.target.value);resize();}}/>;
+}
+function DSecLabel({children}){return <div className="ls-seclabel">{children}</div>;}
+function DField({label,value,onChange}){
+  return <div className="ls-field">
+    <span className="ls-flbl">{label}</span>
+    <input className="ls-finp" value={value} onChange={e=>onChange(e.target.value)}/>
+  </div>;
+}
+function DBoxed({label,children}){
+  return <><div className="ls-boxhdr">{label}</div><div className="ls-box">{children}</div></>;
+}
+function DSegment({label,options,value,onPick}){
+  return <div className="ls-bar">
+    <span className="ls-bark">{label}</span>
+    <div className="ls-chips">
+      {options.map(o=>{const on=value===o.k;return(
+        <button key={o.k} className={"ls-chip"+(on?" on":"")} onClick={()=>onPick(on?"":o.k)}
+          style={on?{borderColor:o.c,background:o.c+"1e",color:DC.ink,fontWeight:700}:{}}>
+          <span style={{display:"inline-block",width:11,height:11,borderRadius:"50%",background:o.c,
+            border:"1px solid #888",marginRight:6,verticalAlign:"-1px"}}/>
+          {o.k}
+        </button>
+      );})}
+    </div>
+  </div>;
+}
+
+function MDiagnostico() {
+  const [f,setF]=useState(diagBlank);
+  const [saved,setSaved]=useState("");
+  const loaded=useRef(false);
+
+  useEffect(()=>{
+    try{const r=localStorage.getItem(DIAG_DRAFT_KEY);if(r)setF(JSON.parse(r));}catch(e){}
+    loaded.current=true;
+  },[]);
+  useEffect(()=>{
+    if(!loaded.current)return;
+    const id=setTimeout(()=>{
+      try{localStorage.setItem(DIAG_DRAFT_KEY,JSON.stringify(f));setSaved("Guardado "+new Date().toLocaleTimeString("es-MX"));}
+      catch(e){setSaved("");}
+    },600);
+    return()=>clearTimeout(id);
+  },[f]);
+
+  const set=(k,v)=>setF(p=>({...p,[k]:v}));
+  const setIn=(g,k,v)=>setF(p=>({...p,[g]:{...p[g],[k]:v}}));
+  const setArr=(g,i,k,v)=>setF(p=>({...p,[g]:p[g].map((r,idx)=>idx===i?{...r,[k]:v}:r)}));
+  const addRow=(g,r)=>setF(p=>({...p,[g]:[...p[g],r]}));
+  const delRow=(g,i)=>setF(p=>({...p,[g]:p[g].filter((_,idx)=>idx!==i)}));
+  const toggleTipo=t=>setF(p=>({...p,tipo:p.tipo.includes(t)?p.tipo.filter(x=>x!==t):[...p.tipo,t]}));
+
+  const nuevo=()=>{if(window.confirm("¿Iniciar un reporte nuevo? Se borra lo capturado."))setF(diagBlank());};
+  const imprimir=()=>window.print();
+
+  return (
+    <div className="ls-root">
+      <style>{DIAG_CSS}</style>
+      <div className="ls-paper" id="reporte">
+        {/* Encabezado */}
+        <div className="ls-head">
+          <div>
+            <div className="ls-brand">LOGI<span style={{color:DC.orange}}>SOLVE</span></div>
+            <div className="ls-tag">Logistics · Supply · Solutions</div>
+          </div>
+          <div className="ls-contact">Alejandro Saucedo<br/>RFC: SAME9612277T9<br/>Tel. 5562321807</div>
+        </div>
+        <div className="ls-rule"/>
+
+        {/* Título + folio */}
+        <div className="ls-titlebar">
+          <span>REPORTE DE DIAGNÓSTICO</span>
+          <span className="ls-folio">
+            Folio <input className="ls-inp ls-inp-w" value={f.folio} onChange={e=>set("folio",e.target.value)}/>
+            <span className="ls-noprint" style={{opacity:0.6}}> · </span>
+            {f.fecha}
+          </span>
+        </div>
+
+        {/* Indicadores */}
+        <DSegment label="PRIORIDAD DE LA FALLA" options={D_GRAVEDAD} value={f.gravedad} onPick={k=>set("gravedad",k)}/>
+        <DSegment label="NIVEL DE CERTEZA"      options={D_CERTEZA}  value={f.certeza}  onPick={k=>set("certeza",k)}/>
+        <div className="ls-bar">
+          <span className="ls-bark">TIPO DE FALLA</span>
+          <div className="ls-chips">
+            {D_TIPOS.map(t=>{const on=f.tipo.includes(t);return(
+              <button key={t} className={"ls-chip"+(on?" on":"")} onClick={()=>toggleTipo(t)}
+                style={on?{borderColor:DC.teal,background:DC.teal+"18",color:DC.ink}:{}}>
+                {on?"✓ ":""}{t}
+              </button>
+            );})}
+          </div>
+        </div>
+
+        {/* Datos de la unidad */}
+        <DSecLabel>Datos de la unidad</DSecLabel>
+        <div className="ls-grid2">
+          <DField label="Cliente"      value={f.unidad.cliente} onChange={v=>setIn("unidad","cliente",v)}/>
+          <DField label="Eco."         value={f.unidad.eco}     onChange={v=>setIn("unidad","eco",v)}/>
+          <DField label="Marca/Modelo" value={f.unidad.marca}   onChange={v=>setIn("unidad","marca",v)}/>
+          <DField label="Año"          value={f.unidad.anio}    onChange={v=>setIn("unidad","anio",v)}/>
+          <DField label="VIN"          value={f.unidad.vin}     onChange={v=>setIn("unidad","vin",v)}/>
+          <DField label="Placa"        value={f.unidad.placa}   onChange={v=>setIn("unidad","placa",v)}/>
+          <DField label="Motor / ESN"  value={f.unidad.motor}   onChange={v=>setIn("unidad","motor",v)}/>
+          <DField label="Kilometraje"  value={f.unidad.km}      onChange={v=>setIn("unidad","km",v)}/>
+        </div>
+
+        {/* Síntoma */}
+        <div className="ls-boxhdr">Síntoma reportado por el cliente</div>
+        <div className="ls-box"><DAutoTextarea value={f.sintoma} onChange={v=>set("sintoma",v)} placeholder="Lo que reporta el cliente…"/></div>
+
+        {/* DTC */}
+        <DSecLabel>Diagnóstico electrónico · Códigos DTC</DSecLabel>
+        <table className="ls-tbl"><thead><tr>
+          <th style={{width:"22%"}}>Código</th><th>Descripción</th>
+          <th style={{width:"26%"}}>Estado</th><th className="ls-noprint" style={{width:34}}/>
+        </tr></thead><tbody>
+          {f.dtc.map((d,i)=>(
+            <tr key={i}>
+              <td><input className="ls-cinp" value={d.codigo} placeholder="P0087" onChange={e=>setArr("dtc",i,"codigo",e.target.value)}/></td>
+              <td><input className="ls-cinp" value={d.desc}   placeholder="Descripción" onChange={e=>setArr("dtc",i,"desc",e.target.value)}/></td>
+              <td><select className="ls-sel" value={d.estado} onChange={e=>setArr("dtc",i,"estado",e.target.value)}>
+                <option>Activo</option><option>Histórico</option>
+              </select></td>
+              <td className="ls-noprint"><button className="ls-del" onClick={()=>delRow("dtc",i)}>✕</button></td>
+            </tr>
+          ))}
+        </tbody></table>
+        <button className="ls-add ls-noprint" onClick={()=>addRow("dtc",{codigo:"",desc:"",estado:"Activo"})}>+ Agregar código</button>
+
+        {/* Valores medidos */}
+        <DSecLabel>Valores medidos (lectura en vivo)</DSecLabel>
+        <table className="ls-tbl"><thead><tr>
+          <th style={{width:"42%"}}>Parámetro</th><th>Objetivo / Esperado</th>
+          <th>Medido</th><th className="ls-noprint" style={{width:34}}/>
+        </tr></thead><tbody>
+          {f.valores.map((v,i)=>(
+            <tr key={i}>
+              <td><input className="ls-cinp" value={v.param}   onChange={e=>setArr("valores",i,"param",e.target.value)}/></td>
+              <td><input className="ls-cinp" value={v.objetivo} placeholder="—" onChange={e=>setArr("valores",i,"objetivo",e.target.value)}/></td>
+              <td><input className="ls-cinp ls-strong" value={v.medido} placeholder="—" onChange={e=>setArr("valores",i,"medido",e.target.value)}/></td>
+              <td className="ls-noprint"><button className="ls-del" onClick={()=>delRow("valores",i)}>✕</button></td>
+            </tr>
+          ))}
+        </tbody></table>
+        <button className="ls-add ls-noprint" onClick={()=>addRow("valores",{param:"",objetivo:"",medido:""})}>+ Agregar parámetro</button>
+
+        {/* Inspección por sistema */}
+        <DSecLabel>Inspección por sistema</DSecLabel>
+        <div className="ls-legend">
+          {D_ESTADOS.map(e=><span key={e.k} className="ls-legitem"><DDot color={e.c} size={11}/>{e.label}</span>)}
+        </div>
+        <div className="ls-insplist">
+          {f.inspeccion.map((row,i)=>{
+            const sel=dEstadoOf(row.estado);
+            return(
+              <div className="ls-insp" key={i}>
+                <div className="ls-insphead">
+                  <div className="ls-inspsis">{row.sistema}</div>
+                  <div className="ls-dots">
+                    {D_ESTADOS.map(e=>{const on=row.estado===e.k;return(
+                      <button key={e.k} className="ls-dotbtn" onClick={()=>setArr("inspeccion",i,"estado",on?"":e.k)} aria-label={e.label}>
+                        <DDot color={e.c} ring={on}/>
+                      </button>
+                    );})}
+                  </div>
+                </div>
+                <div className="ls-insprev">{row.revisar}</div>
+                {sel&&<div className="ls-inspstat" style={{color:sel.c}}>● {sel.label}</div>}
+                <input className="ls-cinp ls-obs" value={row.obs} placeholder="Observaciones…" onChange={e=>setArr("inspeccion",i,"obs",e.target.value)}/>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Diagnóstico técnico */}
+        <DSecLabel>Diagnóstico técnico</DSecLabel>
+        <DBoxed label="Datos obtenidos (evidencia)"><DAutoTextarea value={f.diag.datos}          onChange={v=>setIn("diag","datos",v)}          placeholder="Códigos, presiones medidas, agua, restricciones…"/></DBoxed>
+        <DBoxed label="Interpretación técnica">    <DAutoTextarea value={f.diag.interpretacion} onChange={v=>setIn("diag","interpretacion",v)} placeholder="Qué significan los datos…"/></DBoxed>
+        <DBoxed label="Causa raíz (probable)">     <DAutoTextarea value={f.diag.causa}          onChange={v=>setIn("diag","causa",v)}          placeholder="Origen real de la falla…"/></DBoxed>
+        <DBoxed label="Consecuencia de seguir operando"><DAutoTextarea value={f.diag.consecuencia} onChange={v=>setIn("diag","consecuencia",v)} placeholder="Riesgo / costo de no reparar…"/></DBoxed>
+
+        {/* Tiempo + disponibilidad */}
+        <div className="ls-bar ls-barcol">
+          <div><span className="ls-bark">Tiempo estimado de reparación: </span>
+            <input className="ls-inp ls-inp-s" value={f.tiempo.horas} onChange={e=>setIn("tiempo","horas",e.target.value)}/> horas
+          </div>
+          <div className="ls-dispwrap"><span className="ls-bark">Disponibilidad de refacciones: </span>
+            {D_DISP.map(d=>{const on=f.tiempo.disp===d;return(
+              <button key={d} className={"ls-chip"+(on?" on":"")} onClick={()=>setIn("tiempo","disp",on?"":d)}
+                style={on?{borderColor:DC.teal,background:DC.teal+"18"}:{}}>{on?"✓ ":""}{d}</button>
+            );})}
+          </div>
+        </div>
+
+        {/* Acciones */}
+        <DSecLabel>Acciones recomendadas</DSecLabel>
+        <div className="ls-box"><DAutoTextarea value={f.acciones} onChange={v=>set("acciones",v)} placeholder="1) …  2) …  3) …" minRows={3}/></div>
+
+        {/* Refacciones */}
+        <DSecLabel>Refacciones sugeridas</DSecLabel>
+        <table className="ls-tbl"><thead><tr>
+          <th style={{width:"14%"}}>Cant.</th><th>Descripción / Concepto</th>
+          <th style={{width:"30%"}}>No. de parte</th><th className="ls-noprint" style={{width:34}}/>
+        </tr></thead><tbody>
+          {f.refacciones.map((r,i)=>(
+            <tr key={i}>
+              <td><input className="ls-cinp" value={r.cant} placeholder="1"         onChange={e=>setArr("refacciones",i,"cant",e.target.value)}/></td>
+              <td><input className="ls-cinp" value={r.desc} placeholder="Concepto"  onChange={e=>setArr("refacciones",i,"desc",e.target.value)}/></td>
+              <td><input className="ls-cinp" value={r.pn}   placeholder="P/N · confirmar" onChange={e=>setArr("refacciones",i,"pn",e.target.value)}/></td>
+              <td className="ls-noprint"><button className="ls-del" onClick={()=>delRow("refacciones",i)}>✕</button></td>
+            </tr>
+          ))}
+        </tbody></table>
+        <button className="ls-add ls-noprint" onClick={()=>addRow("refacciones",{cant:"",desc:"",pn:""})}>+ Agregar refacción</button>
+
+        {/* Observaciones comerciales */}
+        <div className="ls-boxhdr">OBSERVACIONES COMERCIALES</div>
+        <div className="ls-box ls-comm">
+          • Este diagnóstico corresponde únicamente a la evaluación técnica realizada.<br/>
+          • La cotización de reparación se emite por separado.<br/>
+          • La disponibilidad y precio de las refacciones están sujetas a confirmación al momento de elaborar la cotización.
+        </div>
+
+        {/* Firmas */}
+        <div className="ls-firmas">
+          <div><div className="ls-firmline"/><div className="ls-firmlbl">Diagnóstico realizado por</div></div>
+          <div><div className="ls-firmline"/><div className="ls-firmlbl">Recibido / enterado (cliente)</div></div>
+        </div>
+      </div>
+
+      {/* Barra de acciones */}
+      <div className="ls-actions-diag ls-noprint">
+        <span className="ls-savemsg">{saved}</span>
+        <button className="ls-btn ls-ghost"   onClick={nuevo}>Nuevo</button>
+        <button className="ls-btn ls-primary" onClick={imprimir}>Generar PDF</button>
+      </div>
+    </div>
+  );
+}
+
 // ── MasSheet — bottom sheet del menú "Más" ───────────────────────────────────
 function MasSheet({open,onClose,tab,setTab}) {
   const C = React.useContext(ThemeCtx);
@@ -15284,6 +15669,7 @@ function MasSheet({open,onClose,tab,setTab}) {
     {id:"catalogo",   label:"Catálogo",   icon:"📦", desc:"Inventario"},
     {id:"clientes",   label:"Clientes",   icon:"🏢", desc:"Directorio"},
     {id:"proveedores",label:"Proveedores",icon:"🔧", desc:"Suppliers"},
+    {id:"diagnostico", label:"Diagnóstico", icon:"🔍", desc:"Reporte técnico"},
     {id:"ajustes",    label:"Ajustes",    icon:"⚙",  desc:"Config"},
   ];
   return (
@@ -15863,6 +16249,7 @@ const TABS = [
   {id:"proveedores",  label:"Proveedores"},
   {id:"clientes",     label:"Clientes"},
   {id:"cartera",      label:"Cartera"},
+  {id:"diagnostico",  label:"Diagnóstico"},
   {id:"ajustes",      label:"Ajustes"},
 ];
 
@@ -16336,6 +16723,7 @@ function App() {
         {tab==="proveedores"&&(mobileView?<MProveedores state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Proveedores state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="clientes"   &&(mobileView?<MClientes   state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Clientes    state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="ajustes"    &&(mobileView?<MAjustes state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Ajustes state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
+        {tab==="diagnostico"&&<MDiagnostico/>}
         {tab==="ia"         &&<MInteligencia state={state}/>}
         {tab==="cobranza"   &&<MCobranza state={state} dispatch={dispatchWithDelete} toast={toast}/>}
         {tab==="chat"       &&<MChat state={state} dispatch={dispatchWithDelete} C={C} toast={toast}/>}
