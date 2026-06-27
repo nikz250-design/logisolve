@@ -15392,14 +15392,49 @@ const DIAG_CSS=`
 .ls-btn{border:none;border-radius:9px;padding:11px 18px;font-size:14px;font-weight:700;cursor:pointer;}
 .ls-primary{background:${DC.teal};color:#fff;}
 .ls-ghost{background:#f0f0f0;color:${DC.ink};}
+.ls-print-only{display:none;}
 @media(max-width:560px){.ls-grid2{grid-template-columns:1fr;}.ls-firmas{gap:14px;}}
 @media print{
-  @page{margin:12mm;}
+  @page{size:letter portrait;margin:15mm 12mm;}
   .ls-root{background:#fff;padding:0;}
   .ls-noprint{display:none!important;}
+  .ls-print-only{display:table!important;}
   .ls-paper{box-shadow:none;border:none;border-radius:0;max-width:100%;padding:0;}
+  .ls-head{margin-bottom:2px;}
+  .ls-brand{font-size:20px;}
+  .ls-tag{font-size:9px;}
+  .ls-contact{font-size:9.5px;}
+  .ls-rule{margin:4px 0 8px;}
+  .ls-titlebar{padding:6px 10px;font-size:12px;border-radius:3px;}
+  .ls-folio{font-size:10px;}
+  .ls-bar{padding:5px 8px;margin-top:5px;border-radius:3px;}
+  .ls-bark{font-size:10px;}
+  .ls-chips{flex-wrap:nowrap;}
+  .ls-chip{font-size:9.5px;padding:3px 7px;border-radius:3px;}
+  .ls-seclabel{font-size:10px;margin:10px 0 4px;}
+  .ls-grid2{gap:2px 10px;}
+  .ls-field{padding:2px 0;}
+  .ls-flbl{font-size:9.5px;min-width:72px;}
+  .ls-finp,.ls-cinp,.ls-area,.ls-sel,.ls-inp,.ls-inp-s{box-shadow:none!important;font-size:10px;}
+  .ls-area{min-height:24px;}
+  .ls-boxhdr{border-radius:2px 2px 0 0;padding:4px 8px;font-size:10px;margin-top:8px;}
+  .ls-box{padding:5px 8px;}
+  .ls-tbl{font-size:10px;}
+  .ls-tbl th{padding:4px 6px;font-size:9.5px;}
+  .ls-tbl td{padding:3px 5px;}
+  .ls-insplist{display:none!important;}
+  .ls-legend{display:none;}
+  .ls-firmas{margin-top:16px;gap:20px;}
+  .ls-firmline{height:28px;}
+  .ls-firmlbl{font-size:8.5px;}
   .ls-insp,.ls-bar,.ls-tbl,.ls-firmas,.ls-boxhdr,.ls-box{break-inside:avoid;}
-  .ls-finp,.ls-cinp,.ls-area,.ls-sel,.ls-inp,.ls-inp-s{box-shadow:none!important;}
+  .ls-ptbl{width:100%;border-collapse:collapse;font-size:10px;margin-top:4px;}
+  .ls-ptbl th{background:${DC.black};color:#fff;font-size:9.5px;text-align:left;padding:4px 6px;font-weight:700;}
+  .ls-ptbl td{border:1px solid #ddd;padding:3px 5px;vertical-align:middle;}
+  .ls-ptbl .p-sis{font-weight:700;width:22%;}
+  .ls-ptbl .p-rev{font-size:9px;color:#555;width:33%;}
+  .ls-ptbl .p-est{width:13%;text-align:center;}
+  .ls-ptbl .p-obs{width:32%;}
   body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 }`;
 
@@ -15425,8 +15460,8 @@ function DField({label,value,onChange}){
 function DBoxed({label,children}){
   return <><div className="ls-boxhdr">{label}</div><div className="ls-box">{children}</div></>;
 }
-function DSegment({label,options,value,onPick}){
-  return <div className="ls-bar">
+function DSegment({label,options,value,onPick,className=""}){
+  return <div className={"ls-bar "+(className||"")}>
     <span className="ls-bark">{label}</span>
     <div className="ls-chips">
       {options.map(o=>{const on=value===o.k;return(
@@ -15495,8 +15530,8 @@ function MDiagnostico() {
 
         {/* Indicadores */}
         <DSegment label="PRIORIDAD DE LA FALLA" options={D_GRAVEDAD} value={f.gravedad} onPick={k=>set("gravedad",k)}/>
-        <DSegment label="NIVEL DE CERTEZA"      options={D_CERTEZA}  value={f.certeza}  onPick={k=>set("certeza",k)}/>
-        <div className="ls-bar">
+        <DSegment label="NIVEL DE CERTEZA"      options={D_CERTEZA}  value={f.certeza}  onPick={k=>set("certeza",k)} className="ls-noprint"/>
+        <div className="ls-bar ls-noprint">
           <span className="ls-bark">TIPO DE FALLA</span>
           <div className="ls-chips">
             {D_TIPOS.map(t=>{const on=f.tipo.includes(t);return(
@@ -15544,28 +15579,32 @@ function MDiagnostico() {
         </tbody></table>
         <button className="ls-add ls-noprint" onClick={()=>addRow("dtc",{codigo:"",desc:"",estado:"Activo"})}>+ Agregar código</button>
 
-        {/* Valores medidos */}
-        <DSecLabel>Valores medidos (lectura en vivo)</DSecLabel>
-        <table className="ls-tbl"><thead><tr>
-          <th style={{width:"42%"}}>Parámetro</th><th>Objetivo / Esperado</th>
-          <th>Medido</th><th className="ls-noprint" style={{width:34}}/>
-        </tr></thead><tbody>
-          {f.valores.map((v,i)=>(
-            <tr key={i}>
-              <td><input className="ls-cinp" value={v.param}   onChange={e=>setArr("valores",i,"param",e.target.value)}/></td>
-              <td><input className="ls-cinp" value={v.objetivo} placeholder="—" onChange={e=>setArr("valores",i,"objetivo",e.target.value)}/></td>
-              <td><input className="ls-cinp ls-strong" value={v.medido} placeholder="—" onChange={e=>setArr("valores",i,"medido",e.target.value)}/></td>
-              <td className="ls-noprint"><button className="ls-del" onClick={()=>delRow("valores",i)}>✕</button></td>
-            </tr>
-          ))}
-        </tbody></table>
-        <button className="ls-add ls-noprint" onClick={()=>addRow("valores",{param:"",objetivo:"",medido:""})}>+ Agregar parámetro</button>
+        {/* Valores medidos — solo pantalla */}
+        <div className="ls-noprint">
+          <DSecLabel>Valores medidos (lectura en vivo)</DSecLabel>
+          <table className="ls-tbl"><thead><tr>
+            <th style={{width:"42%"}}>Parámetro</th><th>Objetivo / Esperado</th>
+            <th>Medido</th><th className="ls-noprint" style={{width:34}}/>
+          </tr></thead><tbody>
+            {f.valores.map((v,i)=>(
+              <tr key={i}>
+                <td><input className="ls-cinp" value={v.param}   onChange={e=>setArr("valores",i,"param",e.target.value)}/></td>
+                <td><input className="ls-cinp" value={v.objetivo} placeholder="—" onChange={e=>setArr("valores",i,"objetivo",e.target.value)}/></td>
+                <td><input className="ls-cinp ls-strong" value={v.medido} placeholder="—" onChange={e=>setArr("valores",i,"medido",e.target.value)}/></td>
+                <td><button className="ls-del" onClick={()=>delRow("valores",i)}>✕</button></td>
+              </tr>
+            ))}
+          </tbody></table>
+          <button className="ls-add" onClick={()=>addRow("valores",{param:"",objetivo:"",medido:""})}>+ Agregar parámetro</button>
+        </div>
 
         {/* Inspección por sistema */}
         <DSecLabel>Inspección por sistema</DSecLabel>
+        {/* Leyenda — solo pantalla */}
         <div className="ls-legend">
           {D_ESTADOS.map(e=><span key={e.k} className="ls-legitem"><DDot color={e.c} size={11}/>{e.label}</span>)}
         </div>
+        {/* Cards — solo pantalla */}
         <div className="ls-insplist">
           {f.inspeccion.map((row,i)=>{
             const sel=dEstadoOf(row.estado);
@@ -15588,6 +15627,31 @@ function MDiagnostico() {
             );
           })}
         </div>
+        {/* Tabla de inspección — solo impresión */}
+        <table className="ls-ptbl ls-print-only">
+          <thead><tr>
+            <th className="p-sis">Sistema</th>
+            <th className="p-rev">Qué revisar</th>
+            <th className="p-est">Estado</th>
+            <th className="p-obs">Observaciones</th>
+          </tr></thead>
+          <tbody>
+            {f.inspeccion.map((row,i)=>(
+              <tr key={i}>
+                <td className="p-sis" style={{fontWeight:700}}>{row.sistema}</td>
+                <td className="p-rev">{row.revisar}</td>
+                <td className="p-est" style={{whiteSpace:"nowrap"}}>
+                  {D_ESTADOS.map(e=>(
+                    <span key={e.k} style={{display:"inline-block",width:10,height:10,borderRadius:"50%",
+                      background:row.estado===e.k?e.c:"transparent",
+                      border:`1.5px solid ${e.c}`,marginRight:3,verticalAlign:"middle"}}/>
+                  ))}
+                </td>
+                <td className="p-obs" style={{fontSize:9}}>{row.obs}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
 
         {/* Diagnóstico técnico */}
         <DSecLabel>Diagnóstico técnico</DSecLabel>
