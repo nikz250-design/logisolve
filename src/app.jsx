@@ -15332,7 +15332,7 @@ function diagBlank() {
 }
 const DIAG_CSS=`
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-.ls-root{background:#e9e9ea;min-height:100%;padding:14px 10px 96px;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:${DC.ink};}
+.ls-root{background:#e9e9ea;min-height:100%;padding:14px 10px calc(96px + env(safe-area-inset-bottom, 0px));font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#222;}
 .ls-paper{max-width:820px;margin:0 auto;background:#fff;border:1px solid #ddd;border-radius:8px;padding:20px 18px;box-shadow:0 2px 14px rgba(0,0,0,.08);}
 .ls-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
 .ls-brand{font-size:24px;font-weight:800;letter-spacing:.5px;color:${DC.black};}
@@ -15355,20 +15355,20 @@ const DIAG_CSS=`
 .ls-grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;}
 .ls-field{display:flex;align-items:baseline;gap:6px;border-bottom:1px solid ${DC.hair};padding:3px 0;}
 .ls-flbl{font-size:10.5px;font-weight:700;color:${DC.ink};white-space:nowrap;min-width:84px;}
-.ls-finp{flex:1;border:none;background:transparent;font:inherit;font-size:12px;padding:2px 0;min-width:0;}
+.ls-finp{flex:1;border:none;background:transparent;font:inherit;font-size:12px;padding:2px 0;min-width:0;color:#222;}
 .ls-finp:focus,.ls-cinp:focus,.ls-area:focus,.ls-sel:focus{outline:none;}
 .ls-finp:focus{box-shadow:inset 0 -2px 0 ${DC.orange};}
 .ls-boxhdr{background:${DC.black};color:#fff;font-size:11px;font-weight:700;padding:5px 9px;border-radius:5px 5px 0 0;margin-top:14px;}
 .ls-box{border:1px solid #e0e0e0;border-top:none;border-radius:0 0 5px 5px;padding:8px 9px;}
 .ls-comm{font-size:11px;color:${DC.ink};line-height:1.7;background:${DC.soft};}
-.ls-area{width:100%;border:none;background:transparent;font:inherit;font-size:12px;resize:none;overflow:hidden;line-height:1.5;min-height:42px;}
+.ls-area{width:100%;border:none;background:transparent;font:inherit;font-size:12px;resize:none;overflow:hidden;line-height:1.5;min-height:42px;color:#222;}
 .ls-tbl{width:100%;border-collapse:collapse;font-size:11.5px;}
 .ls-tbl th{background:${DC.black};color:#fff;font-size:10.5px;text-align:left;padding:6px 7px;font-weight:700;}
 .ls-tbl td{border:1px solid #e6e6e6;padding:2px 5px;vertical-align:middle;}
-.ls-cinp{width:100%;border:none;background:transparent;font:inherit;font-size:11.5px;padding:5px 2px;min-width:0;}
+.ls-cinp{width:100%;border:none;background:transparent;font:inherit;font-size:11.5px;padding:5px 2px;min-width:0;color:#222;}
 .ls-cinp:focus{box-shadow:inset 0 -2px 0 ${DC.orange};}
 .ls-strong{font-weight:700;color:${DC.red};}
-.ls-sel{width:100%;border:none;background:transparent;font:inherit;font-size:11.5px;padding:4px 2px;}
+.ls-sel{width:100%;border:none;background:#fff;font:inherit;font-size:11.5px;padding:4px 2px;color:#222;}
 .ls-del{border:none;background:#f1f1f1;color:#b00;width:24px;height:24px;border-radius:6px;cursor:pointer;font-size:12px;}
 .ls-add{margin-top:6px;border:1px dashed ${DC.teal};background:${DC.teal}10;color:${DC.teal};font-weight:600;font-size:11.5px;padding:7px 12px;border-radius:7px;cursor:pointer;width:100%;}
 .ls-legend{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:8px;}
@@ -15387,7 +15387,7 @@ const DIAG_CSS=`
 .ls-firmas>div{flex:1;}
 .ls-firmline{border-bottom:1px solid #999;height:34px;}
 .ls-firmlbl{font-size:9.5px;color:${DC.grey};font-style:italic;text-align:center;margin-top:3px;}
-.ls-actions-diag{position:fixed;left:0;right:0;bottom:56px;background:#fff;border-top:1px solid #ddd;padding:10px 14px;display:flex;align-items:center;gap:10px;justify-content:flex-end;box-shadow:0 -2px 12px rgba(0,0,0,.08);z-index:50;}
+.ls-actions-diag{position:fixed;left:0;right:0;bottom:calc(56px + env(safe-area-inset-bottom, 0px));background:#fff;border-top:1px solid #ddd;padding:10px 14px;display:flex;align-items:center;gap:10px;justify-content:flex-end;box-shadow:0 -2px 12px rgba(0,0,0,.08);z-index:200;}
 .ls-savemsg{font-size:11px;color:${DC.grey};margin-right:auto;}
 .ls-btn{border:none;border-radius:9px;padding:11px 18px;font-size:14px;font-weight:700;cursor:pointer;}
 .ls-primary{background:${DC.teal};color:#fff;}
