@@ -1077,7 +1077,7 @@ function PDFPreviewModal({tkt,cl,un,supp,onClose}) {
           color:C.t1,padding:"10px 14px",cursor:"pointer",fontSize:14,minWidth:44,minHeight:44,lineHeight:1}}>←</button>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:11,color:C.cyan,fontWeight:700,fontFamily:"'Courier New',monospace"}}>{result.folio}</div>
-          <div style={{fontSize:11,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(tkt.titulo||"").substring(0,44)}</div>
+          <div style={{fontSize:11,color:C.t2,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(tkt.titulo||"").substring(0,44)}</div>
         </div>
         {typeof navigator!=="undefined"&&navigator.share&&(
           <button onClick={handleShare} style={{background:C.bg0,border:`1px solid ${C.border}`,borderRadius:10,
@@ -1975,10 +1975,10 @@ const StatusBadge = React.memo(function StatusBadge({sid,meta,small}) {
 
 const KPI = React.memo(function KPI({label,value,color,sub,accent,alert}) {
   return (
-    <div style={{background:accent?C.blueDim:alert?C.redDim:C.bg2,border:`1px solid ${accent?C.blue:alert?C.red+"55":C.border}`,borderRadius:3,padding:"8px 10px",minWidth:0,overflow:"hidden"}}>
-      <div style={{fontSize:7,color:C.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
-      <div style={{fontSize:13,fontWeight:800,color:color||C.t1,fontFamily:"'Courier New',monospace",lineHeight:1.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{value}</div>
-      {sub&&<div style={{fontSize:7,color:C.t3,marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sub}</div>}
+    <div style={{background:accent?C.blueDim:alert?C.redDim:C.bg2,border:`1px solid ${accent?C.blue:alert?C.red+"55":C.border}`,borderRadius:3,padding:"8px 10px",minWidth:0,overflow:"clip"}}>
+      <div style={{fontSize:7,color:C.t3,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:3,whiteSpace:"nowrap",overflow:"clip",textOverflow:"ellipsis"}}>{label}</div>
+      <div style={{fontSize:13,fontWeight:800,color:color||C.t1,fontFamily:"'Courier New',monospace",lineHeight:1.1,whiteSpace:"nowrap",overflow:"clip",textOverflow:"ellipsis"}}>{value}</div>
+      {sub&&<div style={{fontSize:7,color:C.t3,marginTop:3,whiteSpace:"nowrap",overflow:"clip",textOverflow:"ellipsis"}}>{sub}</div>}
     </div>
   );
 })
@@ -1988,7 +1988,7 @@ function Field({label,value,onChange,onFocus,onBlur,prefix="$",suffix,hint,hi,mi
   return (
     <div style={{marginBottom:7}}>
       {label&&<div style={{fontSize:7,color:hi?C.cyan:C.t3,letterSpacing:"0.14em",marginBottom:3,textTransform:"uppercase"}}>{label}</div>}
-      <div style={{display:"flex",alignItems:rows?"flex-start":"center",background:disabled?C.bg3:C.bg0,border:`1px solid ${hi?C.blueHi:C.border}`,borderRadius:3,overflow:"hidden"}}>
+      <div style={{display:"flex",alignItems:rows?"flex-start":"center",background:disabled?C.bg3:C.bg0,border:`1px solid ${hi?C.blueHi:C.border}`,borderRadius:3,overflow:"clip"}}>
         {prefix&&<span style={{padding:"0 6px",color:hi?C.cyan:C.t3,fontSize:10,fontFamily:"'Courier New',monospace",flexShrink:0,paddingTop:rows?8:0}}>{prefix}</span>}
         {rows?(
           <textarea rows={rows} value={String(value)} disabled={disabled} placeholder={placeholder||""}
@@ -2041,7 +2041,7 @@ const SHdr = React.memo(function SHdr({title,right}) {
 const MiniBar = React.memo(function MiniBar({value,max,color}) {
   const C = React.useContext(ThemeCtx);
   return (
-    <div style={{height:3,background:C.bg4,borderRadius:2,overflow:"hidden",marginTop:3}}>
+    <div style={{height:3,background:C.bg4,borderRadius:2,overflow:"clip",marginTop:3}}>
       <div style={{height:"100%",width:`${clamp((value/Math.max(max,1))*100,0,100)}%`,background:color||C.cyan}}/>
     </div>
   );
@@ -2111,7 +2111,7 @@ function SearchPalette({state,onNavigate,onClose}) {
   const tl={ticket:"Ticket",client:"Cliente",supplier:"Prov.",unit:"Unidad",part:"Parte"};
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",zIndex:600,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:70}} onClick={onClose}>
-      <div style={{width:"90%",maxWidth:520,background:"rgba(16,18,22,0.92)",backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",border:`1px solid ${C.borderHi}`,borderRadius:16,overflow:"hidden"}} onClick={e=>e.stopPropagation()}>
+      <div style={{width:"90%",maxWidth:520,background:"rgba(16,18,22,0.92)",backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",border:`1px solid ${C.borderHi}`,borderRadius:16,overflow:"clip"}} onClick={e=>e.stopPropagation()}>
         <div style={{display:"flex",alignItems:"center",gap:7,padding:"7px 11px",borderBottom:`1px solid ${C.border}`}}>
           <span style={{color:C.t3,fontSize:11}}>&#9906;</span>
           <input ref={ref} value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar ticket, unidad, parte, cliente, proveedor..."
@@ -2178,7 +2178,7 @@ function ClientPicker({clients, value, onChange, placeholder="Buscar cliente..."
       >
         {value ? (
           <div style={{minWidth:0,flex:1}}>
-            <div style={{fontSize:triggerFont,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayLabel}</div>
+            <div style={{fontSize:triggerFont,color:C.t1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayLabel}</div>
             {selected?.rfc && <div style={{fontSize: mobile ? 11 : 7,color:C.t3,marginTop:2,fontFamily:"'Courier New',monospace"}}>{selected.rfc}</div>}
           </div>
         ) : (
@@ -2265,7 +2265,7 @@ function SupplierPicker({suppliers, value, onChange, placeholder="Buscar proveed
       >
         {value ? (
           <div style={{minWidth:0,flex:1}}>
-            <div style={{fontSize:triggerFont,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selected?.nombre||value}</div>
+            <div style={{fontSize:triggerFont,color:C.t1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selected?.nombre||value}</div>
             {selected?.especialidad && <div style={{fontSize: mobile ? 11 : 7,color:C.t3,marginTop:2}}>{selected.especialidad}</div>}
           </div>
         ) : (
@@ -2358,7 +2358,7 @@ function UnitPicker({units, value, onChange, placeholder="Buscar por eco, placa,
       >
         {value ? (
           <div style={{minWidth:0,flex:1}}>
-            <div style={{fontSize:triggerFont,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'Courier New',monospace"}}>{displayLabel}</div>
+            <div style={{fontSize:triggerFont,color:C.t1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'Courier New',monospace"}}>{displayLabel}</div>
             {selected?.placa && <div style={{fontSize:dropSubFont,color:C.t3,marginTop:2}}>Placa {selected.placa}</div>}
           </div>
         ) : (
@@ -2397,7 +2397,7 @@ function UnitPicker({units, value, onChange, placeholder="Buscar por eco, placa,
                 <div style={{minWidth:0,flex:1}}>
                   <div style={{display:"flex",gap:5,alignItems:"center"}}>
                     {u.economico && <span style={{fontSize: mobile ? 13 : 9,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",flexShrink:0}}>Eco.{u.economico}</span>}
-                    <span style={{fontSize: mobile ? 13 : 9,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.marca} {u.modelo} {u.anio}</span>
+                    <span style={{fontSize: mobile ? 13 : 9,color:C.t1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.marca} {u.modelo} {u.anio}</span>
                   </div>
                   <div style={{fontSize:dropSubFont,color:C.t3,fontFamily:"'Courier New',monospace",marginTop:2}}>
                     {u.placa && <span>Placa {u.placa} · </span>}
@@ -2500,7 +2500,7 @@ function MultiUnitPicker({units, values=[], onChange, mobile=false}) {
                 <div style={{minWidth:0,flex:1}}>
                   <div style={{display:"flex",gap:5,alignItems:"center"}}>
                     {u.economico&&<span style={{fontSize:mobile?13:9,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",flexShrink:0}}>Eco.{u.economico}</span>}
-                    <span style={{fontSize:mobile?13:9,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.marca} {u.modelo} {u.anio}</span>
+                    <span style={{fontSize:mobile?13:9,color:C.t1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.marca} {u.modelo} {u.anio}</span>
                   </div>
                   <div style={{fontSize:dropSubFont,color:C.t3,fontFamily:"'Courier New',monospace",marginTop:2}}>
                     {u.placa&&<span>Placa {u.placa} · </span>}
@@ -2952,7 +2952,7 @@ function ReporteFinanciero({state, onClose}) {
         {/* ── 4. POR TIPO DE OPERACIÓN ── */}
         {byOp.length>0&&(
           <Section title="Por tipo de operación" accent={C.yellow}>
-            <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+            <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:8,overflow:"clip"}}>
               <div style={{display:"grid",gridTemplateColumns:"1fr 80px 100px 100px 70px",gap:0,padding:"6px 12px",borderBottom:`1px solid ${C.border}`}}>
                 {["Tipo","Ops","Revenue","U. Neta","Margen"].map(h=>(
                   <span key={h} style={{fontSize:8,color:C.t3,fontWeight:700,textAlign:h==="Tipo"?"left":"right"}}>{h}</span>
@@ -2975,7 +2975,7 @@ function ReporteFinanciero({state, onClose}) {
         {/* ── 5. POR CLIENTE ── */}
         {byClient.length>0&&(
           <Section title="Por cliente" accent={C.blue}>
-            <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+            <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:8,overflow:"clip"}}>
               <div style={{display:"grid",gridTemplateColumns:"1fr 60px 100px 100px 80px 70px",gap:0,padding:"6px 12px",borderBottom:`1px solid ${C.border}`}}>
                 {["Cliente","Ops","Revenue","U. Neta","Pendiente","Margen"].map(h=>(
                   <span key={h} style={{fontSize:8,color:C.t3,fontWeight:700,textAlign:h==="Cliente"?"left":"right"}}>{h}</span>
@@ -3206,7 +3206,7 @@ function CentroOps({state}) {
         <KPI label="Conversión" value={fpct(conversion)} color={conversion>=60?C.green:C.yellow} sub="cierre/total"/>
       </div>
       {/* Pipeline strip */}
-      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:10}}>
+      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"clip",marginBottom:10}}>
         <SHdr title="DISTRIBUCIÓN PIPELINE"/>
         <div style={{display:"grid",gridTemplateColumns:`repeat(${TICKET_ALL.length},1fr)`}}>
           {TICKET_ALL.map(sid=>{
@@ -3248,7 +3248,7 @@ function CentroOps({state}) {
           <KPI label="Capital comprometido ↗" value={mxn(backlogCosto)} color={C.yellow} sub="costos con IVA"/>
         </div>
       </div>
-      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:10}}>
+      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"clip",marginBottom:10}}>
         {backlog.length>0?(
           <>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",borderBottom:`1px solid ${C.border}`}}>
@@ -3264,7 +3264,7 @@ function CentroOps({state}) {
             {backlog.slice(0,5).map((t,i)=>(
               <div key={t.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 11px",
                 borderBottom:i<Math.min(backlog.length,5)-1?`1px solid ${C.border}`:"none"}}>
-                <div style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"55%"}}>
+                <div style={{overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"55%"}}>
                   <div style={{fontSize:8,color:C.t2}}>{t.titulo}</div>
                   <div style={{fontSize:7,color:C.t3}}>{TICKET_META[t.status]?.label||t.status}</div>
                 </div>
@@ -3304,7 +3304,7 @@ function CentroOps({state}) {
         </div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,marginBottom:10}}>
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"clip"}}>
           <SHdr title="AGING CARTERA"/>
           {[["< 30 días",aging.a30,C.green],["30–60 días",aging.a60,C.yellow],["> 60 días",aging.mas60,C.red]].map(([lbl,val,col],i)=>(
             <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 11px",borderBottom:`1px solid ${C.border}`}}>
@@ -3338,7 +3338,7 @@ function CentroOps({state}) {
       </div>
 
       {/* Desglose capital inmovilizado */}
-      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:5}}>
+      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"clip",marginBottom:5}}>
         {/* Fila 1: los dos componentes */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",borderBottom:`1px solid ${C.border}`}}>
           <div onClick={()=>setDrillDown("backlog")} style={{padding:"10px 14px",borderRight:`1px solid ${C.border}`,
@@ -3399,7 +3399,7 @@ function CentroOps({state}) {
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7,marginBottom:7}}>
 
         {/* Col 1: Por categoria */}
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"clip"}}>
           <SHdr title="UTILIDAD POR CATEGORIA"/>
           {byOp.filter(o=>o.count>0).length===0
             ?<EmptyState icon="&#128202;" title="Sin datos"/>
@@ -3418,14 +3418,14 @@ function CentroOps({state}) {
 
         {/* Col 2: Top clientes */}
         <div style={{display:"flex",flexDirection:"column",gap:7}}>
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"clip"}}>
             <SHdr title="TOP CLIENTES — UTILIDAD"/>
             {topClients.length===0
               ?<EmptyState icon="&#127970;" title="Vincula clientes a tickets"/>
               :topClients.map((c,i)=>(
                 <div key={i} style={{padding:"5px 11px",borderBottom:`1px solid ${C.border}`}}>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:1}}>
-                    <span style={{fontSize:9,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"60%"}}>{c.label}</span>
+                    <span style={{fontSize:9,color:C.t2,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"60%"}}>{c.label}</span>
                     <span style={{fontSize:9,fontWeight:700,color:c.neta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(c.neta)}</span>
                   </div>
                   <MiniBar value={c.neta} max={maxClient} color={C.greenDim}/>
@@ -3433,7 +3433,7 @@ function CentroOps({state}) {
               ))
             }
           </div>
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"clip"}}>
             <SHdr title="OPERACIÓN REALIZADA"/>
             <div style={{fontSize:7,color:C.t3,padding:"4px 11px"}}>{operados.length} tickets · Entregado + Facturado + Cobrado</div>
             {[
@@ -3454,13 +3454,13 @@ function CentroOps({state}) {
 
         {/* Col 3: Top proveedores + Eficiencia */}
         <div style={{display:"flex",flexDirection:"column",gap:7}}>
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"clip"}}>
             <SHdr title="TOP PROVEEDORES"/>
             {topSupp.length===0
               ?<EmptyState icon="&#127981;" title="Vincula proveedores a tickets"/>
               :topSupp.map((s,i)=>(
                 <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 11px",borderBottom:`1px solid ${C.border}`}}>
-                  <div style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"65%"}}>
+                  <div style={{overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"65%"}}>
                     <div style={{fontSize:9,color:C.t2}}>{s.label}</div>
                     <div style={{fontSize:7,color:C.t3}}>{s.count} ops</div>
                   </div>
@@ -3469,14 +3469,14 @@ function CentroOps({state}) {
               ))
             }
           </div>
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"clip"}}>
             <SHdr title="EFICIENCIA — UTIL/HORA"/>
             {eficientes.length===0
               ?<EmptyState icon="&#9201;" title="Registra horas en tickets"/>
               :eficientes.map((e,i)=>(
                 <div key={i} style={{padding:"5px 11px",borderBottom:`1px solid ${C.border}`}}>
                   <div style={{display:"flex",justifyContent:"space-between"}}>
-                    <span style={{fontSize:8,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"65%"}}>{e.titulo}</span>
+                    <span style={{fontSize:8,color:C.t2,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"65%"}}>{e.titulo}</span>
                     <span style={{fontSize:9,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(e.uPH)}/h</span>
                   </div>
                   <div style={{fontSize:7,color:C.t3,marginTop:1}}>{mxn(e.uNeta)} · {e.horas}h</div>
@@ -3495,14 +3495,14 @@ function CentroOps({state}) {
             {[["Revenue op.",mxn(revenueOp),C.cyan],["Cash cobrado",mxn(cashTotal),C.green],["Cartera",mxn(carteraMonto),C.yellow],["Capital inm.",mxn(capitalInmovilizado),C.yellow],["Util. operativa",mxn(utilidadOp),utilidadOp>=0?C.green:C.red]].map(([lbl,val,col],i)=>(
               <div key={i} style={{padding:"5px 8px",background:C.bg2,borderRadius:3,border:`1px solid ${C.border}`}}>
                 <div style={{fontSize:7,color:C.t3,marginBottom:2}}>{lbl}</div>
-                <div style={{fontSize:12,fontWeight:800,color:col,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{val}</div>
+                <div style={{fontSize:12,fontWeight:800,color:col,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap",overflow:"clip",textOverflow:"ellipsis"}}>{val}</div>
               </div>
             ))}
           </div>
         </div>
 
         {/* Prioridades */}
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",minWidth:220}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"clip",minWidth:220}}>
           <SHdr title="PRIORIDADES"/>
           {Object.values(PRIORITY).map(pr=>{
             const count=tickets.filter(t=>t.priority===pr.id).length;
@@ -3800,13 +3800,13 @@ function CentroOps({state}) {
                         borderBottom:i<tkts.length-1?`1px solid ${C.border}`:"none",
                         background:i%2===0?"transparent":`${C.bg1}70`}}>
                         <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace",
-                          overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                          overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                           {mkFolio(t,"OP")}
                         </div>
-                        <div style={{overflow:"hidden",paddingRight:8}}>
-                          <div style={{fontSize:9,fontWeight:600,color:C.t1,overflow:"hidden",
+                        <div style={{overflow:"clip",paddingRight:8}}>
+                          <div style={{fontSize:9,fontWeight:600,color:C.t1,overflow:"clip",
                             textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo||"Sin título"}</div>
-                          <div style={{fontSize:7,color:C.t3,marginTop:1,overflow:"hidden",
+                          <div style={{fontSize:7,color:C.t3,marginTop:1,overflow:"clip",
                             textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cliente}</div>
                         </div>
                         <div style={{fontSize:9,fontWeight:700,textAlign:"right",
@@ -3938,7 +3938,7 @@ function Tickets({state,dispatch,toast,scheduleHardDelete}) {
         <span style={{fontSize:8,color:C.t3}}>{filtered.length} resultado{filtered.length!==1?"s":""}</span>
       </div>
 
-      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"clip"}}>
         <div style={{display:"grid",gridTemplateColumns:"24px 1.8fr 0.5fr 0.7fr 0.7fr 0.8fr 0.7fr 0.6fr 22px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:4}}>
           <span/>
           <span>ID / TITULO</span><span>TIPO</span><span>PRIORIDAD</span><span>ESTADO</span>
@@ -3959,8 +3959,8 @@ function Tickets({state,dispatch,toast,scheduleHardDelete}) {
                 style={{display:"grid",gridTemplateColumns:"24px 1.8fr 0.5fr 0.7fr 0.7fr 0.8fr 0.7fr 0.6fr 22px",padding:"6px 9px",background:exp?C.blueDim:i%2===0?C.bg1:C.bg2,cursor:"pointer",gap:4,alignItems:"center",borderLeft:`3px solid ${pr.dot}`}}>
                 <div/>
                 <div style={{minWidth:0}}>
-                  <div style={{fontSize:8,fontWeight:700,color:C.t1,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.id}</div>
-                  <div style={{fontSize:9,color:C.cyan,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                  <div style={{fontSize:8,fontWeight:700,color:C.t1,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap",overflow:"clip",textOverflow:"ellipsis"}}>{t.id}</div>
+                  <div style={{fontSize:9,color:C.cyan,lineHeight:1.2,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
                   <div style={{fontSize:7,color:C.t3}}>{t.date}{cl?" · "+cl.empresa:""}{ticketUnits.length>0?" · "+fmtUnits(ticketUnits):""}</div>
                 </div>
                 <div style={{fontSize:8,color:C.t2,fontFamily:"'Courier New',monospace"}}>{t.opShort}</div>
@@ -4427,7 +4427,7 @@ function Cotizador({state,dispatch,toast}) {
       {catalogSearch!==null&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}
           onClick={()=>{setCatalogSearch(null);setCatalogQ("");}}>
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.borderHi}`,borderRadius:5,width:"90%",maxWidth:520,overflow:"hidden"}}
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.borderHi}`,borderRadius:5,width:"90%",maxWidth:520,overflow:"clip"}}
             onClick={e=>e.stopPropagation()}>
             <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderBottom:`1px solid ${C.border}`,background:C.bg2}}>
               <span style={{fontSize:9,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>CATALOGO — LINEA {String(catalogSearch+1).padStart(2,"0")}</span>
@@ -4444,7 +4444,7 @@ function Cotizador({state,dispatch,toast}) {
               <div key={p.id} onClick={()=>selectFromCatalog(p)}
                 style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 12px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",background:i%2===0?C.bg1:C.bg0}}>
                 <div style={{minWidth:0,flex:1,marginRight:10}}>
-                  <div style={{fontSize:10,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
+                  <div style={{fontSize:10,fontWeight:700,color:C.t1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
                   <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace"}}>
                     {p.oem&&<span style={{color:C.cyan}}>{p.oem}</span>}
                     {p.oem&&p.aplicacion&&" · "}
@@ -4508,7 +4508,7 @@ function Cotizador({state,dispatch,toast}) {
         {/* LEFT */}
         <div>
           {/* Datos del ticket */}
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"clip"}}>
             <SHdr title="DATOS DEL TICKET"/>
             <div style={{padding:9}}>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
@@ -4538,7 +4538,7 @@ function Cotizador({state,dispatch,toast}) {
                 <Sel label="Prob. cierre" value={prob} onChange={setProb} options={PROB.map(p=>({value:p.id,label:p.label+" ("+p.pct+"%)"}))}/>
                 <div>
                   <div style={{fontSize:7,color:C.t3,marginBottom:2}}>HORAS OP.</div>
-                  <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,overflow:"hidden"}}>
+                  <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,overflow:"clip"}}>
                     <input type="text" inputMode="decimal" min={0} step={0.5} value={horasOp} onChange={e=>setHorasOp(e.target.value)}
                       onBlur={()=>setHorasOp(v=>String(safeNumber(v)))}
                       style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:11,padding:"5px 0 5px 7px",fontFamily:"'Courier New',monospace"}}/>
@@ -4555,7 +4555,7 @@ function Cotizador({state,dispatch,toast}) {
           </div>
 
           {/* Lineas de cotizacion */}
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"clip"}}>
             <SHdr title={"LINEAS DE COTIZACION ("+lineas.length+")"} right={
               <button onClick={addLinea} style={{fontSize:8,background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,padding:"2px 8px",cursor:"pointer",fontWeight:600}}>
                 + Agregar linea
@@ -4567,7 +4567,7 @@ function Cotizador({state,dispatch,toast}) {
                 const lsnap = lineSnaps[i]||{precioConIVA:0,uNeta:0,margenNetoPrecio:0,ivaNeto:0};
                 const lmc   = margenColor(lsnap.margenNetoPrecio);
                 return (
-                  <div key={l.key} style={{background:C.bg0,border:`1px solid ${C.borderHi}`,borderRadius:3,marginBottom:i<lineas.length-1?7:0,overflow:"hidden"}}>
+                  <div key={l.key} style={{background:C.bg0,border:`1px solid ${C.borderHi}`,borderRadius:3,marginBottom:i<lineas.length-1?7:0,overflow:"clip"}}>
                     {/* Header linea */}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 9px",background:C.bg3,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderBottom:`1px solid ${C.border}`}}>
                       <span style={{fontSize:8,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>LINEA {String(i+1).padStart(2,"0")}</span>
@@ -4626,7 +4626,7 @@ function Cotizador({state,dispatch,toast}) {
                       <div style={{display:"grid",gridTemplateColumns:"80px 1fr 1fr 1fr",gap:5,marginBottom:6}}>
                         <div>
                           <div style={{fontSize:7,color:C.t3,marginBottom:2}}>CANT.</div>
-                          <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
+                          <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"clip"}}>
                             <input type="text" inputMode="numeric"
                               value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)}
                               onChange={e=>updateLinea(i,{_qtyRaw:e.target.value})}
@@ -4639,7 +4639,7 @@ function Cotizador({state,dispatch,toast}) {
                         {[["COSTO UNIT. (c/IVA)","costoUnit"],["GASOLINA","gasolina"],["OTROS","otros"]].map(([lbl,k])=>(
                           <div key={k}>
                             <div style={{fontSize:7,color:C.t3,marginBottom:2}}>{lbl}</div>
-                            <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,overflow:"hidden"}}>
+                            <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,overflow:"clip"}}>
                               <span style={{padding:"0 5px",color:C.t3,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
                               <input type="text" inputMode="decimal"
                                 value={l[`_${k}Raw`]!==undefined?l[`_${k}Raw`]:String(l[k]||0)}
@@ -4658,7 +4658,7 @@ function Cotizador({state,dispatch,toast}) {
                       )}
                       {/* Modo precio */}
                       <div style={{display:"flex",gap:7,alignItems:"center"}}>
-                        <div style={{display:"flex",borderRadius:3,overflow:"hidden",border:`1px solid ${C.border}`,flexShrink:0}}>
+                        <div style={{display:"flex",borderRadius:3,overflow:"clip",border:`1px solid ${C.border}`,flexShrink:0}}>
                           {[["auto","Auto"],["manual","Manual"]].map(([id,lbl])=>(
                             <button key={id} onClick={()=>updateLinea(i,{mode:id})}
                               style={{padding:"3px 8px",border:"none",cursor:"pointer",fontSize:8,fontWeight:600,background:l.mode===id?C.blue:C.bg2,color:l.mode===id?C.t1:C.t2}}>
@@ -4685,7 +4685,7 @@ function Cotizador({state,dispatch,toast}) {
                         ):(
                           <div style={{display:"flex",alignItems:"center",gap:5,flex:1}}>
                             <span style={{fontSize:7,color:C.t3,flexShrink:0}}>Precio c/IVA:</span>
-                            <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden",flex:1}}>
+                            <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"clip",flex:1}}>
                               <span style={{padding:"0 4px",color:C.cyan,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
                               <input type="number" min={0} step={0.01} value={l.manualPrice} onChange={e=>updateLinea(i,{manualPrice:e.target.value})}
                                 style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:11,fontWeight:700,padding:"4px 0",fontFamily:"'Courier New',monospace"}}/>
@@ -4702,7 +4702,7 @@ function Cotizador({state,dispatch,toast}) {
           </div>
 
           {/* IVA e ISR globales */}
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"clip"}}>
             <SHdr title="PARAMETROS FISCALES"/>
             <div style={{padding:9}}>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:6}}>
@@ -4733,7 +4733,7 @@ function Cotizador({state,dispatch,toast}) {
         {/* RIGHT — margen + resultados */}
         <div>
           {/* Margen efectivo */}
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:6,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:6,overflow:"clip"}}>
             <SHdr title="MARGEN EFECTIVO" right={
               <div style={{display:"flex",alignItems:"center",gap:4}}>
                 <span style={{fontSize:7,color:C.t3}}>Manual</span>
@@ -4775,7 +4775,7 @@ function Cotizador({state,dispatch,toast}) {
               {customMgn&&(
                 <div>
                   <div style={{fontSize:7,color:C.t3,marginBottom:2}}>MARGEN PERSONALIZADO</div>
-                  <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
+                  <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"clip"}}>
                     <input type="number" min={0} step={0.5} value={customVal} onChange={e=>setCustomVal(e.target.value)}
                     onBlur={()=>setCustomVal(v=>safeNumber(v,27))}
                       style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:12,fontWeight:700,padding:"5px 7px",fontFamily:"'Courier New',monospace"}}/>
@@ -4799,7 +4799,7 @@ function Cotizador({state,dispatch,toast}) {
           </div>
 
           {/* IVA */}
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:5,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:5,overflow:"clip"}}>
             <SHdr title="FISCAL — IVA CONSOLIDADO"/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr"}}>
               {[["IVA Acreditable","Recuperas",mxn(totalSnap.ivaAcred),C.blueHi],["IVA Trasladado","Cobras",mxn(totalSnap.ivaTraslad),C.cyan],["IVA Neto SAT","Pagas al SAT",mxn(totalSnap.ivaNeto),totalSnap.ivaNeto>=0?C.yellow:C.green]].map(([lbl,sub,val,col],i)=>(
@@ -4814,14 +4814,14 @@ function Cotizador({state,dispatch,toast}) {
 
           {/* Desglose por linea cuando hay mas de una */}
           {lineas.length>1&&(
-            <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:5}}>
+            <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"clip",marginBottom:5}}>
               <SHdr title="DESGLOSE POR LINEA"/>
               {lineas.map((l,i)=>{
                 const lsnap=lineSnaps[i]||{precioConIVA:0,uNeta:0,margenNetoPrecio:0};
                 return (
                   <div key={l.key} style={{display:"flex",justifyContent:"space-between",padding:"5px 9px",borderBottom:i<lineas.length-1?`1px solid ${C.border}`:"none",background:i%2===0?C.bg1:C.bg0}}>
                     <div style={{minWidth:0,flex:1,marginRight:8}}>
-                      <div style={{fontSize:9,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.titulo||"Linea "+(i+1)}</div>
+                      <div style={{fontSize:9,color:C.t1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.titulo||"Linea "+(i+1)}</div>
                       {l.partRef&&<div style={{fontSize:7,color:C.t3,fontFamily:"'Courier New',monospace"}}>{l.partRef}</div>}
                     </div>
                     <div style={{textAlign:"right",flexShrink:0}}>
@@ -4847,7 +4847,7 @@ function Cotizador({state,dispatch,toast}) {
               <span style={{fontSize:8,color:C.t2}}>Margen neto promedio s/precio</span>
               <span style={{fontSize:9,fontWeight:700,color:mColor,fontFamily:"'Courier New',monospace"}}>{fpct(aggMargen)}</span>
             </div>
-            <div style={{height:4,background:C.bg4,borderRadius:2,overflow:"hidden"}}>
+            <div style={{height:4,background:C.bg4,borderRadius:2,overflow:"clip"}}>
               <div style={{height:"100%",width:`${clamp(aggMargen,0,100)}%`,background:mColor,transition:"width .3s"}}/>
             </div>
             <div style={{display:"flex",justifyContent:"space-between",marginTop:3,fontSize:7,color:C.t3}}>
@@ -5147,7 +5147,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
       {catalogSearch!==null&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}}
           onClick={()=>{setCatalogSearch(null);setCatalogQ("");}}>
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.borderHi}`,borderRadius:5,width:"90%",maxWidth:520,overflow:"hidden"}}
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.borderHi}`,borderRadius:5,width:"90%",maxWidth:520,overflow:"clip"}}
             onClick={e=>e.stopPropagation()}>
             <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderBottom:`1px solid ${C.border}`,background:C.bg2}}>
               <span style={{fontSize:9,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>CATÁLOGO — REF {String(catalogSearch+1).padStart(2,"0")}</span>
@@ -5162,7 +5162,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
               <div key={p.id} onClick={()=>selectFromCatalog(p)}
                 style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 12px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",background:i%2===0?C.bg1:C.bg0}}>
                 <div style={{minWidth:0,flex:1,marginRight:10}}>
-                  <div style={{fontSize:10,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
+                  <div style={{fontSize:10,fontWeight:700,color:C.t1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
                   <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace"}}>
                     {p.oem&&<span style={{color:C.cyan}}>{p.oem}</span>}
                     {p.oem&&p.aplicacion&&" · "}
@@ -5186,7 +5186,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
         <div>
 
           {/* Quote header */}
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"clip"}}>
             <SHdr title="DATOS DE LA COTIZACIÓN"/>
             <div style={{padding:9}}>
               <div className="ref-hdr-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:5,marginBottom:5}}>
@@ -5197,7 +5197,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
                 </div>
                 <div>
                   <div style={{fontSize:7,color:C.t3,marginBottom:2}}>VIGENCIA</div>
-                  <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,overflow:"hidden"}}>
+                  <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,overflow:"clip"}}>
                     <input type="text" inputMode="numeric" value={vigencia}
                       onChange={e=>setVigencia(e.target.value)}
                       onBlur={()=>setVigencia(v=>Math.max(1,parseInt(v)||3))}
@@ -5243,7 +5243,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
           </div>
 
           {/* Parts table */}
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"clip"}}>
             <SHdr title={`REFACCIONES (${lineas.length})`} right={
               <button onClick={addLinea}
                 style={{fontSize:8,background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:3,color:C.cyan,padding:"2px 8px",cursor:"pointer",fontWeight:600}}>
@@ -5257,7 +5257,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
                 const qty=safeNumber(l.qty,1)||1;
                 const unitPriceConIVA=qty>0?lsnap.precioConIVA/qty:0;
                 return (
-                  <div key={l.key} style={{background:C.bg0,border:`1px solid ${C.borderHi}`,borderRadius:3,marginBottom:i<lineas.length-1?7:0,overflow:"hidden"}}>
+                  <div key={l.key} style={{background:C.bg0,border:`1px solid ${C.borderHi}`,borderRadius:3,marginBottom:i<lineas.length-1?7:0,overflow:"clip"}}>
                     {/* Line header */}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 9px",background:C.bg3,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,borderBottom:`1px solid ${C.border}`}}>
                       <span style={{fontSize:8,color:C.cyan,fontFamily:"'Courier New',monospace",fontWeight:700}}>
@@ -5304,7 +5304,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
                       <div className="ref-line-row2" style={{display:"grid",gridTemplateColumns:"80px 1fr auto",gap:5,alignItems:"end"}}>
                         <div>
                           <div style={{fontSize:7,color:C.t3,marginBottom:2}}>CANT.</div>
-                          <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
+                          <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"clip"}}>
                             <input type="text" inputMode="numeric"
                               value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)}
                               onChange={e=>updateLinea(i,{_qtyRaw:e.target.value})}
@@ -5316,7 +5316,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
                         </div>
                         <div>
                           <div style={{fontSize:7,color:C.t3,marginBottom:2}}>COSTO UNIT. {cIVA?"(c/IVA)":"(s/IVA)"}</div>
-                          <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,overflow:"hidden"}}>
+                          <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,overflow:"clip"}}>
                             <span style={{padding:"0 5px",color:C.t3,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
                             <input type="text" inputMode="decimal"
                               value={l._costoRaw!==undefined?l._costoRaw:String(l.costoUnit||0)}
@@ -5327,7 +5327,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
                         </div>
                         {/* Mode + margin or manual price */}
                         <div style={{display:"flex",gap:5,alignItems:"center"}}>
-                          <div style={{display:"flex",borderRadius:3,overflow:"hidden",border:`1px solid ${C.border}`,flexShrink:0}}>
+                          <div style={{display:"flex",borderRadius:3,overflow:"clip",border:`1px solid ${C.border}`,flexShrink:0}}>
                             {[["auto","Auto"],["manual","Manual"]].map(([id,lbl])=>(
                               <button key={id} onClick={()=>updateLinea(i,{modo:id})}
                                 style={{padding:"4px 7px",border:"none",cursor:"pointer",fontSize:8,fontWeight:600,background:l.modo===id?C.blue:C.bg2,color:l.modo===id?C.t1:C.t2}}>
@@ -5353,7 +5353,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
                           ):(
                             <div style={{display:"flex",alignItems:"center",gap:5}}>
                               <span style={{fontSize:7,color:C.t3,flexShrink:0}}>Precio c/IVA:</span>
-                              <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
+                              <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"clip"}}>
                                 <span style={{padding:"0 4px",color:C.cyan,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
                                 <input type="number" min={0} step={0.01} value={l.precioManual}
                                   onChange={e=>updateLinea(i,{precioManual:e.target.value})}
@@ -5382,7 +5382,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
           </div>
 
           {/* Tax params */}
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"clip"}}>
             <SHdr title="PARÁMETROS FISCALES"/>
             <div style={{padding:9,display:"grid",gridTemplateColumns:"80px 1fr 1fr",gap:8,alignItems:"center"}}>
               <div>
@@ -5416,7 +5416,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
         {/* RIGHT — margin + summary */}
         <div>
           {/* Global margin */}
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:6,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:6,overflow:"clip"}}>
             <SHdr title="MARGEN GLOBAL" right={
               <div style={{display:"flex",alignItems:"center",gap:4}}>
                 <span style={{fontSize:7,color:C.t3}}>Por línea</span>
@@ -5435,7 +5435,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
                     </div>
                     <div style={{fontSize:8,color:C.t3}}>aplicado a todas las líneas</div>
                   </div>
-                  <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden"}}>
+                  <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"clip"}}>
                     <input type="number" min={0} step={0.5} value={globalMargen}
                       onChange={e=>setGlobalMargen(safeNumber(e.target.value,30))}
                       style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:13,fontWeight:700,padding:"6px 8px",fontFamily:"'Courier New',monospace"}}/>
@@ -5462,7 +5462,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
           </div>
 
           {/* IVA breakdown */}
-          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:5,overflow:"hidden"}}>
+          <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:5,overflow:"clip"}}>
             <SHdr title="FISCAL — IVA"/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr"}}>
               {[
@@ -5481,14 +5481,14 @@ function CotizadorRefacciones({state,dispatch,toast}) {
 
           {/* Per-line breakdown */}
           {lineas.length>1&&(
-            <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden",marginBottom:5}}>
+            <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"clip",marginBottom:5}}>
               <SHdr title="DESGLOSE POR REFACCIÓN"/>
               {lineas.map((l,i)=>{
                 const lsnap=lineSnaps[i]||{precioConIVA:0,uNeta:0};
                 return (
                   <div key={l.key} style={{display:"flex",justifyContent:"space-between",padding:"5px 9px",borderBottom:i<lineas.length-1?`1px solid ${C.border}`:"none",background:i%2===0?C.bg1:C.bg0}}>
                     <div style={{minWidth:0,flex:1,marginRight:8}}>
-                      <div style={{fontSize:9,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.descripcion||`Refacción ${i+1}`}</div>
+                      <div style={{fontSize:9,color:C.t1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.descripcion||`Refacción ${i+1}`}</div>
                       {l.oem&&<div style={{fontSize:7,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{l.oem}</div>}
                     </div>
                     <div style={{textAlign:"right",flexShrink:0}}>
@@ -5514,7 +5514,7 @@ function CotizadorRefacciones({state,dispatch,toast}) {
               <span style={{fontSize:8,color:C.t2}}>Margen neto s/precio</span>
               <span style={{fontSize:9,fontWeight:700,color:mColor,fontFamily:"'Courier New',monospace"}}>{fpct(aggMargen)}</span>
             </div>
-            <div style={{height:4,background:C.bg4,borderRadius:2,overflow:"hidden"}}>
+            <div style={{height:4,background:C.bg4,borderRadius:2,overflow:"clip"}}>
               <div style={{height:"100%",width:`${clamp(aggMargen,0,100)}%`,background:mColor,transition:"width .3s"}}/>
             </div>
             <div style={{display:"flex",justifyContent:"space-between",marginTop:3,fontSize:7,color:C.t3}}>
@@ -5631,7 +5631,7 @@ function Unidades({state,dispatch,toast}) {
       )}
 
       {filtered.length>0&&(
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"clip"}}>
           <div style={{display:"grid",gridTemplateColumns:"0.6fr 0.5fr 1.4fr 0.7fr 1fr 1fr 0.6fr 0.6fr 0.6fr 60px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:5}}>
             <span>ECO.</span><span>VIN</span><span>UNIDAD</span><span>AÑO</span><span>MOTOR</span><span>TRANSMISION</span><span>KM</span><span>CLIENTE</span><span>ESTADO</span><span/>
           </div>
@@ -5645,8 +5645,8 @@ function Unidades({state,dispatch,toast}) {
               <div key={u.id} style={{borderBottom:`1px solid ${C.border}`}}>
                 <div onClick={()=>setSel(exp?null:u.id)}
                   style={{display:"grid",gridTemplateColumns:"0.6fr 0.5fr 1.4fr 0.7fr 1fr 1fr 0.6fr 0.6fr 0.6fr 60px",padding:"7px 9px",background:exp?C.blueDim:i%2===0?C.bg1:C.bg2,gap:5,alignItems:"center",cursor:"pointer",borderLeft:`3px solid ${st.dot}`}}>
-                  <div style={{fontSize:9,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.economico||"—"}</div>
-                  <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.vin.slice(-8)}</div>
+                  <div style={{fontSize:9,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.economico||"—"}</div>
+                  <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace",overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.vin.slice(-8)}</div>
                   <div>
                     <div style={{fontSize:10,fontWeight:700,color:C.t1}}>{u.marca} {u.modelo}</div>
                     <div style={{display:"flex",gap:5,alignItems:"center",marginTop:1}}>
@@ -5655,10 +5655,10 @@ function Unidades({state,dispatch,toast}) {
                     </div>
                   </div>
                   <div style={{fontSize:9,color:C.t2,fontFamily:"'Courier New',monospace"}}>{u.anio}</div>
-                  <div style={{fontSize:8,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.motor||"---"}</div>
-                  <div style={{fontSize:8,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.transmision||"---"}</div>
+                  <div style={{fontSize:8,color:C.t2,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.motor||"---"}</div>
+                  <div style={{fontSize:8,color:C.t2,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.transmision||"---"}</div>
                   <div style={{fontSize:9,color:C.t2,fontFamily:"'Courier New',monospace"}}>{u.km?u.km.toLocaleString():"---"}</div>
-                  <div style={{fontSize:8,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl?cl.empresa.split(" ")[0]:"---"}</div>
+                  <div style={{fontSize:8,color:C.t2,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl?cl.empresa.split(" ")[0]:"---"}</div>
                   <div>
                     <span style={{display:"inline-block",padding:"2px 5px",borderRadius:2,background:st.color+"22",border:`1px solid ${st.color}55`,fontSize:7,color:st.dot,fontWeight:600}}>{st.label}</span>
                   </div>
@@ -5683,7 +5683,7 @@ function Unidades({state,dispatch,toast}) {
                       tks.slice(0,4).map(t=>(
                         <div key={t.id} style={{display:"flex",justifyContent:"space-between",padding:"2px 0",borderBottom:`1px solid ${C.border}`,fontSize:8,alignItems:"center"}}>
                           <span style={{color:C.t3,fontFamily:"'Courier New',monospace"}}>{t.id}</span>
-                          <span style={{color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:220}}>{t.titulo}</span>
+                          <span style={{color:C.t2,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:220}}>{t.titulo}</span>
                           <PriorityBadge pid={t.priority} small/>
                           <StatusBadge sid={t.status} meta={TICKET_META} small/>
                         </div>
@@ -5770,7 +5770,7 @@ function Catalogo({state,dispatch,toast}) {
       {parts.length===0&&!showForm&&<EmptyState icon="&#128295;" title="Sin partes registradas" sub='Agrega la primera con "+ Nueva parte"'/>}
 
       {filtered.length>0&&(
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"clip"}}>
           <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 2fr 0.8fr 60px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:5}}>
             <span>NOMBRE</span><span>OEM</span><span>AFTERMARKET</span><span>APLICACION</span><span>ULT. PRECIO</span><span/>
           </div>
@@ -5781,12 +5781,12 @@ function Catalogo({state,dispatch,toast}) {
                 <div onClick={()=>setSel(exp?null:p.id)}
                   style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 2fr 0.8fr 60px",padding:"7px 9px",background:exp?C.blueDim:i%2===0?C.bg1:C.bg2,gap:5,alignItems:"center",cursor:"pointer"}}>
                   <div>
-                    <div style={{fontSize:10,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
+                    <div style={{fontSize:10,fontWeight:700,color:C.t1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
                     <div style={{fontSize:7,color:C.t3}}>{p.id}</div>
                   </div>
-                  <div style={{fontSize:9,color:C.cyan,fontFamily:"'Courier New',monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.oem||"---"}</div>
-                  <div style={{fontSize:8,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.aftermarket||"---"}</div>
-                  <div style={{fontSize:8,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.aplicacion||"---"}</div>
+                  <div style={{fontSize:9,color:C.cyan,fontFamily:"'Courier New',monospace",overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.oem||"---"}</div>
+                  <div style={{fontSize:8,color:C.t2,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.aftermarket||"---"}</div>
+                  <div style={{fontSize:8,color:C.t2,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.aplicacion||"---"}</div>
                   <div style={{fontSize:9,fontWeight:700,color:C.yellow,fontFamily:"'Courier New',monospace"}}>{p.ultimoPrecio?mxn(p.ultimoPrecio):"---"}</div>
                   <div style={{display:"flex",gap:3}}>
                     <button onClick={e=>startEdit(p,e)} style={{padding:"2px 5px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:3,color:C.t2,fontSize:8,cursor:"pointer"}}>Editar</button>
@@ -5879,7 +5879,7 @@ function Proveedores({state,dispatch,toast}) {
       {suppliers.length===0&&!showForm&&<EmptyState icon="&#127981;" title="Sin proveedores registrados"/>}
 
       {suppliers.length>0&&(
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"clip"}}>
           <div style={{display:"grid",gridTemplateColumns:"1.8fr 0.8fr 0.6fr 0.6fr 0.7fr 1fr 1fr 60px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:5}}>
             <span>PROVEEDOR</span><span>COBERTURA</span><span>ENTREGA</span><span>CONF.</span><span>SCORE OP.</span><span>INVERTIDO</span><span>UTIL. GEN.</span><span/>
           </div>
@@ -5891,11 +5891,11 @@ function Proveedores({state,dispatch,toast}) {
                 <div onClick={()=>setSel(exp?null:s.id)}
                   style={{display:"grid",gridTemplateColumns:"1.8fr 0.8fr 0.6fr 0.6fr 0.7fr 1fr 1fr 60px",padding:"7px 9px",background:exp?C.blueDim:i%2===0?C.bg1:C.bg2,gap:5,alignItems:"center",cursor:"pointer"}}>
                   <div style={{minWidth:0}}>
-                    <div style={{fontSize:10,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.nombre}</div>
+                    <div style={{fontSize:10,fontWeight:700,color:C.t1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.nombre}</div>
                     <div style={{fontSize:7,color:C.t3}}>{s.especialidad}</div>
                     <MiniBar value={st.neta} max={maxNeta} color={C.greenDim}/>
                   </div>
-                  <div style={{fontSize:8,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.cobertura||"---"}</div>
+                  <div style={{fontSize:8,color:C.t2,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.cobertura||"---"}</div>
                   <div style={{fontSize:9,color:C.t1,fontFamily:"'Courier New',monospace"}}>{s.entregaDias}d</div>
                   <div style={{fontSize:9,fontWeight:700,color:s.confiabilidad>=90?C.green:s.confiabilidad>=75?C.yellow:C.red,fontFamily:"'Courier New',monospace"}}>{s.confiabilidad}%</div>
                   <div style={{fontSize:9,fontWeight:700,color:s.scoreOp>=80?C.green:s.scoreOp>=60?C.yellow:C.red,fontFamily:"'Courier New',monospace"}}>{s.scoreOp}</div>
@@ -5989,7 +5989,7 @@ function Clientes({state,dispatch,toast}) {
       )}
       {clients.length===0&&!showForm&&<EmptyState icon="&#127970;" title="Sin clientes registrados"/>}
       {clients.length>0&&(
-        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+        <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"clip"}}>
           <div style={{display:"grid",gridTemplateColumns:"1.6fr 0.8fr 1fr 1fr 0.8fr 0.6fr 60px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:5}}>
             <span>EMPRESA</span><span>CONTACTO</span><span>FACTURADO</span><span>UTIL. NETA</span><span>PENDIENTE</span><span>SCORE</span><span/>
           </div>
@@ -6003,11 +6003,11 @@ function Clientes({state,dispatch,toast}) {
                 <div onClick={()=>setSel(exp?null:c.id)}
                   style={{display:"grid",gridTemplateColumns:"1.6fr 0.8fr 1fr 1fr 0.8fr 0.6fr 60px",padding:"7px 9px",background:exp?C.blueDim:i%2===0?C.bg1:C.bg2,gap:5,alignItems:"center",cursor:"pointer"}}>
                   <div style={{minWidth:0}}>
-                    <div style={{fontSize:10,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.empresa}</div>
+                    <div style={{fontSize:10,fontWeight:700,color:C.t1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.empresa}</div>
                     <div style={{fontSize:7,color:C.t3}}>{c.id}</div>
                     <MiniBar value={st.fact} max={maxFact} color={C.cyanDim}/>
                   </div>
-                  <div style={{fontSize:9,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.contacto||"---"}</div>
+                  <div style={{fontSize:9,color:C.t2,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.contacto||"---"}</div>
                   <div style={{fontSize:10,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(st.fact)}</div>
                   <div>
                     <div style={{fontSize:10,fontWeight:700,color:st.neta>=0?C.green:C.red,fontFamily:"'Courier New',monospace"}}>{mxn(st.neta)}</div>
@@ -6037,7 +6037,7 @@ function Clientes({state,dispatch,toast}) {
                     {tickets.filter(t=>t.clientId===c.id).slice(0,3).map(t=>(
                       <div key={t.id} style={{display:"flex",justifyContent:"space-between",padding:"2px 0",borderBottom:`1px solid ${C.border}`,fontSize:8,alignItems:"center",gap:6}}>
                         <span style={{color:C.t3,fontFamily:"'Courier New',monospace",flexShrink:0}}>{t.id}</span>
-                        <span style={{color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{t.titulo}</span>
+                        <span style={{color:C.t2,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{t.titulo}</span>
                         <PriorityBadge pid={t.priority} small/>
                         <StatusBadge sid={t.status} meta={TICKET_META} small/>
                         <span style={{color:(t.snap?.uNeta||0)>=0?C.green:C.red,fontFamily:"'Courier New',monospace",flexShrink:0}}>{mxn((t.snap?.uNeta||0))}</span>
@@ -6081,7 +6081,7 @@ function Cartera({state,dispatch,toast}) {
           );})}
         </div>
       )}
-      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"clip"}}>
         <SHdr title="CUENTAS POR COBRAR" right={pendientes.length+" pendientes"}/>
         <div style={{display:"grid",gridTemplateColumns:"1.5fr 1fr 0.8fr 0.9fr 0.8fr 0.7fr 90px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:4}}>
           <span>TICKET / OP</span><span>CLIENTE</span><span>ESTADO</span><span>MONTO</span><span>PROMESA</span><span>DIAS</span><span/>
@@ -6094,10 +6094,10 @@ function Cartera({state,dispatch,toast}) {
           return (
             <div key={t.id} style={{display:"grid",gridTemplateColumns:"1.5fr 1fr 0.8fr 0.9fr 0.8fr 0.7fr 90px",padding:"6px 9px",background:venc?C.redDim:i%2===0?C.bg1:C.bg2,borderBottom:`1px solid ${C.border}`,gap:4,alignItems:"center"}}>
               <div style={{minWidth:0}}>
-                <div style={{fontSize:8,fontWeight:700,color:C.t1,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.id}</div>
-                <div style={{fontSize:8,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo.substring(0,30)}</div>
+                <div style={{fontSize:8,fontWeight:700,color:C.t1,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap",overflow:"clip",textOverflow:"ellipsis"}}>{t.id}</div>
+                <div style={{fontSize:8,color:C.t2,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo.substring(0,30)}</div>
               </div>
-              <div style={{fontSize:9,color:C.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl?.empresa||"---"}</div>
+              <div style={{fontSize:9,color:C.t2,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl?.empresa||"---"}</div>
               <StatusBadge sid={t.status} meta={TICKET_META} small/>
               <div style={{fontSize:10,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace"}}>{mxn(t.snap?.precioConIVA||0)}</div>
               <div style={{fontSize:9,color:C.t2,fontFamily:"'Courier New',monospace"}}>{t.promesaPago||"---"}</div>
@@ -6442,7 +6442,7 @@ function Ajustes({state,dispatch,toast}) {
                   <div key={b.key} style={{background:C.bg0,border:`1px solid ${C.border}`,borderRadius:4,padding:"8px 10px",marginBottom:6}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                       <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:9,fontFamily:"'Courier New',monospace",color:C.cyan,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.key}</div>
+                        <div style={{fontSize:9,fontFamily:"'Courier New',monospace",color:C.cyan,marginBottom:2,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.key}</div>
                         <div style={{fontSize:8,color:C.t3}}>{b.date} · {b.tickets} tickets · {b.units} unidades · {(b.size/1024).toFixed(1)}KB</div>
                       </div>
                       <div style={{display:"flex",gap:5,flexShrink:0,marginLeft:8}}>
@@ -6545,7 +6545,7 @@ function Ajustes({state,dispatch,toast}) {
           </div>
         )},
       ].map(sec=>(
-        <div key={sec.title} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"hidden"}}>
+        <div key={sec.title} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,marginBottom:7,overflow:"clip"}}>
           <SHdr title={sec.title}/>
           {sec.content}
         </div>
@@ -6688,7 +6688,7 @@ function MAjustes({state,dispatch,toast}) {
   };
 
   const Card=({title,children})=>(
-    <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",marginBottom:10}}>
+    <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:14,overflow:"clip",marginBottom:10}}>
       <div style={{padding:"11px 16px",borderBottom:`1px solid ${C.border}`,background:C.bg3}}>
         <div style={{fontSize:10,color:C.t3,letterSpacing:"0.18em",fontWeight:700}}>{title}</div>
       </div>
@@ -7023,7 +7023,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
         <KPI label="Operaciones"     value={String(tickets.length)} color={C.t1} sub={Object.keys(days).length+" dias"}/>
       </div>
 
-      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"hidden"}}>
+      <div style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:4,overflow:"clip"}}>
         <div style={{display:"grid",gridTemplateColumns:"1.6fr 0.5fr 0.6fr 0.7fr 0.6fr 0.7fr 0.7fr 56px 20px",padding:"4px 9px",borderBottom:`1px solid ${C.border}`,fontSize:7,color:C.t3,letterSpacing:"0.1em",gap:4}}>
           <span>ID / TITULO</span><span>TIPO</span><span>PRIO</span><span>ESTADO</span><span>MARKUP</span><span>PRECIO</span><span>UTIL.</span><span/><span/>
         </div>
@@ -7047,8 +7047,8 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
               <div onClick={()=>{if(!editing)setExpId(exp?null:t.id);}}
                 style={{display:"grid",gridTemplateColumns:"1.6fr 0.5fr 0.6fr 0.7fr 0.6fr 0.7fr 0.7fr 56px 20px",padding:"6px 9px",background:editing?C.blueDim:exp?C.bg3:i%2===0?C.bg1:C.bg2,cursor:editing?"default":"pointer",gap:4,alignItems:"center",borderLeft:`2px solid ${PRIORITY[t.priority]?.dot||C.border}`}}>
                 <div style={{minWidth:0}}>
-                  <div style={{fontSize:8,fontWeight:700,color:C.t1,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.id}</div>
-                  <div style={{fontSize:9,color:C.cyan,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                  <div style={{fontSize:8,fontWeight:700,color:C.t1,fontFamily:"'Courier New',monospace",whiteSpace:"nowrap",overflow:"clip",textOverflow:"ellipsis"}}>{t.id}</div>
+                  <div style={{fontSize:9,color:C.cyan,lineHeight:1.2,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
                   <div style={{fontSize:7,color:C.t3}}>{t.date}{cl?" · "+cl.empresa.split(" ")[0]:""}</div>
                 </div>
                 <div style={{fontSize:8,fontFamily:"'Courier New',monospace",color:C.t2,fontWeight:600}}>{t.opShort}</div>
@@ -7176,7 +7176,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                           {(safeNumber(l.qty,1))>1&&<div style={{fontSize:7,color:C.t3,marginBottom:5,fontFamily:"'Courier New',monospace"}}>{l.qty} × {mxn(safeNumber(l.costoUnit))} = {mxn(safeNumber(l.costoUnit)*safeNumber(l.qty,1))} costo total</div>}
                           {/* Modo precio */}
                           <div style={{display:"flex",gap:7,alignItems:"center"}}>
-                            <div style={{display:"flex",borderRadius:3,overflow:"hidden",border:`1px solid ${C.border}`,flexShrink:0}}>
+                            <div style={{display:"flex",borderRadius:3,overflow:"clip",border:`1px solid ${C.border}`,flexShrink:0}}>
                               {[["auto","Auto"],["manual","Manual"]].map(([id,lbl])=>(
                                 <button key={id} onClick={()=>updLinea(idx,{mode:id})}
                                   style={{padding:"3px 8px",border:"none",cursor:"pointer",fontSize:8,fontWeight:600,background:l.mode===id?C.blue:C.bg2,color:l.mode===id?C.t1:C.t2}}>{lbl}</button>
@@ -7201,7 +7201,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                             ) : (
                               <div style={{display:"flex",alignItems:"center",gap:5,flex:1}}>
                                 <span style={{fontSize:7,color:C.t3}}>Precio c/IVA:</span>
-                                <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"hidden",flex:1}}>
+                                <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"clip",flex:1}}>
                                   <span style={{padding:"0 4px",color:C.cyan,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
                                   <input type="text" inputMode="decimal" value={l.manualPrice} onChange={e=>updLinea(idx,{manualPrice:e.target.value})}
                                     style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.cyan,fontSize:11,fontWeight:700,padding:"4px 0",fontFamily:"'Courier New',monospace"}}/>
@@ -7358,7 +7358,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
 // ── Helpers móviles ──────────────────────────────────────────────────────────
 function MCard({children,style={}}) {
   const C = React.useContext(ThemeCtx);
-  return <div style={{background:"rgba(22,24,28,0.82)",border:"1px solid rgba(255,255,255,0.04)",borderRadius:18,marginBottom:10,overflow:"hidden",boxShadow:"0 2px 16px rgba(255,255,255,0.04)",...style}}>{children}</div>;
+  return <div style={{background:"rgba(22,24,28,0.82)",border:"1px solid rgba(255,255,255,0.04)",borderRadius:18,marginBottom:10,overflow:"clip",boxShadow:"0 2px 16px rgba(255,255,255,0.04)",...style}}>{children}</div>;
 }
 function MRow({label,value,color,bold}) {
   const C = React.useContext(ThemeCtx);
@@ -7389,7 +7389,7 @@ function MField({label,value,onChange,onFocus,onBlur,type="text",inputMode,place
   return (
     <div style={{marginBottom:10}}>
       {label&&<div style={{fontSize:10,color:C.t3,letterSpacing:"0.12em",marginBottom:5,textTransform:"uppercase",fontWeight:600}}>{label}</div>}
-      <div style={{display:"flex",alignItems:"center",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden",minHeight:48}}>
+      <div style={{display:"flex",alignItems:"center",background:C.bg2,border:`1px solid ${C.border}`,borderRadius:10,overflow:"clip",minHeight:48}}>
         <input type={type} inputMode={inputMode} value={value} placeholder={placeholder||""} onChange={e=>onChange(e.target.value)} onFocus={onFocus} onBlur={onBlur}
           style={{flex:1,background:"transparent",border:"none",outline:"none",color:color||C.t1,
             fontSize:16,/* 16px prevents iOS auto-zoom on focus */
@@ -7612,7 +7612,7 @@ function MOps({state,setTab,triggerMargin}) {
                   style={{display:"flex",alignItems:"center",gap:12,padding:"11px 0",
                     cursor:"pointer",borderTop:i>0?`1px solid rgba(232,72,72,0.12)`:"none"}}>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:14,fontWeight:600,color:A.t1,overflow:"hidden",
+                    <div style={{fontSize:14,fontWeight:600,color:A.t1,overflow:"clip",
                       textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>{t.titulo}</div>
                     <div style={{fontSize:11,color:A.red}}>Pendiente acción · {TICKET_META[t.status]?.label||t.status}</div>
                   </div>
@@ -7651,7 +7651,7 @@ function MOps({state,setTab,triggerMargin}) {
                 <div key={t.id} onClick={()=>setTab("cartera")}
                   style={{display:"flex",alignItems:"center",gap:12,padding:"11px 0",cursor:"pointer"}}>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:14,fontWeight:600,color:A.t1,overflow:"hidden",
+                    <div style={{fontSize:14,fontWeight:600,color:A.t1,overflow:"clip",
                       textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>
                       {t.titulo}
                     </div>
@@ -7829,7 +7829,7 @@ function MOps({state,setTab,triggerMargin}) {
         </div>
 
         {/* ══ DISTRIBUCIÓN PIPELINE ═════════════════════════════════════════════ */}
-        <div className="glass-card" style={{overflow:"hidden",marginBottom:12,padding:0}}>
+        <div className="glass-card" style={{overflow:"clip",marginBottom:12,padding:0}}>
           <div style={{padding:"14px 20px 10px",borderBottom:`1px solid ${C.border}`}}>
             <div style={{fontSize:9,color:A.t3,letterSpacing:"0.16em",textTransform:"uppercase"}}>
               Distribución Pipeline
@@ -7875,7 +7875,7 @@ function MOps({state,setTab,triggerMargin}) {
         </div>
 
         {/* ══ BACKLOG OPERATIVO ═════════════════════════════════════════════════ */}
-        <div className="glass-card" style={{overflow:"hidden",marginBottom:12,padding:0,
+        <div className="glass-card" style={{overflow:"clip",marginBottom:12,padding:0,
           border:`1px solid rgba(245,197,48,0.2)`}}>
           {/* Header */}
           <div style={{padding:"14px 20px 12px",
@@ -7965,8 +7965,8 @@ function MOps({state,setTab,triggerMargin}) {
                   alignItems:"center",padding:"11px 16px",
                   borderBottom:i<Math.min(backlogTkts.length,5)-1
                     ?`1px solid rgba(245,197,48,0.08)`:"none"}}>
-                  <div style={{overflow:"hidden",flex:1,minWidth:0,marginRight:12}}>
-                    <div style={{fontSize:12,color:A.t2,overflow:"hidden",
+                  <div style={{overflow:"clip",flex:1,minWidth:0,marginRight:12}}>
+                    <div style={{fontSize:12,color:A.t2,overflow:"clip",
                       textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                       {t.titulo}
                     </div>
@@ -8050,7 +8050,7 @@ function MOps({state,setTab,triggerMargin}) {
         </div>
 
         {/* ══ CAPITAL INMOVILIZADO WIDGET ═══════════════════════════════════════ */}
-        <div className="glass-card" style={{overflow:"hidden",marginBottom:12,
+        <div className="glass-card" style={{overflow:"clip",marginBottom:12,
           border:`1px solid rgba(245,197,48,0.2)`}}>
           {/* Header */}
           <div style={{padding:"18px 24px 14px",borderBottom:`1px solid rgba(245,197,48,0.12)`}}>
@@ -8268,7 +8268,7 @@ function MOps({state,setTab,triggerMargin}) {
                                 background:"rgba(255,255,255,0.03)",border:`1px solid ${C.border}`}}>
                                 <div style={{flex:1,minWidth:0}}>
                                   <div style={{fontSize:12,fontWeight:600,color:A.t1,
-                                    overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>
+                                    overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>
                                     {t.titulo||"Sin título"}
                                   </div>
                                   <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -8370,7 +8370,7 @@ function MOps({state,setTab,triggerMargin}) {
                                 background:"rgba(255,255,255,0.03)",border:`1px solid ${C.border}`}}>
                                 <div style={{flex:1,minWidth:0}}>
                                   <div style={{fontSize:12,fontWeight:600,color:A.t1,
-                                    overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>
+                                    overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>
                                     {t.titulo||"Sin título"}
                                   </div>
                                   <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -8580,7 +8580,7 @@ function MOps({state,setTab,triggerMargin}) {
                             background:"rgba(255,255,255,0.03)",border:`1px solid ${C.border}`}}>
                             <div style={{flex:1,minWidth:0}}>
                               <div style={{fontSize:12,fontWeight:600,color:A.t1,
-                                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>
+                                overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:3}}>
                                 {t.titulo||"Sin título"}
                               </div>
                               <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -8691,7 +8691,7 @@ function MOps({state,setTab,triggerMargin}) {
                   </div>
                 </div>
               </div>
-              <div style={{height:3,background:C.border,borderRadius:2,overflow:"hidden"}}>
+              <div style={{height:3,background:C.border,borderRadius:2,overflow:"clip"}}>
                 <div style={{height:"100%",width:`${Math.min(pct,100)}%`,
                   background:`linear-gradient(90deg,${A.lime},${A.mint})`,
                   borderRadius:2,transition:"width 600ms ease"}}/>
@@ -8721,7 +8721,7 @@ function MOps({state,setTab,triggerMargin}) {
 
         {/* ══ RESUMEN FINANCIERO — tabla completa ══════════════════════════════ */}
         <div className="glass-card" style={{
-          overflow:"hidden",marginBottom:12,
+          overflow:"clip",marginBottom:12,
         }}>
           {/* Header */}
           <div style={{padding:"20px 22px 16px",borderBottom:`1px solid ${C.border}`}}>
@@ -8852,7 +8852,7 @@ function MOps({state,setTab,triggerMargin}) {
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
                         <div style={{flex:1,minWidth:0,marginRight:8}}>
                           <div style={{fontSize:13,fontWeight:600,color:A.t1,marginBottom:2,
-                            overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                            overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
                           <div style={{fontSize:11,color:A.t3}}>{cl?.empresa||"Sin cliente"}</div>
                         </div>
                         <span style={{fontSize:8,fontWeight:700,color:meta.dot||A.t3,
@@ -8915,7 +8915,7 @@ function MOps({state,setTab,triggerMargin}) {
                                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
                                     <div style={{flex:1,minWidth:0,marginRight:8}}>
                                       <div style={{fontSize:12,fontWeight:600,color:A.t1,
-                                        overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                                        overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
                                       <div style={{fontSize:10,color:A.t3,marginTop:1}}>
                                         {t.date}{t.promesaPago?` · promesa ${t.promesaPago}`:""}
                                       </div>
@@ -8973,7 +8973,7 @@ function MOps({state,setTab,triggerMargin}) {
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
                               <div style={{flex:1,minWidth:0,marginRight:8}}>
                                 <div style={{fontSize:13,fontWeight:700,color:A.red,marginBottom:2}}>{cl?.empresa||"Sin cliente"}</div>
-                                <div style={{fontSize:11,color:A.t2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                                <div style={{fontSize:11,color:A.t2,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
                                 <div style={{fontSize:10,color:A.t3,marginTop:2}}>Prometido {t.promesaPago||"—"}</div>
                               </div>
                               <div style={{textAlign:"right",flexShrink:0}}>
@@ -9070,7 +9070,7 @@ function MOps({state,setTab,triggerMargin}) {
                                 {mkFolio(t,"OP")}
                               </div>
                               <div style={{fontSize:14,fontWeight:700,color:A.t1,
-                                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",
+                                overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap",
                                 marginBottom:3}}>
                                 {t.titulo||"Sin título"}
                               </div>
@@ -9603,7 +9603,7 @@ ${rows.map(r=>`<tr>${r.map((v,ci)=>toCell(v,ci)).join("")}</tr>`).join("\n")}
             return (
               <div key={t.id} style={{
                 background:isP1?"rgba(239,68,68,0.08)":A.card,
-                borderRadius:A.r,overflow:"hidden",
+                borderRadius:A.r,overflow:"clip",
                 boxShadow:isP1
                   ? "0 1px 3px rgba(0,0,0,0.3), 0 0 0 1px rgba(239,68,68,0.15)"
                   : A.shadow,
@@ -9641,7 +9641,7 @@ ${rows.map(r=>`<tr>${r.map((v,ci)=>toCell(v,ci)).join("")}</tr>`).join("\n")}
                   {/* Client + unit */}
                   {(cl||un)&&(
                     <div style={{fontSize:11,color:A.t2,marginBottom:10,
-                      overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                      overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                       {cl&&<span>{cl.empresa}</span>}
                       {cl&&un&&<span style={{color:A.t3,margin:"0 4px"}}>·</span>}
                       {un&&<span style={{color:A.t3}}>{un.economico?"Eco. "+un.economico:un.marca+" "+un.modelo}</span>}
@@ -9650,7 +9650,7 @@ ${rows.map(r=>`<tr>${r.map((v,ci)=>toCell(v,ci)).join("")}</tr>`).join("\n")}
                   {/* Progress */}
                   {!isClosed&&(
                     <div>
-                      <div style={{height:2,background:C.border,borderRadius:2,overflow:"hidden",marginBottom:4}}>
+                      <div style={{height:2,background:C.border,borderRadius:2,overflow:"clip",marginBottom:4}}>
                         <div style={{height:"100%",width:`${prog}%`,background:pCol,borderRadius:2,transition:"width 400ms ease"}}/>
                       </div>
                       <div style={{display:"flex",justifyContent:"space-between"}}>
@@ -9693,7 +9693,7 @@ ${rows.map(r=>`<tr>${r.map((v,ci)=>toCell(v,ci)).join("")}</tr>`).join("\n")}
 
                     {/* Timeline completo */}
                     {(t.timeline||[]).length > 0 && (
-                      <div style={{marginBottom:14,background:C.bg1,border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden"}}>
+                      <div style={{marginBottom:14,background:C.bg1,border:`1px solid ${C.border}`,borderRadius:12,overflow:"clip"}}>
                         <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                           <span style={{fontSize:9,fontWeight:700,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase"}}>Timeline · {(t.timeline||[]).length} eventos</span>
                           {!CLOSED_SET.has(t.status)&&t.status!=="cancelado"&&(
@@ -9859,7 +9859,7 @@ function PartPicker({parts, value, onChange, onSelect, onAddToCatalog, placehold
               style={{padding:"11px 14px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",
                 display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:700,color:"#F5F5F7",overflow:"hidden",
+                <div style={{fontSize:13,fontWeight:700,color:"#F5F5F7",overflow:"clip",
                   textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
                 <div style={{fontSize:10,color:"#7E848E",marginTop:1,fontFamily:"'Courier New',monospace"}}>
                   {p.oem&&<span>OEM: {p.oem}</span>}
@@ -10200,7 +10200,7 @@ function MCotizador({state,dispatch,toast}) {
         const sn=lineSnaps[i];
         const isManual=l.mode==="manual";
         return (
-          <div key={i} className="glass-card" style={{overflow:"hidden",marginBottom:12}}>
+          <div key={i} className="glass-card" style={{overflow:"clip",marginBottom:12}}>
             <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,
               display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div style={{fontSize:9,color:A.t3,fontWeight:800,letterSpacing:"0.14em",textTransform:"uppercase"}}>
@@ -10414,7 +10414,7 @@ function MCotizador({state,dispatch,toast}) {
     <div style={{minHeight:"100vh",background:"transparent",padding:"0 16px 32px"}}>
       <StepBar/>
 
-      <div className="glass-card" style={{overflow:"hidden",
+      <div className="glass-card" style={{overflow:"clip",
         marginBottom:14}}>
         <div style={{padding:"18px 18px 6px"}}>
           <MField label="Fecha" value={fecha} onChange={setFecha} placeholder="DD/MM/AAAA"/>
@@ -10624,7 +10624,7 @@ function MCartera({state,dispatch,toast}) {
                   </span>
                 </div>
                 {b.monto>0&&(
-                  <div style={{height:3,background:C.border,borderRadius:2,overflow:"hidden"}}>
+                  <div style={{height:3,background:C.border,borderRadius:2,overflow:"clip"}}>
                     <div style={{height:"100%",width:`${(b.monto/maxAging)*100}%`,
                       background:i===2?A.red:A.amber,borderRadius:2,transition:"width 500ms ease"}}/>
                   </div>
@@ -10650,7 +10650,7 @@ function MCartera({state,dispatch,toast}) {
                 return (
                   <div key={t.id} style={{
                     background:"rgba(239,68,68,0.08)",
-                    borderRadius:A.r,overflow:"hidden",
+                    borderRadius:A.r,overflow:"clip",
                     boxShadow:"0 1px 3px rgba(0,0,0,0.3), 0 0 0 1px rgba(239,68,68,0.15)",
                   }}>
                     <div style={{padding:"16px 16px 14px"}}>
@@ -10663,7 +10663,7 @@ function MCartera({state,dispatch,toast}) {
                         </div>
                       </div>
                       <div style={{fontSize:14,fontWeight:700,color:A.t1,marginBottom:6,
-                        overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                        overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                         {t.titulo}
                       </div>
                       <div style={{fontSize:10,color:A.t3}}>Prometido: {t.promesaPago||"—"}</div>
@@ -10706,7 +10706,7 @@ function MCartera({state,dispatch,toast}) {
                 const daysLeft=d?Math.ceil((d-now)/86400000):null;
                 const urgent=daysLeft!==null&&daysLeft<=3;
                 return (
-                  <div key={t.id} className="glass-card-sm" style={{overflow:"hidden"}}>
+                  <div key={t.id} className="glass-card-sm" style={{overflow:"clip"}}>
                     <div style={{padding:"16px 16px 14px"}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
                         <div style={{fontSize:12,fontWeight:600,color:A.t2}}>{cl?.empresa||"Sin cliente"}</div>
@@ -10720,7 +10720,7 @@ function MCartera({state,dispatch,toast}) {
                         )}
                       </div>
                       <div style={{fontSize:14,fontWeight:700,color:A.t1,marginBottom:4,
-                        overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                        overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                         {t.titulo}
                       </div>
                       <div style={{fontSize:10,color:A.t3}}>Vence: {t.promesaPago||"—"}</div>
@@ -10760,7 +10760,7 @@ function MCartera({state,dispatch,toast}) {
                   <div key={t.id} className="glass-card-sm" style={{padding:"12px 16px",
                     display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <div style={{minWidth:0,flex:1}}>
-                      <div style={{fontSize:12,fontWeight:600,color:A.t2,overflow:"hidden",
+                      <div style={{fontSize:12,fontWeight:600,color:A.t2,overflow:"clip",
                         textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
                       <div style={{fontSize:10,color:A.t3,marginTop:2}}>{cl?.empresa||""} · {t.date}</div>
                     </div>
@@ -10787,7 +10787,7 @@ function MCartera({state,dispatch,toast}) {
                   <div key={t.id} className="glass-card-sm" style={{padding:"12px 16px",
                     display:"flex",justifyContent:"space-between",alignItems:"center",opacity:0.6}}>
                     <div style={{minWidth:0,flex:1}}>
-                      <div style={{fontSize:12,fontWeight:600,color:A.t2,overflow:"hidden",
+                      <div style={{fontSize:12,fontWeight:600,color:A.t2,overflow:"clip",
                         textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
                       <div style={{fontSize:10,color:A.t3,marginTop:2}}>{cl?.empresa||""} · {t.date}</div>
                     </div>
@@ -10874,7 +10874,7 @@ function MAttachments({ticket, dispatch, toast}) {
             <span style={{fontSize:16,flexShrink:0}}>{cat.icon}</span>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:10,fontWeight:700,color:C.t1,
-                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{att.name}</div>
+                overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{att.name}</div>
               <div style={{fontSize:9,color:C.t3}}>{cat.label} · {fmtSize(att.size)}</div>
             </div>
             <a href={att.url} target="_blank" rel="noreferrer"
@@ -11164,7 +11164,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
           onClick={()=>{setMCatalogIdx(null);}}>
           <div style={{background:C.bg1,border:`1px solid ${C.borderHi}`,
             borderRadius:"16px 16px 0 0",width:"100%",maxWidth:560,
-            maxHeight:"75vh",display:"flex",flexDirection:"column",overflow:"hidden"}}
+            maxHeight:"75vh",display:"flex",flexDirection:"column",overflow:"clip"}}
             onClick={e=>e.stopPropagation()}>
             <div style={{padding:"14px 16px 10px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
               <div style={{fontSize:9,color:A.cyan,letterSpacing:"0.12em",textTransform:"uppercase",
@@ -11190,9 +11190,9 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
                     background:i%2===0?C.bg1:C.bg0,activeStyle:{background:C.bg3}}}>
                   <div style={{flex:1,minWidth:0,marginRight:12}}>
                     <div style={{fontSize:13,fontWeight:700,color:A.t1,
-                      overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
+                      overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
                     <div style={{fontSize:10,color:A.t3,marginTop:2,
-                      overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                      overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                       {p.oem&&<span style={{color:A.cyan,fontFamily:"'Courier New',monospace"}}>{p.oem}</span>}
                       {p.oem&&p.aplicacion&&" · "}
                       {p.aplicacion}
@@ -11325,7 +11325,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
                   return (
                     <div key={t.id} style={{
                       background:isCan?"rgba(239,68,68,0.06)":A.card,
-                      borderRadius:A.r,overflow:"hidden",
+                      borderRadius:A.r,overflow:"clip",
                       boxShadow:isCan
                         ?"0 2px 12px rgba(239,68,68,0.08), 0 0 0 1px rgba(239,68,68,0.18)"
                         :A.shadow,
@@ -11395,7 +11395,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
                             ))}
                           </div>
                           {t.timeline&&t.timeline.length>0&&(
-                            <div style={{marginBottom:14,background:C.bg1,border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden"}}>
+                            <div style={{marginBottom:14,background:C.bg1,border:`1px solid ${C.border}`,borderRadius:12,overflow:"clip"}}>
                               <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`}}>
                                 <span style={{fontSize:9,fontWeight:700,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase"}}>Timeline · {t.timeline.length} eventos</span>
                               </div>
@@ -11482,7 +11482,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
                                 {titleDropOpen&&(ef.titulo||"").trim().length>=2&&(
                                   <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:300,
                                     background:C.bg1,border:`1px solid ${C.blueHi}`,borderTop:"none",
-                                    borderRadius:"0 0 10px 10px",overflow:"hidden",
+                                    borderRadius:"0 0 10px 10px",overflow:"clip",
                                     boxShadow:"0 8px 24px rgba(0,0,0,0.5)"}}>
                                     {titleCatResults.map((p,pi)=>(
                                       <div key={p.id}
@@ -11492,7 +11492,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
                                           display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                                         <div style={{minWidth:0,flex:1}}>
                                           <div style={{fontSize:12,color:A.t1,fontWeight:600,
-                                            overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
+                                            overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
                                           {p.oem&&<div style={{fontSize:10,color:A.cyan,fontFamily:"'Courier New',monospace"}}>{p.oem}</div>}
                                         </div>
                                         {p.ultimoPrecio>0&&<span style={{fontSize:11,color:A.lime,fontFamily:"'Courier New',monospace",fontWeight:700,flexShrink:0,marginLeft:8}}>{mxn(p.ultimoPrecio)}</span>}
@@ -11767,7 +11767,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
                                           borderBottom:pi<mCatalogResults.length-1?`1px solid ${C.border}`:"none",
                                           display:"flex",flexDirection:"column",gap:2}}>
                                         <div style={{fontSize:12,color:A.t1,fontWeight:600,
-                                          overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                                          overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                                           {p.nombre}
                                         </div>
                                         <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -12014,7 +12014,7 @@ function MClientes({state,dispatch,toast}) {
           const exp=sel===c.id;
           const cliUnits=units.filter(u=>u.clientId===c.id);
           return (
-            <div key={c.id} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${exp?C.cyan:C.border}`,borderRadius:14,overflow:"hidden"}}>
+            <div key={c.id} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${exp?C.cyan:C.border}`,borderRadius:14,overflow:"clip"}}>
               <div onClick={()=>setSel(exp?null:c.id)} style={{padding:"14px 16px",cursor:"pointer"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
                   <div style={{fontSize:15,fontWeight:800,color:C.t1,lineHeight:1.2,flex:1,marginRight:8}}>{c.empresa}</div>
@@ -12125,7 +12125,7 @@ function MUnidades({state,dispatch,toast}) {
           const allTks=tickets.filter(t=>t.unitId===u.id);
           const exp=sel===u.id;
           return (
-            <div key={u.id} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${exp?C.cyan:C.border}`,borderRadius:14,overflow:"hidden",borderLeft:`4px solid ${st.dot}`}}>
+            <div key={u.id} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${exp?C.cyan:C.border}`,borderRadius:14,overflow:"clip",borderLeft:`4px solid ${st.dot}`}}>
               <div onClick={()=>setSel(exp?null:u.id)} style={{padding:"14px 16px",cursor:"pointer"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
                   <div>
@@ -12156,7 +12156,7 @@ function MUnidades({state,dispatch,toast}) {
                       {allTks.slice(0,3).map(t=>(
                         <div key={t.id} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:`1px solid ${C.border}`,fontSize:11,alignItems:"center"}}>
                           <span style={{color:C.t3,fontFamily:"'Courier New',monospace",fontSize:10,flexShrink:0}}>{t.id}</span>
-                          <span style={{color:C.t2,flex:1,marginLeft:8,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</span>
+                          <span style={{color:C.t2,flex:1,marginLeft:8,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</span>
                           <StatusBadge sid={t.status} meta={TICKET_META} small/>
                         </div>
                       ))}
@@ -12287,7 +12287,7 @@ function MCatalogo({state,dispatch,toast}) {
           return (
             <div key={p.id} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,
               border:`1px solid ${exp?C.cyan:isFrecuente?`rgba(38,122,144,0.2)`:C.border}`,
-              borderRadius:14,overflow:"hidden",
+              borderRadius:14,overflow:"clip",
               boxShadow:isFrecuente?"0 0 0 1px rgba(59,130,246,0.2)":undefined}}>
               <div onClick={()=>setSel(exp?null:p.id)} style={{padding:"13px 15px",cursor:"pointer"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:3}}>
@@ -12307,7 +12307,7 @@ function MCatalogo({state,dispatch,toast}) {
                   {p.oem&&<div style={{fontSize:10,color:C.cyan,fontFamily:"'Courier New',monospace"}}>OEM: {p.oem}</div>}
                   {p.proveedor&&<div style={{fontSize:10,color:C.t3}}>· {p.proveedor}</div>}
                 </div>
-                {p.aplicacion&&<div style={{fontSize:10,color:C.t3,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.aplicacion}</div>}
+                {p.aplicacion&&<div style={{fontSize:10,color:C.t3,marginTop:2,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.aplicacion}</div>}
               </div>
               {exp&&(
                 <div style={{background:C.bg0,borderTop:`1px solid ${C.border}`,padding:"12px 15px"}}>
@@ -12404,7 +12404,7 @@ function MProveedores({state,dispatch,toast}) {
           const confColor=s.confiabilidad>=90?C.green:s.confiabilidad>=75?C.yellow:C.red;
           const scoreColor=s.scoreOp>=80?C.green:s.scoreOp>=60?C.yellow:C.red;
           return (
-            <div key={s.id} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${exp?C.cyan:C.border}`,borderRadius:14,overflow:"hidden"}}>
+            <div key={s.id} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${exp?C.cyan:C.border}`,borderRadius:14,overflow:"clip"}}>
               <div onClick={()=>setSel(exp?null:s.id)} style={{padding:"14px 16px",cursor:"pointer"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
                   <div style={{flex:1}}>
@@ -13636,7 +13636,7 @@ function MInteligencia({state}) {
                               <div style={{fontSize:9,color:C.t3,fontFamily:"'Courier New',monospace",letterSpacing:"0.04em",marginBottom:2}}>
                                 {folio}
                               </div>
-                              <div style={{fontSize:12,fontWeight:600,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                              <div style={{fontSize:12,fontWeight:600,color:C.t1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                                 {t.titulo||"Sin título"}
                               </div>
                               <div style={{fontSize:10,color:C.t3,marginTop:2}}>{t.date||"—"}</div>
@@ -13683,7 +13683,7 @@ function MInteligencia({state}) {
                   {idx+1}
                 </div>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:13,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                  <div style={{fontSize:13,fontWeight:700,color:C.t1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                     {supplier.nombre||supplier.id}
                   </div>
                   <div style={{fontSize:11,color:C.t3}}>{ticketCount} asignados · {concretadosCount} concretados</div>
@@ -13748,7 +13748,7 @@ function MInteligencia({state}) {
                         display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:scoreColor(scoreV2)}}>
                         {scoreV2}
                       </div>
-                      <span style={{fontSize:13,fontWeight:700,color:C.t1,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                      <span style={{fontSize:13,fontWeight:700,color:C.t1,flex:1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                         {cl.empresa||cl.id}
                       </span>
                       <span style={{fontSize:10,color:C.t3,flexShrink:0}}>{ticketCount} ops</span>
@@ -13782,7 +13782,7 @@ function MInteligencia({state}) {
                         background:`${scoreColor(score)}18`,border:`1px solid ${scoreColor(score)}44`,
                         borderRadius:6,padding:"2px 5px",flexShrink:0,
                       }}>{score}</span>
-                      <span style={{fontSize:12,fontWeight:700,color:C.t1,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                      <span style={{fontSize:12,fontWeight:700,color:C.t1,flex:1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                         {cl.empresa||cl.id}
                       </span>
                       <span style={{fontSize:13,fontWeight:700,color,flexShrink:0}}>{valFmt(rest[valKey])}</span>
@@ -13840,7 +13840,7 @@ function MInteligencia({state}) {
                 <div key={d.t.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
                   <span style={{fontSize:11,fontWeight:800,color:C.red,flexShrink:0,minWidth:28}}>{Math.round(d.diasSinMovimiento)}d</span>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:12,fontWeight:600,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.t.titulo||"Sin título"}</div>
+                    <div style={{fontSize:12,fontWeight:600,color:C.t1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.t.titulo||"Sin título"}</div>
                     <div style={{fontSize:10,color:C.t3}}>{d.cl?.empresa||"—"} · {d.t.status}</div>
                   </div>
                   {d.rev>0&&<div style={{fontSize:11,fontWeight:600,color:C.t3,flexShrink:0}}>{mxn(d.rev)}</div>}
@@ -13872,7 +13872,7 @@ function MInteligencia({state}) {
                     <span style={{fontSize:12,fontWeight:800,color:s.isBottleneck?C.red:C.t1,flexShrink:0,minWidth:24,textAlign:"right"}}>{s.count}</span>
                     {i>0&&<span style={{fontSize:10,color:s.isBottleneck?C.red:s.convPct>=70?C.green:s.convPct>=40?C.yellow:C.red,flexShrink:0,minWidth:38,textAlign:"right"}}>{fpct(s.convPct)}</span>}
                   </div>
-                  <div style={{height:7,borderRadius:4,background:C.border,overflow:"hidden"}}>
+                  <div style={{height:7,borderRadius:4,background:C.border,overflow:"clip"}}>
                     <div style={{height:"100%",borderRadius:4,width:`${barW}%`,background:barColor,transition:"width .5s ease"}}/>
                   </div>
                   {i>0&&s.lost>0&&(
@@ -13933,7 +13933,7 @@ function MInteligencia({state}) {
                     <span style={{fontSize:12,fontWeight:800,color:C.t1,flexShrink:0,minWidth:24,textAlign:"right"}}>{s.count}</span>
                     {i>0&&<span style={{fontSize:10,color:s.convPct>=70?C.green:s.convPct>=40?C.yellow:C.red,flexShrink:0,minWidth:38,textAlign:"right"}}>{fpct(s.convPct)}</span>}
                   </div>
-                  <div style={{height:7,borderRadius:4,background:C.border,overflow:"hidden"}}>
+                  <div style={{height:7,borderRadius:4,background:C.border,overflow:"clip"}}>
                     <div style={{height:"100%",borderRadius:4,width:`${barW}%`,background:colors[i],transition:"width .5s ease"}}/>
                   </div>
                   {i>0&&s.pendingRev>0&&(
@@ -13971,7 +13971,7 @@ function MInteligencia({state}) {
                   const cl=clients.find(c=>c.id===d.clientId);
                   return(
                     <div key={d.clientId||i} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderBottom:i<pipelineData.topDeudores.length-1?`1px solid ${C.border}`:"none"}}>
-                      <span style={{fontSize:10,fontWeight:600,color:C.t1,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl?.empresa||"Sin cliente"}</span>
+                      <span style={{fontSize:10,fontWeight:600,color:C.t1,flex:1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl?.empresa||"Sin cliente"}</span>
                       <span style={{fontSize:10,color:C.t3,flexShrink:0}}>{d.count} tkt{d.count>1?"s":""}</span>
                       <span style={{fontSize:11,fontWeight:700,color:C.cyan,fontFamily:"'Courier New',monospace",flexShrink:0}}>{mxn(d.total)}</span>
                     </div>
@@ -14038,7 +14038,7 @@ function MInteligencia({state}) {
                 <span style={{fontSize:9,padding:"3px 10px",borderRadius:10,background:`${accent}18`,color:accent,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",flexShrink:0}}>
                   {typeIcon[f.type]} {typeLabel[f.type]}
                 </span>
-                <span style={{fontSize:14,fontWeight:800,color:C.t1,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                <span style={{fontSize:14,fontWeight:800,color:C.t1,flex:1,minWidth:0,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                   {f.type==='parte'?f.name:f.type==='vehiculo'?`${f.u.marca} ${f.u.modelo}${f.u.anio?" "+f.u.anio:""}`:f.type==='proveedor'?(f.s?.nombre||f.s?.name||fichaKey):f.type==='cliente'?(f.cl?.empresa||fichaKey):""}
                 </span>
               </div>
@@ -14146,7 +14146,7 @@ function MInteligencia({state}) {
                       return(
                         <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<Math.min(f.casos.length,8)-1?`1px solid ${C.border}`:"none"}}>
                           <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:11,color:C.t1,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                            <div style={{fontSize:11,color:C.t1,fontWeight:600,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
                             <div style={{fontSize:9,color:C.t3}}>{t.date} · {cl?.empresa||"—"}</div>
                           </div>
                           <span style={{fontSize:9,padding:"2px 7px",borderRadius:5,background:sm?.color+"22",color:sm?.dot,flexShrink:0}}>{sm?.label||t.status}</span>
@@ -14192,7 +14192,7 @@ function MInteligencia({state}) {
                       return(
                         <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<Math.min(f.casos.length,8)-1?`1px solid ${C.border}`:"none"}}>
                           <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:11,color:C.t1,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                            <div style={{fontSize:11,color:C.t1,fontWeight:600,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
                             <div style={{fontSize:9,color:C.t3}}>{t.date} · {cl?.empresa||"—"}</div>
                           </div>
                           <span style={{fontSize:9,padding:"2px 7px",borderRadius:5,background:sm?.color+"22",color:sm?.dot,flexShrink:0}}>{sm?.label||t.status}</span>
@@ -14238,7 +14238,7 @@ function MInteligencia({state}) {
                       return(
                         <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<Math.min(f.casos.length,8)-1?`1px solid ${C.border}`:"none"}}>
                           <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:11,color:C.t1,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                            <div style={{fontSize:11,color:C.t1,fontWeight:600,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
                             <div style={{fontSize:9,color:C.t3}}>{t.date}</div>
                           </div>
                           <span style={{fontSize:9,padding:"2px 7px",borderRadius:5,background:sm?.color+"22",color:sm?.dot,flexShrink:0}}>{sm?.label||t.status}</span>
@@ -14275,10 +14275,10 @@ function MInteligencia({state}) {
             <button key={item.key} onClick={()=>openFicha('parte',item.key)}
               style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderBottom:isLast?"none":`1px solid ${C.border}`,background:"none",border:"none",width:"100%",textAlign:"left",cursor:"pointer",touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.name}</div>
+                <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.name}</div>
                 <div style={{fontSize:10,color:C.t3,marginTop:2}}>{item.total}x · {item.success} entregadas ({Math.round(item.successRate)}%){item.avgUtil>0?` · ${mxn(Math.round(item.avgUtil))} util.`:""}</div>
               </div>
-              {item.topSuppId&&<span style={{fontSize:9,color:C.t3,flexShrink:0,maxWidth:90,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{suppName(item.topSuppId)}</span>}
+              {item.topSuppId&&<span style={{fontSize:9,color:C.t3,flexShrink:0,maxWidth:90,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{suppName(item.topSuppId)}</span>}
               <span style={{fontSize:10,color:C.cyan,fontWeight:700,flexShrink:0}}>›</span>
             </button>
           );
@@ -14286,7 +14286,7 @@ function MInteligencia({state}) {
             <button key={item.unitId} onClick={()=>openFicha('vehiculo',item.unitId)}
               style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderBottom:isLast?"none":`1px solid ${C.border}`,background:"none",border:"none",width:"100%",textAlign:"left",cursor:"pointer",touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u?`${u.marca} ${u.modelo}${u.anio?" "+u.anio:""}`:item.unitId}</div>
+                <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u?`${u.marca} ${u.modelo}${u.anio?" "+u.anio:""}`:item.unitId}</div>
                 <div style={{fontSize:10,color:C.t3,marginTop:2}}>{item.count} incidencias · {item.success} resueltas{u?.economico?" · Eco."+u.economico:""}</div>
               </div>
               <span style={{fontSize:13,fontWeight:800,color:C.blue,flexShrink:0}}>{item.count}x</span>
@@ -14297,7 +14297,7 @@ function MInteligencia({state}) {
             <button key={item.supplierId} onClick={()=>openFicha('proveedor',item.supplierId)}
               style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderBottom:isLast?"none":`1px solid ${C.border}`,background:"none",border:"none",width:"100%",textAlign:"left",cursor:"pointer",touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s?.nombre||s?.name||item.supplierId}</div>
+                <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s?.nombre||s?.name||item.supplierId}</div>
                 <div style={{fontSize:10,color:C.t3,marginTop:2}}>{item.count} operaciones · {item.parts} tipos de parte</div>
               </div>
               <span style={{fontSize:13,fontWeight:800,color:C.green,flexShrink:0}}>{mxn(Math.round(item.util))}</span>
@@ -14308,7 +14308,7 @@ function MInteligencia({state}) {
             <button key={item.clientId} onClick={()=>openFicha('cliente',item.clientId)}
               style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderBottom:isLast?"none":`1px solid ${C.border}`,background:"none",border:"none",width:"100%",textAlign:"left",cursor:"pointer",touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl?.empresa||item.clientId}</div>
+                <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl?.empresa||item.clientId}</div>
                 <div style={{fontSize:10,color:C.t3,marginTop:2}}>{item.count} solicitudes · {item.success} resueltas · {item.problems} tipos de falla</div>
               </div>
               <span style={{fontSize:13,fontWeight:800,color:C.yellow,flexShrink:0}}>{mxn(Math.round(item.util))}</span>
@@ -14350,7 +14350,7 @@ function MInteligencia({state}) {
                   <div style={{fontSize:10,color:C.t3,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8,paddingLeft:2}}>
                     {res.length} resultado{res.length!==1?"s":""} para "{conocimientoSearch}"
                   </div>
-                  <div style={{...cardStyle,padding:0,overflow:"hidden"}}>
+                  <div style={{...cardStyle,padding:0,overflow:"clip"}}>
                     {res.map((r,i)=>{
                       const col=typeColor[r.type]||C.cyan;
                       return(
@@ -14361,7 +14361,7 @@ function MInteligencia({state}) {
                             touchAction:"manipulation",WebkitTapHighlightColor:"transparent"}}>
                           <span style={{fontSize:14,flexShrink:0}}>{typeIcon[r.type]}</span>
                           <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.title}</div>
+                            <div style={{fontSize:12,fontWeight:700,color:C.t1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.title}</div>
                             <div style={{fontSize:10,color:C.t3,marginTop:1}}>{r.sub}</div>
                           </div>
                           <span style={{fontSize:9,padding:"2px 7px",borderRadius:8,background:`${col}18`,color:col,fontWeight:700,flexShrink:0}}>{typeLabel[r.type]}</span>
@@ -14392,7 +14392,7 @@ function MInteligencia({state}) {
                   {list.length===0?(
                     <div style={{...cardStyle,padding:24,textAlign:"center",color:C.t3,fontSize:12}}>Sin datos registrados aún.</div>
                   ):(
-                    <div style={{...cardStyle,padding:0,overflow:"hidden"}}>
+                    <div style={{...cardStyle,padding:0,overflow:"clip"}}>
                       {list.map((item,i)=>renderListItem(kbView,item,i,list.length))}
                     </div>
                   )}
@@ -14427,7 +14427,7 @@ function MInteligencia({state}) {
           {/* Top 15 */}
           <div>
             <div style={{...label10,marginBottom:8}}>Top Partes por Frecuencia</div>
-            <div style={{...cardStyle,padding:0,overflow:"hidden"}}>
+            <div style={{...cardStyle,padding:0,overflow:"clip"}}>
               {partesData.top15.map((p,i)=>(
                 <div key={p.name} style={{
                   display:"grid",gridTemplateColumns:"24px 1fr auto auto",
@@ -14436,7 +14436,7 @@ function MInteligencia({state}) {
                   borderBottom: i<partesData.top15.length-1?`1px solid ${C.border}`:"none",
                 }}>
                   <span style={{fontSize:10,color:C.t3,fontWeight:700}}>#{i+1}</span>
-                  <span style={{fontSize:12,color:C.t1,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                  <span style={{fontSize:12,color:C.t1,fontWeight:600,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                     {p.name}
                   </span>
                   <span style={{fontSize:11,color:C.cyan,fontWeight:700,flexShrink:0}}>{p.freq}x</span>
@@ -14514,7 +14514,7 @@ function MInteligencia({state}) {
           {/* Componentes más difíciles */}
           <div>
             <div style={{...label10,marginBottom:8}}>Componentes más difíciles de sourcear</div>
-            <div style={{...cardStyle,padding:0,overflow:"hidden"}}>
+            <div style={{...cardStyle,padding:0,overflow:"clip"}}>
               {sourceoData.partesDificiles.length===0 && (
                 <div style={{padding:14,color:C.t3,fontSize:12}}>Sin datos suficientes.</div>
               )}
@@ -14522,7 +14522,7 @@ function MInteligencia({state}) {
                 <div key={p.name} style={{display:"grid",gridTemplateColumns:"20px 1fr auto auto",gap:8,alignItems:"center",
                   padding:"9px 14px",borderBottom:i<sourceoData.partesDificiles.length-1?`1px solid ${C.border}`:"none"}}>
                   <span style={{fontSize:9,color:C.t3,fontWeight:700}}>#{i+1}</span>
-                  <span style={{fontSize:12,color:C.t1,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</span>
+                  <span style={{fontSize:12,color:C.t1,fontWeight:600,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</span>
                   <span style={{fontSize:10,color:C.t3,flexShrink:0}}>{p.freq}x</span>
                   <span style={{fontSize:12,fontWeight:700,color:p.avgH<2?C.green:p.avgH<6?C.yellow:C.red,flexShrink:0}}>
                     {sourceoData.fmtH(p.avgH)}
@@ -14603,7 +14603,7 @@ function MInteligencia({state}) {
                       <span style={{fontSize:11,color:C.t3}}>{d.count} ops</span>
                       <span style={{fontSize:12,fontWeight:700,color:C.red,flexShrink:0}}>{mxn(d.revenue)}</span>
                     </div>
-                    <div style={{height:4,background:C.border,borderRadius:2,overflow:"hidden"}}>
+                    <div style={{height:4,background:C.border,borderRadius:2,overflow:"clip"}}>
                       <div style={{height:"100%",width:`${pct}%`,background:C.red,borderRadius:2}}/>
                     </div>
                     <div style={{fontSize:9,color:C.t3,marginTop:3,textAlign:"right"}}>{pct.toFixed(0)}%</div>
@@ -14645,7 +14645,7 @@ function MInteligencia({state}) {
               <div key={k.key} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
                 <div style={{flex:1}}>
                   <div style={{fontSize:12,fontWeight:600,color:C.t1,marginBottom:3}}>{k.label}</div>
-                  <div style={{height:4,borderRadius:2,background:C.border,overflow:"hidden"}}>
+                  <div style={{height:4,borderRadius:2,background:C.border,overflow:"clip"}}>
                     {k.hrs!==null && (
                       <div style={{height:"100%",borderRadius:2,
                         width:`${Math.min(100,(k.hrs/720)*100)}%`,
@@ -14751,7 +14751,7 @@ function MInteligencia({state}) {
                 <div key={d.t.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
                   <span style={{fontSize:11,fontWeight:800,color:C.red,flexShrink:0,minWidth:28}}>{Math.round(d.diasSinMovimiento)}d</span>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:12,fontWeight:600,color:C.t1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.t.titulo||"Sin título"}</div>
+                    <div style={{fontSize:12,fontWeight:600,color:C.t1,overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.t.titulo||"Sin título"}</div>
                     <div style={{fontSize:10,color:C.t3}}>{d.cl?.empresa||"—"} · {d.t.status}</div>
                   </div>
                 </div>
@@ -14872,7 +14872,7 @@ function MInteligencia({state}) {
                       <div style={{fontSize:11,color:C.t3,marginTop:2}}>Índice de salud (0–100)</div>
                     </div>
                   </div>
-                  <div style={{height:5,borderRadius:3,background:C.border,marginBottom:12,overflow:"hidden"}}>
+                  <div style={{height:5,borderRadius:3,background:C.border,marginBottom:12,overflow:"clip"}}>
                     <div style={{height:"100%",borderRadius:3,width:`${result.saludFinanciera.score}%`,
                       background:`linear-gradient(90deg,${saludColor(result.saludFinanciera.score)},${saludColor(result.saludFinanciera.score)}aa)`,transition:"width 1s"}}/>
                   </div>
@@ -15146,7 +15146,7 @@ function NuevoCasoSheet({open, onClose, state, dispatch, toast, onCreated}) {
                     {dropOpen&&(
                       <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:400,
                         background:C.bg1,border:`1px solid ${C.cyan+"88"}`,borderTop:"none",
-                        borderRadius:"0 0 10px 10px",overflow:"hidden",
+                        borderRadius:"0 0 10px 10px",overflow:"clip",
                         boxShadow:"0 8px 24px rgba(0,0,0,0.5)"}}>
                         {results.map((p,pi)=>(
                           <div key={p.id}
@@ -15157,7 +15157,7 @@ function NuevoCasoSheet({open, onClose, state, dispatch, toast, onCreated}) {
                               background:pi%2===0?"transparent":"rgba(255,255,255,0.02)"}}>
                             <div style={{minWidth:0,flex:1}}>
                               <div style={{fontSize:12,color:C.t1,fontWeight:600,
-                                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
+                                overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
                               {(p.oem||p.aftermarket)&&(
                                 <div style={{fontSize:10,color:C.cyan,fontFamily:"'Courier New',monospace"}}>
                                   {p.oem||p.aftermarket}
@@ -15976,7 +15976,7 @@ function CobrosHeatMap({cobrados, clients, mxn, A, C}) {
 
             {/* Barra proporcional */}
             <div style={{marginBottom:12}}>
-              <div style={{display:"flex",height:8,borderRadius:4,overflow:"hidden",gap:1}}>
+              <div style={{display:"flex",height:8,borderRadius:4,overflow:"clip",gap:1}}>
                 <div style={{width:`${pCost}%`,  background:`${A.t3}88`}}/>
                 <div style={{width:`${pFiscal}%`,background:`${C.yellow}99`}}/>
                 <div style={{width:`${pUtil}%`,  background:"rgba(143,227,190,0.8)"}}/>
@@ -15994,7 +15994,7 @@ function CobrosHeatMap({cobrados, clients, mxn, A, C}) {
 
             {/* Tabla */}
             <div style={{background:C.bg1,border:`1px solid rgba(43,181,160,0.18)`,
-              borderRadius:12,overflow:"hidden",marginBottom:12}}>
+              borderRadius:12,overflow:"clip",marginBottom:12}}>
 
               {sec("Ingresos")}
               {row("Revenue (IVA incl.)", tot.precioConIVA, "#8FE3BE", {bold:true})}
@@ -16042,7 +16042,7 @@ function CobrosHeatMap({cobrados, clients, mxn, A, C}) {
                   display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:11,fontWeight:700,color:C.t1,
-                      overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
+                      overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo}</div>
                     <div style={{fontSize:10,color:C.t3,marginTop:2}}>
                       {mkFolio(t,"OP")}&nbsp;·&nbsp;{cl?.empresa||"Sin cliente"}
                     </div>
@@ -16260,13 +16260,13 @@ function CobranzaCard({t, clients, C, A, mxn, daysSince, action, dispatch, toast
 
   return (
     <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:14,
-      marginBottom:10,overflow:"hidden"}}>
+      marginBottom:10,overflow:"clip"}}>
       <div style={{padding:"12px 14px"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:6}}>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:9,fontWeight:700,color:A.cyan,fontFamily:"'Courier New',monospace",letterSpacing:"0.04em",marginBottom:2}}>{mkFolio(t,"OP")}</div>
             <div style={{fontSize:12,fontWeight:800,color:A.t1,
-              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:2}}>
+              overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:2}}>
               {t.titulo}
             </div>
             <div style={{fontSize:10,color:A.t3}}>
@@ -16798,7 +16798,7 @@ function App() {
       <style>{`
         :root{color-scheme:${darkMode?"dark":"light"}}
         html{background:${darkMode?"#0D0F12":"#E8E3DB"};transition:background 350ms ease}
-        html,body{overscroll-behavior:none;overflow-x:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;touch-action:pan-y;}
+        html,body{overscroll-behavior:none;overflow-x:clip;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;touch-action:pan-y;}
         body{background:${darkMode
           ? "radial-gradient(ellipse 80% 60% at 50% -10%,rgba(143,227,190,0.07) 0%,transparent 60%),radial-gradient(ellipse 50% 40% at 85% 80%,rgba(143,227,190,0.04) 0%,transparent 50%),#0D0F12"
           : "linear-gradient(180deg,#F7F6F3 0%,#ECE9E4 100%)"
