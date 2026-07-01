@@ -16578,10 +16578,14 @@ function App() {
 
   // Body scroll lock when a bottom sheet is open on mobile — prevents scroll into empty space on iPhone
   useEffect(()=>{
-    if(!mobileView||(!quickOpen&&!masOpen)) {
+    const unlock=()=>{
       document.body.style.overflow="";
       document.body.style.position="";
+      document.body.style.top="";
       document.body.style.width="";
+    };
+    if(!mobileView||(!quickOpen&&!masOpen)) {
+      unlock();
       return;
     }
     const y=window.scrollY;
@@ -16589,13 +16593,7 @@ function App() {
     document.body.style.position="fixed";
     document.body.style.top=`-${y}px`;
     document.body.style.width="100%";
-    return()=>{
-      document.body.style.overflow="";
-      document.body.style.position="";
-      document.body.style.top="";
-      document.body.style.width="";
-      window.scrollTo(0,y);
-    };
+    return()=>{ unlock(); window.scrollTo(0,y); };
   },[mobileView,quickOpen,masOpen]);
 
   const p1Active  = useMemo(()=>state.tickets.filter(t=>t.priority==="P1"&&!CLOSED_SET.has(t.status)).length,[state.tickets]);
@@ -16765,7 +16763,7 @@ function App() {
       )}
 
       {/* MasSheet — bottom sheet for "Más" modules */}
-      {mobileView&&<MasSheet open={masOpen} onClose={()=>setMasOpen(false)} tab={tab} setTab={t=>{setTab(t);setMasOpen(false);}}/>}
+      {mobileView&&<MasSheet open={masOpen} onClose={()=>setMasOpen(false)} tab={tab} setTab={t=>{setMasOpen(false);requestAnimationFrame(()=>setTab(t));}}/>}
 
       {/* NuevoCasoSheet — captura rápida de caso/solicitud */}
       {mobileView&&<NuevoCasoSheet open={nuevoCasoOpen} onClose={()=>setNuevoCasoOpen(false)}
