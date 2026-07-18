@@ -15719,6 +15719,189 @@ function MDiagnostico() {
   );
 }
 
+// ── MReporteRefacciones — lista de costos de refacciones por operación ───────
+function MReporteRefacciones({state}) {
+  const C = React.useContext(ThemeCtx);
+  const A = C.a || {};
+  const {tickets, clients, units} = state;
+  const [period, setPeriod] = useState("month");
+  const [search,  setSearch]  = useState("");
+
+  const allActive = useMemo(()=>sel_active(tickets), [tickets]);
+
+  const range = useMemo(()=>buildRange(period), [period]);
+
+  const inRange = useCallback(t=>{
+    const d = parseDateMX(t.date);
+    return d && d >= range.from && d <= range.to;
+  }, [range]);
+
+  const filtered = useMemo(()=>{
+    let arr = allActive.filter(inRange);
+    if (search.trim()) {
+      const lq = search.toLowerCase();
+      arr = arr.filter(t =>
+        t.titulo?.toLowerCase().includes(lq) ||
+        t.id?.toLowerCase().includes(lq) ||
+        clients.find(c=>c.id===t.clientId)?.empresa?.toLowerCase().includes(lq)
+      );
+    }
+    const toS = (d="") => { const p=d.split("/"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; };
+    return [...arr].sort((a,b)=>toS(b.date).localeCompare(toS(a.date)));
+  }, [allActive, inRange, search, clients]);
+
+  // Each row is one line item across all filtered tickets
+  const rows = useMemo(()=>{
+    const out = [];
+    filtered.forEach(t => {
+      const cl   = clients.find(c=>c.id===t.clientId);
+      const unit = units.find(u=>u.id===(t.unitIds?.[0]||t.unitId));
+      const iva  = safeNumber(t.snap?.params?.iva, 16);
+      const meta = { id:t.id, date:t.date, status:t.status,
+        client: cl?.empresa||"—", unit: unit?(unit.economico?"Eco. "+unit.economico+" · ":"")+`${unit.marca||""} ${unit.modelo||""}`.trim():"—" };
+      if (t.lineas && t.lineas.length > 0) {
+        t.lineas.forEach(l => {
+          const qty     = safeNumber(l.qty, 1) || 1;
+          const costoU  = safeNumber(l.costoUnit);
+          const lineTotal = costoU * qty;
+          out.push({ ...meta, desc: l.titulo||"Sin descripción", partRef: l.partRef||"", qty, costoUnit: costoU, lineTotal });
+        });
+      } else {
+        // Legacy single-snap ticket — parts cost = costoBase*(1+iva%)
+        const costoBase = safeNumber(t.snap?.costoBase);
+        const lineTotal = costoBase * (1 + iva/100);
+        out.push({ ...meta, desc: t.titulo||"Sin descripción", partRef: "", qty: safeNumber(t.qty,1)||1, costoUnit: lineTotal / Math.max(safeNumber(t.qty,1)||1,1), lineTotal });
+      }
+    });
+    return out;
+  }, [filtered, clients, units]);
+
+  const grandTotal = useMemo(()=>rows.reduce((s,r)=>s+r.lineTotal,0), [rows]);
+  const opCount    = useMemo(()=>new Set(rows.map(r=>r.id)).size, [rows]);
+
+  const fmtM = n => safeNumber(n).toLocaleString("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2});
+
+  // Group rows by ticket id to render per-ticket sections
+  const grouped = useMemo(()=>{
+    const map = new Map();
+    rows.forEach(r => {
+      if (!map.has(r.id)) map.set(r.id, { id:r.id, date:r.date, status:r.status, client:r.client, unit:r.unit, lines:[] });
+      map.get(r.id).lines.push(r);
+    });
+    return [...map.values()];
+  }, [rows]);
+
+  const pill = (v,l) => (
+    <button key={v} onClick={()=>setPeriod(v)}
+      className={period===v?"glass-pill-active":"glass-pill-inactive"}
+      style={{flexShrink:0,padding:"7px 16px",borderRadius:20,fontSize:11,fontWeight:700,
+        color:period===v?A.pillColor:A.t3,cursor:"pointer",letterSpacing:"0.04em"}}>
+      {l}
+    </button>
+  );
+
+  return (
+    <div style={{padding:"0 14px",paddingBottom:"calc(80px + env(safe-area-inset-bottom,0px))"}}>
+      <div style={{padding:"18px 0 6px",fontSize:13,fontWeight:800,color:A.t1,letterSpacing:"0.04em",textTransform:"uppercase"}}>
+        Costos de Refacciones
+      </div>
+
+      {/* Period filter */}
+      <div style={{display:"flex",gap:6,paddingBottom:10,overflowX:"auto",scrollbarWidth:"none"}}>
+        {pill("week","Semana")}{pill("month","Mes")}{pill("3m","3M")}{pill("year","Año")}{pill("all","Todo")}
+      </div>
+
+      {/* Search */}
+      <input value={search} onChange={e=>setSearch(e.target.value)}
+        placeholder="Buscar por operación, cliente..."
+        style={{width:"100%",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,
+          border:`1px solid ${C.border}`,borderRadius:12,padding:"11px 16px",color:A.t1,
+          fontSize:14,outline:"none",marginBottom:14,boxSizing:"border-box",fontFamily:"inherit"}}/>
+
+      {/* Summary strip */}
+      {rows.length > 0 && (
+        <div className="glass-card" style={{padding:"14px 18px",marginBottom:16,display:"flex",gap:0}}>
+          {[
+            {label:"Operaciones",value:opCount,color:A.t1},
+            {label:"Líneas",value:rows.length,color:A.t2,border:true},
+            {label:"Costo total",value:fmtM(grandTotal),color:"#e0662a",border:true},
+          ].map(({label,value,color,border})=>(
+            <div key={label} style={{flex:1,paddingLeft:border?14:0,borderLeft:border?`1px solid ${C.border}`:"none"}}>
+              <div style={{fontSize:8,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:4}}>{label}</div>
+              <div style={{fontSize:border&&label==="Costo total"?13:16,fontWeight:800,color,fontVariantNumeric:"tabular-nums"}}>{value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {rows.length === 0 && (
+        <div style={{textAlign:"center",padding:"48px 20px"}}>
+          <div style={{fontSize:32,marginBottom:12}}>📦</div>
+          <div style={{fontSize:11,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase"}}>Sin refacciones</div>
+          <div style={{fontSize:13,color:A.t3,marginTop:6}}>No hay operaciones en este período</div>
+        </div>
+      )}
+
+      {/* Per-ticket sections */}
+      {grouped.map(grp => {
+        const tm = TICKET_META[grp.status] || TICKET_META.recibido;
+        const ticketTotal = grp.lines.reduce((s,r)=>s+r.lineTotal,0);
+        return (
+          <div key={grp.id} className="glass-card" style={{marginBottom:14,overflow:"clip"}}>
+            {/* Ticket header */}
+            <div style={{padding:"12px 14px 8px",borderBottom:`1px solid ${C.border}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:10,color:A.t3,fontFamily:"monospace",marginBottom:2}}>{grp.id}</div>
+                  <div style={{fontSize:12,fontWeight:700,color:A.t1,marginBottom:2}}>{grp.client}</div>
+                  <div style={{fontSize:11,color:A.t2}}>{grp.unit}</div>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+                  <div style={{fontSize:10,color:A.t3}}>{grp.date}</div>
+                  <div style={{fontSize:9,padding:"2px 8px",borderRadius:10,fontWeight:700,
+                    background:tm.color,color:tm.dot}}>{tm.label}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Line items */}
+            <div>
+              {/* Header row */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 44px 70px 80px",gap:4,
+                padding:"6px 14px",borderBottom:`1px solid ${C.border}`,
+                background:"rgba(0,0,0,0.06)"}}>
+                {["Refacción","Cant","Costo U.","Total"].map(h=>(
+                  <div key={h} style={{fontSize:9,fontWeight:700,color:A.t3,letterSpacing:"0.08em",
+                    textTransform:"uppercase",textAlign:h==="Cant"||h==="Costo U."||h==="Total"?"right":"left"}}>{h}</div>
+                ))}
+              </div>
+              {grp.lines.map((r,i)=>(
+                <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 44px 70px 80px",gap:4,
+                  padding:"8px 14px",borderBottom:i<grp.lines.length-1?`1px solid ${C.border}`:"none",
+                  alignItems:"start"}}>
+                  <div>
+                    <div style={{fontSize:12,color:A.t1,lineHeight:1.3}}>{r.desc}</div>
+                    {r.partRef&&<div style={{fontSize:10,color:A.t3,marginTop:1}}>{r.partRef}</div>}
+                  </div>
+                  <div style={{fontSize:12,color:A.t2,textAlign:"right",paddingTop:2}}>{r.qty}</div>
+                  <div style={{fontSize:12,color:A.t2,textAlign:"right",paddingTop:2,fontVariantNumeric:"tabular-nums"}}>{fmtM(r.costoUnit)}</div>
+                  <div style={{fontSize:12,color:A.t1,textAlign:"right",paddingTop:2,fontWeight:700,fontVariantNumeric:"tabular-nums"}}>{fmtM(r.lineTotal)}</div>
+                </div>
+              ))}
+              {/* Ticket total row */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                padding:"8px 14px",background:"rgba(224,102,42,0.06)",borderTop:`1px solid ${C.border}`}}>
+                <div style={{fontSize:10,color:A.t3,letterSpacing:"0.08em",textTransform:"uppercase"}}>Total operación</div>
+                <div style={{fontSize:14,fontWeight:800,color:"#e0662a",fontVariantNumeric:"tabular-nums"}}>{fmtM(ticketTotal)}</div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── MasSheet — bottom sheet del menú "Más" ───────────────────────────────────
 function MasSheet({open,onClose,tab,setTab}) {
   const C = React.useContext(ThemeCtx);
@@ -15733,7 +15916,8 @@ function MasSheet({open,onClose,tab,setTab}) {
     {id:"catalogo",   label:"Catálogo",   icon:"📦", desc:"Inventario"},
     {id:"clientes",   label:"Clientes",   icon:"🏢", desc:"Directorio"},
     {id:"proveedores",label:"Proveedores",icon:"🔧", desc:"Suppliers"},
-    {id:"diagnostico", label:"Diagnóstico", icon:"🔍", desc:"Reporte técnico"},
+    {id:"diagnostico",  label:"Diagnóstico", icon:"🔍", desc:"Reporte técnico"},
+    {id:"reporte-ref",  label:"Costos Ref.", icon:"📊", desc:"Costos refacciones"},
     {id:"ajustes",    label:"Ajustes",    icon:"⚙",  desc:"Config"},
   ];
   return (
@@ -16785,7 +16969,8 @@ function App() {
         {tab==="proveedores"&&(mobileView?<MProveedores state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Proveedores state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="clientes"   &&(mobileView?<MClientes   state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Clientes    state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="ajustes"    &&(mobileView?<MAjustes state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Ajustes state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
-        {tab==="diagnostico"&&<MDiagnostico/>}
+        {tab==="diagnostico" &&<MDiagnostico/>}
+        {tab==="reporte-ref" &&<MReporteRefacciones state={state}/>}
         {tab==="ia"         &&<MInteligencia state={state}/>}
         {tab==="cobranza"   &&<MCobranza state={state} dispatch={dispatchWithDelete} toast={toast}/>}
         {tab==="chat"       &&<MChat state={state} dispatch={dispatchWithDelete} C={C} toast={toast}/>}
