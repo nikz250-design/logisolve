@@ -15724,7 +15724,7 @@ function MReporteRefacciones({state}) {
   const C = React.useContext(ThemeCtx);
   const A = C.a || {};
   const {tickets, clients, units} = state;
-  const [period, setPeriod] = useState("month");
+  const [period, setPeriod] = useState("all");
   const [search,  setSearch]  = useState("");
 
   const allActive = useMemo(()=>sel_active(tickets), [tickets]);
@@ -15757,12 +15757,15 @@ function MReporteRefacciones({state}) {
       const cl   = clients.find(c=>c.id===t.clientId);
       const unit = units.find(u=>u.id===(t.unitIds?.[0]||t.unitId));
       const iva  = safeNumber(t.snap?.params?.iva, 16);
-      const meta = { id:t.id, date:t.date, status:t.status,
-        client: cl?.empresa||"—", unit: unit?(unit.economico?"Eco. "+unit.economico+" · ":"")+`${unit.marca||""} ${unit.modelo||""}`.trim():"—" };
+      const meta = {
+        id: t.id, titulo: t.titulo||"Sin título", date: t.date, status: t.status,
+        client: cl?.empresa||"—",
+        unit: unit ? ((unit.economico?"Eco. "+unit.economico+" · ":"")+`${unit.marca||""} ${unit.modelo||""}`.trim()) : "—",
+      };
       if (t.lineas && t.lineas.length > 0) {
         t.lineas.forEach(l => {
-          const qty     = safeNumber(l.qty, 1) || 1;
-          const costoU  = safeNumber(l.costoUnit);
+          const qty      = safeNumber(l.qty, 1) || 1;
+          const costoU   = safeNumber(l.costoUnit);
           const lineTotal = costoU * qty;
           out.push({ ...meta, desc: l.titulo||"Sin descripción", partRef: l.partRef||"", qty, costoUnit: costoU, lineTotal });
         });
@@ -15770,7 +15773,8 @@ function MReporteRefacciones({state}) {
         // Legacy single-snap ticket — parts cost = costoBase*(1+iva%)
         const costoBase = safeNumber(t.snap?.costoBase);
         const lineTotal = costoBase * (1 + iva/100);
-        out.push({ ...meta, desc: t.titulo||"Sin descripción", partRef: "", qty: safeNumber(t.qty,1)||1, costoUnit: lineTotal / Math.max(safeNumber(t.qty,1)||1,1), lineTotal });
+        const qty = safeNumber(t.qty,1)||1;
+        out.push({ ...meta, desc: t.titulo||"Sin descripción", partRef: "", qty, costoUnit: lineTotal / Math.max(qty,1), lineTotal });
       }
     });
     return out;
@@ -15780,16 +15784,37 @@ function MReporteRefacciones({state}) {
   const opCount    = useMemo(()=>new Set(rows.map(r=>r.id)).size, [rows]);
 
   const fmtM = n => safeNumber(n).toLocaleString("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2});
+  const fmtN = n => safeNumber(n).toFixed(2);
 
   // Group rows by ticket id to render per-ticket sections
   const grouped = useMemo(()=>{
     const map = new Map();
     rows.forEach(r => {
-      if (!map.has(r.id)) map.set(r.id, { id:r.id, date:r.date, status:r.status, client:r.client, unit:r.unit, lines:[] });
+      if (!map.has(r.id)) map.set(r.id, { id:r.id, titulo:r.titulo, date:r.date, status:r.status, client:r.client, unit:r.unit, lines:[] });
       map.get(r.id).lines.push(r);
     });
     return [...map.values()];
   }, [rows]);
+
+  const exportCSV = useCallback(()=>{
+    const esc = v => `"${String(v==null?"":v).replace(/"/g,'""')}"`;
+    const headers = ["Folio","Título Operación","Fecha","Cliente","Unidad","Estatus","Refacción","No. Parte","Cantidad","Costo Unitario","Total Línea"];
+    const dataRows = rows.map(r => [
+      r.id, r.titulo, r.date, r.client, r.unit,
+      TICKET_META[r.status]?.label || r.status,
+      r.desc, r.partRef, r.qty, fmtN(r.costoUnit), fmtN(r.lineTotal),
+    ].map(esc).join(","));
+    // Summary row
+    dataRows.push([esc("TOTAL"),"","","","","","","","","",esc(fmtN(grandTotal))].join(","));
+    const csv = "﻿" + [headers.map(esc).join(","), ...dataRows].join("\r\n");
+    const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url;
+    a.download = `refacciones-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [rows, grandTotal]);
 
   const pill = (v,l) => (
     <button key={v} onClick={()=>setPeriod(v)}
@@ -15802,8 +15827,19 @@ function MReporteRefacciones({state}) {
 
   return (
     <div style={{padding:"0 14px",paddingBottom:"calc(80px + env(safe-area-inset-bottom,0px))"}}>
-      <div style={{padding:"18px 0 6px",fontSize:13,fontWeight:800,color:A.t1,letterSpacing:"0.04em",textTransform:"uppercase"}}>
-        Costos de Refacciones
+      {/* Header row with export button */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"18px 0 10px"}}>
+        <div style={{fontSize:13,fontWeight:800,color:A.t1,letterSpacing:"0.04em",textTransform:"uppercase"}}>
+          Costos de Refacciones
+        </div>
+        {rows.length > 0 && (
+          <button onClick={exportCSV}
+            style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:20,
+              background:"#e0662a",border:"none",color:"#fff",fontSize:11,fontWeight:700,
+              cursor:"pointer",letterSpacing:"0.04em",flexShrink:0}}>
+            ⬇ Exportar Excel
+          </button>
+        )}
       </div>
 
       {/* Period filter */}
@@ -15853,8 +15889,8 @@ function MReporteRefacciones({state}) {
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:10,color:A.t3,fontFamily:"monospace",marginBottom:2}}>{grp.id}</div>
-                  <div style={{fontSize:12,fontWeight:700,color:A.t1,marginBottom:2}}>{grp.client}</div>
-                  <div style={{fontSize:11,color:A.t2}}>{grp.unit}</div>
+                  <div style={{fontSize:13,fontWeight:700,color:A.t1,marginBottom:2,lineHeight:1.3}}>{grp.titulo}</div>
+                  <div style={{fontSize:11,color:A.t2}}>{grp.client} · {grp.unit}</div>
                 </div>
                 <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
                   <div style={{fontSize:10,color:A.t3}}>{grp.date}</div>
