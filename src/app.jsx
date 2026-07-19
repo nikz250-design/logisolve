@@ -15737,7 +15737,7 @@ function MReporteRefacciones({state}) {
   }, [range]);
 
   const filtered = useMemo(()=>{
-    let arr = allActive.filter(inRange);
+    let arr = allActive.filter(t => OPERADO_SET.has(t.status) && inRange(t));
     if (search.trim()) {
       const lq = search.toLowerCase();
       arr = arr.filter(t =>
@@ -15757,8 +15757,10 @@ function MReporteRefacciones({state}) {
       const cl   = clients.find(c=>c.id===t.clientId);
       const unit = units.find(u=>u.id===(t.unitIds?.[0]||t.unitId));
       const iva  = safeNumber(t.snap?.params?.iva, 16);
+      const hasGastos = safeNumber(t.snap?.gastos) > 0;
       const meta = {
         id: t.id, titulo: t.titulo||"Sin título", date: t.date, status: t.status,
+        hasGastos,
         client: cl?.empresa||"—",
         unit: unit ? ((unit.economico?"Eco. "+unit.economico+" · ":"")+`${unit.marca||""} ${unit.modelo||""}`.trim()) : "—",
       };
@@ -15790,7 +15792,7 @@ function MReporteRefacciones({state}) {
   const grouped = useMemo(()=>{
     const map = new Map();
     rows.forEach(r => {
-      if (!map.has(r.id)) map.set(r.id, { id:r.id, titulo:r.titulo, date:r.date, status:r.status, client:r.client, unit:r.unit, lines:[] });
+      if (!map.has(r.id)) map.set(r.id, { id:r.id, titulo:r.titulo, date:r.date, status:r.status, client:r.client, unit:r.unit, hasGastos:r.hasGastos, lines:[] });
       map.get(r.id).lines.push(r);
     });
     return [...map.values()];
@@ -15798,10 +15800,11 @@ function MReporteRefacciones({state}) {
 
   const exportCSV = useCallback(()=>{
     const esc = v => `"${String(v==null?"":v).replace(/"/g,'""')}"`;
-    const headers = ["Folio","Título Operación","Fecha","Cliente","Unidad","Estatus","Refacción","No. Parte","Cantidad","Costo Unitario","Total Línea"];
+    const headers = ["Folio","Título Operación","Fecha","Cliente","Unidad","Estatus","C. Operativo","Refacción","No. Parte","Cantidad","Costo Unitario","Total Línea"];
     const dataRows = rows.map(r => [
       r.id, r.titulo, r.date, r.client, r.unit,
       TICKET_META[r.status]?.label || r.status,
+      r.hasGastos ? "Sí" : "No",
       r.desc, r.partRef, r.qty, fmtN(r.costoUnit), fmtN(r.lineTotal),
     ].map(esc).join(","));
     // Summary row
@@ -15894,8 +15897,14 @@ function MReporteRefacciones({state}) {
                 </div>
                 <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
                   <div style={{fontSize:10,color:A.t3}}>{grp.date}</div>
-                  <div style={{fontSize:9,padding:"2px 8px",borderRadius:10,fontWeight:700,
-                    background:tm.color,color:tm.dot}}>{tm.label}</div>
+                  <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"flex-end"}}>
+                    <div style={{fontSize:9,padding:"2px 8px",borderRadius:10,fontWeight:700,
+                      background:tm.color,color:tm.dot}}>{tm.label}</div>
+                    {grp.hasGastos&&(
+                      <div style={{fontSize:9,padding:"2px 8px",borderRadius:10,fontWeight:700,
+                        background:"rgba(74,112,192,0.18)",color:"#7AA0E0"}}>+ C. Op.</div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
