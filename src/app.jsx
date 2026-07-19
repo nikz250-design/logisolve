@@ -8733,7 +8733,7 @@ function MOps({state,setTab,triggerMargin}) {
           {/* Rows */}
           {[
             {label:"Revenue operado (IVA incl.)",   val:mxn(totalFact),             col:A.lime,  bold:true},
-            {label:"− Costo producto (IVA incl.)",  val:mxn(costoProducto),         col:A.t2},
+            {label:"− Costo producto (IVA incl.)",  val:mxn(costoProducto),         col:A.t2,    tap:"costoProducto"},
             {label:"Margen operativo bruto",         val:mxn(margenOpBruto),         col:margenOpBruto>=0?"#8FE3BE":A.red, bold:true, divider:true},
             {label:"− Gastos operativos",            val:mxn(gastosOp),              col:A.t2},
             {label:"Resultado antes ajuste IVA",     val:mxn(resultadoAntesIVA),     col:A.t2,    bold:true, divider:true},
@@ -8760,15 +8760,20 @@ function MOps({state,setTab,triggerMargin}) {
             {label:"Forecast utilidad", val:mxn(forecastUtil),       col:forecastUtil>0?A.lime:A.t2},
             {label:"P1 activos",        val:String(p1Active.length), col:p1Active.length>0?A.red:A.t3, bold:p1Active.length>0},
             {label:"P2 activos",        val:String(p2Active.length), col:p2Active.length>0?A.amber:A.t3},
-          ].map(({label,val,col,bold,divider,indent},i,arr)=>(
-            <div key={label} style={{
-              display:"flex",justifyContent:"space-between",alignItems:"center",
-              padding:indent?"6px 22px 6px 34px":"12px 22px",
-              borderTop:divider?`1px solid ${C.borderHi}`:"none",
-              borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none",
-              background:bold?(C._dark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.02)"):"transparent",
-            }}>
-              <span style={{fontSize:indent?11:12,color:indent?A.t3:A.t2,letterSpacing:"0.01em"}}>{label}</span>
+          ].map(({label,val,col,bold,divider,indent,tap},i,arr)=>(
+            <div key={label}
+              onClick={tap?()=>setMDrillDown(tap):undefined}
+              style={{
+                display:"flex",justifyContent:"space-between",alignItems:"center",
+                padding:indent?"6px 22px 6px 34px":"12px 22px",
+                borderTop:divider?`1px solid ${C.borderHi}`:"none",
+                borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none",
+                background:tap?(C._dark?"rgba(255,255,255,0.05)":"rgba(0,0,0,0.04)"):bold?(C._dark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.02)"):"transparent",
+                cursor:tap?"pointer":"default",
+              }}>
+              <span style={{fontSize:indent?11:12,color:indent?A.t3:A.t2,letterSpacing:"0.01em",display:"flex",alignItems:"center",gap:5}}>
+                {label}{tap&&<span style={{fontSize:10,color:A.t3}}>›</span>}
+              </span>
               <span style={{
                 fontSize:bold?15:indent?11:13,fontWeight:bold?800:600,
                 color:col,fontFamily:"'Courier New',monospace",
@@ -8798,9 +8803,10 @@ function MOps({state,setTab,triggerMargin}) {
         const carteraTktsM = sel_cartera(tickets);
         const vSet = new Set(vencidosTkts.map(v=>v.id));
         const titles = {
-          backlog: `Capital Comprometido · ${mxn(backlogCostoM)}`,
-          cartera: `Capital en Cartera · ${mxn(carteraMonto)}`,
-          vencidos:`Pagos Vencidos · ${vencidosTkts.length} pago${vencidosTkts.length!==1?"s":""}`,
+          backlog:       `Capital Comprometido · ${mxn(backlogCostoM)}`,
+          cartera:       `Capital en Cartera · ${mxn(carteraMonto)}`,
+          vencidos:      `Pagos Vencidos · ${vencidosTkts.length} pago${vencidosTkts.length!==1?"s":""}`,
+          costoProducto: `Costo Producto · ${mxn(costoProducto)} · ${operados.length} op.`,
         };
         const Row = ({label,value,color,muted,bold,mono})=>(
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
@@ -8949,6 +8955,74 @@ function MOps({state,setTab,triggerMargin}) {
                         padding:"12px 0",borderTop:`2px solid ${C.border}`}}>
                         <span style={{fontSize:12,fontWeight:800,color:A.t3,letterSpacing:"0.06em",textTransform:"uppercase"}}>Total Cartera</span>
                         <span style={{fontSize:14,fontWeight:800,color:vencidosTkts.length>0?A.red:A.amber,fontFamily:"'Courier New',monospace"}}>{mxn(carteraMonto)}</span>
+                      </div>
+                    </>
+                  );
+                })()}
+
+                {/* COSTO PRODUCTO */}
+                {mDrillDown==="costoProducto"&&(()=>{
+                  const sorted=[...operados].sort((a,b)=>{
+                    const toS=(d="")=>{const p=d.split("/");return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d;};
+                    return toS(b.date).localeCompare(toS(a.date));
+                  });
+                  return (
+                    <>
+                      {sorted.map(t=>{
+                        const cl  = clients.find(c=>c.id===t.clientId);
+                        const iva = safeNumber(t.snap?.params?.iva,16);
+                        const costo = safeNumber(t.snap?.costoBase)*(1+iva/100);
+                        const revenue = safeNumber(t.snap?.precioConIVA);
+                        const pct = revenue>0?(costo/revenue)*100:0;
+                        const tm  = TICKET_META[t.status]||{};
+                        const gastos = safeNumber(t.snap?.gastos);
+                        return (
+                          <div key={t.id} style={{paddingTop:14,paddingBottom:12,
+                            borderBottom:`1px solid ${C.border}`}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                              <div style={{flex:1,minWidth:0,marginRight:8}}>
+                                <div style={{fontSize:13,fontWeight:700,color:A.t1,marginBottom:2,
+                                  overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.titulo||"Sin título"}</div>
+                                <div style={{fontSize:11,color:A.t3,marginBottom:2}}>{cl?.empresa||"Sin cliente"} · {t.date||"—"}</div>
+                                <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                                  <span style={{fontSize:9,padding:"2px 7px",borderRadius:8,fontWeight:700,
+                                    background:tm.color||"transparent",color:tm.dot||A.t3}}>{tm.label||t.status}</span>
+                                  {gastos>0&&<span style={{fontSize:9,padding:"2px 7px",borderRadius:8,fontWeight:700,
+                                    background:"rgba(74,112,192,0.18)",color:"#7AA0E0"}}>+ C. Op.</span>}
+                                </div>
+                              </div>
+                              <div style={{textAlign:"right",flexShrink:0}}>
+                                <div style={{fontSize:16,fontWeight:800,color:A.t1,fontFamily:"'Courier New',monospace"}}>{mxn(costo)}</div>
+                                <div style={{fontSize:11,color:A.t3,marginTop:2}}>{pct.toFixed(1)}% del revenue</div>
+                              </div>
+                            </div>
+                            {t.lineas&&t.lineas.length>0&&(
+                              <div style={{background:C._dark?"rgba(255,255,255,0.04)":"rgba(0,0,0,0.04)",
+                                borderRadius:10,padding:"8px 10px",marginTop:4}}>
+                                {t.lineas.map((l,li)=>{
+                                  const qty=safeNumber(l.qty,1)||1;
+                                  const lc =safeNumber(l.costoUnit)*qty;
+                                  return (
+                                    <div key={li} style={{display:"flex",justifyContent:"space-between",
+                                      padding:"4px 0",borderBottom:li<t.lineas.length-1?`1px solid ${C.border}`:"none"}}>
+                                      <span style={{fontSize:11,color:A.t2,flex:1,minWidth:0,
+                                        overflow:"clip",textOverflow:"ellipsis",whiteSpace:"nowrap",marginRight:8}}>
+                                        {l.titulo||"Sin descripción"}{qty>1?` ×${qty}`:""}
+                                      </span>
+                                      <span style={{fontSize:11,fontWeight:700,color:A.t1,
+                                        fontFamily:"'Courier New',monospace",flexShrink:0}}>{mxn(lc)}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      <div style={{marginTop:14,display:"flex",justifyContent:"space-between",
+                        padding:"12px 0",borderTop:`2px solid ${C.border}`}}>
+                        <span style={{fontSize:12,fontWeight:800,color:A.t3,letterSpacing:"0.06em",textTransform:"uppercase"}}>Total Costo Producto</span>
+                        <span style={{fontSize:14,fontWeight:800,color:A.t1,fontFamily:"'Courier New',monospace"}}>{mxn(costoProducto)}</span>
                       </div>
                     </>
                   );
