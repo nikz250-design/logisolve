@@ -165,7 +165,7 @@ const TICKET_TRANSITIONS = {
   transito:   ["entregado","facturado","cancelado"],
   entregado:  ["facturado","cancelado"],
   facturado:  ["cobrado","entregado","cancelado"],
-  cobrado:    ["cerrado"],
+  cobrado:    ["cerrado","transito","entregado"],
   cerrado:    [],
   cancelado:  [],
 };
