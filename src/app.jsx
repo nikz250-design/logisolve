@@ -184,7 +184,7 @@ const PIPELINE_SET  = new Set(["recibido","validando","sourcing","comprado","tra
 // Backlog Operativo — vendido y comprometido, no entregado aún
 const BACKLOG_SET   = new Set(["autorizado","comprado","transito"]);
 // Closed states
-const CLOSED_SET    = new Set(["cerrado","cancelado","cobrado"]);
+const CLOSED_SET    = new Set(["cerrado","cancelado"]);
 const PAID_SET      = new Set(["cobrado","cerrado"]);
 // Legacy alias — kept for backward compat
 const REVENUE_SET   = OPERADO_SET;
