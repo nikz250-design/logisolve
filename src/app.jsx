@@ -15793,6 +15793,517 @@ function MDiagnostico() {
   );
 }
 
+// ── computeER — motor de cálculo del Estado de Resultados ────────────────────
+const MESES_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+const SALE_SET_ER = new Set(["cobrado","entregado","facturado"]);
+
+function computeER(tickets, clients, units, month) {
+  const [y, m] = month.split("-").map(Number);
+  const from = new Date(y, m-1, 1);
+  const to   = new Date(y, m,   0, 23, 59, 59);
+  const label = `${MESES_ES[m-1]} ${y}`;
+  const dateRange = `01/${String(m).padStart(2,"0")}/${y} — ${new Date(y,m,0).getDate()}/${String(m).padStart(2,"0")}/${y}`;
+
+  const all = sel_active(tickets).filter(t => {
+    const d = parseDateMX(t.date);
+    return d && d >= from && d <= to;
+  });
+
+  const saleTickets = all.filter(t => SALE_SET_ER.has(t.status));
+  const excluded    = all.filter(t => !SALE_SET_ER.has(t.status));
+
+  const ops = saleTickets.map(t => {
+    const cl   = clients.find(c => c.id === t.clientId);
+    const unit = units.find(u => u.id === (t.unitIds?.[0] || t.unitId));
+    const snap = t.snap || {};
+
+    // Revenue — use snap values (already computed with correct IVA rate)
+    const ventaConIVA = safeNumber(snap.precioConIVA);
+    const ventaSinIVA = safeNumber(snap.precioSinIVA);
+    const ivaTraslad  = ventaConIVA - ventaSinIVA;
+
+    // Costs — decompose lineas by category
+    let refConIVA = 0, gasolina = 0, otros = 0;
+    if (t.lineas && t.lineas.length > 0) {
+      t.lineas.forEach(l => {
+        refConIVA += safeNumber(l.costoUnit) * (safeNumber(l.qty,1) || 1);
+        gasolina  += safeNumber(l.gasolina);
+        otros     += safeNumber(l.otros);
+      });
+    } else {
+      // Legacy single-snap ticket
+      refConIVA = safeNumber(snap.costoBase) * (1 + safeNumber(snap.params?.iva, 16)/100);
+      gasolina  = safeNumber(t.gasolina || 0);
+      otros     = safeNumber(t.otros    || 0);
+    }
+
+    // Costo sin IVA — use snap.costoBase which already stripped IVA with the correct rate
+    const refSinIVA      = safeNumber(snap.costoBase);
+    const ivaAcreditable = refConIVA - refSinIVA;
+    const costoTotal     = refSinIVA + gasolina + otros;
+
+    // Profitability — use snap values so ISR matches exactly what the system computed
+    const uBruta = safeNumber(snap.uBruta);
+    const isr    = safeNumber(snap.isr);      // already Math.max(uBruta*0.20, 0)
+    const uNeta  = safeNumber(snap.uNeta);
+    const margen = ventaSinIVA > 0 ? (uNeta / ventaSinIVA) * 100 : 0;
+
+    const noCosto = refConIVA === 0 && gasolina === 0 && otros === 0;
+    const perdida = uBruta < 0;
+
+    return {
+      id: t.id, titulo: t.titulo||"Sin título", date: t.date, status: t.status,
+      client: cl?.empresa||"—",
+      unit: unit ? `${unit.marca||""} ${unit.modelo||""}`.trim()||"—" : "—",
+      ventaConIVA, ventaSinIVA, ivaTraslad,
+      refConIVA, refSinIVA, ivaAcreditable,
+      gasolina, otros, costoTotal,
+      uBruta, isr, uNeta, margen,
+      noCosto, perdida,
+    };
+  });
+
+  const sum = (k) => ops.reduce((s, o) => s + o[k], 0);
+  const tot = {
+    ventaConIVA: sum("ventaConIVA"), ventaSinIVA: sum("ventaSinIVA"), ivaTraslad: sum("ivaTraslad"),
+    refConIVA: sum("refConIVA"), refSinIVA: sum("refSinIVA"), ivaAcreditable: sum("ivaAcreditable"),
+    gasolina: sum("gasolina"), otros: sum("otros"), costoTotal: sum("costoTotal"),
+    uBruta: sum("uBruta"), isr: sum("isr"), uNeta: sum("uNeta"),
+  };
+  tot.uOperativa = tot.uBruta; // uBruta already includes gastos in computeSnap
+
+  const EPS = 0.10;
+  const validations = [
+    { ok: Math.abs(tot.ventaConIVA - tot.ivaTraslad - tot.ventaSinIVA) < EPS,
+      label: "Ventas c/IVA − IVA trasladado = Ventas s/IVA" },
+    { ok: Math.abs(tot.refConIVA - tot.ivaAcreditable - tot.refSinIVA) < EPS,
+      label: "Ref. c/IVA − IVA acreditable = Ref. s/IVA" },
+    { ok: Math.abs(ops.reduce((s,o)=>s+o.ventaSinIVA,0) - tot.ventaSinIVA) < EPS,
+      label: "Suma operaciones = Total ventas s/IVA" },
+    { ok: Math.abs(ops.reduce((s,o)=>s+o.uNeta,0) - tot.uNeta) < EPS,
+      label: "Suma resultados individuales = Resultado total" },
+  ];
+
+  return { label, dateRange, month, ops, tot, excluded, validations,
+    opCount: ops.length, totalCount: all.length };
+}
+
+// ── MEstadoResultados — Estado de Resultados mensual con descarga PDF ────────
+function MEstadoResultados({state}) {
+  const C = React.useContext(ThemeCtx);
+  const A = C.a || {};
+  const {tickets, clients, units} = state;
+
+  const [month, setMonth] = useState(() => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}`;
+  });
+
+  const er = useMemo(() => computeER(tickets, clients, units, month), [tickets, clients, units, month]);
+
+  const mxn = n => safeNumber(n).toLocaleString("es-MX",{style:"currency",currency:"MXN",minimumFractionDigits:2});
+  const pct = n => `${safeNumber(n).toFixed(1)}%`;
+
+  const prevMonth = () => {
+    const [y, m] = month.split("-").map(Number);
+    const d = new Date(y, m-2, 1);
+    setMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
+  };
+  const nextMonth = () => {
+    const [y, m] = month.split("-").map(Number);
+    const d = new Date(y, m, 1);
+    setMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
+  };
+
+  const allValid = er.validations.every(v => v.ok);
+
+  const handlePDF = useCallback(() => {
+    const validFail = er.validations.filter(v => !v.ok);
+    if (validFail.length > 0) {
+      const msg = validFail.map(v => `❌ ${v.label}`).join("\n");
+      if (!confirm(`⚠️ Inconsistencias detectadas:\n\n${msg}\n\n¿Deseas generar el PDF de todas formas?`)) return;
+    }
+
+    const style = `
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:9pt;color:#1a1a1a;background:#fff}
+      .page{width:210mm;min-height:297mm;padding:16mm 14mm;page-break-after:always;position:relative}
+      h1{font-size:20pt;font-weight:900;color:#1a1a1a;letter-spacing:-0.5px}
+      h2{font-size:11pt;font-weight:800;color:#1a1a1a;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em}
+      h3{font-size:9pt;font-weight:700;color:#444;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em}
+      .logo{font-size:10pt;font-weight:900;color:#e0662a;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px}
+      .sub{font-size:8pt;color:#666;margin-bottom:2px}
+      .divider{border:none;border-top:2px solid #e0662a;margin:10px 0}
+      .thin{border:none;border-top:1px solid #e5e5e5;margin:6px 0}
+      table{width:100%;border-collapse:collapse}
+      th{font-size:7pt;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.06em;padding:5px 6px;border-bottom:1px solid #e0662a;text-align:left}
+      th.r,td.r{text-align:right}
+      td{font-size:7.5pt;color:#1a1a1a;padding:4px 6px;border-bottom:1px solid #f0f0f0;vertical-align:top}
+      tr.total td{font-weight:800;font-size:8pt;border-top:2px solid #e0662a;border-bottom:none;background:#fafafa}
+      .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+      .kpi{background:#f8f8f8;border-radius:6px;padding:8px 10px;border-left:3px solid #e0662a}
+      .kpi-label{font-size:6.5pt;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px}
+      .kpi-val{font-size:12pt;font-weight:900;color:#1a1a1a}
+      .kpi-sub{font-size:7pt;color:#666;margin-top:2px}
+      .er-table td.label{color:#444;padding-left:0}
+      .er-table td.val{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;min-width:90px}
+      .er-table td.val.pos{color:#1a7f4b}
+      .er-table td.val.neg{color:#c0392b}
+      .er-table tr.section td{font-weight:800;font-size:8.5pt;background:#f4f4f4;padding:6px}
+      .er-table tr.highlight td.val{color:#e0662a;font-size:10pt;font-weight:900}
+      .er-table tr.indent td.label{padding-left:16px;font-size:8pt;color:#555}
+      .badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:0.08em}
+      .badge-ok{background:#d4edda;color:#155724}
+      .badge-warn{background:#fff3cd;color:#856404}
+      .badge-loss{background:#f8d7da;color:#721c24}
+      .warn-box{background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:6px 8px;margin-bottom:8px;font-size:7.5pt;color:#856404}
+      .note{font-size:6.5pt;color:#888;font-style:italic;margin-top:4px}
+      .footer{position:absolute;bottom:8mm;left:14mm;right:14mm;font-size:6.5pt;color:#aaa;display:flex;justify-content:space-between;border-top:1px solid #e5e5e5;padding-top:4px}
+      @media print{.page{page-break-after:always}}
+    `;
+
+    const fmt = n => safeNumber(n).toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+    const {tot, ops, excluded, er: _er, label, dateRange, opCount, totalCount} = er;
+    const margenOp = tot.ventaSinIVA > 0 ? (tot.uNeta / tot.ventaSinIVA) * 100 : 0;
+    const warnOps  = ops.filter(o => o.noCosto);
+
+    // Page 1 — Summary
+    const page1 = `
+      <div class="page">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+          <div>
+            <div class="logo">LogiSolve</div>
+            <h1>Estado de Resultados</h1>
+            <div class="sub">${label}</div>
+            <div class="sub">${dateRange}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:7pt;color:#888">Operaciones registradas: ${totalCount}</div>
+            <div style="font-size:7pt;color:#888">Operaciones comerciales: ${opCount}</div>
+            <div style="font-size:6pt;color:#bbb;margin-top:4px">Generado: ${new Date().toLocaleDateString("es-MX")}</div>
+          </div>
+        </div>
+        <hr class="divider"/>
+        ${warnOps.length > 0 ? `<div class="warn-box">⚠️ ${warnOps.length} operación(es) sin costo registrado: ${warnOps.map(o=>o.id).join(", ")}. La utilidad puede estar sobreestimada.</div>` : ""}
+        <div class="kpi-grid">
+          <div class="kpi"><div class="kpi-label">Ventas sin IVA</div><div class="kpi-val">$${fmt(tot.ventaSinIVA)}</div><div class="kpi-sub">${opCount} operaciones</div></div>
+          <div class="kpi"><div class="kpi-label">Utilidad bruta</div><div class="kpi-val">$${fmt(tot.uBruta)}</div><div class="kpi-sub">${tot.ventaSinIVA>0?fmt(tot.uBruta/tot.ventaSinIVA*100):"0.00"}% de ventas</div></div>
+          <div class="kpi"><div class="kpi-label">Reserva ISR</div><div class="kpi-val">$${fmt(tot.isr)}</div><div class="kpi-sub">Provisional</div></div>
+          <div class="kpi" style="border-left-color:${tot.uNeta>=0?"#1a7f4b":"#c0392b"}"><div class="kpi-label">Resultado</div><div class="kpi-val" style="color:${tot.uNeta>=0?"#1a7f4b":"#c0392b"}">$${fmt(tot.uNeta)}</div><div class="kpi-sub">Margen ${fmt(margenOp)}%</div></div>
+        </div>
+        <h2 style="margin-top:10px">Estado de Resultados</h2>
+        <table class="er-table">
+          <tbody>
+            <tr class="section"><td class="label" colspan="2">Ingresos</td></tr>
+            <tr><td class="label">Ventas con IVA</td><td class="val">$${fmt(tot.ventaConIVA)}</td></tr>
+            <tr class="indent"><td class="label">IVA trasladado</td><td class="val">($${fmt(tot.ivaTraslad)})</td></tr>
+            <tr><td class="label" style="font-weight:700">Ventas sin IVA</td><td class="val pos" style="font-weight:700">$${fmt(tot.ventaSinIVA)}</td></tr>
+            <tr class="section"><td class="label" colspan="2">Costo de ventas</td></tr>
+            <tr class="indent"><td class="label">Refacciones con IVA registradas</td><td class="val">$${fmt(tot.refConIVA)}</td></tr>
+            <tr class="indent"><td class="label">IVA acreditable</td><td class="val">($${fmt(tot.ivaAcreditable)})</td></tr>
+            <tr><td class="label" style="font-weight:700">Refacciones sin IVA</td><td class="val neg" style="font-weight:700">($${fmt(tot.refSinIVA)})</td></tr>
+            <tr class="highlight"><td class="label" style="font-weight:900;font-size:9pt">Utilidad bruta</td><td class="val ${tot.uBruta>=0?"pos":"neg"}">$${fmt(tot.uBruta)}</td></tr>
+            <tr class="section"><td class="label" colspan="2">Gastos operativos</td></tr>
+            ${tot.gasolina > 0 ? `<tr class="indent"><td class="label">Gasolina</td><td class="val neg">($${fmt(tot.gasolina)})</td></tr>` : ""}
+            ${tot.otros    > 0 ? `<tr class="indent"><td class="label">Otros gastos</td><td class="val neg">($${fmt(tot.otros)})</td></tr>` : ""}
+            <tr class="highlight"><td class="label" style="font-weight:900;font-size:9pt">Utilidad operativa</td><td class="val ${tot.uBruta>=0?"pos":"neg"}">$${fmt(tot.uBruta)}</td></tr>
+            <tr class="section"><td class="label" colspan="2">Impuestos y reservas</td></tr>
+            <tr class="indent"><td class="label">Reserva administrativa ISR (20%)</td><td class="val neg">($${fmt(tot.isr)})</td></tr>
+            <tr class="highlight"><td class="label" style="font-weight:900;font-size:10pt">Resultado después de reserva</td><td class="val ${tot.uNeta>=0?"pos":"neg"}" style="font-size:10pt">$${fmt(tot.uNeta)}</td></tr>
+          </tbody>
+        </table>
+        <div class="note">⚠️ La reserva de ISR es una provisión administrativa interna. El impuesto fiscal definitivo será determinado por el contador.</div>
+        <hr class="thin" style="margin-top:10px"/>
+        <h3 style="margin-top:8px">Posición IVA</h3>
+        <table style="width:50%">
+          <tbody>
+            <tr><td style="font-size:8pt;color:#555">IVA trasladado (ventas)</td><td style="text-align:right;font-size:8pt;font-weight:600">$${fmt(tot.ivaTraslad)}</td></tr>
+            <tr><td style="font-size:8pt;color:#555">IVA acreditable (compras)</td><td style="text-align:right;font-size:8pt;font-weight:600">($${fmt(tot.ivaAcreditable)})</td></tr>
+            <tr><td style="font-size:8pt;font-weight:700">IVA neto a pagar</td><td style="text-align:right;font-size:8pt;font-weight:800;color:#e0662a">$${fmt(tot.ivaTraslad-tot.ivaAcreditable)}</td></tr>
+          </tbody>
+        </table>
+        <div class="footer">
+          <span>LogiSolve · ${label} · Estado de Resultados</span>
+          <span>Página 1</span>
+        </div>
+      </div>`;
+
+    // Pages 2+ — Detail table (chunk ~20 ops per page)
+    const CHUNK = 18;
+    let detailPages = "";
+    for (let i = 0; i < ops.length; i += CHUNK) {
+      const chunk = ops.slice(i, i + CHUNK);
+      const pageNum = Math.floor(i/CHUNK) + 2;
+      detailPages += `
+        <div class="page">
+          <div class="logo" style="font-size:8pt;margin-bottom:4px">LogiSolve · ${label}</div>
+          <h2>Detalle de Operaciones${ops.length > CHUNK ? ` (${i+1}–${Math.min(i+CHUNK,ops.length)} de ${ops.length})` : ""}</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Folio</th><th>Fecha</th><th>Cliente</th><th>Estatus</th>
+                <th class="r">V. s/IVA</th><th class="r">Ref. s/IVA</th>
+                <th class="r">Gasolina</th><th class="r">Otros</th>
+                <th class="r">U. Bruta</th><th class="r">ISR</th>
+                <th class="r">Resultado</th><th class="r">Margen</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${chunk.map(op => {
+                const statusLabel = TICKET_META[op.status]?.label || op.status;
+                const badge = op.noCosto ? `<span class="badge badge-warn">sin costo</span>` :
+                              op.perdida ? `<span class="badge badge-loss">pérdida</span>` :
+                              `<span class="badge badge-ok">${statusLabel}</span>`;
+                return `<tr>
+                  <td style="font-family:monospace;font-size:7pt">${op.id}</td>
+                  <td>${op.date}</td>
+                  <td style="font-size:7pt;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${op.client}</td>
+                  <td>${badge}</td>
+                  <td class="r">$${fmt(op.ventaSinIVA)}</td>
+                  <td class="r ${op.refSinIVA===0&&!op.noCosto?"":""}">$${fmt(op.refSinIVA)}</td>
+                  <td class="r">${op.gasolina>0?"$"+fmt(op.gasolina):"—"}</td>
+                  <td class="r">${op.otros>0?"$"+fmt(op.otros):"—"}</td>
+                  <td class="r" style="color:${op.uBruta>=0?"#1a7f4b":"#c0392b"};font-weight:700">$${fmt(op.uBruta)}</td>
+                  <td class="r">$${fmt(op.isr)}</td>
+                  <td class="r" style="color:${op.uNeta>=0?"#1a7f4b":"#c0392b"};font-weight:700">$${fmt(op.uNeta)}</td>
+                  <td class="r">${op.uNeta<0?"(pérd.)":fmt(op.margen)+"%"}</td>
+                </tr>`;
+              }).join("")}
+            </tbody>
+            ${i + CHUNK >= ops.length ? `
+            <tfoot>
+              <tr class="total">
+                <td colspan="4">TOTALES (${ops.length} ops.)</td>
+                <td class="r">$${fmt(tot.ventaSinIVA)}</td>
+                <td class="r">$${fmt(tot.refSinIVA)}</td>
+                <td class="r">$${fmt(tot.gasolina)}</td>
+                <td class="r">$${fmt(tot.otros)}</td>
+                <td class="r">$${fmt(tot.uBruta)}</td>
+                <td class="r">$${fmt(tot.isr)}</td>
+                <td class="r">$${fmt(tot.uNeta)}</td>
+                <td class="r">${fmt(margenOp)}%</td>
+              </tr>
+            </tfoot>` : ""}
+          </table>
+          ${excluded.length > 0 && i + CHUNK >= ops.length ? `
+          <div style="margin-top:12px">
+            <h3 style="color:#888">Operaciones Excluidas del Estado de Resultados</h3>
+            <table>
+              <thead><tr><th>Folio</th><th>Fecha</th><th>Estatus</th><th class="r">Importe</th><th>Motivo</th></tr></thead>
+              <tbody>
+                ${excluded.map(t => {
+                  const reason = t.status==="cancelado"?"Operación cancelada":
+                                 t.status==="cotizado"?"Pendiente de autorización":
+                                 t.status==="autorizado"?"Pendiente de compra": t.status;
+                  return `<tr>
+                    <td style="font-family:monospace;font-size:7pt">${t.id}</td>
+                    <td>${t.date}</td>
+                    <td>${TICKET_META[t.status]?.label||t.status}</td>
+                    <td class="r">$${fmt(safeNumber(t.snap?.precioConIVA))}</td>
+                    <td style="color:#888;font-size:7pt">${reason}</td>
+                  </tr>`;
+                }).join("")}
+              </tbody>
+            </table>
+          </div>` : ""}
+          ${validFail && i + CHUNK >= ops.length && validFail.length > 0 ? `
+          <div class="warn-box" style="margin-top:12px">⚠️ Inconsistencias de validación: ${validFail.map(v=>v.label).join(" · ")}</div>` : ""}
+          <div class="footer">
+            <span>LogiSolve · ${label} · Estado de Resultados</span>
+            <span>Página ${pageNum}</span>
+          </div>
+        </div>`;
+    }
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>${style}</style></head><body>${page1}${detailPages}</body></html>`;
+    const container = document.createElement("div");
+    container.style.cssText = "position:fixed;left:-9999px;top:0;width:210mm;background:#fff";
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const generate = () => {
+      // eslint-disable-next-line no-undef
+      html2pdf().set({
+        margin:0,
+        filename:`estado-resultados-${er.month}.pdf`,
+        image:{type:"jpeg",quality:0.98},
+        html2canvas:{scale:2,useCORS:true,logging:false},
+        jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},
+      }).from(container).save().finally(() => container.remove());
+    };
+    if (typeof html2pdf !== "undefined") {
+      requestAnimationFrame(() => requestAnimationFrame(generate));
+    } else {
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+      s.onload = () => requestAnimationFrame(() => requestAnimationFrame(generate));
+      s.onerror = () => { container.remove(); alert("No se pudo cargar html2pdf.js."); };
+      document.head.appendChild(s);
+    }
+  }, [er]);
+
+  const row = (label, val, opts={}) => {
+    const {indent, bold, highlight, neg, divTop} = opts;
+    return (
+      <div key={label} style={{
+        display:"flex",justifyContent:"space-between",alignItems:"center",
+        padding: highlight ? "10px 14px" : "7px 14px",
+        paddingLeft: indent ? 28 : 14,
+        borderTop: divTop ? `2px solid ${C.border}` : "none",
+        background: highlight ? (C._dark?"rgba(224,102,42,0.1)":"rgba(224,102,42,0.05)") : "transparent",
+      }}>
+        <span style={{fontSize: highlight?13:11, color: bold||highlight?A.t1:A.t2, fontWeight: bold||highlight?700:400}}>{label}</span>
+        <span style={{fontSize: highlight?15:12, fontWeight: bold||highlight?800:500, color: highlight?(neg?"#e05555":"#e0662a"):(neg?"#e05555":A.t1), fontVariantNumeric:"tabular-nums"}}>{val}</span>
+      </div>
+    );
+  };
+
+  const {tot, ops, er: _unused, validations, opCount, totalCount, label, dateRange} = er;
+  const margenOp = tot.ventaSinIVA > 0 ? (tot.uNeta / tot.ventaSinIVA) * 100 : 0;
+
+  return (
+    <div style={{padding:"0 0 calc(80px + env(safe-area-inset-bottom,0px))",maxWidth:520,margin:"0 auto"}}>
+      {/* Header */}
+      <div style={{padding:"18px 14px 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{fontSize:13,fontWeight:800,color:A.t1,letterSpacing:"0.04em",textTransform:"uppercase"}}>
+          Estado de Resultados
+        </div>
+        <button onClick={handlePDF} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",
+          borderRadius:20,background:"#e0662a",border:"none",color:"#fff",fontSize:11,fontWeight:700,
+          cursor:"pointer",letterSpacing:"0.04em",flexShrink:0}}>
+          ⬇ Descargar PDF
+        </button>
+      </div>
+
+      {/* Month selector */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,padding:"8px 14px 14px"}}>
+        <button onClick={prevMonth} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:20,
+          padding:"6px 14px",color:A.t2,fontSize:12,cursor:"pointer"}}>‹</button>
+        <div style={{fontSize:16,fontWeight:800,color:A.t1,minWidth:140,textAlign:"center"}}>{label}</div>
+        <button onClick={nextMonth} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:20,
+          padding:"6px 14px",color:A.t2,fontSize:12,cursor:"pointer"}}>›</button>
+      </div>
+
+      {/* Ops count */}
+      <div style={{display:"flex",gap:8,padding:"0 14px 12px"}}>
+        {[
+          {l:"Ops. registradas",v:totalCount},
+          {l:"Ops. comerciales",v:opCount,hi:true},
+        ].map(({l,v,hi})=>(
+          <div key={l} className="glass-card" style={{flex:1,padding:"10px 12px"}}>
+            <div style={{fontSize:9,color:A.t3,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:3}}>{l}</div>
+            <div style={{fontSize:20,fontWeight:900,color:hi?"#e0662a":A.t1}}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {ops.length === 0 ? (
+        <div style={{textAlign:"center",padding:"48px 20px"}}>
+          <div style={{fontSize:32,marginBottom:12}}>📋</div>
+          <div style={{fontSize:11,color:A.t3,letterSpacing:"0.14em",textTransform:"uppercase"}}>Sin operaciones comerciales</div>
+          <div style={{fontSize:13,color:A.t3,marginTop:6}}>No hay ops. cobradas/entregadas/facturadas en {label}</div>
+        </div>
+      ) : (<>
+
+      {/* Validation badges */}
+      <div style={{padding:"0 14px 10px",display:"flex",gap:6,flexWrap:"wrap"}}>
+        {validations.map(v=>(
+          <div key={v.label} style={{fontSize:9,padding:"3px 8px",borderRadius:10,fontWeight:700,
+            background:v.ok?(C._dark?"rgba(26,127,75,0.2)":"#d4edda"):(C._dark?"rgba(192,57,43,0.2)":"#f8d7da"),
+            color:v.ok?"#1a7f4b":"#c0392b"}}>
+            {v.ok?"✓":"✗"} {v.label}
+          </div>
+        ))}
+      </div>
+
+      {/* Estado de resultados */}
+      <div className="glass-card" style={{marginBottom:14,overflow:"clip"}}>
+        <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,fontSize:10,fontWeight:800,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase"}}>Ingresos</div>
+        {row("Ventas con IVA",         mxn(tot.ventaConIVA))}
+        {row("IVA trasladado",         `(${mxn(tot.ivaTraslad)})`, {indent:true})}
+        {row("Ventas sin IVA",         mxn(tot.ventaSinIVA), {bold:true})}
+
+        <div style={{padding:"10px 14px",borderTop:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`,fontSize:10,fontWeight:800,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase"}}>Costo de ventas</div>
+        {row("Refacciones con IVA",    mxn(tot.refConIVA), {indent:true})}
+        {row("IVA acreditable",        `(${mxn(tot.ivaAcreditable)})`, {indent:true})}
+        {row("Refacciones sin IVA",    mxn(tot.refSinIVA), {bold:true, neg:true})}
+        {row("Utilidad bruta",         mxn(tot.uBruta), {highlight:true, neg:tot.uBruta<0})}
+
+        {(tot.gasolina > 0 || tot.otros > 0) && <>
+          <div style={{padding:"10px 14px",borderTop:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`,fontSize:10,fontWeight:800,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase"}}>Gastos operativos</div>
+          {tot.gasolina > 0 && row("Gasolina", `(${mxn(tot.gasolina)})`, {indent:true, neg:true})}
+          {tot.otros    > 0 && row("Otros gastos", `(${mxn(tot.otros)})`, {indent:true, neg:true})}
+          {row("Utilidad operativa", mxn(tot.uBruta), {highlight:true, neg:tot.uBruta<0})}
+        </>}
+
+        <div style={{padding:"10px 14px",borderTop:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`,fontSize:10,fontWeight:800,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase"}}>Reserva administrativa</div>
+        {row("Reserva ISR (20% u. bruta)", `(${mxn(tot.isr)})`, {indent:true, neg:true})}
+        {row("Resultado después de reserva", mxn(tot.uNeta), {highlight:true, neg:tot.uNeta<0})}
+        <div style={{padding:"6px 14px",fontSize:9,color:A.t3,fontStyle:"italic",borderTop:`1px solid ${C.border}`}}>
+          La reserva de ISR es una provisión administrativa interna. El impuesto definitivo lo determina el contador.
+        </div>
+      </div>
+
+      {/* IVA position */}
+      <div className="glass-card" style={{marginBottom:14}}>
+        <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,fontSize:10,fontWeight:800,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase"}}>Posición IVA</div>
+        {row("IVA trasladado (ventas)", mxn(tot.ivaTraslad))}
+        {row("IVA acreditable (compras)", `(${mxn(tot.ivaAcreditable)})`, {indent:true})}
+        {row("IVA neto a pagar", mxn(tot.ivaTraslad - tot.ivaAcreditable), {bold:true})}
+      </div>
+
+      {/* Margen strip */}
+      <div className="glass-card" style={{marginBottom:14,padding:"12px 14px"}}>
+        <div style={{fontSize:9,color:A.t3,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:6}}>Margen operativo</div>
+        <div style={{display:"flex",alignItems:"baseline",gap:8}}>
+          <div style={{fontSize:28,fontWeight:900,color:tot.uNeta>=0?"#1a7f4b":"#e05555"}}>{pct(margenOp)}</div>
+          <div style={{fontSize:11,color:A.t2}}>utilidad / ventas sin IVA</div>
+        </div>
+      </div>
+
+      {/* Per-op detail */}
+      <div style={{padding:"4px 14px 8px",fontSize:10,fontWeight:800,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase"}}>Detalle por operación</div>
+      {ops.map(op => {
+        const tm = TICKET_META[op.status]||{};
+        return (
+          <div key={op.id} className="glass-card" style={{marginBottom:10,overflow:"clip"}}>
+            <div style={{padding:"10px 14px 8px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:10,color:A.t3,fontFamily:"monospace"}}>{op.id}</div>
+                <div style={{fontSize:12,fontWeight:700,color:A.t1,lineHeight:1.3}}>{op.titulo}</div>
+                <div style={{fontSize:10,color:A.t2}}>{op.client} · {op.date}</div>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
+                <div style={{fontSize:9,padding:"2px 8px",borderRadius:10,fontWeight:700,background:tm.color,color:tm.dot}}>{tm.label}</div>
+                {op.noCosto&&<div style={{fontSize:9,padding:"2px 7px",borderRadius:10,fontWeight:700,background:"rgba(224,102,42,0.15)",color:"#e0662a"}}>⚠ sin costo</div>}
+                {op.perdida&&<div style={{fontSize:9,padding:"2px 7px",borderRadius:10,fontWeight:700,background:"rgba(192,57,43,0.15)",color:"#c0392b"}}>pérdida</div>}
+              </div>
+            </div>
+            <div style={{padding:"8px 14px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:"4px 16px"}}>
+              {[
+                ["Venta s/IVA", mxn(op.ventaSinIVA)],
+                ["Ref. s/IVA",  mxn(op.refSinIVA)],
+                ...(op.gasolina>0?[["Gasolina",mxn(op.gasolina)]]:[]),
+                ...(op.otros>0   ?[["Otros",   mxn(op.otros)]]:[]),
+                ["U. Bruta",   mxn(op.uBruta)],
+                ["Reserva ISR",mxn(op.isr)],
+              ].map(([l,v])=>(
+                <div key={l} style={{display:"flex",justifyContent:"space-between",fontSize:10,color:A.t2,padding:"2px 0",borderBottom:`1px solid ${C.border}`}}>
+                  <span>{l}</span><span style={{fontVariantNumeric:"tabular-nums"}}>{v}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{padding:"6px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",background:op.uNeta<0?"rgba(192,57,43,0.06)":"rgba(26,127,75,0.06)"}}>
+              <span style={{fontSize:10,color:A.t3,textTransform:"uppercase",letterSpacing:"0.08em"}}>Resultado</span>
+              <span style={{fontSize:14,fontWeight:800,color:op.uNeta<0?"#c0392b":"#1a7f4b",fontVariantNumeric:"tabular-nums"}}>{mxn(op.uNeta)}</span>
+            </div>
+          </div>
+        );
+      })}
+      </>)}
+    </div>
+  );
+}
+
 // ── MReporteRefacciones — lista de costos de refacciones por operación ───────
 function MReporteRefacciones({state}) {
   const C = React.useContext(ThemeCtx);
@@ -16080,6 +16591,7 @@ function MasSheet({open,onClose,tab,setTab}) {
     {id:"proveedores",label:"Proveedores",icon:"🔧", desc:"Suppliers"},
     {id:"diagnostico",  label:"Diagnóstico", icon:"🔍", desc:"Reporte técnico"},
     {id:"reporte-ref",  label:"Costos Ref.", icon:"📊", desc:"Costos refacciones"},
+    {id:"estado-resultados", label:"E. Resultados", icon:"📋", desc:"Estado de resultados PDF"},
     {id:"ajustes",    label:"Ajustes",    icon:"⚙",  desc:"Config"},
   ];
   return (
@@ -17132,7 +17644,8 @@ function App() {
         {tab==="clientes"   &&(mobileView?<MClientes   state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Clientes    state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="ajustes"    &&(mobileView?<MAjustes state={state} dispatch={dispatchWithDelete} toast={toast}/>:<Ajustes state={state} dispatch={dispatchWithDelete} toast={toast}/>)}
         {tab==="diagnostico" &&<MDiagnostico/>}
-        {tab==="reporte-ref" &&<MReporteRefacciones state={state}/>}
+        {tab==="reporte-ref"        &&<MReporteRefacciones state={state}/>}
+        {tab==="estado-resultados"  &&<MEstadoResultados state={state}/>}
         {tab==="ia"         &&<MInteligencia state={state}/>}
         {tab==="cobranza"   &&<MCobranza state={state} dispatch={dispatchWithDelete} toast={toast}/>}
         {tab==="chat"       &&<MChat state={state} dispatch={dispatchWithDelete} C={C} toast={toast}/>}
