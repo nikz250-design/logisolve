@@ -16218,15 +16218,70 @@ function MEstadoResultados({state}) {
 
       {/* Per-op detail */}
       <div style={{padding:"4px 14px 8px",fontSize:10,fontWeight:800,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase"}}>Detalle por operación</div>
+      {/* Análisis por Eco */}
+      {(() => {
+        const ecoMap = {};
+        ops.forEach(op => {
+          const key = op.eco;
+          if (!ecoMap[key]) ecoMap[key] = { eco: key, unit: op.unit, ops: [] };
+          ecoMap[key].ops.push(op);
+        });
+        const ecoList = Object.values(ecoMap);
+        if (ecoList.length < 2) return null; // solo mostrar si hay más de una unidad
+        return (
+          <div style={{marginBottom:14}}>
+            <div style={{padding:"4px 14px 8px",fontSize:10,fontWeight:800,color:A.t3,letterSpacing:"0.1em",textTransform:"uppercase"}}>Análisis por Eco</div>
+            {ecoList.map(e => {
+              const sumE = k => e.ops.reduce((s,o)=>s+o[k],0);
+              const vta = sumE("ventaSinIVA");
+              const uN  = sumE("uNeta");
+              const mg  = vta > 0 ? (uN/vta)*100 : 0;
+              return (
+                <div key={e.eco} className="glass-card" style={{marginBottom:8,overflow:"clip"}}>
+                  <div style={{padding:"8px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div>
+                      {e.eco!=="—"&&<span style={{fontSize:13,fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace",marginRight:8}}>Eco.{e.eco}</span>}
+                      <span style={{fontSize:11,color:A.t1,fontWeight:600}}>{e.unit||"Sin unidad"}</span>
+                    </div>
+                    <div style={{fontSize:9,color:A.t3}}>{e.ops.length} op{e.ops.length!==1?"s":""}</div>
+                  </div>
+                  <div style={{padding:"6px 14px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:"3px 16px"}}>
+                    {[
+                      ["Venta s/IVA",   mxn(vta)],
+                      ["Ref. s/IVA",    mxn(sumE("refSinIVA"))],
+                      ...(sumE("gasolina")>0?[["Gasolina",mxn(sumE("gasolina"))]]:[]),
+                      ...(sumE("otros")>0?[["Otros",mxn(sumE("otros"))]]:[]),
+                      ["U. Bruta",      mxn(sumE("uBruta"))],
+                      ["Reserva ISR",   mxn(sumE("isr"))],
+                    ].map(([l,v])=>(
+                      <div key={l} style={{display:"flex",justifyContent:"space-between",fontSize:10,color:A.t2,padding:"2px 0",borderBottom:`1px solid ${C.border}`}}>
+                        <span>{l}</span><span style={{fontVariantNumeric:"tabular-nums"}}>{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{padding:"5px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",background:uN<0?"rgba(192,57,43,0.06)":"rgba(26,127,75,0.06)"}}>
+                    <span style={{fontSize:10,color:A.t3}}>Resultado · Margen</span>
+                    <span style={{fontSize:13,fontWeight:800,color:uN<0?"#c0392b":"#1a7f4b",fontVariantNumeric:"tabular-nums"}}>{mxn(uN)} <span style={{fontSize:10,fontWeight:600}}>({mg.toFixed(1)}%)</span></span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
       {ops.map(op => {
         const tm = TICKET_META[op.status]||{};
         return (
           <div key={op.id} className="glass-card" style={{marginBottom:10,overflow:"clip"}}>
             <div style={{padding:"10px 14px 8px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:10,color:A.t3,fontFamily:"monospace"}}>{op.id}</div>
+                <div style={{fontSize:10,color:A.t3,fontFamily:"monospace",display:"flex",gap:8,alignItems:"center"}}>
+                  <span>{op.id}</span>
+                  {op.eco!=="—"&&<span style={{fontWeight:800,color:C.cyan,fontFamily:"'Courier New',monospace"}}>Eco.{op.eco}</span>}
+                </div>
                 <div style={{fontSize:12,fontWeight:700,color:A.t1,lineHeight:1.3}}>{op.titulo}</div>
-                <div style={{fontSize:10,color:A.t2}}>{op.client} · {op.date}</div>
+                <div style={{fontSize:10,color:A.t2}}>{op.client} · {op.unit} · {op.date}</div>
               </div>
               <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
                 <div style={{fontSize:9,padding:"2px 8px",borderRadius:10,fontWeight:700,background:tm.color,color:tm.dot}}>{tm.label}</div>
