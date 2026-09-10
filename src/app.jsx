@@ -15799,13 +15799,22 @@ const SALE_SET_ER = new Set(["cobrado","entregado","facturado"]);
 
 function computeER(tickets, clients, units, month) {
   const [y, m] = month.split("-").map(Number);
+  // Use local midnight dates to avoid UTC-offset comparisons
   const from = new Date(y, m-1, 1);
   const to   = new Date(y, m,   0, 23, 59, 59);
   const label = `${MESES_ES[m-1]} ${y}`;
   const dateRange = `01/${String(m).padStart(2,"0")}/${y} — ${new Date(y,m,0).getDate()}/${String(m).padStart(2,"0")}/${y}`;
+  // Parse as local midnight (not UTC) to match the range bounds above
+  const parseLocalMX = s => {
+    if (!s) return null;
+    const p = s.split("/");
+    if (p.length !== 3) return null;
+    const dt = new Date(+p[2], +p[1]-1, +p[0]);
+    return isNaN(dt.getTime()) ? null : dt;
+  };
 
   const all = sel_active(tickets).filter(t => {
-    const d = parseDateMX(t.date);
+    const d = parseLocalMX(t.date);
     return d && d >= from && d <= to;
   });
 
@@ -15830,11 +15839,23 @@ function computeER(tickets, clients, units, month) {
         gasolina  += safeNumber(l.gasolina);
         otros     += safeNumber(l.otros);
       });
+      // Gastos may live at ticket level when lineas were saved without per-line gastos
+      if (gasolina === 0 && otros === 0) {
+        gasolina = safeNumber(t.gasolina, 0);
+        otros    = safeNumber(t.otros, 0);
+        // Last resort: snap.gastos = gasolina+otros combined; can't split → attr to gasolina
+        if (gasolina === 0 && otros === 0 && safeNumber(snap.gastos) > 0) {
+          gasolina = safeNumber(snap.gastos);
+        }
+      }
     } else {
-      // Legacy single-snap ticket
+      // Legacy single-snap ticket (no lineas array)
       refConIVA = safeNumber(snap.costoBase) * (1 + safeNumber(snap.params?.iva, 16)/100);
-      gasolina  = safeNumber(t.gasolina || 0);
-      otros     = safeNumber(t.otros    || 0);
+      gasolina  = safeNumber(t.gasolina, 0);
+      otros     = safeNumber(t.otros, 0);
+      if (gasolina === 0 && otros === 0 && safeNumber(snap.gastos) > 0) {
+        gasolina = safeNumber(snap.gastos);
+      }
     }
 
     // Costo sin IVA — use snap.costoBase which already stripped IVA with the correct rate
