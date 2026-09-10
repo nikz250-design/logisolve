@@ -15843,14 +15843,16 @@ function MReporteRefacciones({state}) {
           const qty      = safeNumber(l.qty, 1) || 1;
           const costoU   = safeNumber(l.costoUnit);
           const lineTotal = costoU * qty;
-          out.push({ ...meta, desc: l.titulo||"Sin descripción", partRef: l.partRef||"", qty, costoUnit: costoU, lineTotal });
+          out.push({ ...meta, desc: l.titulo||"Sin descripción", partRef: l.partRef||"", qty, costoUnit: costoU, lineTotal,
+            gasolina: safeNumber(l.gasolina), otros: safeNumber(l.otros) });
         });
       } else {
         // Legacy single-snap ticket — parts cost = costoBase*(1+iva%)
         const costoBase = safeNumber(t.snap?.costoBase);
         const lineTotal = costoBase * (1 + iva/100);
         const qty = safeNumber(t.qty,1)||1;
-        out.push({ ...meta, desc: t.titulo||"Sin descripción", partRef: "", qty, costoUnit: lineTotal / Math.max(qty,1), lineTotal });
+        out.push({ ...meta, desc: t.titulo||"Sin descripción", partRef: "", qty, costoUnit: lineTotal / Math.max(qty,1), lineTotal,
+          gasolina: safeNumber(t.snap?.gastos)||0, otros: 0 });
       }
     });
     return out;
@@ -15866,23 +15868,43 @@ function MReporteRefacciones({state}) {
   const grouped = useMemo(()=>{
     const map = new Map();
     rows.forEach(r => {
-      if (!map.has(r.id)) map.set(r.id, { id:r.id, titulo:r.titulo, date:r.date, status:r.status, client:r.client, unit:r.unit, hasGastos:r.hasGastos, lines:[] });
-      map.get(r.id).lines.push(r);
+      if (!map.has(r.id)) map.set(r.id, { id:r.id, titulo:r.titulo, date:r.date, status:r.status, client:r.client, unit:r.unit, hasGastos:r.hasGastos, lines:[], gasolina:0, otros:0 });
+      const g = map.get(r.id);
+      g.lines.push(r);
+      g.gasolina += r.gasolina || 0;
+      g.otros    += r.otros    || 0;
     });
     return [...map.values()];
   }, [rows]);
 
   const exportCSV = useCallback(()=>{
     const esc = v => `"${String(v==null?"":v).replace(/"/g,'""')}"`;
-    const headers = ["Folio","Título Operación","Fecha","Cliente","Unidad","Estatus","C. Operativo","Refacción","No. Parte","Cantidad","Costo Unitario","Total Línea"];
-    const dataRows = rows.map(r => [
-      r.id, r.titulo, r.date, r.client, r.unit,
-      TICKET_META[r.status]?.label || r.status,
-      r.hasGastos ? "Sí" : "No",
-      r.desc, r.partRef, r.qty, fmtN(r.costoUnit), fmtN(r.lineTotal),
-    ].map(esc).join(","));
-    // Summary row
-    dataRows.push([esc("TOTAL"),"","","","","","","","","",esc(fmtN(grandTotal))].join(","));
+    const headers = ["Folio","Título Operación","Fecha","Cliente","Unidad","Estatus","Tipo de Costo","Descripción","No. Parte","Cantidad","Costo Unitario","Total"];
+    const dataRows = [];
+    let totalRef = 0, totalGas = 0, totalOtros = 0;
+    grouped.forEach(grp => {
+      const statusLabel = TICKET_META[grp.status]?.label || grp.status;
+      const base = [grp.id, grp.titulo, grp.date, grp.client, grp.unit, statusLabel];
+      // Refacciones
+      grp.lines.forEach(r => {
+        dataRows.push([...base, "Refacción", r.desc, r.partRef, r.qty, fmtN(r.costoUnit), fmtN(r.lineTotal)].map(esc).join(","));
+        totalRef += r.lineTotal;
+      });
+      // Gasolina
+      if (grp.gasolina > 0) {
+        dataRows.push([...base, "Gasolina", "Costo de combustible", "", 1, fmtN(grp.gasolina), fmtN(grp.gasolina)].map(esc).join(","));
+        totalGas += grp.gasolina;
+      }
+      // Otros gastos
+      if (grp.otros > 0) {
+        dataRows.push([...base, "Otros gastos", "Otros gastos operativos", "", 1, fmtN(grp.otros), fmtN(grp.otros)].map(esc).join(","));
+        totalOtros += grp.otros;
+      }
+    });
+    dataRows.push(["","","","","","",esc("SUBTOTAL REFACCIONES"),"","","","",esc(fmtN(totalRef))].join(","));
+    if (totalGas > 0)    dataRows.push(["","","","","","",esc("SUBTOTAL GASOLINA"),"","","","",esc(fmtN(totalGas))].join(","));
+    if (totalOtros > 0)  dataRows.push(["","","","","","",esc("SUBTOTAL OTROS"),"","","","",esc(fmtN(totalOtros))].join(","));
+    dataRows.push(["","","","","","",esc("TOTAL OPERACIONAL"),"","","","",esc(fmtN(totalRef+totalGas+totalOtros))].join(","));
     const csv = "﻿" + [headers.map(esc).join(","), ...dataRows].join("\r\n");
     const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
     const url  = URL.createObjectURL(blob);
@@ -15891,7 +15913,7 @@ function MReporteRefacciones({state}) {
     a.download = `refacciones-${new Date().toISOString().slice(0,10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [rows, grandTotal]);
+  }, [grouped, grandTotal]);
 
   const pill = (v,l) => (
     <button key={v} onClick={()=>setPeriod(v)}
@@ -16007,11 +16029,32 @@ function MReporteRefacciones({state}) {
                   <div style={{fontSize:12,color:A.t1,textAlign:"right",paddingTop:2,fontWeight:700,fontVariantNumeric:"tabular-nums"}}>{fmtM(r.lineTotal)}</div>
                 </div>
               ))}
+              {/* Gastos operativos breakdown */}
+              {(grp.gasolina > 0 || grp.otros > 0) && (
+                <div style={{borderTop:`1px solid ${C.border}`,background:"rgba(74,112,192,0.05)"}}>
+                  <div style={{padding:"4px 14px 2px",fontSize:8,color:"#7AA0E0",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase"}}>Gastos operativos</div>
+                  {grp.gasolina > 0 && (
+                    <div style={{display:"flex",justifyContent:"space-between",padding:"4px 14px",fontSize:11,color:A.t2}}>
+                      <span>Gasolina</span><span style={{fontVariantNumeric:"tabular-nums"}}>{fmtM(grp.gasolina)}</span>
+                    </div>
+                  )}
+                  {grp.otros > 0 && (
+                    <div style={{display:"flex",justifyContent:"space-between",padding:"4px 14px",fontSize:11,color:A.t2}}>
+                      <span>Otros gastos</span><span style={{fontVariantNumeric:"tabular-nums"}}>{fmtM(grp.otros)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
               {/* Ticket total row */}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
                 padding:"8px 14px",background:"rgba(224,102,42,0.06)",borderTop:`1px solid ${C.border}`}}>
-                <div style={{fontSize:10,color:A.t3,letterSpacing:"0.08em",textTransform:"uppercase"}}>Total operación</div>
-                <div style={{fontSize:14,fontWeight:800,color:"#e0662a",fontVariantNumeric:"tabular-nums"}}>{fmtM(ticketTotal)}</div>
+                <div style={{display:"flex",flexDirection:"column",gap:1}}>
+                  <div style={{fontSize:10,color:A.t3,letterSpacing:"0.08em",textTransform:"uppercase"}}>Total operación</div>
+                  {(grp.gasolina > 0 || grp.otros > 0) && (
+                    <div style={{fontSize:9,color:A.t3}}>Ref. {fmtM(ticketTotal)} + Op. {fmtM(grp.gasolina+grp.otros)}</div>
+                  )}
+                </div>
+                <div style={{fontSize:14,fontWeight:800,color:"#e0662a",fontVariantNumeric:"tabular-nums"}}>{fmtM(ticketTotal + grp.gasolina + grp.otros)}</div>
               </div>
             </div>
           </div>
