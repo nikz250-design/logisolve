@@ -15875,6 +15875,7 @@ function computeER(tickets, clients, units, month) {
     return {
       id: t.id, titulo: t.titulo||"Sin título", date: t.date, status: t.status,
       client: cl?.empresa||"—",
+      eco: unit?.economico || "—",
       unit: unit ? `${unit.marca||""} ${unit.modelo||""}`.trim()||"—" : "—",
       ventaConIVA, ventaSinIVA, ivaTraslad,
       refConIVA, refSinIVA, ivaAcreditable,
@@ -16004,14 +16005,14 @@ function MEstadoResultados({state}) {
 
       /* ── Hoja 2: Detalle de operaciones ───────────────────────────── */
       const headers2 = [
-        "Folio","Concepto","Fecha","Cliente","Unidad","Estatus",
+        "Folio","Eco","Concepto","Fecha","Cliente","Unidad","Estatus",
         "Venta c/IVA","Venta s/IVA","IVA Trasladado",
         "Ref. c/IVA","IVA Acreditable","Ref. s/IVA",
         "Gasolina","Otros","Costo Total s/IVA",
         "Utilidad Bruta","Reserva ISR","Resultado","Margen %","Alertas"
       ];
       const detailRows = ops.map(op => [
-        op.id, op.titulo, op.date, op.client, op.unit, TICKET_META[op.status]?.label||op.status,
+        op.id, op.eco, op.titulo, op.date, op.client, op.unit, TICKET_META[op.status]?.label||op.status,
         n2(op.ventaConIVA), n2(op.ventaSinIVA), n2(op.ivaTraslad),
         n2(op.refConIVA), n2(op.ivaAcreditable), n2(op.refSinIVA),
         n2(op.gasolina), n2(op.otros), n2(op.costoTotal),
@@ -16021,7 +16022,7 @@ function MEstadoResultados({state}) {
       ]);
       // Fila de totales
       const totRow = [
-        "TOTALES","","","","","",
+        "TOTALES","","","","","","",
         n2(tot.ventaConIVA), n2(tot.ventaSinIVA), n2(tot.ivaTraslad),
         n2(tot.refConIVA), n2(tot.ivaAcreditable), n2(tot.refSinIVA),
         n2(tot.gasolina), n2(tot.otros), n2(tot.costoTotal),
@@ -16031,7 +16032,7 @@ function MEstadoResultados({state}) {
       const ws2Data = [headers2, ...detailRows, [], totRow];
       const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
       ws2["!cols"] = [
-        {wch:12},{wch:30},{wch:11},{wch:22},{wch:18},{wch:12},
+        {wch:12},{wch:8},{wch:30},{wch:11},{wch:22},{wch:18},{wch:12},
         {wch:13},{wch:13},{wch:13},
         {wch:13},{wch:13},{wch:13},
         {wch:11},{wch:11},{wch:14},
@@ -16052,6 +16053,35 @@ function MEstadoResultados({state}) {
         ws3["!cols"] = [{wch:12},{wch:11},{wch:14},{wch:14},{wch:30}];
         XLSX.utils.book_append_sheet(wb, ws3, "Excluidas");
       }
+
+      /* ── Hoja 4: Análisis por Eco ─────────────────────────────── */
+      const ecoMap = {};
+      ops.forEach(op => {
+        const key = op.eco;
+        if (!ecoMap[key]) ecoMap[key] = { eco: key, unit: op.unit, ops: [] };
+        ecoMap[key].ops.push(op);
+      });
+      const ecoHeaders = ["Eco","Unidad","# Ops","Venta s/IVA","Ref. s/IVA","Gasolina","Otros","Costo Total s/IVA","Utilidad Bruta","Reserva ISR","Resultado","Margen %"];
+      const ecoRows = Object.values(ecoMap).map(e => {
+        const sumE = k => e.ops.reduce((s, o) => s + o[k], 0);
+        const vta = sumE("ventaSinIVA");
+        const uN  = sumE("uNeta");
+        return [
+          e.eco, e.unit, e.ops.length,
+          n2(vta), n2(sumE("refSinIVA")), n2(sumE("gasolina")), n2(sumE("otros")), n2(sumE("costoTotal")),
+          n2(sumE("uBruta")), n2(sumE("isr")), n2(uN),
+          vta > 0 ? n2(uN / vta * 100) : 0,
+        ];
+      });
+      const ecoTotRow = [
+        "TOTALES","—", ops.length,
+        n2(tot.ventaSinIVA), n2(tot.refSinIVA), n2(tot.gasolina), n2(tot.otros), n2(tot.costoTotal),
+        n2(tot.uBruta), n2(tot.isr), n2(tot.uNeta),
+        tot.ventaSinIVA > 0 ? n2(tot.uNeta / tot.ventaSinIVA * 100) : 0,
+      ];
+      const ws4 = XLSX.utils.aoa_to_sheet([ecoHeaders, ...ecoRows, [], ecoTotRow]);
+      ws4["!cols"] = [{wch:8},{wch:20},{wch:7},{wch:14},{wch:14},{wch:11},{wch:11},{wch:16},{wch:14},{wch:12},{wch:13},{wch:10}];
+      XLSX.utils.book_append_sheet(wb, ws4, "Por Eco");
 
       XLSX.writeFile(wb, `estado-resultados-${er.month}.xlsx`);
     };
