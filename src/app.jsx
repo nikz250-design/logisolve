@@ -16004,14 +16004,14 @@ function MEstadoResultados({state}) {
 
       /* ── Hoja 2: Detalle de operaciones ───────────────────────────── */
       const headers2 = [
-        "Folio","Fecha","Cliente","Unidad","Estatus",
+        "Folio","Concepto","Fecha","Cliente","Unidad","Estatus",
         "Venta c/IVA","Venta s/IVA","IVA Trasladado",
         "Ref. c/IVA","IVA Acreditable","Ref. s/IVA",
         "Gasolina","Otros","Costo Total s/IVA",
         "Utilidad Bruta","Reserva ISR","Resultado","Margen %","Alertas"
       ];
       const detailRows = ops.map(op => [
-        op.id, op.date, op.client, op.unit, TICKET_META[op.status]?.label||op.status,
+        op.id, op.titulo, op.date, op.client, op.unit, TICKET_META[op.status]?.label||op.status,
         n2(op.ventaConIVA), n2(op.ventaSinIVA), n2(op.ivaTraslad),
         n2(op.refConIVA), n2(op.ivaAcreditable), n2(op.refSinIVA),
         n2(op.gasolina), n2(op.otros), n2(op.costoTotal),
@@ -16021,7 +16021,7 @@ function MEstadoResultados({state}) {
       ]);
       // Fila de totales
       const totRow = [
-        "TOTALES","","","","",
+        "TOTALES","","","","","",
         n2(tot.ventaConIVA), n2(tot.ventaSinIVA), n2(tot.ivaTraslad),
         n2(tot.refConIVA), n2(tot.ivaAcreditable), n2(tot.refSinIVA),
         n2(tot.gasolina), n2(tot.otros), n2(tot.costoTotal),
@@ -16031,7 +16031,7 @@ function MEstadoResultados({state}) {
       const ws2Data = [headers2, ...detailRows, [], totRow];
       const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
       ws2["!cols"] = [
-        {wch:12},{wch:11},{wch:22},{wch:18},{wch:12},
+        {wch:12},{wch:30},{wch:11},{wch:22},{wch:18},{wch:12},
         {wch:13},{wch:13},{wch:13},
         {wch:13},{wch:13},{wch:13},
         {wch:11},{wch:11},{wch:14},
