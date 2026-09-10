@@ -15917,226 +15917,131 @@ function MEstadoResultados({state}) {
 
   const allValid = er.validations.every(v => v.ok);
 
-  const handlePDF = useCallback(() => {
+  const handleExcel = useCallback(() => {
+    const {tot, ops, excluded, label, dateRange, opCount, totalCount} = er;
     const validFail = er.validations.filter(v => !v.ok);
     if (validFail.length > 0) {
-      const msg = validFail.map(v => `❌ ${v.label}`).join("\n");
-      if (!confirm(`⚠️ Inconsistencias detectadas:\n\n${msg}\n\n¿Deseas generar el PDF de todas formas?`)) return;
+      const msg = validFail.map(v => `- ${v.label}`).join("\n");
+      if (!confirm(`⚠️ Inconsistencias detectadas:\n\n${msg}\n\n¿Deseas generar el archivo de todas formas?`)) return;
     }
 
-    const style = `
-      *{box-sizing:border-box;margin:0;padding:0}
-      body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:9pt;color:#1a1a1a;background:#fff}
-      .page{width:210mm;min-height:297mm;padding:16mm 14mm;page-break-after:always;position:relative}
-      h1{font-size:20pt;font-weight:900;color:#1a1a1a;letter-spacing:-0.5px}
-      h2{font-size:11pt;font-weight:800;color:#1a1a1a;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em}
-      h3{font-size:9pt;font-weight:700;color:#444;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em}
-      .logo{font-size:10pt;font-weight:900;color:#e0662a;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px}
-      .sub{font-size:8pt;color:#666;margin-bottom:2px}
-      .divider{border:none;border-top:2px solid #e0662a;margin:10px 0}
-      .thin{border:none;border-top:1px solid #e5e5e5;margin:6px 0}
-      table{width:100%;border-collapse:collapse}
-      th{font-size:7pt;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.06em;padding:5px 6px;border-bottom:1px solid #e0662a;text-align:left}
-      th.r,td.r{text-align:right}
-      td{font-size:7.5pt;color:#1a1a1a;padding:4px 6px;border-bottom:1px solid #f0f0f0;vertical-align:top}
-      tr.total td{font-weight:800;font-size:8pt;border-top:2px solid #e0662a;border-bottom:none;background:#fafafa}
-      .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
-      .kpi{background:#f8f8f8;border-radius:6px;padding:8px 10px;border-left:3px solid #e0662a}
-      .kpi-label{font-size:6.5pt;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px}
-      .kpi-val{font-size:12pt;font-weight:900;color:#1a1a1a}
-      .kpi-sub{font-size:7pt;color:#666;margin-top:2px}
-      .er-table td.label{color:#444;padding-left:0}
-      .er-table td.val{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;min-width:90px}
-      .er-table td.val.pos{color:#1a7f4b}
-      .er-table td.val.neg{color:#c0392b}
-      .er-table tr.section td{font-weight:800;font-size:8.5pt;background:#f4f4f4;padding:6px}
-      .er-table tr.highlight td.val{color:#e0662a;font-size:10pt;font-weight:900}
-      .er-table tr.indent td.label{padding-left:16px;font-size:8pt;color:#555}
-      .badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:0.08em}
-      .badge-ok{background:#d4edda;color:#155724}
-      .badge-warn{background:#fff3cd;color:#856404}
-      .badge-loss{background:#f8d7da;color:#721c24}
-      .warn-box{background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:6px 8px;margin-bottom:8px;font-size:7.5pt;color:#856404}
-      .note{font-size:6.5pt;color:#888;font-style:italic;margin-top:4px}
-      .footer{position:absolute;bottom:8mm;left:14mm;right:14mm;font-size:6.5pt;color:#aaa;display:flex;justify-content:space-between;border-top:1px solid #e5e5e5;padding-top:4px}
-      @media print{.page{page-break-after:always}}
-    `;
+    const n2 = v => Math.round(safeNumber(v)*100)/100;
+    const pct2 = v => Math.round(safeNumber(v)*100)/10000; // como fracción para Excel
 
-    const fmt = n => safeNumber(n).toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
-    const {tot, ops, excluded, er: _er, label, dateRange, opCount, totalCount} = er;
-    const margenOp = tot.ventaSinIVA > 0 ? (tot.uNeta / tot.ventaSinIVA) * 100 : 0;
-    const warnOps  = ops.filter(o => o.noCosto);
+    const doExport = (XLSX) => {
+      const wb = XLSX.utils.book_new();
 
-    // Page 1 — Summary
-    const page1 = `
-      <div class="page">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-          <div>
-            <div class="logo">LogiSolve</div>
-            <h1>Estado de Resultados</h1>
-            <div class="sub">${label}</div>
-            <div class="sub">${dateRange}</div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:7pt;color:#888">Operaciones registradas: ${totalCount}</div>
-            <div style="font-size:7pt;color:#888">Operaciones comerciales: ${opCount}</div>
-            <div style="font-size:6pt;color:#bbb;margin-top:4px">Generado: ${new Date().toLocaleDateString("es-MX")}</div>
-          </div>
-        </div>
-        <hr class="divider"/>
-        ${warnOps.length > 0 ? `<div class="warn-box">⚠️ ${warnOps.length} operación(es) sin costo registrado: ${warnOps.map(o=>o.id).join(", ")}. La utilidad puede estar sobreestimada.</div>` : ""}
-        <div class="kpi-grid">
-          <div class="kpi"><div class="kpi-label">Ventas sin IVA</div><div class="kpi-val">$${fmt(tot.ventaSinIVA)}</div><div class="kpi-sub">${opCount} operaciones</div></div>
-          <div class="kpi"><div class="kpi-label">Utilidad bruta</div><div class="kpi-val">$${fmt(tot.uBruta)}</div><div class="kpi-sub">${tot.ventaSinIVA>0?fmt(tot.uBruta/tot.ventaSinIVA*100):"0.00"}% de ventas</div></div>
-          <div class="kpi"><div class="kpi-label">Reserva ISR</div><div class="kpi-val">$${fmt(tot.isr)}</div><div class="kpi-sub">Provisional</div></div>
-          <div class="kpi" style="border-left-color:${tot.uNeta>=0?"#1a7f4b":"#c0392b"}"><div class="kpi-label">Resultado</div><div class="kpi-val" style="color:${tot.uNeta>=0?"#1a7f4b":"#c0392b"}">$${fmt(tot.uNeta)}</div><div class="kpi-sub">Margen ${fmt(margenOp)}%</div></div>
-        </div>
-        <h2 style="margin-top:10px">Estado de Resultados</h2>
-        <table class="er-table">
-          <tbody>
-            <tr class="section"><td class="label" colspan="2">Ingresos</td></tr>
-            <tr><td class="label">Ventas con IVA</td><td class="val">$${fmt(tot.ventaConIVA)}</td></tr>
-            <tr class="indent"><td class="label">IVA trasladado</td><td class="val">($${fmt(tot.ivaTraslad)})</td></tr>
-            <tr><td class="label" style="font-weight:700">Ventas sin IVA</td><td class="val pos" style="font-weight:700">$${fmt(tot.ventaSinIVA)}</td></tr>
-            <tr class="section"><td class="label" colspan="2">Costo de ventas</td></tr>
-            <tr class="indent"><td class="label">Refacciones con IVA registradas</td><td class="val">$${fmt(tot.refConIVA)}</td></tr>
-            <tr class="indent"><td class="label">IVA acreditable</td><td class="val">($${fmt(tot.ivaAcreditable)})</td></tr>
-            <tr><td class="label" style="font-weight:700">Refacciones sin IVA</td><td class="val neg" style="font-weight:700">($${fmt(tot.refSinIVA)})</td></tr>
-            <tr class="highlight"><td class="label" style="font-weight:900;font-size:9pt">Utilidad bruta</td><td class="val ${tot.uBruta>=0?"pos":"neg"}">$${fmt(tot.uBruta)}</td></tr>
-            <tr class="section"><td class="label" colspan="2">Gastos operativos</td></tr>
-            ${tot.gasolina > 0 ? `<tr class="indent"><td class="label">Gasolina</td><td class="val neg">($${fmt(tot.gasolina)})</td></tr>` : ""}
-            ${tot.otros    > 0 ? `<tr class="indent"><td class="label">Otros gastos</td><td class="val neg">($${fmt(tot.otros)})</td></tr>` : ""}
-            <tr class="highlight"><td class="label" style="font-weight:900;font-size:9pt">Utilidad operativa</td><td class="val ${tot.uBruta>=0?"pos":"neg"}">$${fmt(tot.uBruta)}</td></tr>
-            <tr class="section"><td class="label" colspan="2">Impuestos y reservas</td></tr>
-            <tr class="indent"><td class="label">Reserva administrativa ISR (20%)</td><td class="val neg">($${fmt(tot.isr)})</td></tr>
-            <tr class="highlight"><td class="label" style="font-weight:900;font-size:10pt">Resultado después de reserva</td><td class="val ${tot.uNeta>=0?"pos":"neg"}" style="font-size:10pt">$${fmt(tot.uNeta)}</td></tr>
-          </tbody>
-        </table>
-        <div class="note">⚠️ La reserva de ISR es una provisión administrativa interna. El impuesto fiscal definitivo será determinado por el contador.</div>
-        <hr class="thin" style="margin-top:10px"/>
-        <h3 style="margin-top:8px">Posición IVA</h3>
-        <table style="width:50%">
-          <tbody>
-            <tr><td style="font-size:8pt;color:#555">IVA trasladado (ventas)</td><td style="text-align:right;font-size:8pt;font-weight:600">$${fmt(tot.ivaTraslad)}</td></tr>
-            <tr><td style="font-size:8pt;color:#555">IVA acreditable (compras)</td><td style="text-align:right;font-size:8pt;font-weight:600">($${fmt(tot.ivaAcreditable)})</td></tr>
-            <tr><td style="font-size:8pt;font-weight:700">IVA neto a pagar</td><td style="text-align:right;font-size:8pt;font-weight:800;color:#e0662a">$${fmt(tot.ivaTraslad-tot.ivaAcreditable)}</td></tr>
-          </tbody>
-        </table>
-        <div class="footer">
-          <span>LogiSolve · ${label} · Estado de Resultados</span>
-          <span>Página 1</span>
-        </div>
-      </div>`;
+      /* ── Hoja 1: Estado de Resultados ─────────────────────────────── */
+      const er1 = [
+        ["LOGISOLVE — ESTADO DE RESULTADOS"],
+        [label],
+        [dateRange],
+        [`Generado: ${new Date().toLocaleDateString("es-MX")}`],
+        [],
+        ["Operaciones registradas en el mes", totalCount],
+        ["Operaciones comerciales (cob/entr/fact)", opCount],
+        [],
+        ["INGRESOS", ""],
+        ["Ventas con IVA",                   n2(tot.ventaConIVA)],
+        ["  IVA trasladado",                  n2(tot.ivaTraslad)],
+        ["Ventas sin IVA",                    n2(tot.ventaSinIVA)],
+        [],
+        ["COSTO DE VENTAS", ""],
+        ["  Refacciones con IVA registradas", n2(tot.refConIVA)],
+        ["  IVA acreditable",                 n2(tot.ivaAcreditable)],
+        ["Refacciones sin IVA",               n2(tot.refSinIVA)],
+        [],
+        ["UTILIDAD BRUTA",                    n2(tot.uBruta)],
+        [],
+        ["GASTOS OPERATIVOS", ""],
+        ["  Gasolina",                         n2(tot.gasolina)],
+        ["  Otros gastos",                     n2(tot.otros)],
+        [],
+        ["UTILIDAD OPERATIVA",                n2(tot.uBruta)],
+        [],
+        ["RESERVA ADMINISTRATIVA ISR (20%)",  n2(tot.isr)],
+        ["RESULTADO DESPUÉS DE RESERVA",      n2(tot.uNeta)],
+        [],
+        ["Margen operativo %", tot.ventaSinIVA > 0 ? n2(tot.uNeta / tot.ventaSinIVA * 100) : 0],
+        [],
+        ["POSICIÓN IVA", ""],
+        ["  IVA trasladado (ventas)",          n2(tot.ivaTraslad)],
+        ["  IVA acreditable (compras)",        n2(tot.ivaAcreditable)],
+        ["IVA neto a pagar",                  n2(tot.ivaTraslad - tot.ivaAcreditable)],
+        [],
+        ["NOTA: La reserva de ISR es una provisión administrativa interna."],
+        ["El impuesto fiscal definitivo será determinado por el contador."],
+      ];
+      if (validFail.length > 0) {
+        er1.push([]);
+        er1.push(["⚠ INCONSISTENCIAS DE VALIDACIÓN"]);
+        validFail.forEach(v => er1.push(["  " + v.label]));
+      }
+      const ws1 = XLSX.utils.aoa_to_sheet(er1);
+      ws1["!cols"] = [{wch:42},{wch:18}];
+      XLSX.utils.book_append_sheet(wb, ws1, "Estado de Resultados");
 
-    // Pages 2+ — Detail table (chunk ~20 ops per page)
-    const CHUNK = 18;
-    let detailPages = "";
-    for (let i = 0; i < ops.length; i += CHUNK) {
-      const chunk = ops.slice(i, i + CHUNK);
-      const pageNum = Math.floor(i/CHUNK) + 2;
-      detailPages += `
-        <div class="page">
-          <div class="logo" style="font-size:8pt;margin-bottom:4px">LogiSolve · ${label}</div>
-          <h2>Detalle de Operaciones${ops.length > CHUNK ? ` (${i+1}–${Math.min(i+CHUNK,ops.length)} de ${ops.length})` : ""}</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Folio</th><th>Fecha</th><th>Cliente</th><th>Estatus</th>
-                <th class="r">V. s/IVA</th><th class="r">Ref. s/IVA</th>
-                <th class="r">Gasolina</th><th class="r">Otros</th>
-                <th class="r">U. Bruta</th><th class="r">ISR</th>
-                <th class="r">Resultado</th><th class="r">Margen</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${chunk.map(op => {
-                const statusLabel = TICKET_META[op.status]?.label || op.status;
-                const badge = op.noCosto ? `<span class="badge badge-warn">sin costo</span>` :
-                              op.perdida ? `<span class="badge badge-loss">pérdida</span>` :
-                              `<span class="badge badge-ok">${statusLabel}</span>`;
-                return `<tr>
-                  <td style="font-family:monospace;font-size:7pt">${op.id}</td>
-                  <td>${op.date}</td>
-                  <td style="font-size:7pt;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${op.client}</td>
-                  <td>${badge}</td>
-                  <td class="r">$${fmt(op.ventaSinIVA)}</td>
-                  <td class="r ${op.refSinIVA===0&&!op.noCosto?"":""}">$${fmt(op.refSinIVA)}</td>
-                  <td class="r">${op.gasolina>0?"$"+fmt(op.gasolina):"—"}</td>
-                  <td class="r">${op.otros>0?"$"+fmt(op.otros):"—"}</td>
-                  <td class="r" style="color:${op.uBruta>=0?"#1a7f4b":"#c0392b"};font-weight:700">$${fmt(op.uBruta)}</td>
-                  <td class="r">$${fmt(op.isr)}</td>
-                  <td class="r" style="color:${op.uNeta>=0?"#1a7f4b":"#c0392b"};font-weight:700">$${fmt(op.uNeta)}</td>
-                  <td class="r">${op.uNeta<0?"(pérd.)":fmt(op.margen)+"%"}</td>
-                </tr>`;
-              }).join("")}
-            </tbody>
-            ${i + CHUNK >= ops.length ? `
-            <tfoot>
-              <tr class="total">
-                <td colspan="4">TOTALES (${ops.length} ops.)</td>
-                <td class="r">$${fmt(tot.ventaSinIVA)}</td>
-                <td class="r">$${fmt(tot.refSinIVA)}</td>
-                <td class="r">$${fmt(tot.gasolina)}</td>
-                <td class="r">$${fmt(tot.otros)}</td>
-                <td class="r">$${fmt(tot.uBruta)}</td>
-                <td class="r">$${fmt(tot.isr)}</td>
-                <td class="r">$${fmt(tot.uNeta)}</td>
-                <td class="r">${fmt(margenOp)}%</td>
-              </tr>
-            </tfoot>` : ""}
-          </table>
-          ${excluded.length > 0 && i + CHUNK >= ops.length ? `
-          <div style="margin-top:12px">
-            <h3 style="color:#888">Operaciones Excluidas del Estado de Resultados</h3>
-            <table>
-              <thead><tr><th>Folio</th><th>Fecha</th><th>Estatus</th><th class="r">Importe</th><th>Motivo</th></tr></thead>
-              <tbody>
-                ${excluded.map(t => {
-                  const reason = t.status==="cancelado"?"Operación cancelada":
-                                 t.status==="cotizado"?"Pendiente de autorización":
-                                 t.status==="autorizado"?"Pendiente de compra": t.status;
-                  return `<tr>
-                    <td style="font-family:monospace;font-size:7pt">${t.id}</td>
-                    <td>${t.date}</td>
-                    <td>${TICKET_META[t.status]?.label||t.status}</td>
-                    <td class="r">$${fmt(safeNumber(t.snap?.precioConIVA))}</td>
-                    <td style="color:#888;font-size:7pt">${reason}</td>
-                  </tr>`;
-                }).join("")}
-              </tbody>
-            </table>
-          </div>` : ""}
-          ${validFail && i + CHUNK >= ops.length && validFail.length > 0 ? `
-          <div class="warn-box" style="margin-top:12px">⚠️ Inconsistencias de validación: ${validFail.map(v=>v.label).join(" · ")}</div>` : ""}
-          <div class="footer">
-            <span>LogiSolve · ${label} · Estado de Resultados</span>
-            <span>Página ${pageNum}</span>
-          </div>
-        </div>`;
-    }
+      /* ── Hoja 2: Detalle de operaciones ───────────────────────────── */
+      const headers2 = [
+        "Folio","Fecha","Cliente","Unidad","Estatus",
+        "Venta c/IVA","Venta s/IVA","IVA Trasladado",
+        "Ref. c/IVA","IVA Acreditable","Ref. s/IVA",
+        "Gasolina","Otros","Costo Total s/IVA",
+        "Utilidad Bruta","Reserva ISR","Resultado","Margen %","Alertas"
+      ];
+      const detailRows = ops.map(op => [
+        op.id, op.date, op.client, op.unit, TICKET_META[op.status]?.label||op.status,
+        n2(op.ventaConIVA), n2(op.ventaSinIVA), n2(op.ivaTraslad),
+        n2(op.refConIVA), n2(op.ivaAcreditable), n2(op.refSinIVA),
+        n2(op.gasolina), n2(op.otros), n2(op.costoTotal),
+        n2(op.uBruta), n2(op.isr), n2(op.uNeta),
+        n2(op.margen),
+        [op.noCosto?"SIN COSTO":null, op.perdida?"PÉRDIDA":null].filter(Boolean).join(" ") || "",
+      ]);
+      // Fila de totales
+      const totRow = [
+        "TOTALES","","","","",
+        n2(tot.ventaConIVA), n2(tot.ventaSinIVA), n2(tot.ivaTraslad),
+        n2(tot.refConIVA), n2(tot.ivaAcreditable), n2(tot.refSinIVA),
+        n2(tot.gasolina), n2(tot.otros), n2(tot.costoTotal),
+        n2(tot.uBruta), n2(tot.isr), n2(tot.uNeta),
+        tot.ventaSinIVA > 0 ? n2(tot.uNeta / tot.ventaSinIVA * 100) : 0, "",
+      ];
+      const ws2Data = [headers2, ...detailRows, [], totRow];
+      const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
+      ws2["!cols"] = [
+        {wch:12},{wch:11},{wch:22},{wch:18},{wch:12},
+        {wch:13},{wch:13},{wch:13},
+        {wch:13},{wch:13},{wch:13},
+        {wch:11},{wch:11},{wch:14},
+        {wch:13},{wch:12},{wch:13},{wch:10},{wch:14},
+      ];
+      XLSX.utils.book_append_sheet(wb, ws2, "Detalle Operaciones");
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>${style}</style></head><body>${page1}${detailPages}</body></html>`;
-    const container = document.createElement("div");
-    container.style.cssText = "position:fixed;left:-9999px;top:0;width:210mm;background:#fff";
-    container.innerHTML = html;
-    document.body.appendChild(container);
-    const generate = () => {
-      // eslint-disable-next-line no-undef
-      html2pdf().set({
-        margin:0,
-        filename:`estado-resultados-${er.month}.pdf`,
-        image:{type:"jpeg",quality:0.98},
-        html2canvas:{scale:2,useCORS:true,logging:false},
-        jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},
-      }).from(container).save().finally(() => container.remove());
+      /* ── Hoja 3: Excluidas (si hay) ───────────────────────────────── */
+      if (excluded.length > 0) {
+        const exHeaders = ["Folio","Fecha","Estatus","Importe c/IVA","Motivo"];
+        const exRows = excluded.map(t => {
+          const reason = t.status==="cancelado"?"Operación cancelada":
+                         t.status==="cotizado"?"Pendiente de autorización":
+                         t.status==="autorizado"?"Pendiente de compra": t.status;
+          return [t.id, t.date, TICKET_META[t.status]?.label||t.status, n2(safeNumber(t.snap?.precioConIVA)), reason];
+        });
+        const ws3 = XLSX.utils.aoa_to_sheet([exHeaders, ...exRows]);
+        ws3["!cols"] = [{wch:12},{wch:11},{wch:14},{wch:14},{wch:30}];
+        XLSX.utils.book_append_sheet(wb, ws3, "Excluidas");
+      }
+
+      XLSX.writeFile(wb, `estado-resultados-${er.month}.xlsx`);
     };
-    if (typeof html2pdf !== "undefined") {
-      requestAnimationFrame(() => requestAnimationFrame(generate));
+
+    if (typeof window.XLSX !== "undefined") {
+      doExport(window.XLSX);
     } else {
       const s = document.createElement("script");
-      s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-      s.onload = () => requestAnimationFrame(() => requestAnimationFrame(generate));
-      s.onerror = () => { container.remove(); alert("No se pudo cargar html2pdf.js."); };
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+      s.onload = () => doExport(window.XLSX);
+      s.onerror = () => alert("No se pudo cargar la librería de Excel. Verifica tu conexión.");
       document.head.appendChild(s);
     }
   }, [er]);
@@ -16167,10 +16072,10 @@ function MEstadoResultados({state}) {
         <div style={{fontSize:13,fontWeight:800,color:A.t1,letterSpacing:"0.04em",textTransform:"uppercase"}}>
           Estado de Resultados
         </div>
-        <button onClick={handlePDF} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",
+        <button onClick={handleExcel} style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",
           borderRadius:20,background:"#e0662a",border:"none",color:"#fff",fontSize:11,fontWeight:700,
           cursor:"pointer",letterSpacing:"0.04em",flexShrink:0}}>
-          ⬇ Descargar PDF
+          ⬇ Descargar Excel
         </button>
       </div>
 
