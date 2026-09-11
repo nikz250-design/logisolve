@@ -15872,6 +15872,18 @@ function computeER(tickets, clients, units, month) {
     const noCosto = refConIVA === 0 && gasolina === 0 && otros === 0;
     const perdida = uBruta < 0;
 
+    // Fecha real de cobro — busca en timeline el evento "Cobrado" más reciente
+    const cobroEv = (t.timeline||[]).slice().reverse().find(e => {
+      const ev = (e.evento||"").toLowerCase();
+      return ev==="cobrado"||ev==="cobrado ✓"||ev==="pagado"||ev.includes("cobr");
+    });
+    const cobroDateISO = cobroEv?.ts?.slice(0,10) || null; // YYYY-MM-DD
+    // Convertir a DD/MM/YYYY para consistencia con el resto de la app
+    const fmtISO = d => d ? `${d.slice(8,10)}/${d.slice(5,7)}/${d.slice(0,4)}` : "";
+    const cobroDate    = fmtISO(cobroDateISO);
+    const promesaPago  = t.promesaPago || "";
+    const payType      = t.payType === "contado" ? "Contado" : "Crédito";
+
     return {
       id: t.id, titulo: t.titulo||"Sin título", date: t.date, status: t.status,
       client: cl?.empresa||"—",
@@ -15882,6 +15894,7 @@ function computeER(tickets, clients, units, month) {
       gasolina, otros, costoTotal,
       uBruta, isr, uNeta, margen,
       noCosto, perdida,
+      cobroDate, promesaPago, payType,
     };
   });
 
@@ -16054,7 +16067,65 @@ function MEstadoResultados({state}) {
         XLSX.utils.book_append_sheet(wb, ws3, "Excluidas");
       }
 
-      /* ── Hoja 4: Análisis por Eco ─────────────────────────────── */
+      /* ── Hoja 4: Flujo de Caja ────────────────────────────────── */
+      const cobradas  = ops.filter(op => op.status === "cobrado");
+      const pendientes = ops.filter(op => op.status !== "cobrado");
+      const totalCobrado  = cobradas.reduce((s,o) => s + o.ventaConIVA, 0);
+      const totalPendiente = pendientes.reduce((s,o) => s + o.ventaConIVA, 0);
+
+      const fcSummary = [
+        ["LOGISOLVE — FLUJO DE CAJA"],
+        [label],
+        [],
+        ["ENTRADAS DE EFECTIVO (COBRADAS)", ""],
+        ["Operaciones cobradas", cobradas.length],
+        ["Total cobrado (c/IVA)", n2(totalCobrado)],
+        [],
+        ["PENDIENTES DE COBRO", ""],
+        ["Operaciones pendientes", pendientes.length],
+        ["Total pendiente (c/IVA)", n2(totalPendiente)],
+        [],
+        ["TOTAL FACTURADO EN EL MES (c/IVA)", n2(totalCobrado + totalPendiente)],
+        [],
+      ];
+
+      const fcHeaders = [
+        "Folio","Concepto","Fecha Op","Cliente","Eco","Unidad","Tipo Pago",
+        "Venta c/IVA","Fecha Cobro","Promesa Pago","Estado"
+      ];
+      // Sort: cobradas primero (por fecha cobro), luego pendientes (por promesa)
+      const toSortKey = s => { if(!s) return "9999-99-99"; const p=s.split("/"); return p.length===3?`${p[2]}-${p[1]}-${p[0]}`:s; };
+      const fcCobradas = [...cobradas].sort((a,b) => toSortKey(a.cobroDate).localeCompare(toSortKey(b.cobroDate)));
+      const fcPend     = [...pendientes].sort((a,b) => toSortKey(a.promesaPago).localeCompare(toSortKey(b.promesaPago)));
+
+      const fcRow = (op, estado) => [
+        op.id, op.titulo, op.date, op.client, op.eco, op.unit, op.payType,
+        n2(op.ventaConIVA),
+        estado === "COBRADO" ? op.cobroDate : "",
+        op.promesaPago || "",
+        estado,
+      ];
+
+      const fcData = [
+        ...fcSummary,
+        fcHeaders,
+        ...fcCobradas.map(op => fcRow(op, "COBRADO")),
+        ...(fcCobradas.length > 0 ? [[]] : []),
+        ...(fcPend.length > 0 ? [["— PENDIENTES DE COBRO —","","","","","","","","","",""]] : []),
+        ...fcPend.map(op => fcRow(op, "PENDIENTE")),
+        [],
+        ["TOTAL COBRADO","","","","","","", n2(totalCobrado),"","",""],
+        ["TOTAL PENDIENTE","","","","","","", n2(totalPendiente),"","",""],
+        ["GRAN TOTAL","","","","","","", n2(totalCobrado + totalPendiente),"","",""],
+      ];
+      const wsFc = XLSX.utils.aoa_to_sheet(fcData);
+      wsFc["!cols"] = [
+        {wch:12},{wch:30},{wch:11},{wch:22},{wch:8},{wch:18},{wch:9},
+        {wch:14},{wch:12},{wch:13},{wch:11},
+      ];
+      XLSX.utils.book_append_sheet(wb, wsFc, "Flujo de Caja");
+
+      /* ── Hoja 5: Análisis por Eco ─────────────────────────────── */
       const ecoMap = {};
       ops.forEach(op => {
         const key = op.eco;
@@ -16081,7 +16152,7 @@ function MEstadoResultados({state}) {
       ];
       const ws4 = XLSX.utils.aoa_to_sheet([ecoHeaders, ...ecoRows, [], ecoTotRow]);
       ws4["!cols"] = [{wch:8},{wch:20},{wch:7},{wch:14},{wch:14},{wch:11},{wch:11},{wch:16},{wch:14},{wch:12},{wch:13},{wch:10}];
-      XLSX.utils.book_append_sheet(wb, ws4, "Por Eco");
+      XLSX.utils.book_append_sheet(wb, ws4, "Análisis por Eco");
 
       XLSX.writeFile(wb, `estado-resultados-${er.month}.xlsx`);
     };
