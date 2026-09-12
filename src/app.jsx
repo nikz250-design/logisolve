@@ -476,6 +476,7 @@ function migrateLinea(l, fallbackSnap, ivaR=0.16) {
     partRef:      safeStr(l.partRef),
     qty:          safeNumber(l.qty, 1) || 1,
     costoUnit:    safeNumber(l.costoUnit, (l.snap?.costoBase||0)*(1+ivaR)),
+    gastos:       Array.isArray(l.gastos) ? l.gastos : [],
     gasolina:     safeNumber(l.gasolina, l.snap?.gastos||0),
     otros:        safeNumber(l.otros, 0),
     mode:         l.mode || "manual",
@@ -4219,12 +4220,31 @@ const emptyLine = (opType, priority, activeMods) => {
     partRef:     "",
     qty:         1,
     costoUnit:   0,
-    gasolina:    0,
-    otros:       0,
+    gastos:      [],   // [{titulo, monto}] — reemplaza gasolina/otros planos
+    gasolina:    0,    // legacy: se mantiene para tickets viejos
+    otros:       0,    // legacy
     mode:        "auto",
     manualPrice: "0",
     customMgn:   false,
     customVal:   mg,
+  };
+};
+
+// Lee gastos de una linea — soporta formato nuevo (gastos:[]) y viejo (gasolina/otros)
+const getLineGastos = l => {
+  if (l.gastos && l.gastos.length > 0) {
+    let gas = 0, ot = 0;
+    l.gastos.forEach(g => {
+      const m = safeNumber(g.monto);
+      if (/^gasolina$|^combustible$|^diesel$/i.test((g.titulo||"").trim())) gas += m;
+      else ot += m;
+    });
+    return { gasolina: gas, otros: ot, total: gas + ot };
+  }
+  return {
+    gasolina: safeNumber(l.gasolina||0),
+    otros:    safeNumber(l.otros||0),
+    total:    safeNumber(l.gasolina||0) + safeNumber(l.otros||0),
   };
 };
 
@@ -4274,10 +4294,9 @@ function Cotizador({state,dispatch,toast}) {
     const mg      = l.customMgn ? Math.min(safeNumber(l.customVal), opMeta.cap) : sharedMargin;
     const qty     = l._qtyRaw!==undefined ? (parseInt(l._qtyRaw)||1) : (safeNumber(l.qty,1)||1);
     const costoU  = l._costoUnitRaw!==undefined ? safeNumber(l._costoUnitRaw) : safeNumber(l.costoUnit);
-    const gasol   = l._gasolinaRaw!==undefined  ? safeNumber(l._gasolinaRaw)  : safeNumber(l.gasolina);
-    const otros_  = l._otrosRaw!==undefined      ? safeNumber(l._otrosRaw)     : safeNumber(l.otros);
-    const costo   = costoU * qty;
-    return computeSnap({costo,gasolina:gasol,otros:otros_,iva,isr,
+    const lg = getLineGastos(l);
+    const costo = costoU * qty;
+    return computeSnap({costo,gasolina:lg.gasolina,otros:lg.otros,iva,isr,
       compraConIVA:cIVA,ventaConIVA:vIVA,mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
   }),[lineas,sharedMargin,opMeta,iva,isr,cIVA,vIVA]);
 
@@ -4331,7 +4350,7 @@ function Cotizador({state,dispatch,toast}) {
     const lineasConSnap = lineas.map((l,i)=>({
       titulo:l.titulo||"Sin descripcion", partRef:l.partRef||"",
       qty:safeNumber(l.qty,1)||1, costoUnit:safeNumber(l.costoUnit),
-      gasolina:safeNumber(l.gasolina), otros:safeNumber(l.otros),
+      gastos:l.gastos||[], gasolina:safeNumber(l.gasolina), otros:safeNumber(l.otros),
       mode:l.mode||"manual", manualPrice:l.manualPrice||"0",
       descripcionPDF:l.descripcionPDF||"",
       snap:lineSnaps[i],
@@ -4622,8 +4641,8 @@ function Cotizador({state,dispatch,toast}) {
                           </div>
                         </div>
                       )}
-                      {/* Cantidad + Costo unitario + Gasolina + Otros */}
-                      <div style={{display:"grid",gridTemplateColumns:"80px 1fr 1fr 1fr",gap:5,marginBottom:6}}>
+                      {/* Cantidad + Costo unitario */}
+                      <div style={{display:"grid",gridTemplateColumns:"80px 1fr",gap:5,marginBottom:6}}>
                         <div>
                           <div style={{fontSize:7,color:C.t3,marginBottom:2}}>CANT.</div>
                           <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.blueHi}`,borderRadius:3,overflow:"clip"}}>
@@ -4636,19 +4655,52 @@ function Cotizador({state,dispatch,toast}) {
                             <span style={{padding:"0 5px",color:C.t3,fontSize:9}}>pz</span>
                           </div>
                         </div>
-                        {[["COSTO UNIT. (c/IVA)","costoUnit"],["GASOLINA","gasolina"],["OTROS","otros"]].map(([lbl,k])=>(
-                          <div key={k}>
-                            <div style={{fontSize:7,color:C.t3,marginBottom:2}}>{lbl}</div>
+                        <div>
+                          <div style={{fontSize:7,color:C.t3,marginBottom:2}}>COSTO UNIT. (c/IVA)</div>
+                          <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,overflow:"clip"}}>
+                            <span style={{padding:"0 5px",color:C.t3,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
+                            <input type="text" inputMode="decimal"
+                              value={l._costoUnitRaw!==undefined?l._costoUnitRaw:String(l.costoUnit||0)}
+                              onChange={e=>updateLinea(i,{_costoUnitRaw:e.target.value})}
+                              onBlur={()=>setLineas(p=>p.map((line,idx)=>idx!==i?line:{...line,costoUnit:safeNumber(line._costoUnitRaw),_costoUnitRaw:undefined}))}
+                              style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:10,padding:"5px 0",fontFamily:"'Courier New',monospace"}}/>
+                          </div>
+                        </div>
+                      </div>
+                      {/* Gastos operativos — lista con nombre libre */}
+                      <div style={{marginBottom:6}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                          <div style={{fontSize:7,color:C.t3,letterSpacing:"0.14em"}}>GASTOS OPERATIVOS</div>
+                          <button onClick={()=>updateLinea(i,{gastos:[...(l.gastos||[]),{titulo:"",monto:0}]})}
+                            style={{fontSize:7,padding:"1px 7px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:2,color:C.cyan,cursor:"pointer",fontWeight:600}}>
+                            + gasto
+                          </button>
+                        </div>
+                        {(l.gastos||[]).length===0&&<div style={{fontSize:8,color:C.t3,fontStyle:"italic",marginBottom:2}}>Sin gastos — toca "+ gasto" para agregar gasolina, embalaje, etc.</div>}
+                        {(l.gastos||[]).map((g,gi)=>(
+                          <div key={gi} style={{display:"grid",gridTemplateColumns:"1fr 90px 22px",gap:3,marginBottom:3,alignItems:"center"}}>
+                            <input
+                              value={g.titulo}
+                              onChange={e=>updateLinea(i,{gastos:l.gastos.map((x,xi)=>xi===gi?{...x,titulo:e.target.value}:x)})}
+                              placeholder="Concepto (ej: Gasolina, Embalaje…)"
+                              style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,padding:"3px 6px",color:C.t1,fontSize:9,outline:"none"}}/>
                             <div style={{display:"flex",alignItems:"center",background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.border}`,borderRadius:3,overflow:"clip"}}>
-                              <span style={{padding:"0 5px",color:C.t3,fontSize:10,fontFamily:"'Courier New',monospace"}}>$</span>
+                              <span style={{padding:"0 3px",color:C.t3,fontSize:9,fontFamily:"'Courier New',monospace"}}>$</span>
                               <input type="text" inputMode="decimal"
-                                value={l[`_${k}Raw`]!==undefined?l[`_${k}Raw`]:String(l[k]||0)}
-                                onChange={e=>updateLinea(i,{[`_${k}Raw`]:e.target.value})}
-                                onBlur={()=>setLineas(p=>p.map((line,idx)=>idx!==i?line:{...line,[k]:safeNumber(line[`_${k}Raw`]),[`_${k}Raw`]:undefined}))}
-                                style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:10,padding:"5px 0",fontFamily:"'Courier New',monospace"}}/>
+                                value={g._raw!==undefined?g._raw:String(g.monto||0)}
+                                onChange={e=>updateLinea(i,{gastos:l.gastos.map((x,xi)=>xi===gi?{...x,_raw:e.target.value}:x)})}
+                                onBlur={()=>updateLinea(i,{gastos:l.gastos.map((x,xi)=>xi===gi?{titulo:x.titulo,monto:safeNumber(x._raw!==undefined?x._raw:String(x.monto))}:x)})}
+                                style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:10,padding:"3px 0",fontFamily:"'Courier New',monospace"}}/>
                             </div>
+                            <button onClick={()=>updateLinea(i,{gastos:l.gastos.filter((_,xi)=>xi!==gi)})}
+                              style={{background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:2,color:C.red,fontSize:11,cursor:"pointer",width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,padding:0,flexShrink:0}}>×</button>
                           </div>
                         ))}
+                        {(l.gastos||[]).length>1&&(
+                          <div style={{fontSize:8,color:C.t3,fontFamily:"'Courier New',monospace",textAlign:"right"}}>
+                            Total gastos: <span style={{color:C.t1,fontWeight:700}}>{mxn((l.gastos||[]).reduce((s,g)=>s+safeNumber(g.monto),0))}</span>
+                          </div>
+                        )}
                       </div>
                       {/* Subtotal de cantidad */}
                       {(safeNumber(l.qty,1))>1&&(
@@ -6867,27 +6919,35 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
     const toConIVA = (snap) => (snap?.costoBase||0)*(1+ivaR);
     let lineas;
     if(t.lineas&&t.lineas.length>0) {
-      lineas = t.lineas.map(l=>({
-        titulo:       l.titulo||"",
-        partRef:      l.partRef||"",
-        qty:          safeNumber(l.qty,1)||1,
-        costoUnit:    safeNumber(l.costoUnit, toConIVA(l.snap)),
-        gasolina:     safeNumber(l.gasolina, l.snap?.gastos||0),
-        otros:        safeNumber(l.otros, 0),
-        mode:         l.mode||"manual",
-        manualPrice:  l.manualPrice||(l.snap?.precioConIVA||0).toFixed(2),
-        customMgn:    !!l.customMgn,
-        customVal:    safeNumber(l.customVal, 27),
-        descripcionPDF: l.descripcionPDF||"",
-      }));
+      lineas = t.lineas.map(l=>{
+        // Migrar gasolina/otros planos al nuevo formato gastos[]
+        const gas = Array.isArray(l.gastos) && l.gastos.length > 0 ? l.gastos :
+          [...(safeNumber(l.gasolina)>0?[{titulo:"Gasolina",monto:safeNumber(l.gasolina)}]:[]),
+           ...(safeNumber(l.otros)>0?[{titulo:"Otros gastos",monto:safeNumber(l.otros)}]:[])];
+        return {
+          titulo:       l.titulo||"",
+          partRef:      l.partRef||"",
+          qty:          safeNumber(l.qty,1)||1,
+          costoUnit:    safeNumber(l.costoUnit, toConIVA(l.snap)),
+          gastos:       gas,
+          gasolina:     0,
+          otros:        0,
+          mode:         l.mode||"manual",
+          manualPrice:  l.manualPrice||(l.snap?.precioConIVA||0).toFixed(2),
+          customMgn:    !!l.customMgn,
+          customVal:    safeNumber(l.customVal, 27),
+          descripcionPDF: l.descripcionPDF||"",
+        };
+      });
     } else {
       const parts=(t.titulo||"").split(" / ").filter(Boolean);
       if(parts.length>1) {
         const pxLinea=((t.snap?.precioConIVA||0)/parts.length).toFixed(2);
         const costoXLinea=toConIVA(t.snap)/parts.length;
-        lineas=parts.map(p=>({titulo:p.trim(),partRef:"",qty:1,costoUnit:costoXLinea,gasolina:0,otros:0,mode:"manual",manualPrice:pxLinea,customMgn:false,customVal:27,descripcionPDF:""}));
+        lineas=parts.map(p=>({titulo:p.trim(),partRef:"",qty:1,costoUnit:costoXLinea,gastos:[],gasolina:0,otros:0,mode:"manual",manualPrice:pxLinea,customMgn:false,customVal:27,descripcionPDF:""}));
       } else {
-        lineas=[{titulo:t.titulo||"",partRef:t.partRef||"",qty:1,costoUnit:safeNumber(t.costoUnit,toConIVA(t.snap)),gasolina:safeNumber(t.gasolina,t.snap?.gastos||0),otros:safeNumber(t.otros,0),mode:t.mode||"manual",manualPrice:t.manualPrice||(t.snap?.precioConIVA||0).toFixed(2),customMgn:!!t.customMgn,customVal:safeNumber(t.customVal,27),descripcionPDF:""}];
+        const tGas=[...(safeNumber(t.gasolina||t.snap?.gastos)>0?[{titulo:"Gasolina",monto:safeNumber(t.gasolina||t.snap?.gastos)}]:[]),...(safeNumber(t.otros)>0?[{titulo:"Otros gastos",monto:safeNumber(t.otros)}]:[])];
+        lineas=[{titulo:t.titulo||"",partRef:t.partRef||"",qty:1,costoUnit:safeNumber(t.costoUnit,toConIVA(t.snap)),gastos:tGas,gasolina:0,otros:0,mode:t.mode||"manual",manualPrice:t.manualPrice||(t.snap?.precioConIVA||0).toFixed(2),customMgn:!!t.customMgn,customVal:safeNumber(t.customVal,27),descripcionPDF:""}];
       }
     }
     setEditLineas(lineas);
@@ -6916,7 +6976,8 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
       const mg = l.customMgn?Math.min(safeNumber(l.customVal),99):sharedMgn;
       const qty = safeNumber(l.qty,1)||1;
       const costo = safeNumber(l.costoUnit)*qty;
-      return computeSnap({costo,gasolina:safeNumber(l.gasolina),otros:safeNumber(l.otros),iva,isr,
+      const lg = getLineGastos(l);
+      return computeSnap({costo,gasolina:lg.gasolina,otros:lg.otros,iva,isr,
         compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,
         mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
     });
@@ -6945,11 +7006,14 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
     const lineasConSnap = editLineas.map(l=>{
       const mg=l.customMgn?Math.min(l.customVal,99):sharedMgn;
       const costo=(l.costoUnit||0)*(l.qty||1);
-      const snap=computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,
+      const lg2 = getLineGastos(l);
+      const snap=computeSnap({costo,gasolina:lg2.gasolina,otros:lg2.otros,
         iva:parseFloat(ef.iva)||16,isr:parseFloat(ef.isr)||20,
         compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,
         mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
-      return {titulo:l.titulo||"Sin descripcion",partRef:l.partRef||"",snap,qty:l.qty||1,descripcionPDF:l.descripcionPDF||""};
+      return {titulo:l.titulo||"Sin descripcion",partRef:l.partRef||"",snap,qty:l.qty||1,
+        costoUnit:safeNumber(l.costoUnit),gastos:l.gastos||[],gasolina:0,otros:0,mode:l.mode||"manual",
+        manualPrice:l.manualPrice||"0",descripcionPDF:l.descripcionPDF||""};
     });
     const opMeta=OP_TYPES.find(o=>o.id===opType)||OP_TYPES[0];
     const patch={
@@ -7153,7 +7217,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                       {editLineas.map((l,idx)=>{
                         const mg = l.customMgn ? Math.min(l.customVal,99) : effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
                         const costo=(l.costoUnit||0)*(l.qty||1);
-                        const lsnap = computeSnap({costo,gasolina:l.gasolina||0,otros:l.otros||0,iva:parseFloat(ef.iva)||16,isr:parseFloat(ef.isr)||20,compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
+                        const _lg=getLineGastos(l);const lsnap = computeSnap({costo,gasolina:_lg.gasolina,otros:_lg.otros,iva:parseFloat(ef.iva)||16,isr:parseFloat(ef.isr)||20,compraConIVA:ef.cIVA!==false,ventaConIVA:ef.vIVA!==false,mode:l.mode||"manual",margin:mg,manualPrice:l.manualPrice||"0"});
                         return (
                         <div key={idx} style={{background:C.bg1,backdropFilter:C.glass,WebkitBackdropFilter:C.glass,border:`1px solid ${C.borderHi}`,borderRadius:3,padding:"7px 9px",marginBottom:5}}>
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
@@ -7166,12 +7230,36 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                             <Field label="Ref. / OEM" value={l.partRef||""} onChange={v=>updLinea(idx,{partRef:v})} prefix=""/>
                           </div>
                           <Field label="Descripción PDF (aparece en cotización)" value={l.descripcionPDF||""} onChange={v=>updLinea(idx,{descripcionPDF:v})} prefix="" hint="Dejar vacío para usar texto por defecto" rows={2}/>
-                          {/* Qty, costo, gasolina, otros */}
-                          <div style={{display:"grid",gridTemplateColumns:"70px 1fr 1fr 1fr",gap:5,marginBottom:5}}>
+                          {/* Qty + costo */}
+                          <div style={{display:"grid",gridTemplateColumns:"70px 1fr",gap:5,marginBottom:5}}>
                             <Field label="Cant." value={l._qtyRaw!==undefined?l._qtyRaw:String(l.qty||1)} onChange={v=>updLinea(idx,{_qtyRaw:v})} onFocus={()=>updLinea(idx,{_qtyRaw:""})} onBlur={()=>{const n=parseInt(l._qtyRaw);updLinea(idx,{qty:isFinite(n)&&n>=1?n:1,_qtyRaw:undefined});}} prefix="" suffix="pz" type="text" inputMode="numeric"/>
                             <Field label="Costo unit. c/IVA" value={l.costoUnit||0} onChange={v=>updLinea(idx,{costoUnit:v})} onBlur={()=>updLinea(idx,{costoUnit:safeNumber(l.costoUnit)})} type="text" inputMode="decimal"/>
-                            <Field label="Gasolina" value={l.gasolina||0} onChange={v=>updLinea(idx,{gasolina:v})} onBlur={()=>updLinea(idx,{gasolina:safeNumber(l.gasolina)})} type="text" inputMode="decimal"/>
-                            <Field label="Otros gastos" value={l.otros||0} onChange={v=>updLinea(idx,{otros:v})} onBlur={()=>updLinea(idx,{otros:safeNumber(l.otros)})} type="text" inputMode="decimal"/>
+                          </div>
+                          {/* Gastos operativos con nombre libre */}
+                          <div style={{marginBottom:5}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                              <div style={{fontSize:7,color:C.t3,letterSpacing:"0.1em"}}>GASTOS OPERATIVOS</div>
+                              <button onClick={()=>updLinea(idx,{gastos:[...(l.gastos||[]),{titulo:"",monto:0}]})}
+                                style={{fontSize:7,padding:"1px 6px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:2,color:C.cyan,cursor:"pointer",fontWeight:600}}>+ gasto</button>
+                            </div>
+                            {(l.gastos||[]).length===0&&<div style={{fontSize:7,color:C.t3,fontStyle:"italic"}}>Sin gastos</div>}
+                            {(l.gastos||[]).map((g,gi)=>(
+                              <div key={gi} style={{display:"grid",gridTemplateColumns:"1fr 80px 20px",gap:3,marginBottom:2,alignItems:"center"}}>
+                                <input value={g.titulo} onChange={e=>updLinea(idx,{gastos:l.gastos.map((x,xi)=>xi===gi?{...x,titulo:e.target.value}:x)})}
+                                  placeholder="Concepto…"
+                                  style={{background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,padding:"2px 5px",color:C.t1,fontSize:8,outline:"none"}}/>
+                                <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,overflow:"clip"}}>
+                                  <span style={{padding:"0 3px",color:C.t3,fontSize:8,fontFamily:"'Courier New',monospace"}}>$</span>
+                                  <input type="text" inputMode="decimal"
+                                    value={g._raw!==undefined?g._raw:String(g.monto||0)}
+                                    onChange={e=>updLinea(idx,{gastos:l.gastos.map((x,xi)=>xi===gi?{...x,_raw:e.target.value}:x)})}
+                                    onBlur={()=>updLinea(idx,{gastos:l.gastos.map((x,xi)=>xi===gi?{titulo:x.titulo,monto:safeNumber(x._raw!==undefined?x._raw:String(x.monto))}:x)})}
+                                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:9,padding:"2px 0",fontFamily:"'Courier New',monospace"}}/>
+                                </div>
+                                <button onClick={()=>updLinea(idx,{gastos:l.gastos.filter((_,xi)=>xi!==gi)})}
+                                  style={{background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:2,color:C.red,fontSize:10,cursor:"pointer",width:20,height:20,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>×</button>
+                              </div>
+                            ))}
                           </div>
                           {(safeNumber(l.qty,1))>1&&<div style={{fontSize:7,color:C.t3,marginBottom:5,fontFamily:"'Courier New',monospace"}}>{l.qty} × {mxn(safeNumber(l.costoUnit))} = {mxn(safeNumber(l.costoUnit)*safeNumber(l.qty,1))} costo total</div>}
                           {/* Modo precio */}
@@ -15836,8 +15924,9 @@ function computeER(tickets, clients, units, month) {
     if (t.lineas && t.lineas.length > 0) {
       t.lineas.forEach(l => {
         refConIVA += safeNumber(l.costoUnit) * (safeNumber(l.qty,1) || 1);
-        gasolina  += safeNumber(l.gasolina);
-        otros     += safeNumber(l.otros);
+        const lg = getLineGastos(l);
+        gasolina += lg.gasolina;
+        otros    += lg.otros;
       });
       // Gastos may live at ticket level when lineas were saved without per-line gastos
       if (gasolina === 0 && otros === 0) {
@@ -16436,8 +16525,9 @@ function MReporteRefacciones({state}) {
           const qty      = safeNumber(l.qty, 1) || 1;
           const costoU   = safeNumber(l.costoUnit);
           const lineTotal = costoU * qty;
+          const _rg = getLineGastos(l);
           out.push({ ...meta, desc: l.titulo||"Sin descripción", partRef: l.partRef||"", qty, costoUnit: costoU, lineTotal,
-            gasolina: safeNumber(l.gasolina), otros: safeNumber(l.otros) });
+            gasolina: _rg.gasolina, otros: _rg.otros, gastosItems: l.gastos||[] });
         });
       } else {
         // Legacy single-snap ticket — parts cost = costoBase*(1+iva%)
@@ -16461,11 +16551,21 @@ function MReporteRefacciones({state}) {
   const grouped = useMemo(()=>{
     const map = new Map();
     rows.forEach(r => {
-      if (!map.has(r.id)) map.set(r.id, { id:r.id, titulo:r.titulo, date:r.date, status:r.status, client:r.client, unit:r.unit, hasGastos:r.hasGastos, lines:[], gasolina:0, otros:0 });
+      if (!map.has(r.id)) map.set(r.id, { id:r.id, titulo:r.titulo, date:r.date, status:r.status, client:r.client, unit:r.unit, hasGastos:r.hasGastos, lines:[], gasolina:0, otros:0, gastosMap:{} });
       const g = map.get(r.id);
       g.lines.push(r);
       g.gasolina += r.gasolina || 0;
       g.otros    += r.otros    || 0;
+      // Acumular gastos con nombre libre por concepto
+      (r.gastosItems||[]).forEach(gi => {
+        const key = (gi.titulo||"Sin concepto").trim();
+        g.gastosMap[key] = (g.gastosMap[key]||0) + safeNumber(gi.monto);
+      });
+      // Fallback: si hay gasolina/otros del formato viejo, agregarlos al mapa
+      if (!r.gastosItems?.length) {
+        if (r.gasolina > 0) g.gastosMap["Gasolina"] = (g.gastosMap["Gasolina"]||0) + r.gasolina;
+        if (r.otros > 0)    g.gastosMap["Otros gastos"] = (g.gastosMap["Otros gastos"]||0) + r.otros;
+      }
     });
     return [...map.values()];
   }, [rows]);
@@ -16483,21 +16583,15 @@ function MReporteRefacciones({state}) {
         dataRows.push([...base, "Refacción", r.desc, r.partRef, r.qty, fmtN(r.costoUnit), fmtN(r.lineTotal)].map(esc).join(","));
         totalRef += r.lineTotal;
       });
-      // Gasolina
-      if (grp.gasolina > 0) {
-        dataRows.push([...base, "Gasolina", "Costo de combustible", "", 1, fmtN(grp.gasolina), fmtN(grp.gasolina)].map(esc).join(","));
-        totalGas += grp.gasolina;
-      }
-      // Otros gastos
-      if (grp.otros > 0) {
-        dataRows.push([...base, "Otros gastos", "Otros gastos operativos", "", 1, fmtN(grp.otros), fmtN(grp.otros)].map(esc).join(","));
-        totalOtros += grp.otros;
-      }
+      // Gastos por concepto
+      Object.entries(grp.gastosMap||{}).forEach(([concepto, monto]) => {
+        dataRows.push([...base, "Gasto op.", concepto, "", 1, fmtN(monto), fmtN(monto)].map(esc).join(","));
+        totalOtros += monto;
+      });
     });
     dataRows.push(["","","","","","",esc("SUBTOTAL REFACCIONES"),"","","","",esc(fmtN(totalRef))].join(","));
-    if (totalGas > 0)    dataRows.push(["","","","","","",esc("SUBTOTAL GASOLINA"),"","","","",esc(fmtN(totalGas))].join(","));
-    if (totalOtros > 0)  dataRows.push(["","","","","","",esc("SUBTOTAL OTROS"),"","","","",esc(fmtN(totalOtros))].join(","));
-    dataRows.push(["","","","","","",esc("TOTAL OPERACIONAL"),"","","","",esc(fmtN(totalRef+totalGas+totalOtros))].join(","));
+    if (totalOtros > 0)  dataRows.push(["","","","","","",esc("SUBTOTAL GASTOS OP."),"","","","",esc(fmtN(totalOtros))].join(","));
+    dataRows.push(["","","","","","",esc("TOTAL OPERACIONAL"),"","","","",esc(fmtN(totalRef+totalOtros))].join(","));
     const csv = "﻿" + [headers.map(esc).join(","), ...dataRows].join("\r\n");
     const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
     const url  = URL.createObjectURL(blob);
@@ -16622,20 +16716,15 @@ function MReporteRefacciones({state}) {
                   <div style={{fontSize:12,color:A.t1,textAlign:"right",paddingTop:2,fontWeight:700,fontVariantNumeric:"tabular-nums"}}>{fmtM(r.lineTotal)}</div>
                 </div>
               ))}
-              {/* Gastos operativos breakdown */}
-              {(grp.gasolina > 0 || grp.otros > 0) && (
+              {/* Gastos operativos breakdown — por concepto */}
+              {Object.keys(grp.gastosMap||{}).length > 0 && (
                 <div style={{borderTop:`1px solid ${C.border}`,background:"rgba(74,112,192,0.05)"}}>
                   <div style={{padding:"4px 14px 2px",fontSize:8,color:"#7AA0E0",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase"}}>Gastos operativos</div>
-                  {grp.gasolina > 0 && (
-                    <div style={{display:"flex",justifyContent:"space-between",padding:"4px 14px",fontSize:11,color:A.t2}}>
-                      <span>Gasolina</span><span style={{fontVariantNumeric:"tabular-nums"}}>{fmtM(grp.gasolina)}</span>
+                  {Object.entries(grp.gastosMap).map(([concepto, monto])=>(
+                    <div key={concepto} style={{display:"flex",justifyContent:"space-between",padding:"3px 14px",fontSize:11,color:A.t2}}>
+                      <span>{concepto}</span><span style={{fontVariantNumeric:"tabular-nums"}}>{fmtM(monto)}</span>
                     </div>
-                  )}
-                  {grp.otros > 0 && (
-                    <div style={{display:"flex",justifyContent:"space-between",padding:"4px 14px",fontSize:11,color:A.t2}}>
-                      <span>Otros gastos</span><span style={{fontVariantNumeric:"tabular-nums"}}>{fmtM(grp.otros)}</span>
-                    </div>
-                  )}
+                  ))}
                 </div>
               )}
               {/* Ticket total row */}
