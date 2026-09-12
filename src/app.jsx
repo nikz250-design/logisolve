@@ -11221,7 +11221,15 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
            unitIds:getTicketUnitIds(t),payType:t.payType||"contado",promesaPago:t.promesaPago||"",
            notes:t.notes||"",priority:t.priority||"P3",
            costoIVA:String(safeNumber(unitCostoIVA)||0),
-           _gastos:String(safeNumber(s.gastos)||0),
+           _gastosItems:(()=>{
+             // Cargar gastos desde lineas (nuevo formato) o snap.gastos (legacy)
+             const fromLineas=[];
+             (t.lineas||[]).forEach(l=>{(l.gastos||[]).forEach(g=>fromLineas.push({titulo:g.titulo,monto:safeNumber(g.monto)}));});
+             if(fromLineas.length>0) return fromLineas;
+             if(Array.isArray(t.gastosItems)&&t.gastosItems.length>0) return t.gastosItems;
+             const gs=safeNumber(s.gastos)||0;
+             return gs>0?[{titulo:"Gastos",monto:gs}]:[];
+           })(),
            precioIVA:String(safeNumber(unitPrecioIVA)||0),
            qty:String(savedQty),
            _iva:safeNumber(s.params?.iva,16), _isr:safeNumber(s.params?.isr,20),
@@ -11254,7 +11262,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
 
   const saveEdit = t => {
     const iva = ef._iva||16; const isr = ef._isr||20;
-    const gastos = safeNumber(ef._gastos);
+    const gastos = (ef._gastosItems||[]).reduce((s,g)=>s+safeNumber(g.monto),0);
     const opMeta = OP_TYPES.find(o=>o.id===(ef.opType||"consumable"))||OP_TYPES[0];
     const mgn = effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27);
 
@@ -11301,12 +11309,13 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
     }
 
     const {costoIVA:_c,precioIVA:_p,_iva:_iv,_isr:_is,quoteMode:_q,opType:_ot,
-           activeMods:_am,_gastos:_g,qty:_qty,titulo:_ti,kitMode:_km,...rest}=ef;
+           activeMods:_am,_gastosItems:_gi,qty:_qty,titulo:_ti,kitMode:_km,...rest}=ef;
     dispatch({type:"TKT_UPDATE",id:t.id,patch:{
       ...rest, titulo:newTitulo, qty:newQty, snap:newSnap, lineas:newLineas,
       kitMode:ef.kitMode||false,
       opId:ef.opType||"consumable", opShort:opMeta.short, mods:ef.activeMods||[],
       unitIds:[...(ef.unitIds||[])], unitId:(ef.unitIds||[])[0]||"",
+      gastosItems:ef._gastosItems||[],
     }});
     toast("Actualizado","success");
     setEditId(null);
@@ -11791,14 +11800,41 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
                             );
                           })()}
                           </>)}
-                          {/* ── Gasolina / Flete / Otros (siempre visible) ── */}
+                          {/* ── Gastos operativos con nombre libre ── */}
                           <div style={{marginBottom:8}}>
-                            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:5}}>Gasolina / Flete / Otros ($)</div>
-                            <input type="number" inputMode="decimal" value={ef._gastos||""} onChange={e=>sfn("_gastos")(e.target.value)}
-                              placeholder="0"
-                              style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.03)",
-                                border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",
-                                color:A.amber,fontSize:14,outline:"none",fontFamily:"inherit"}}/>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+                              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase"}}>Gastos operativos</div>
+                              <button onClick={()=>sfn("_gastosItems")([...(ef._gastosItems||[]),{titulo:"",monto:0}])}
+                                style={{fontSize:9,padding:"2px 10px",background:"rgba(74,112,192,0.15)",border:`1px solid ${C.blue}55`,borderRadius:6,color:C.cyan,cursor:"pointer",fontWeight:600}}>
+                                + gasto
+                              </button>
+                            </div>
+                            {(ef._gastosItems||[]).length===0&&(
+                              <div style={{fontSize:9,color:A.t3,fontStyle:"italic",padding:"6px 0"}}>Sin gastos — toca "+ gasto" para agregar gasolina, embalaje, etc.</div>
+                            )}
+                            {(ef._gastosItems||[]).map((g,gi)=>(
+                              <div key={gi} style={{display:"grid",gridTemplateColumns:"1fr 100px 28px",gap:4,marginBottom:4,alignItems:"center"}}>
+                                <input value={g.titulo}
+                                  onChange={e=>sfn("_gastosItems")((ef._gastosItems||[]).map((x,xi)=>xi===gi?{...x,titulo:e.target.value}:x))}
+                                  placeholder="Concepto (ej: Gasolina, Embalaje…)"
+                                  style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 10px",color:A.t1,fontSize:11,outline:"none",fontFamily:"inherit"}}/>
+                                <div style={{display:"flex",alignItems:"center",background:"rgba(255,255,255,0.03)",border:`1px solid ${C.border}`,borderRadius:8,overflow:"clip"}}>
+                                  <span style={{padding:"0 6px",color:A.t3,fontSize:11,fontFamily:"'Courier New',monospace"}}>$</span>
+                                  <input type="text" inputMode="decimal"
+                                    value={g._raw!==undefined?g._raw:String(g.monto||0)}
+                                    onChange={e=>sfn("_gastosItems")((ef._gastosItems||[]).map((x,xi)=>xi===gi?{...x,_raw:e.target.value}:x))}
+                                    onBlur={()=>sfn("_gastosItems")((ef._gastosItems||[]).map((x,xi)=>xi===gi?{titulo:x.titulo,monto:safeNumber(x._raw!==undefined?x._raw:String(x.monto))}:x))}
+                                    style={{flex:1,background:"transparent",border:"none",outline:"none",color:A.amber,fontSize:13,padding:"7px 0",fontFamily:"'Courier New',monospace"}}/>
+                                </div>
+                                <button onClick={()=>sfn("_gastosItems")((ef._gastosItems||[]).filter((_,xi)=>xi!==gi))}
+                                  style={{background:"rgba(192,57,43,0.1)",border:"1px solid rgba(192,57,43,0.3)",borderRadius:6,color:"#c0392b",fontSize:14,cursor:"pointer",width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>×</button>
+                              </div>
+                            ))}
+                            {(ef._gastosItems||[]).length>1&&(
+                              <div style={{fontSize:10,color:A.t3,fontFamily:"'Courier New',monospace",textAlign:"right",marginTop:2}}>
+                                Total: <span style={{color:A.amber,fontWeight:700}}>{mxn((ef._gastosItems||[]).reduce((s,g)=>s+safeNumber(g.monto),0))}</span>
+                              </div>
+                            )}
                           </div>
                           {/* ── Modo: Manual / Cotizador (siempre visible) ── */}
                           <div style={{display:"flex",gap:6,marginBottom:12}}>
