@@ -4669,14 +4669,28 @@ function Cotizador({state,dispatch,toast}) {
                       </div>
                       {/* Gastos operativos — lista con nombre libre */}
                       <div style={{marginBottom:6}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
-                          <div style={{fontSize:7,color:C.t3,letterSpacing:"0.14em"}}>GASTOS OPERATIVOS</div>
-                          <button onClick={()=>updateLinea(i,{gastos:[...(l.gastos||[]),{titulo:"",monto:0}]})}
-                            style={{fontSize:7,padding:"1px 7px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:2,color:C.cyan,cursor:"pointer",fontWeight:600}}>
-                            + gasto
+                        <div style={{fontSize:7,color:C.t3,letterSpacing:"0.14em",marginBottom:3}}>GASTOS OPERATIVOS</div>
+                        {/* Quick-add: monto + botones de acceso rápido */}
+                        <div style={{display:"flex",gap:3,alignItems:"center",marginBottom:4}}>
+                          <div style={{display:"flex",alignItems:"center",background:C.bg1,border:`1px solid ${C.border}`,borderRadius:3,overflow:"clip",width:75,flexShrink:0}}>
+                            <span style={{padding:"0 3px",color:C.t3,fontSize:9,fontFamily:"'Courier New',monospace"}}>$</span>
+                            <input type="text" inputMode="decimal" placeholder="0"
+                              value={l._quickMonto!==undefined?l._quickMonto:""}
+                              onChange={e=>updateLinea(i,{_quickMonto:e.target.value})}
+                              style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:10,padding:"3px 0",fontFamily:"'Courier New',monospace",width:0}}/>
+                          </div>
+                          {[["Gasolina","#f59e0b"],["Gestión","#818cf8"],["Otros","#94a3b8"]].map(([tit,col])=>(
+                            <button key={tit} onClick={()=>{const m=safeNumber(l._quickMonto||0);updateLinea(i,{gastos:[...(l.gastos||[]),{titulo:tit,monto:m}],_quickMonto:""});}}
+                              style={{fontSize:8,padding:"3px 8px",background:"transparent",border:`1px solid ${col}66`,borderRadius:3,color:col,cursor:"pointer",fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>
+                              {tit}
+                            </button>
+                          ))}
+                          <button onClick={()=>updateLinea(i,{gastos:[...(l.gastos||[]),{titulo:"",monto:safeNumber(l._quickMonto||0)}],_quickMonto:""})}
+                            style={{fontSize:7,padding:"3px 7px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:2,color:C.cyan,cursor:"pointer",fontWeight:600,whiteSpace:"nowrap",flexShrink:0}}>
+                            + otro
                           </button>
                         </div>
-                        {(l.gastos||[]).length===0&&<div style={{fontSize:8,color:C.t3,fontStyle:"italic",marginBottom:2}}>Sin gastos — toca "+ gasto" para agregar gasolina, embalaje, etc.</div>}
+                        {(l.gastos||[]).length===0&&<div style={{fontSize:8,color:C.t3,fontStyle:"italic",marginBottom:2}}>Sin gastos</div>}
                         {(l.gastos||[]).map((g,gi)=>(
                           <div key={gi} style={{display:"grid",gridTemplateColumns:"1fr 90px 22px",gap:3,marginBottom:3,alignItems:"center"}}>
                             <input
@@ -7237,10 +7251,26 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                           </div>
                           {/* Gastos operativos con nombre libre */}
                           <div style={{marginBottom:5}}>
-                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
-                              <div style={{fontSize:7,color:C.t3,letterSpacing:"0.1em"}}>GASTOS OPERATIVOS</div>
-                              <button onClick={()=>updLinea(idx,{gastos:[...(l.gastos||[]),{titulo:"",monto:0}]})}
-                                style={{fontSize:7,padding:"1px 6px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:2,color:C.cyan,cursor:"pointer",fontWeight:600}}>+ gasto</button>
+                            <div style={{fontSize:7,color:C.t3,letterSpacing:"0.1em",marginBottom:3}}>GASTOS OPERATIVOS</div>
+                            {/* Quick-add: monto + botones de acceso rápido */}
+                            <div style={{display:"flex",gap:3,alignItems:"center",marginBottom:4}}>
+                              <div style={{display:"flex",alignItems:"center",background:C.bg0,border:`1px solid ${C.border}`,borderRadius:3,overflow:"clip",width:70,flexShrink:0}}>
+                                <span style={{padding:"0 3px",color:C.t3,fontSize:8,fontFamily:"'Courier New',monospace"}}>$</span>
+                                <input type="text" inputMode="decimal" placeholder="0"
+                                  value={l._quickMonto!==undefined?l._quickMonto:""}
+                                  onChange={e=>updLinea(idx,{_quickMonto:e.target.value})}
+                                  style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:9,padding:"2px 0",fontFamily:"'Courier New',monospace",width:0}}/>
+                              </div>
+                              {[["Gasolina","#f59e0b"],["Gestión","#818cf8"],["Otros","#94a3b8"]].map(([tit,col])=>(
+                                <button key={tit} onClick={()=>{const m=safeNumber(l._quickMonto||0);updLinea(idx,{gastos:[...(l.gastos||[]),{titulo:tit,monto:m}],_quickMonto:""});}}
+                                  style={{fontSize:7,padding:"2px 7px",background:"transparent",border:`1px solid ${col}66`,borderRadius:3,color:col,cursor:"pointer",fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>
+                                  {tit}
+                                </button>
+                              ))}
+                              <button onClick={()=>updLinea(idx,{gastos:[...(l.gastos||[]),{titulo:"",monto:safeNumber(l._quickMonto||0)}],_quickMonto:""})}
+                                style={{fontSize:7,padding:"2px 6px",background:C.blueDim,border:`1px solid ${C.blueHi}`,borderRadius:2,color:C.cyan,cursor:"pointer",fontWeight:600,whiteSpace:"nowrap",flexShrink:0}}>
+                                + otro
+                              </button>
                             </div>
                             {(l.gastos||[]).length===0&&<div style={{fontSize:7,color:C.t3,fontStyle:"italic"}}>Sin gastos</div>}
                             {(l.gastos||[]).map((g,gi)=>(
