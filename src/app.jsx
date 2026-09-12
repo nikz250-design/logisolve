@@ -11832,15 +11832,29 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
                           </>)}
                           {/* ── Gastos operativos con nombre libre ── */}
                           <div style={{marginBottom:8}}>
-                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
-                              <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase"}}>Gastos operativos</div>
-                              <button onClick={()=>sfn("_gastosItems")([...(ef._gastosItems||[]),{titulo:"",monto:0}])}
-                                style={{fontSize:9,padding:"2px 10px",background:"rgba(74,112,192,0.15)",border:`1px solid ${C.blue}55`,borderRadius:6,color:C.cyan,cursor:"pointer",fontWeight:600}}>
-                                + gasto
+                            <div style={{fontSize:9,color:A.t3,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:6}}>Gastos operativos</div>
+                            {/* Quick-add: monto + botones rápidos */}
+                            <div style={{display:"flex",gap:5,alignItems:"center",marginBottom:6}}>
+                              <div style={{display:"flex",alignItems:"center",background:"rgba(255,255,255,0.03)",border:`1px solid ${C.border}`,borderRadius:8,overflow:"clip",width:90,flexShrink:0}}>
+                                <span style={{padding:"0 6px",color:A.t3,fontSize:11,fontFamily:"'Courier New',monospace"}}>$</span>
+                                <input type="text" inputMode="decimal" placeholder="0"
+                                  value={ef._quickMonto!==undefined?ef._quickMonto:""}
+                                  onChange={e=>sfn("_quickMonto")(e.target.value)}
+                                  style={{flex:1,background:"transparent",border:"none",outline:"none",color:A.amber,fontSize:13,padding:"7px 0",fontFamily:"'Courier New',monospace",width:0}}/>
+                              </div>
+                              {[["Gasolina","#f59e0b"],["Gestión","#818cf8"],["Otros","#94a3b8"]].map(([tit,col])=>(
+                                <button key={tit} onClick={()=>{const m=safeNumber(ef._quickMonto||0);sfn("_gastosItems")([...(ef._gastosItems||[]),{titulo:tit,monto:m}]);sfn("_quickMonto")("");}}
+                                  style={{flex:1,padding:"7px 4px",background:"transparent",border:`1px solid ${col}66`,borderRadius:8,color:col,cursor:"pointer",fontWeight:700,fontSize:10}}>
+                                  {tit}
+                                </button>
+                              ))}
+                              <button onClick={()=>{sfn("_gastosItems")([...(ef._gastosItems||[]),{titulo:"",monto:safeNumber(ef._quickMonto||0)}]);sfn("_quickMonto")("");}}
+                                style={{padding:"7px 10px",background:"rgba(74,112,192,0.15)",border:`1px solid ${C.blue}55`,borderRadius:8,color:C.cyan,cursor:"pointer",fontWeight:600,fontSize:10,whiteSpace:"nowrap",flexShrink:0}}>
+                                + otro
                               </button>
                             </div>
                             {(ef._gastosItems||[]).length===0&&(
-                              <div style={{fontSize:9,color:A.t3,fontStyle:"italic",padding:"6px 0"}}>Sin gastos — toca "+ gasto" para agregar gasolina, embalaje, etc.</div>
+                              <div style={{fontSize:9,color:A.t3,fontStyle:"italic",padding:"4px 0"}}>Sin gastos</div>
                             )}
                             {(ef._gastosItems||[]).map((g,gi)=>(
                               <div key={gi} style={{display:"grid",gridTemplateColumns:"1fr 100px 28px",gap:4,marginBottom:4,alignItems:"center"}}>
