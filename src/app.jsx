@@ -6632,6 +6632,63 @@ function MAjustes({state,dispatch,toast}) {
   const [exportingCSV,setExportingCSV]=useState(false);
   const [importMode,setImportMode]=useState("merge");
   const [empEdits,setEmpEdits]=useState(()=>({...DEFAULT_EMPRESA,...(state.empresa||{})}));
+  const [gastosAudit,setGastosAudit]=useState(null);
+
+  const runGastosMigration = () => {
+    const migrados=[], sinGastos=[], divergentes=[];
+    const toMigrate=[];
+    state.tickets.filter(t=>!t._deleted).forEach(t=>{
+      const lineas=(t.lineas||[]);
+      let totalGastos=0, hasAny=false, changed=false;
+      // Sum gastos from lineas
+      const newLineas=lineas.map(l=>{
+        const lg=getLineGastos(l);
+        totalGastos+=lg.total;
+        if(lg.total>0) hasAny=true;
+        // If old format (otros>0, no gastos array), migrate to Gestión
+        const hasNew=Array.isArray(l.gastos)&&l.gastos.length>0;
+        if(!hasNew&&(safeNumber(l.otros)>0||safeNumber(l.gasolina)>0)){
+          changed=true;
+          const newGastos=[
+            ...(safeNumber(l.gasolina)>0?[{titulo:"Gasolina",monto:safeNumber(l.gasolina)}]:[]),
+            ...(safeNumber(l.otros)>0?[{titulo:"Gestión",monto:safeNumber(l.otros)}]:[]),
+          ];
+          return {...l,gastos:newGastos,gasolina:0,otros:0};
+        }
+        // Rename "Otros gastos" → "Gestión" in existing gastos arrays
+        if(hasNew){
+          const renamed=l.gastos.map(g=>{
+            const tit=(g.titulo||"").trim().toLowerCase();
+            if(tit==="otros gastos"||tit==="otros"){changed=true;return {...g,titulo:"Gestión"};}
+            return g;
+          });
+          return {...l,gastos:renamed};
+        }
+        return l;
+      });
+      // ticket-level gastosItems
+      let newGastosItems=t.gastosItems;
+      if(Array.isArray(t.gastosItems)){
+        newGastosItems=t.gastosItems.map(g=>{
+          const tit=(g.titulo||"").trim().toLowerCase();
+          if(tit==="otros gastos"||tit==="otros"){changed=true;return {...g,titulo:"Gestión"};}
+          return g;
+        });
+      }
+      const snapGastos=safeNumber(t.snap?.gastos);
+      const isDivergente=Math.abs(totalGastos-snapGastos)>1&&snapGastos>0&&hasAny;
+      const entry={id:t.id,titulo:t.titulo||t.id,totalGastos,snapGastos};
+      if(isDivergente) divergentes.push(entry);
+      else if(!hasAny) sinGastos.push(entry);
+      if(changed) toMigrate.push({t,newLineas,newGastosItems});
+      if(hasAny&&!isDivergente) migrados.push({...entry,changed});
+    });
+    toMigrate.forEach(({t,newLineas,newGastosItems})=>{
+      dispatch({type:"TKT_UPDATE",id:t.id,patch:{lineas:newLineas,gastosItems:newGastosItems}});
+    });
+    setGastosAudit({migrados,sinGastos,divergentes,fecha:new Date().toLocaleString("es-MX")});
+    toast(`Migración: ${toMigrate.length} tickets actualizados`,"success");
+  };
 
   const savedAt=(()=>{try{const r=localStorage.getItem(STORAGE_KEY);if(r){const p=JSON.parse(r);return p.savedAt?new Date(p.savedAt).toLocaleString("es-MX"):"---";}}catch(_e){}return "---";})();
 
@@ -6866,6 +6923,41 @@ function MAjustes({state,dispatch,toast}) {
           color={exportingAudit?C.t3:C.t1} bg={exportingAudit?C.bg2:C.blue} border={exportingAudit?C.border:C.blue}
           onClick={exportAuditoria}/>
         <div style={{fontSize:10,color:C.t3,marginTop:8}}>{state.tickets.filter(t=>!t._deleted).length} tickets activos en memoria</div>
+      </Card>
+
+      <Card title="MIGRACIÓN GASTOS">
+        <div style={{fontSize:13,color:C.t2,marginBottom:4}}>Convierte campos viejos <b style={{color:C.yellow}}>"otros"</b> a <b style={{color:"#818cf8"}}>Gestión</b> y renombra "Otros gastos" → "Gestión" en todos los tickets.</div>
+        <div style={{fontSize:11,color:C.t3,marginBottom:12}}>También muestra cuáles no tienen gastos y cuáles tienen divergencia entre lineas y snap.</div>
+        <MBtn label="▶ Analizar y migrar gastos" full color={C.t1} bg={C.blue} border={C.blue} onClick={runGastosMigration}/>
+        {gastosAudit&&(
+          <div style={{marginTop:12,fontSize:11,lineHeight:1.7}}>
+            <div style={{color:C.t3,fontSize:9,marginBottom:6}}>{gastosAudit.fecha}</div>
+            <div style={{color:"#4ade80",fontWeight:700,marginBottom:4}}>✓ CON GASTOS ({gastosAudit.migrados.length})</div>
+            {gastosAudit.migrados.length===0&&<div style={{color:C.t3,fontStyle:"italic",marginBottom:6,fontSize:10}}>Ninguno</div>}
+            {gastosAudit.migrados.map(e=>(
+              <div key={e.id} style={{color:C.t2,fontSize:10,marginBottom:2}}>
+                <span style={{color:C.cyan,fontFamily:"monospace"}}>{e.id}</span> — {e.titulo}
+                <span style={{color:C.t3}}> · ${e.totalGastos.toFixed(0)}</span>
+                {e.changed&&<span style={{color:"#818cf8",marginLeft:4,fontSize:9}}>✦ migrado</span>}
+              </div>
+            ))}
+            <div style={{color:C.yellow,fontWeight:700,marginTop:8,marginBottom:4}}>⚠ SIN GASTOS ({gastosAudit.sinGastos.length})</div>
+            {gastosAudit.sinGastos.length===0&&<div style={{color:C.t3,fontStyle:"italic",marginBottom:6,fontSize:10}}>Ninguno</div>}
+            {gastosAudit.sinGastos.map(e=>(
+              <div key={e.id} style={{color:C.t2,fontSize:10,marginBottom:2}}>
+                <span style={{color:C.cyan,fontFamily:"monospace"}}>{e.id}</span> — {e.titulo}
+              </div>
+            ))}
+            <div style={{color:C.red,fontWeight:700,marginTop:8,marginBottom:4}}>⚡ DIVERGENTES ({gastosAudit.divergentes.length})</div>
+            {gastosAudit.divergentes.length===0&&<div style={{color:C.t3,fontStyle:"italic",fontSize:10}}>Ninguno</div>}
+            {gastosAudit.divergentes.map(e=>(
+              <div key={e.id} style={{color:C.t2,fontSize:10,marginBottom:2}}>
+                <span style={{color:C.cyan,fontFamily:"monospace"}}>{e.id}</span> — {e.titulo}
+                <span style={{color:C.red}}> · lineas=${e.totalGastos.toFixed(0)} vs snap=${e.snapGastos.toFixed(0)}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
       <Card title="RESTABLECER">
