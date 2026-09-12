@@ -6640,22 +6640,20 @@ function MAjustes({state,dispatch,toast}) {
     state.tickets.filter(t=>!t._deleted).forEach(t=>{
       const lineas=(t.lineas||[]);
       let totalGastos=0, hasAny=false, changed=false;
-      // Sum gastos from lineas
+
+      // ── Migrar lineas ──
       const newLineas=lineas.map(l=>{
         const lg=getLineGastos(l);
         totalGastos+=lg.total;
         if(lg.total>0) hasAny=true;
-        // If old format (otros>0, no gastos array), migrate to Gestión
         const hasNew=Array.isArray(l.gastos)&&l.gastos.length>0;
         if(!hasNew&&(safeNumber(l.otros)>0||safeNumber(l.gasolina)>0)){
           changed=true;
-          const newGastos=[
+          return {...l,gastos:[
             ...(safeNumber(l.gasolina)>0?[{titulo:"Gasolina",monto:safeNumber(l.gasolina)}]:[]),
             ...(safeNumber(l.otros)>0?[{titulo:"Gestión",monto:safeNumber(l.otros)}]:[]),
-          ];
-          return {...l,gastos:newGastos,gasolina:0,otros:0};
+          ],gasolina:0,otros:0};
         }
-        // Rename "Otros gastos" → "Gestión" in existing gastos arrays
         if(hasNew){
           const renamed=l.gastos.map(g=>{
             const tit=(g.titulo||"").trim().toLowerCase();
@@ -6666,22 +6664,37 @@ function MAjustes({state,dispatch,toast}) {
         }
         return l;
       });
-      // ticket-level gastosItems
-      let newGastosItems=t.gastosItems;
-      if(Array.isArray(t.gastosItems)){
-        newGastosItems=t.gastosItems.map(g=>{
-          const tit=(g.titulo||"").trim().toLowerCase();
-          if(tit==="otros gastos"||tit==="otros"){changed=true;return {...g,titulo:"Gestión"};}
-          return g;
-        });
-      }
+
+      // ── gastosItems a nivel ticket (Pipeline form) ──
+      let newGastosItems=Array.isArray(t.gastosItems)?t.gastosItems:[];
+      // Renombrar "Otros gastos"/"Otros" → "Gestión"
+      newGastosItems=newGastosItems.map(g=>{
+        const tit=(g.titulo||"").trim().toLowerCase();
+        if(tit==="otros gastos"||tit==="otros"){changed=true;return {...g,titulo:"Gestión"};}
+        return g;
+      });
+      // Si no hay gastosItems ni lineas con gastos, pero snap.gastos > 0 → ticket viejo Pipeline
       const snapGastos=safeNumber(t.snap?.gastos);
-      const isDivergente=Math.abs(totalGastos-snapGastos)>1&&snapGastos>0&&hasAny;
+      const gastosItemsTotal=newGastosItems.reduce((s,g)=>s+safeNumber(g.monto),0);
+      if(!hasAny&&newGastosItems.length===0&&snapGastos>0){
+        // snap.gastos viene del campo _gastos plano del Pipeline viejo → Gestión
+        changed=true;
+        newGastosItems=[{titulo:"Gestión",monto:snapGastos}];
+        totalGastos=snapGastos;
+        hasAny=true;
+      }
+      // Contar gastosItems en totalGastos si no hay lineas
+      if(lineas.length===0&&newGastosItems.length>0){
+        totalGastos=gastosItemsTotal>0?gastosItemsTotal:snapGastos;
+        hasAny=totalGastos>0;
+      }
+
+      const isDivergente=lineas.length>0&&Math.abs(totalGastos-snapGastos)>1&&snapGastos>0&&hasAny;
       const entry={id:t.id,titulo:t.titulo||t.id,totalGastos,snapGastos};
       if(isDivergente) divergentes.push(entry);
       else if(!hasAny) sinGastos.push(entry);
+      else migrados.push({...entry,changed});
       if(changed) toMigrate.push({t,newLineas,newGastosItems});
-      if(hasAny&&!isDivergente) migrados.push({...entry,changed});
     });
     toMigrate.forEach(({t,newLineas,newGastosItems})=>{
       dispatch({type:"TKT_UPDATE",id:t.id,patch:{lineas:newLineas,gastosItems:newGastosItems}});
