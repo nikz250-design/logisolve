@@ -16252,6 +16252,40 @@ function MEstadoResultados({state}) {
 
   const handleExcel = useCallback(() => {
     const {tot, ops, excluded, label, dateRange, opCount, totalCount} = er;
+    // Helpers to get gastosItems breakdown from a raw ticket
+    const getTicketGastosItems = t => {
+      const items = [];
+      // Try per-linea gastos (new format)
+      (t.lineas||[]).forEach(l => {
+        (l.gastos||[]).forEach(g => { if(safeNumber(g.monto)>0) items.push(g); });
+      });
+      if (items.length > 0) return items;
+      // Ticket-level gastosItems (Pipeline form)
+      if (Array.isArray(t.gastosItems) && t.gastosItems.length > 0) return t.gastosItems;
+      // Old flat format
+      const gas = safeNumber(t.gasolina||0), ot = safeNumber(t.otros||0), sg = safeNumber(t.snap?.gastos||0);
+      const fallback = [];
+      if (gas > 0) fallback.push({titulo:"Gasolina", monto:gas});
+      if (ot > 0)  fallback.push({titulo:"Gestión",  monto:ot});
+      if (fallback.length === 0 && sg > 0) fallback.push({titulo:"Gestión", monto:sg});
+      return fallback;
+    };
+    const fmtGastosItems = t => {
+      const items = getTicketGastosItems(t);
+      return items.map(g => `${g.titulo} $${safeNumber(g.monto).toFixed(0)}`).join(" | ");
+    };
+    // Helper: get cobro date (YYYY-MM-DD) from timeline — same logic as CobrosHeatMap
+    const getCobradoDate = t => {
+      const ev = (t.timeline||[]).slice().reverse().find(e => {
+        const ev=(e.evento||"").toLowerCase();
+        return ev==="cobrado"||ev==="cobrado ✓"||ev==="pagado"||ev.includes("cobr");
+      });
+      if (ev?.ts) return ev.ts.slice(0,10);
+      if (t.updatedAt) return t.updatedAt.slice(0,10);
+      if (t.date) { const p=t.date.split("/"); if(p.length===3) return `${p[2]}-${p[1]}-${p[0]}`; }
+      return null;
+    };
+    const fmtDDMM = iso => { if(!iso) return ""; const p=iso.split("-"); return `${p[2]}/${p[1]}/${p[0]}`; };
     const validFail = er.validations.filter(v => !v.ok);
     if (validFail.length > 0) {
       const msg = validFail.map(v => `- ${v.label}`).join("\n");
@@ -16319,24 +16353,27 @@ function MEstadoResultados({state}) {
         "Folio","Eco","Concepto","Fecha","Cliente","Unidad","Estatus",
         "Venta c/IVA","Venta s/IVA","IVA Trasladado",
         "Ref. c/IVA","IVA Acreditable","Ref. s/IVA",
-        "Gasolina","Otros","Costo Total s/IVA",
+        "Gasolina","Otros","Desglose Gastos","Costo Total s/IVA",
         "Utilidad Bruta","Reserva ISR","Resultado","Margen %","Alertas"
       ];
-      const detailRows = ops.map(op => [
-        op.id, op.eco, op.titulo, op.date, op.client, op.unit, TICKET_META[op.status]?.label||op.status,
-        n2(op.ventaConIVA), n2(op.ventaSinIVA), n2(op.ivaTraslad),
-        n2(op.refConIVA), n2(op.ivaAcreditable), n2(op.refSinIVA),
-        n2(op.gasolina), n2(op.otros), n2(op.costoTotal),
-        n2(op.uBruta), n2(op.isr), n2(op.uNeta),
-        n2(op.margen),
-        [op.noCosto?"SIN COSTO":null, op.perdida?"PÉRDIDA":null].filter(Boolean).join(" ") || "",
-      ]);
+      const detailRows = ops.map(op => {
+        const rawTkt = tickets.find(t => t.id === op.id);
+        return [
+          op.id, op.eco, op.titulo, op.date, op.client, op.unit, TICKET_META[op.status]?.label||op.status,
+          n2(op.ventaConIVA), n2(op.ventaSinIVA), n2(op.ivaTraslad),
+          n2(op.refConIVA), n2(op.ivaAcreditable), n2(op.refSinIVA),
+          n2(op.gasolina), n2(op.otros), rawTkt ? fmtGastosItems(rawTkt) : "", n2(op.costoTotal),
+          n2(op.uBruta), n2(op.isr), n2(op.uNeta),
+          n2(op.margen),
+          [op.noCosto?"SIN COSTO":null, op.perdida?"PÉRDIDA":null].filter(Boolean).join(" ") || "",
+        ];
+      });
       // Fila de totales
       const totRow = [
         "TOTALES","","","","","","",
         n2(tot.ventaConIVA), n2(tot.ventaSinIVA), n2(tot.ivaTraslad),
         n2(tot.refConIVA), n2(tot.ivaAcreditable), n2(tot.refSinIVA),
-        n2(tot.gasolina), n2(tot.otros), n2(tot.costoTotal),
+        n2(tot.gasolina), n2(tot.otros), "", n2(tot.costoTotal),
         n2(tot.uBruta), n2(tot.isr), n2(tot.uNeta),
         tot.ventaSinIVA > 0 ? n2(tot.uNeta / tot.ventaSinIVA * 100) : 0, "",
       ];
@@ -16346,7 +16383,7 @@ function MEstadoResultados({state}) {
         {wch:12},{wch:8},{wch:30},{wch:11},{wch:22},{wch:18},{wch:12},
         {wch:13},{wch:13},{wch:13},
         {wch:13},{wch:13},{wch:13},
-        {wch:11},{wch:11},{wch:14},
+        {wch:11},{wch:11},{wch:32},{wch:14},
         {wch:13},{wch:12},{wch:13},{wch:10},{wch:14},
       ];
       XLSX.utils.book_append_sheet(wb, ws2, "Detalle Operaciones");
@@ -16365,25 +16402,50 @@ function MEstadoResultados({state}) {
         XLSX.utils.book_append_sheet(wb, ws3, "Excluidas");
       }
 
-      /* ── Hoja 4: Flujo de Caja ────────────────────────────────── */
-      const cobradas  = ops.filter(op => op.status === "cobrado");
-      const pendientes = ops.filter(op => op.status !== "cobrado");
-      const totalCobrado  = cobradas.reduce((s,o) => s + o.ventaConIVA, 0);
+      /* ── Hoja 4: Flujo de Caja — basado en el calendario real de cobros ── */
+      // Incluye TODOS los tickets cobrados cuya fecha de cobro cae en el mes
+      // (independiente de cuándo se creó la operación — igual que el mapa de calor)
+      const [erY, erM] = month.split("-").map(Number);
+      const monthPfxFC = `${erY}-${String(erM).padStart(2,"0")}`;
+
+      const allActive = tickets.filter(t => !t._deleted);
+      // Cobrados EN este mes (por fecha de cobro del timeline)
+      const cobrosDelMes = allActive
+        .map(t => { const d = getCobradoDate(t); return {t, cobroISO: d}; })
+        .filter(({cobroISO}) => cobroISO && cobroISO.startsWith(monthPfxFC))
+        .sort((a,b) => a.cobroISO.localeCompare(b.cobroISO));
+
+      // Pendientes de cobro (cualquier ticket no cobrado del mes de la ER)
+      const toSortKey = s => { if(!s) return "9999-99-99"; const p=s.split("/"); return p.length===3?`${p[2]}-${p[1]}-${p[0]}`:s; };
+      const pendientes = ops.filter(op => op.status !== "cobrado")
+        .sort((a,b) => toSortKey(a.promesaPago).localeCompare(toSortKey(b.promesaPago)));
+
+      const totalCobrado   = cobrosDelMes.reduce((s,{t}) => s + safeNumber(t.snap?.precioConIVA), 0);
       const totalPendiente = pendientes.reduce((s,o) => s + o.ventaConIVA, 0);
+
+      // Agrupar cobros por día para el resumen tipo mapa de calor
+      const cobrosByDay = {};
+      cobrosDelMes.forEach(({t, cobroISO}) => {
+        if (!cobrosByDay[cobroISO]) cobrosByDay[cobroISO] = {total:0, count:0};
+        cobrosByDay[cobroISO].total += safeNumber(t.snap?.precioConIVA);
+        cobrosByDay[cobroISO].count++;
+      });
 
       const fcSummary = [
         ["LOGISOLVE — FLUJO DE CAJA"],
         [label],
         [],
-        ["ENTRADAS DE EFECTIVO (COBRADAS)", ""],
-        ["Operaciones cobradas", cobradas.length],
+        ["ENTRADAS DE EFECTIVO (COBRADAS EN EL MES)", ""],
+        ["Pagos recibidos", cobrosDelMes.length],
         ["Total cobrado (c/IVA)", n2(totalCobrado)],
         [],
-        ["PENDIENTES DE COBRO", ""],
+        ["RESUMEN POR DÍA", "Monto c/IVA", "# Cobros"],
+        ...Object.entries(cobrosByDay).sort(([a],[b])=>a.localeCompare(b))
+          .map(([iso,{total,count}]) => [fmtDDMM(iso), n2(total), count]),
+        [],
+        ["PENDIENTES DE COBRO (ops del mes)", ""],
         ["Operaciones pendientes", pendientes.length],
         ["Total pendiente (c/IVA)", n2(totalPendiente)],
-        [],
-        ["TOTAL FACTURADO EN EL MES (c/IVA)", n2(totalCobrado + totalPendiente)],
         [],
       ];
 
@@ -16391,30 +16453,42 @@ function MEstadoResultados({state}) {
         "Folio","Concepto","Fecha Op","Cliente","Eco","Unidad","Tipo Pago",
         "Venta c/IVA","Fecha Cobro","Promesa Pago","Estado"
       ];
-      // Sort: cobradas primero (por fecha cobro), luego pendientes (por promesa)
-      const toSortKey = s => { if(!s) return "9999-99-99"; const p=s.split("/"); return p.length===3?`${p[2]}-${p[1]}-${p[0]}`:s; };
-      const fcCobradas = [...cobradas].sort((a,b) => toSortKey(a.cobroDate).localeCompare(toSortKey(b.cobroDate)));
-      const fcPend     = [...pendientes].sort((a,b) => toSortKey(a.promesaPago).localeCompare(toSortKey(b.promesaPago)));
 
-      const fcRow = (op, estado) => [
+      const getClient = t => {
+        const cl = clients.find(c=>c.id===t.clientId);
+        return cl?.empresa||cl?.nombre||t.clientId||"";
+      };
+      const getUnit = t => {
+        const u = units.find(u=>u.id===(t.unitIds?.[0]||t.unitId));
+        return u?.eco ? `Eco.${u.eco}` : u?.nombre||u?.placa||"";
+      };
+      const getEco = t => {
+        const u = units.find(u=>u.id===(t.unitIds?.[0]||t.unitId));
+        return u?.eco||"—";
+      };
+
+      const fcCobRows = cobrosDelMes.map(({t, cobroISO}) => [
+        t.id, t.titulo||"", t.date||"", getClient(t), getEco(t), getUnit(t),
+        t.payType==="contado"?"Contado":"Crédito",
+        n2(safeNumber(t.snap?.precioConIVA)),
+        fmtDDMM(cobroISO), t.promesaPago||"", "COBRADO",
+      ]);
+      const fcPendRows = pendientes.map(op => [
         op.id, op.titulo, op.date, op.client, op.eco, op.unit, op.payType,
-        n2(op.ventaConIVA),
-        estado === "COBRADO" ? op.cobroDate : "",
-        op.promesaPago || "",
-        estado,
-      ];
+        n2(op.ventaConIVA), "", op.promesaPago||"", "PENDIENTE",
+      ]);
 
       const fcData = [
         ...fcSummary,
         fcHeaders,
-        ...fcCobradas.map(op => fcRow(op, "COBRADO")),
-        ...(fcCobradas.length > 0 ? [[]] : []),
-        ...(fcPend.length > 0 ? [["— PENDIENTES DE COBRO —","","","","","","","","","",""]] : []),
-        ...fcPend.map(op => fcRow(op, "PENDIENTE")),
+        ...fcCobRows,
+        ...(fcCobRows.length>0?[[]]:[]),
+        ...(fcPendRows.length>0?[["— PENDIENTES DE COBRO —","","","","","","","","","",""]]:[]),
+        ...fcPendRows,
         [],
         ["TOTAL COBRADO","","","","","","", n2(totalCobrado),"","",""],
         ["TOTAL PENDIENTE","","","","","","", n2(totalPendiente),"","",""],
-        ["GRAN TOTAL","","","","","","", n2(totalCobrado + totalPendiente),"","",""],
+        ["GRAN TOTAL","","","","","","", n2(totalCobrado+totalPendiente),"","",""],
       ];
       const wsFc = XLSX.utils.aoa_to_sheet(fcData);
       wsFc["!cols"] = [
