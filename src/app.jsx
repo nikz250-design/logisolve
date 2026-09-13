@@ -16104,6 +16104,17 @@ function computeER(tickets, clients, units, month) {
     const ventaSinIVA = safeNumber(snap.precioSinIVA);
     const ivaTraslad  = ventaConIVA - ventaSinIVA;
 
+    // Helper: categorize a gastosItems array → {gasolina, otros}
+    const readGastosItems = (items=[]) => {
+      let gas=0, ot=0;
+      items.forEach(g => {
+        const m = safeNumber(g.monto);
+        if (/^gasolina$|^combustible$|^diesel$/i.test((g.titulo||"").trim())) gas += m;
+        else ot += m;
+      });
+      return {gasolina:gas, otros:ot};
+    };
+
     // Costs — decompose lineas by category
     let refConIVA = 0, gasolina = 0, otros = 0;
     if (t.lineas && t.lineas.length > 0) {
@@ -16115,20 +16126,33 @@ function computeER(tickets, clients, units, month) {
       });
       // Gastos may live at ticket level when lineas were saved without per-line gastos
       if (gasolina === 0 && otros === 0) {
-        gasolina = safeNumber(t.gasolina, 0);
-        otros    = safeNumber(t.otros, 0);
-        // Last resort: snap.gastos = gasolina+otros combined; can't split → attr to gasolina
-        if (gasolina === 0 && otros === 0 && safeNumber(snap.gastos) > 0) {
-          gasolina = safeNumber(snap.gastos);
+        if (Array.isArray(t.gastosItems) && t.gastosItems.length > 0) {
+          const gi = readGastosItems(t.gastosItems);
+          gasolina = gi.gasolina; otros = gi.otros;
+        } else {
+          gasolina = safeNumber(t.gasolina, 0);
+          otros    = safeNumber(t.otros, 0);
+          if (gasolina === 0 && otros === 0 && safeNumber(snap.gastos) > 0) {
+            otros = safeNumber(snap.gastos); // snap.gastos → otros (Gestión), not gasolina
+          }
         }
+      }
+      // Fallback: if lineas exist but costoUnit wasn't stored, use snap
+      if (refConIVA === 0 && safeNumber(snap.costoBase) > 0) {
+        refConIVA = safeNumber(snap.costoBase) * (1 + safeNumber(snap.params?.iva, 16)/100);
       }
     } else {
       // Legacy single-snap ticket (no lineas array)
       refConIVA = safeNumber(snap.costoBase) * (1 + safeNumber(snap.params?.iva, 16)/100);
-      gasolina  = safeNumber(t.gasolina, 0);
-      otros     = safeNumber(t.otros, 0);
-      if (gasolina === 0 && otros === 0 && safeNumber(snap.gastos) > 0) {
-        gasolina = safeNumber(snap.gastos);
+      if (Array.isArray(t.gastosItems) && t.gastosItems.length > 0) {
+        const gi = readGastosItems(t.gastosItems);
+        gasolina = gi.gasolina; otros = gi.otros;
+      } else {
+        gasolina = safeNumber(t.gasolina, 0);
+        otros    = safeNumber(t.otros, 0);
+        if (gasolina === 0 && otros === 0 && safeNumber(snap.gastos) > 0) {
+          otros = safeNumber(snap.gastos); // snap.gastos → otros (Gestión), not gasolina
+        }
       }
     }
 
