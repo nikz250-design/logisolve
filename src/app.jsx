@@ -11911,9 +11911,10 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
                             const qty=Math.max(1,safeNumber(ef.qty)||1);
                             const totalCosto=safeNumber(ef.costoIVA)*qty;
                             const mgn=ef.quoteMode?effectiveMargin(ef.opType||"consumable",ef.priority||"P3",ef.activeMods||[],false,27):null;
+                            const gastosTotal=(ef._gastosItems||[]).reduce((s,g)=>s+safeNumber(g.monto),0);
                             const prev=computeSnap({costo:totalCosto,compraConIVA:true,
                               ...(ef.quoteMode?{mode:"auto",margin:mgn}:{mode:"manual",manualPrice:safeNumber(ef.precioIVA)*qty,ventaConIVA:true}),
-                              gasolina:safeNumber(ef._gastos),otros:0,iva:ef._iva||16,isr:ef._isr||20});
+                              gasolina:gastosTotal,otros:0,iva:ef._iva||16,isr:ef._isr||20});
                             const items=[
                               {l:qty>1?"Total venta":"Venta",v:mxn(prev.precioConIVA),c:A.t1},
                               {l:"Util.",v:mxn(prev.uNeta),c:prev.uNeta>=0?A.lime:A.red},
