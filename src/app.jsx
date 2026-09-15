@@ -4235,7 +4235,7 @@ const getLineGastos = l => {
   if (l.gastos && l.gastos.length > 0) {
     let gas = 0, ot = 0;
     l.gastos.forEach(g => {
-      const m = safeNumber(g.monto);
+      const m = g._raw !== undefined ? safeNumber(g._raw) : safeNumber(g.monto);
       if (/^gasolina$|^combustible$|^diesel$/i.test((g.titulo||"").trim())) gas += m;
       else ot += m;
     });
