@@ -4702,7 +4702,7 @@ function Cotizador({state,dispatch,toast}) {
                               <span style={{padding:"0 3px",color:C.t3,fontSize:9,fontFamily:"'Courier New',monospace"}}>$</span>
                               <input type="text" inputMode="decimal"
                                 value={g._raw!==undefined?g._raw:String(g.monto||0)}
-                                onChange={e=>updateLinea(i,{gastos:l.gastos.map((x,xi)=>xi===gi?{...x,_raw:e.target.value}:x)})}
+                                onChange={e=>updateLinea(i,{gastos:l.gastos.map((x,xi)=>xi===gi?{...x,_raw:e.target.value,monto:safeNumber(e.target.value)}:x)})}
                                 onBlur={()=>updateLinea(i,{gastos:l.gastos.map((x,xi)=>xi===gi?{titulo:x.titulo,monto:safeNumber(x._raw!==undefined?x._raw:String(x.monto))}:x)})}
                                 style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:10,padding:"3px 0",fontFamily:"'Courier New',monospace"}}/>
                             </div>
@@ -7387,7 +7387,7 @@ function Historial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete}) {
                                   <span style={{padding:"0 3px",color:C.t3,fontSize:8,fontFamily:"'Courier New',monospace"}}>$</span>
                                   <input type="text" inputMode="decimal"
                                     value={g._raw!==undefined?g._raw:String(g.monto||0)}
-                                    onChange={e=>updLinea(idx,{gastos:l.gastos.map((x,xi)=>xi===gi?{...x,_raw:e.target.value}:x)})}
+                                    onChange={e=>updLinea(idx,{gastos:l.gastos.map((x,xi)=>xi===gi?{...x,_raw:e.target.value,monto:safeNumber(e.target.value)}:x)})}
                                     onBlur={()=>updLinea(idx,{gastos:l.gastos.map((x,xi)=>xi===gi?{titulo:x.titulo,monto:safeNumber(x._raw!==undefined?x._raw:String(x.monto))}:x)})}
                                     style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.t1,fontSize:9,padding:"2px 0",fontFamily:"'Courier New',monospace"}}/>
                                 </div>
@@ -11971,7 +11971,7 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
                                   <span style={{padding:"0 6px",color:A.t3,fontSize:11,fontFamily:"'Courier New',monospace"}}>$</span>
                                   <input type="text" inputMode="decimal"
                                     value={g._raw!==undefined?g._raw:String(g.monto||0)}
-                                    onChange={e=>sfn("_gastosItems")((ef._gastosItems||[]).map((x,xi)=>xi===gi?{...x,_raw:e.target.value}:x))}
+                                    onChange={e=>sfn("_gastosItems")((ef._gastosItems||[]).map((x,xi)=>xi===gi?{...x,_raw:e.target.value,monto:safeNumber(e.target.value)}:x))}
                                     onBlur={()=>sfn("_gastosItems")((ef._gastosItems||[]).map((x,xi)=>xi===gi?{titulo:x.titulo,monto:safeNumber(x._raw!==undefined?x._raw:String(x.monto))}:x))}
                                     style={{flex:1,background:"transparent",border:"none",outline:"none",color:A.amber,fontSize:13,padding:"7px 0",fontFamily:"'Courier New',monospace"}}/>
                                 </div>
