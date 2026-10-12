@@ -17608,10 +17608,42 @@ function MCobranza({state, dispatch, toast}) {
 
 function CobranzaCard({t, clients, C, A, mxn, daysSince, action, dispatch, toast}) {
   const [showAtt, setShowAtt] = React.useState(false);
+  const [editingCobroDate, setEditingCobroDate] = React.useState(false);
   const cl = clients.find(c=>c.id===t.clientId);
   const days = daysSince(t.date);
   const meta = TICKET_META[t.status] || {};
   const price = t.snap?.precioConIVA || 0;
+  const isCobrado = t.status==="cobrado"||t.status==="cerrado";
+
+  // Lee fecha de cobro del timeline
+  const cobroISO = React.useMemo(()=>{
+    const ev=(t.timeline||[]).slice().reverse().find(e=>{
+      const n=(e.evento||"").toLowerCase();
+      return n==="cobrado"||n==="cobrado ✓"||n==="pagado"||n.includes("cobr");
+    });
+    if(ev?.ts) return ev.ts.slice(0,10);
+    if(t.updatedAt) return t.updatedAt.slice(0,10);
+    return null;
+  },[t.timeline,t.updatedAt]);
+
+  const saveCobroDate = (isoDate) => {
+    if(!isoDate) return;
+    const tl=[...(t.timeline||[])];
+    const isoTs=isoDate+"T12:00:00.000Z";
+    const idx=tl.map((e,i)=>({e,i})).filter(({e})=>{
+      const n=(e.evento||"").toLowerCase();
+      return n==="cobrado"||n==="cobrado ✓"||n==="pagado"||n.includes("cobr");
+    }).map(x=>x.i).pop();
+    const newTl = idx!==undefined
+      ? tl.map((e,i)=>i===idx?{...e,ts:isoTs}:e)
+      : [...tl,{ts:isoTs,evento:"Cobrado",actor:"Operador"}];
+    dispatch({type:"TKT_UPDATE",id:t.id,patch:{timeline:newTl,cobrado:true}});
+    toast("Fecha de cobro actualizada","success");
+    setEditingCobroDate(false);
+  };
+
+  // Formatea YYYY-MM-DD → DD/MM/YYYY para mostrar
+  const fmtDate = iso => { if(!iso) return ""; const p=iso.split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso; };
 
   return (
     <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:14,
@@ -17629,6 +17661,33 @@ function CobranzaCard({t, clients, C, A, mxn, daysSince, action, dispatch, toast
               {days!=null&&<span style={{color:days>30?A.red:days>14?A.amber||"#F59E0B":A.t3,
                 marginLeft:6}}>({days}d)</span>}
             </div>
+            {/* Fecha de cobro editable */}
+            {isCobrado&&(
+              <div style={{marginTop:4}}>
+                {editingCobroDate?(
+                  <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                    <input type="date" defaultValue={cobroISO||""}
+                      autoFocus
+                      onBlur={e=>saveCobroDate(e.target.value)}
+                      onKeyDown={e=>{if(e.key==="Enter")saveCobroDate(e.target.value);if(e.key==="Escape")setEditingCobroDate(false);}}
+                      style={{background:"rgba(255,255,255,0.05)",border:`1px solid ${A.lime||"#84CC16"}44`,
+                        borderRadius:8,padding:"4px 8px",color:A.lime||"#84CC16",
+                        fontSize:11,outline:"none",fontFamily:"inherit",flex:1}}/>
+                    <button onClick={()=>setEditingCobroDate(false)}
+                      style={{background:"transparent",border:"none",color:A.t3,cursor:"pointer",fontSize:14,padding:"0 4px"}}>✕</button>
+                  </div>
+                ):(
+                  <button onClick={()=>setEditingCobroDate(true)}
+                    style={{background:"transparent",border:"none",cursor:"pointer",
+                      display:"flex",alignItems:"center",gap:4,padding:"2px 0"}}>
+                    <span style={{fontSize:10,color:A.lime||"#84CC16",fontWeight:600}}>
+                      Cobrado: {cobroISO?fmtDate(cobroISO):"—"}
+                    </span>
+                    <span style={{fontSize:9,color:A.t3}}>✏</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           <div style={{textAlign:"right",flexShrink:0}}>
             <div style={{fontSize:16,fontWeight:800,color:A.t1}}>{mxn(price)}</div>
