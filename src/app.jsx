@@ -9545,6 +9545,7 @@ function MEditSheet({ticket, state, dispatch, toast, onClose}) {
 
   const snap0 = ticket.snap || {};
   const [titulo,    setTitulo]    = useState(ticket.titulo || "");
+  const [fecha,     setFecha]     = useState(ticket.date || "");
   const [costoIVA,  setCostoIVA]  = useState(String(safeNumber(snap0.costoTotal + (snap0.ivaAcred||0)) || 0));
   const [precioIVA, setPrecioIVA] = useState(String(safeNumber(snap0.precioConIVA) || 0));
   const [notes,     setNotes]     = useState(ticket.notes || "");
@@ -9572,6 +9573,7 @@ function MEditSheet({ticket, state, dispatch, toast, onClose}) {
     });
     dispatch({type:"TKT_UPDATE", id: ticket.id, patch:{
       titulo: titulo.trim() || ticket.titulo,
+      date: fecha || ticket.date,
       notes, priority, snap: newSnap,
     }});
     toast("Ticket actualizado","success");
@@ -9606,6 +9608,13 @@ function MEditSheet({ticket, state, dispatch, toast, onClose}) {
         <div style={{marginBottom:14}}>
           <label style={labelStyle}>Título</label>
           <input value={titulo} onChange={e=>setTitulo(e.target.value)} style={inputStyle} placeholder="Descripción del trabajo"/>
+        </div>
+
+        {/* Fecha de operación */}
+        <div style={{marginBottom:14}}>
+          <label style={labelStyle}>Fecha de operación</label>
+          <input type="date" value={toDateInput(fecha)} onChange={e=>setFecha(fromDateInput(e.target.value))}
+            style={{...inputStyle,color:C.cyan,fontFamily:"inherit"}}/>
         </div>
 
         {/* Costo / Precio */}
@@ -11351,9 +11360,18 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
     const unitPrecioIVA = ((safeNumber(s.precioConIVA)||0) / savedQty).toFixed(2);
     // Compute existing lines — accept any non-empty line object
     const existingLineas = (t.lineas||[]).filter(l=>l && typeof l==='object' && (l.titulo||l.descripcion||l.partRef||l.costoUnit));
+    const cobroDateISO = (()=>{
+      const ev=(t.timeline||[]).slice().reverse().find(e=>{
+        const n=(e.evento||"").toLowerCase();
+        return n==="cobrado"||n==="cobrado ✓"||n==="pagado"||n.includes("cobr");
+      });
+      return ev?.ts?ev.ts.slice(0,10):"";
+    })();
     setEf({titulo:t.titulo||"",kitMode:t.kitMode||false,
+           date:t.date||"",
            status:t.status,clientId:t.clientId||"",supplierId:t.supplierId||"",
            unitIds:getTicketUnitIds(t),payType:t.payType||"contado",promesaPago:t.promesaPago||"",
+           _fechaCobro:cobroDateISO,
            notes:t.notes||"",priority:t.priority||"P3",
            costoIVA:String(safeNumber(unitCostoIVA)||0),
            _gastosItems:(()=>{
@@ -11444,13 +11462,29 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
     }
 
     const {costoIVA:_c,precioIVA:_p,_iva:_iv,_isr:_is,quoteMode:_q,opType:_ot,
-           activeMods:_am,_gastosItems:_gi,qty:_qty,titulo:_ti,kitMode:_km,...rest}=ef;
+           activeMods:_am,_gastosItems:_gi,qty:_qty,titulo:_ti,kitMode:_km,
+           _fechaCobro:_fc,_quickMonto:_qm,...rest}=ef;
+    // Build updated timeline if cobro date was changed
+    const patchTimeline = (()=>{
+      if(!_fc) return undefined;
+      const tl=[...(t.timeline||[])];
+      const isoTs=_fc+"T12:00:00.000Z";
+      const idx=tl.map((e,i)=>({e,i})).filter(({e})=>{
+        const n=(e.evento||"").toLowerCase();
+        return n==="cobrado"||n==="cobrado ✓"||n==="pagado"||n.includes("cobr");
+      }).map(x=>x.i).pop();
+      if(idx!==undefined){tl[idx]={...tl[idx],ts:isoTs};return tl;}
+      if(ef.status==="cobrado"||ef.status==="cerrado")
+        return [...tl,{ts:isoTs,evento:"Cobrado",actor:"Operador"}];
+      return undefined;
+    })();
     dispatch({type:"TKT_UPDATE",id:t.id,patch:{
       ...rest, titulo:newTitulo, qty:newQty, snap:newSnap, lineas:newLineas,
       kitMode:ef.kitMode||false,
       opId:ef.opType||"consumable", opShort:opMeta.short, mods:ef.activeMods||[],
       unitIds:[...(ef.unitIds||[])], unitId:(ef.unitIds||[])[0]||"",
       gastosItems:ef._gastosItems||[],
+      ...(patchTimeline?{timeline:patchTimeline,cobrado:true}:{}),
     }});
     toast("Actualizado","success");
     setEditId(null);
@@ -11829,8 +11863,15 @@ function MHistorial({state,dispatch,toast,scheduleHardDelete,cancelHardDelete,in
                             );
                           })()}
 
+                          <MField label="Fecha de operación" type="date"
+                            value={toDateInput(ef.date)} onChange={v=>sfn("date")(fromDateInput(v))}/>
                           <MSel label="Estado" value={ef.status} onChange={sfn("status")}
                             options={TICKET_ALL.map(s=>({value:s,label:(TICKET_META[s]?.label||s)}))}/>
+                          {(ef.status==="cobrado"||ef.status==="cerrado")&&(
+                            <MField label="Fecha de cobro" type="date"
+                              value={ef._fechaCobro||""} onChange={v=>sfn("_fechaCobro")(v)}
+                              color={A.lime}/>
+                          )}
                           <ClientPicker clients={clients} value={ef.clientId||""} onChange={sfn("clientId")} mobile/>
                           <SupplierPicker suppliers={suppliers} value={ef.supplierId||""} onChange={sfn("supplierId")} mobile/>
                           <MultiUnitPicker units={units} values={ef.unitIds||[]} onChange={ids=>setEf(p=>({...p,unitIds:ids}))} mobile/>
